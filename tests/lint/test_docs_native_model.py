@@ -17,7 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from eawf.observability.bench.harness import HARNESS_CATALOG
-from eawf.workflow.skills.census import epoch1_nouns
+from eawf.workflow.skills.census import retired_nouns
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DOCS = _REPO_ROOT / "docs"
@@ -46,7 +46,7 @@ def _noun_findings(pages: list[Path], *, root: Path = _REPO_ROOT) -> list[str]:
     """Return one ``<page>: <nouns>`` line per page under *root* naming an epoch-1 noun."""
     findings: list[str] = []
     for page in pages:
-        nouns = epoch1_nouns(page.read_text(encoding="utf-8"))
+        nouns = retired_nouns(page.read_text(encoding="utf-8"))
         if nouns:
             findings.append(f"{page.relative_to(root).as_posix()}: {', '.join(nouns)}")
     return findings

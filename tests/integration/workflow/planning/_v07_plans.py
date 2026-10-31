@@ -48,7 +48,10 @@ PLAN_NAMES: Final = ("rc1", "rc2", "stable")
 
 #: The applied revision each re-planning proposal names as its parent, kept
 #: as it was filed so the canary can land it before the child rewrites it.
-PARENTS: Final = {"rc2": REPO_ROOT / "tests" / "fixtures" / "planning" / "v07" / "rc2-prv0201.json"}
+PARENTS: Final = {
+    "rc2": REPO_ROOT / "tests" / "fixtures" / "planning" / "v07" / "rc2-prv0201.json",
+    "stable": REPO_ROOT / "tests" / "fixtures" / "planning" / "v07" / "stable-prv0301.json",
+}
 
 #: The human who approves; a plan approval admits no other principal kind.
 OPERATOR: Final = {"principal_kind": "operator", "principal_id": "OP-0001"}

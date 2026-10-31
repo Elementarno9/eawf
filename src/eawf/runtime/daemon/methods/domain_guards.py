@@ -113,11 +113,6 @@ class GuardInputs:
     ledger_statuses: dict[Epoch2Collection, Mapping[str, str]] = field(default_factory=dict)
 
 
-#: The code a watchlist line leads with, so a client can tell an advisory
-#: ceiling from any other note on an accepted answer.
-WIP_WATCHLIST_SIGNAL: Final = "wip_active_milestones_advisory"
-
-
 #: A predicate over the document and the request. ``True`` means the guard
 #: holds; a predicate that cannot show its fact answers ``False``, so a
 #: document missing the row it needs shuts the edge rather than opening it.
@@ -430,36 +425,63 @@ def batch_activation_admitted(
     return policy.admits_batch_activation(proving_batches_in_repo=proving)
 
 
-def milestone_watchlist(document: dict[str, Any], milestone: Milestone) -> tuple[str, ...]:
-    """Return the advisory signals activating *milestone* raises, if any.
+#: The Milestone statuses that hold a Track's attention: review is still
+#: open work, since a reopened review sends the Milestone back to ACTIVE.
+_OPEN_MILESTONE_STATUSES: Final = frozenset(
+    {MilestoneStatus.ACTIVE.value, MilestoneStatus.ACCEPTANCE_REVIEW.value}
+)
 
-    The active-Milestone ceiling never refuses anything: it bounds split
-    attention rather than protecting a proof, so exceeding it is reported
-    beside an accepted answer instead of shutting the edge.
+
+def _open_milestone_keys(document: dict[str, Any], milestone: Milestone) -> tuple[str, ...]:
+    """Return the keys of the other open Milestones on *milestone*'s primary Track, sorted.
 
     Args:
-        document: A document holding the Milestone at its new status.
-        milestone: The Milestone just activated.
+        document: The document to read.
+        milestone: The Milestone whose Track is counted.
 
     Returns:
-        One watchlist line when the Track now carries more ACTIVE
-        Milestones than its policy advises, else nothing.
+        The keys of the ACTIVE and ACCEPTANCE_REVIEW Milestones of the
+        Track, *milestone* itself excluded so a Milestone returning to
+        ACTIVE is not counted against itself.
     """
     track_ref = str(milestone.primary_track_ref)
-    policy = _track_policy(document, track_ref)
-    if policy is None:
-        return ()
-    active = sum(
-        1
-        for row in document_rows(document, Epoch2Collection.MILESTONE).values()
-        if _row_field(row, "primary_track_ref") == track_ref
-        and _row_field(row, "status") == MilestoneStatus.ACTIVE.value
+    return tuple(
+        sorted(
+            key
+            for key, row in document_rows(document, Epoch2Collection.MILESTONE).items()
+            if key != milestone.key
+            and _row_field(row, "primary_track_ref") == track_ref
+            and _row_field(row, "status") in _OPEN_MILESTONE_STATUSES
+        )
     )
-    if not policy.exceeds_milestone_advisory(active_milestones=active):
-        return ()
+
+
+def milestone_activation_refusal(document: dict[str, Any], milestone: Milestone) -> str | None:
+    """Return why *milestone* may not become ACTIVE under its Track's open-Milestone limit.
+
+    Activation and both reopen edges ask this. A Track that cannot be read
+    answers nothing here: activation and a revoked acceptance are refused
+    by their ``track_active`` guard, and a Milestone in review sits on a
+    Track that cannot have retired under it.
+
+    Args:
+        document: The locked document.
+        milestone: The Milestone asking to become ACTIVE.
+
+    Returns:
+        ``None`` when the Track holds fewer other open Milestones than its
+        limit or cannot be read; otherwise a sentence naming the Track, its
+        limit and the open Milestones counted against it.
+    """
+    policy = _track_policy(document, str(milestone.primary_track_ref))
+    if policy is None:
+        return None
+    open_keys = _open_milestone_keys(document, milestone)
+    if policy.admits_milestone_activation(active_milestones=len(open_keys)):
+        return None
     return (
-        f"{WIP_WATCHLIST_SIGNAL}: track {milestone.primary_track_ref.entity_key} carries "
-        f"{active} active milestones, past its advisory {policy.wip.active_milestones}",
+        f"track {milestone.primary_track_ref.entity_key} is at its limit of "
+        f"{policy.wip.active_milestones} open milestones: {', '.join(open_keys) or 'none'}"
     )
 
 
@@ -468,6 +490,13 @@ def _batch_wip_admits(inputs: GuardInputs) -> bool:
     if not isinstance(inputs.record, DeliveryBatch):
         return False
     return batch_activation_admitted(inputs.document, inputs.document_path, inputs.record)
+
+
+def _milestone_wip_admits(inputs: GuardInputs) -> bool:
+    """Return whether the Milestone's Track admits one more open Milestone."""
+    if not isinstance(inputs.record, Milestone):
+        return False
+    return milestone_activation_refusal(inputs.document, inputs.record) is None
 
 
 def _never_claimed(inputs: GuardInputs) -> bool:
@@ -682,6 +711,7 @@ GUARD_COMPUTERS: Final[Mapping[TransitionGuard, GuardComputer]] = {
     TransitionGuard.TASKS_READY_TO_INTEGRATE: _tasks_ready_to_integrate,
     TransitionGuard.TARGET_BRANCH_PINNED: _target_branch_pinned,
     TransitionGuard.BATCH_WIP_ADMITS: _batch_wip_admits,
+    TransitionGuard.MILESTONE_WIP_ADMITS: _milestone_wip_admits,
     TransitionGuard.NEVER_CLAIMED: _never_claimed,
     TransitionGuard.HEAD_BINDING_PINNED: _head_binding_pinned,
     TransitionGuard.PROMOTION_CONTRACT_COMPLETE: _promotion_contract_complete,
@@ -701,11 +731,10 @@ GUARD_COMPUTERS: Final[Mapping[TransitionGuard, GuardComputer]] = {
 
 __all__ = [
     "GUARD_COMPUTERS",
-    "WIP_WATCHLIST_SIGNAL",
     "GuardComputer",
     "GuardInputs",
     "batch_activation_admitted",
     "integrating_batch_refs",
-    "milestone_watchlist",
+    "milestone_activation_refusal",
     "task_run_open",
 ]

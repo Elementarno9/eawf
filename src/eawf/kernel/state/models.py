@@ -8,14 +8,10 @@ constraint. Datetimes are tz-aware UTC (Pydantic accepts ISO-8601 with ``Z``).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from enum import StrEnum
-from typing import TYPE_CHECKING, Annotated, Any, Literal, get_args
+from typing import Annotated, Any, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-
-if TYPE_CHECKING:
-    from eawf.kernel.spec.common import CriterionSpec, GateSpec
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.budget_signal import refuse_budget_signal
@@ -24,20 +20,14 @@ from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
     AuditKind,
-    AuditRequirement,
     AuditStatus,
     AuditVerdict,
     BacklogPriority,
     BacklogStatus,
     ClaimStatus,
-    CloseAttemptStatus,
-    CloseFailureKind,
-    CloseOperatorAction,
     Confidence,
     DecisionStatus,
-    DependencyStage,
     DispatchNote,
-    EffortBucket,
     FlowStatus,
     GoalStatus,
     HypothesisStatus,
@@ -45,8 +35,6 @@ from eawf.kernel.state.enums import (
     IncidentCause,
     IncidentSeverity,
     IncidentStatus,
-    IterStatus,
-    IterTrigger,
     McpRisk,
     McpStatus,
     MeasurementQuality,
@@ -57,7 +45,6 @@ from eawf.kernel.state.enums import (
     OpenQuestionStatus,
     OutcomeDirection,
     OutcomeStatus,
-    PhaseStatus,
     PluginInstallStatus,
     ProjectStatus,
     RiskTier,
@@ -65,10 +52,6 @@ from eawf.kernel.state.enums import (
     TrackStatus,
     Urgency,
     UserDecisionKind,
-    WaveIntegrationKind,
-    WaveIntegrationStatus,
-    WaveStatus,
-    WorktreeStatus,
 )
 from eawf.kernel.state.ids import (
     RE_HYPOTHESIS,
@@ -77,7 +60,6 @@ from eawf.kernel.state.ids import (
     RE_PHASE,
     RE_PROJECT_CODE,
     RE_WAVE,
-    natural_key,
 )
 from eawf.kernel.state.types import ShaStr as ShaStr
 from eawf.kernel.state.types import UtcDatetime
@@ -129,11 +111,6 @@ class _FrozenStrictModel(BaseModel):
     """Immutable operational fact model that forbids unknown keys."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-
-
-def wave_dependency_key(wave_id: str, dep_wave_id: str) -> str:
-    """Return the canonical sparse-map key for one directed dependency edge."""
-    return f"{wave_id}::{dep_wave_id}"
 
 
 #: Minimum useful length for a present entity ``description``. A description
@@ -255,26 +232,6 @@ class Project(_StrictModel):
     track_ids: list[str] = Field(default_factory=list)
 
 
-class WorkspaceRepoRef(_StrictModel):
-    """Reference to a repo from a workspace index."""
-
-    code: ProjectCodeStr
-    path: str
-    state_urn: UrnStr
-    project_code: ProjectCodeStr
-    title: str
-    status: ProjectStatus
-
-
-class WorkspaceIndex(_StrictModel):
-    """Workspace-level catalogue of repos."""
-
-    code: ProjectCodeStr
-    title: str
-    repos: dict[str, WorkspaceRepoRef]
-    current_repo_code: str | None = None
-
-
 class CurrentPointers(_StrictModel):
     """Active lifecycle pointers for the current state."""
 
@@ -394,189 +351,6 @@ class Outcome(_StrictModel):
         return self
 
 
-class Phase(_DescribedEntity):
-    """Lifecycle phase.
-
-    The ``release`` field bands the phase under a ``vMAJOR.MINOR.PATCH``
-    release version in the rendered roadmap. It is strictly optional
-    (default ``None``) so adding it is additive -- a phase without a
-    release loads unchanged and renders under the "Unreleased" band,
-    and an old ``state.json`` that predates the field stays valid under
-    ``extra="forbid"`` because the missing key takes the default.
-
-    The optional ``description`` carries a clarity floor when present (see
-    :class:`_DescribedEntity`): grandfathered when ``None``, else floored at
-    a useful length and rejected when it merely restates the title.
-    """
-
-    id: PhaseIdStr
-    scope_id: str
-    track_id: str | None = None
-    title: Annotated[str, Field(min_length=1, max_length=72)]
-    description: Annotated[str, Field(max_length=500)] | None = None
-    status: PhaseStatus
-    iter_ids: list[IterIdStr] = Field(default_factory=list)
-    outcome_ids: list[str] = Field(default_factory=list)
-    depends_on: list[PhaseIdStr] = Field(default_factory=list)
-    source_brief_ids: list[str] = Field(default_factory=list)
-    release: ReleaseStr | None = None
-    opened_at: UtcDatetime
-    closed_at: UtcDatetime | None = None
-    audit_id: str | None = None
-    intent: IntentBrief | None = None
-
-
-class Iter(_DescribedEntity):
-    """Lifecycle iteration.
-
-    ``trigger`` records *why* the iter was opened so the planned-vs-reactive
-    metric can classify its waves by intent rather than by the ``I##`` id
-    suffix. It defaults to :attr:`IterTrigger.NONE` so the field is additive
-    (pre-trigger states and in-code constructors stay valid); the lifecycle
-    surface that opens iters sets the real value, and :class:`IterTrigger`
-    documents how each value lands in the metric denominator.
-
-    ``candidate_tag`` carries a proposed ``vMAJOR.MINOR.PATCH`` release tag
-    for the iter -- the version an operator pencils in for the iter's
-    deliverable before the phase-close release pre-flight pins it. It is
-    strictly optional (default ``None``) so adding it is additive: an iter
-    without a candidate tag loads unchanged and a pre-1.4 ``state.json``
-    stays valid under ``extra="forbid"`` because the missing key takes the
-    default.
-
-    The optional ``description`` carries a clarity floor when present (see
-    :class:`_DescribedEntity`): grandfathered when ``None``, else floored at
-    a useful length and rejected when it merely restates the title.
-    """
-
-    id: IterIdStr
-    phase_id: PhaseIdStr
-    title: Annotated[str, Field(min_length=1, max_length=72)]
-    description: Annotated[str, Field(max_length=500)] | None = None
-    status: IterStatus
-    trigger: IterTrigger = IterTrigger.NONE
-    candidate_tag: ReleaseStr | None = None
-    wave_ids: list[WaveIdStr] = Field(default_factory=list)
-    estimate_id: str | None = None
-    audit_id: str | None = None
-    opened_at: UtcDatetime
-    closed_at: UtcDatetime | None = None
-    intent: IntentBrief | None = None
-
-    @field_validator("wave_ids")
-    @classmethod
-    def _normalize_wave_ids(cls, wave_ids: list[WaveIdStr]) -> list[WaveIdStr]:
-        """Sort ``wave_ids`` into ascending natural-id order on every validation.
-
-        Stored iters from before this rule kept ``wave_ids`` in append order,
-        which diverges from ascending ``W##`` order whenever a wave was claimed
-        out-of-order or a reactive wave landed after a higher-numbered sibling.
-        Normalizing here is self-healing: loading then persisting state rewrites
-        a divergent iter to ascending order with no separate migration step, and
-        every render site that iterates ``wave_ids`` gets ascending order for
-        free. The sort is idempotent (an already-sorted list is unchanged) and
-        total (membership is preserved; only the order changes).
-        """
-        return sorted(wave_ids, key=natural_key)
-
-
-class WaveIntegration(_FrozenStrictModel):
-    """One immutable source-to-integrated generation for a Wave."""
-
-    id: IdStr
-    wave_id: WaveIdStr
-    generation: Annotated[int, Field(ge=1)]
-    status: WaveIntegrationStatus
-    base_sha: ShaStr
-    candidate_sha: ShaStr
-    integrated_sha: ShaStr
-    tree_sha: ShaStr
-    diff_digest: DigestStr
-    spec_digest: DigestStr
-    created_at: UtcDatetime
-    supersedes_id: IdStr | None = None
-    kind: WaveIntegrationKind
-    reason: Annotated[str, Field(min_length=1, max_length=500)] | None = None
-
-    @model_validator(mode="after")
-    def _require_adoption_reason(self) -> WaveIntegration:
-        """Require explicit operator rationale for adopted integrations."""
-        if self.kind is WaveIntegrationKind.ADOPT and self.reason is None:
-            raise ValueError("adopted integration requires a reason")
-        return self
-
-
-class CloseAttempt(_FrozenStrictModel):
-    """Durable exact-revision close attempt, separate from Wave status."""
-
-    id: IdStr
-    wave_id: WaveIdStr
-    outcome: Annotated[str, Field(min_length=1, max_length=1000)]
-    tokens_consumed: Annotated[int, Field(ge=0)] | None
-    generation: Annotated[int, Field(ge=1)]
-    supersedes_id: IdStr | None
-    status: CloseAttemptStatus
-    integration_id: IdStr
-    candidate_sha: ShaStr
-    integrated_sha: ShaStr
-    commit_identity_digest: DigestStr | None = None
-    tree_sha: ShaStr
-    wave_revision_digest: DigestStr
-    spec_digest: DigestStr
-    criteria_digest: DigestStr
-    gate_manifest_digest: DigestStr
-    policy_digest: DigestStr
-    runner_environment_digest: DigestStr
-    dependency_binding_digest: DigestStr
-    required_gate_ids: list[IdStr] = Field(default_factory=list)
-    gate_receipt_ids: list[IdStr] = Field(default_factory=list)
-    audit_requirement: AuditRequirement
-    audit_report_id: IdStr | None = None
-    no_runtime_waiver: bool
-    repair_wave_id: WaveIdStr | None = None
-    repair_generation: Annotated[int, Field(ge=1)] | None = None
-    repair_budget_remaining: Annotated[int, Field(ge=0)]
-    infrastructure_retry_budget_remaining: Annotated[int, Field(ge=0)]
-    required_operator_actions: list[CloseOperatorAction] = Field(default_factory=list)
-    waiver_decision_ids: list[IdStr] = Field(default_factory=list)
-    usage_receipt_ids: list[IdStr] = Field(default_factory=list)
-    artifact_refs: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
-    failure_kind: CloseFailureKind | None = None
-    failure_detail_ref: Annotated[str, Field(min_length=1, max_length=500)] | None = None
-    invalidation_causes: list[Annotated[str, Field(min_length=1, max_length=500)]] = Field(
-        default_factory=list
-    )
-    requested_at: UtcDatetime
-    started_at: UtcDatetime | None = None
-    updated_at: UtcDatetime
-    terminal_at: UtcDatetime | None = None
-    idempotency_key: Annotated[str, Field(min_length=1, max_length=500)]
-    apply_event_id: IdStr | None = None
-
-    @model_validator(mode="after")
-    def _validate_required_operator_actions(self) -> CloseAttempt:
-        """Expose exactly split/defer/abort after the repair budget is exhausted."""
-        required = [
-            CloseOperatorAction.SPLIT,
-            CloseOperatorAction.DEFER,
-            CloseOperatorAction.ABORT,
-        ]
-        exhausted_block = (
-            self.status is CloseAttemptStatus.BLOCKED and self.repair_budget_remaining == 0
-        )
-        if exhausted_block and self.required_operator_actions != required:
-            raise ValueError(
-                "blocked close attempt with exhausted repair budget requires "
-                "split/defer/abort operator actions"
-            )
-        if not exhausted_block and self.required_operator_actions:
-            raise ValueError(
-                "required_operator_actions are only valid for a blocked close "
-                "attempt with exhausted repair budget"
-            )
-        return self
-
-
 #: Repair generations one durable close attempt is funded for. A blocked attempt
 #: may fork exactly this many repair generations before the close escalates to
 #: the operator (split / defer / abort). The daemon ENFORCES this number, so it
@@ -589,7 +363,7 @@ DEFAULT_CLOSE_REPAIR_BUDGET: int = 1
 DEFAULT_CLOSE_INFRASTRUCTURE_RETRY_BUDGET: int = 1
 
 #: The two independently-exhaustible axes of a close attempt's budget. Named
-#: verbatim after the :class:`CloseAttempt` counters they bound, so a receipt
+#: verbatim after the close attempt counters they bound, so a receipt
 #: reader maps an exhausted axis straight back to the persisted field.
 type CloseBudgetAxis = Literal["repair", "infrastructure_retry"]
 
@@ -605,16 +379,16 @@ class CloseBudget(_FrozenStrictModel):
     """The effective repair + infrastructure budgets for one close attempt.
 
     The unified budget every close surface reads instead of its own literal: the
-    daemon seeds a fresh :class:`CloseAttempt` from it, the TUI lane band renders
+    daemon seeds a fresh close attempt from it, the TUI lane band renders
     it, and the CLI advises on it. Because all three resolve the same object,
     the budget an operator SEES is by construction the budget the daemon
     ENFORCES.
 
     Attributes:
-        repair: Repair generations still funded (seeds / mirrors
-            :attr:`CloseAttempt.repair_budget_remaining`).
-        infrastructure_retry: Infrastructure auto-retries still funded (seeds /
-            mirrors :attr:`CloseAttempt.infrastructure_retry_budget_remaining`).
+        repair: Repair generations still funded (seeds a close attempt's
+            ``repair_budget_remaining``).
+        infrastructure_retry: Infrastructure auto-retries still funded (seeds a
+            close attempt's ``infrastructure_retry_budget_remaining``).
     """
 
     repair: Annotated[int, Field(ge=0)]
@@ -677,94 +451,19 @@ class CloseBudget(_FrozenStrictModel):
         return f"{CLOSE_BUDGET_RECEIPT_PREFIX}:{attempt_id}:{axis}:{funded}"
 
 
-def resolve_close_budget(*, attempt: CloseAttempt | None = None) -> CloseBudget:
-    """Return the effective repair + infrastructure budgets for a close attempt.
+def resolve_close_budget() -> CloseBudget:
+    """Return the seed repair + infrastructure budgets a fresh close attempt starts with.
 
-    The single resolver behind every close budget number in the system. Called
-    without *attempt* it returns the SEED budget the daemon stamps onto a fresh
-    :class:`CloseAttempt`; called with a live *attempt* it returns that attempt's
-    REMAINING budget. Display surfaces call the second form, so they can never
-    drift from the counters the daemon enforces.
-
-    Args:
-        attempt: The live close attempt to read remaining budget off, or ``None``
-            for the seed budget a fresh attempt starts with.
+    The single resolver behind every close budget number in the system, so a
+    surface that reads it cannot drift from the budget the daemon enforces.
 
     Returns:
-        The effective :class:`CloseBudget`.
-
-    Raises:
-        TypeError: When *attempt* is neither ``None`` nor a :class:`CloseAttempt`.
+        The seed :class:`CloseBudget`.
     """
-    if attempt is None:
-        return CloseBudget(
-            repair=DEFAULT_CLOSE_REPAIR_BUDGET,
-            infrastructure_retry=DEFAULT_CLOSE_INFRASTRUCTURE_RETRY_BUDGET,
-        )
-    if not isinstance(attempt, CloseAttempt):
-        raise TypeError(f"attempt must be a CloseAttempt or None: {type(attempt).__name__}")
     return CloseBudget(
-        repair=attempt.repair_budget_remaining,
-        infrastructure_retry=attempt.infrastructure_retry_budget_remaining,
+        repair=DEFAULT_CLOSE_REPAIR_BUDGET,
+        infrastructure_retry=DEFAULT_CLOSE_INFRASTRUCTURE_RETRY_BUDGET,
     )
-
-
-class WaveDependencyBarrier(_FrozenStrictModel):
-    """Explicit start/land proof thresholds for one Wave dependency."""
-
-    wave_id: WaveIdStr
-    dep_wave_id: WaveIdStr
-    start_after: DependencyStage
-    land_after: DependencyStage
-    reason: Annotated[str, Field(min_length=1, max_length=500)]
-
-    @model_validator(mode="after")
-    def _validate_edge(self) -> WaveDependencyBarrier:
-        """Reject self edges and a land threshold weaker than start."""
-        if self.wave_id == self.dep_wave_id:
-            raise ValueError(f"dependency barrier cannot reference itself: {self.wave_id!r}")
-        rank = {
-            DependencyStage.INTEGRATED: 0,
-            DependencyStage.VERIFIED: 1,
-            DependencyStage.CLOSED: 2,
-        }
-        if rank[self.land_after] < rank[self.start_after]:
-            raise ValueError("land_after cannot be weaker than start_after")
-        return self
-
-
-def wave_dependency_stages(
-    barriers: Mapping[str, WaveDependencyBarrier],
-    *,
-    wave_id: str,
-    dep_wave_id: str,
-) -> tuple[DependencyStage, DependencyStage]:
-    """Resolve an edge's stages, preserving legacy ``closed/closed`` semantics."""
-    barrier = barriers.get(wave_dependency_key(wave_id, dep_wave_id))
-    if barrier is None:
-        return DependencyStage.CLOSED, DependencyStage.CLOSED
-    return barrier.start_after, barrier.land_after
-
-
-class WaveDependencyBinding(_FrozenStrictModel):
-    """Exact upstream integration generation adopted by a downstream Wave."""
-
-    wave_id: WaveIdStr
-    dep_wave_id: WaveIdStr
-    integration_id: IdStr
-    generation: Annotated[int, Field(ge=1)]
-    integrated_sha: ShaStr
-    tree_sha: ShaStr
-    start_fact_ref: Annotated[str, Field(min_length=1, max_length=500)] | None = None
-    land_fact_ref: Annotated[str, Field(min_length=1, max_length=500)] | None = None
-    bound_at: UtcDatetime
-
-    @model_validator(mode="after")
-    def _reject_self_binding(self) -> WaveDependencyBinding:
-        """Reject a Wave binding its own integration generation."""
-        if self.wave_id == self.dep_wave_id:
-            raise ValueError(f"dependency binding cannot reference itself: {self.wave_id!r}")
-        return self
 
 
 class SessionAttempt(_StrictModel):
@@ -850,177 +549,6 @@ class DispatchAnnotation(_StrictModel):
     runtime_to: str | None = None
     occurred_at: UtcDatetime
     reason: str | None = None
-
-
-class RuntimeBaseline(_StrictModel):
-    """Cumulative runtime counters captured when a wave is first claimed.
-
-    The baseline is the "before" snapshot used by later close-time telemetry
-    readers to subtract already-spent runtime/cost/token counters from the
-    same runtime source. Numeric fields are optional because not every runtime
-    reports every counter; ``captured_at`` is required so consumers can order
-    and audit the snapshot.
-
-    ``harness`` and ``model`` carry the attribution that makes the captured
-    counters calibratable: the agent harness id (e.g. ``"claude-code"``) and the
-    model id (e.g. ``"claude-opus-4-1"``) the runtime billed against. Both are
-    optional because not every runtime reports them, and a state written before
-    the v1.11 bump re-validates with both defaulted to ``None``.
-
-    ``session_id`` records WHICH session the counters were read from. Runtime
-    counters are cumulative *per session*, so a baseline taken in one session and
-    a latest taken in another measure two different origins and must not be
-    differenced -- the daemon rebases instead (see :attr:`Wave.runtime_carry`).
-    It stays optional: a state written before the v1.15 bump, or a runtime that
-    discloses no session id, re-validates with it defaulted to ``None``.
-
-    ``measure_version`` records WHICH definition of the counters produced them,
-    for the same reason and with a sharper edge: a snapshot is comparable only
-    against a baseline taken under the same definition. Change the definition and
-    the difference between two snapshots is not work, it is the change. Detecting
-    that from the direction the number moved catches only the falling half -- a
-    rising redefinition is indistinguishable from a productive week, and gets
-    banked as one. (Both halves have happened: one redefinition stranded
-    two claimed waves, the next inflated three by thirteen hours each.) The version
-    makes it a fact instead of a guess.
-
-    ``shared_wave_count`` records HOW MANY waves were active when the snapshot was
-    captured. One capture is written to every active wave, and each wave then
-    differences the whole session -- so N concurrent waves each record the SAME
-    runtime, and the session is counted N times over. (One session recorded it: two
-    fan-out waves both read 0.3769 EU / $3.10, four more all read 0.0419 EU.) The
-    count is the divisor the close-time delta applies, so a shared session is split
-    among its sharers instead of being handed to each of them whole. It stays
-    optional: a snapshot written before the v1.18 bump, and the headless
-    single-wave spawn path, re-validate with it defaulted to ``None``, which the
-    delta reads as a divisor of one.
-    """
-
-    api_duration_ms: Annotated[int, Field(ge=0)] | None = None
-    total_duration_ms: Annotated[int, Field(ge=0)] | None = None
-    cost_usd: Annotated[float, Field(ge=0.0)] | None = None
-    input_tokens: Annotated[int, Field(ge=0)] | None = None
-    output_tokens: Annotated[int, Field(ge=0)] | None = None
-    cache_creation_input_tokens: Annotated[int, Field(ge=0)] | None = None
-    cache_read_input_tokens: Annotated[int, Field(ge=0)] | None = None
-    harness: str | None = None
-    model: str | None = None
-    session_id: str | None = None
-    measure_version: int | None = None
-    shared_wave_count: Annotated[int, Field(ge=1)] | None = None
-    captured_at: UtcDatetime
-
-
-class RuntimeLatest(RuntimeBaseline):
-    """Latest cumulative runtime counters captured while a wave is active."""
-
-
-class RuntimeCarry(_StrictModel):
-    """Runtime already spent on a wave in sessions that have since ended.
-
-    Baseline and latest are cumulative counters *within one session*. A wave
-    claimed in session A and closed in session B therefore cannot difference the
-    two -- B's counters start from zero, not from where A left off. On the first
-    capture from a new session the daemon folds the finished session's total
-    (``latest - baseline``) into this accumulator and rebases the baseline onto
-    the new session's origin, so a wave spanning N sessions sums N per-session
-    runtimes instead of differencing mismatched origins.
-
-    Every field is a non-negative total, defaulting to zero, so an accumulator
-    with nothing carried yet is the identity for the close-time delta.
-
-    Attributes:
-        sessions_folded: How many finished sessions the totals cover -- the
-            audit trail for a multi-session wave.
-        counter_resets: How many times the counter source reset under this wave
-            (a truncated transcript, or a change to what the duration measures)
-            and the baseline had to be re-originated. Each reset drops the
-            runtime measured before it -- it cannot be re-derived -- so this is
-            the recorded REASON a wave may close with less runtime than it
-            really spent, or with none at all. Without it, that close is
-            indistinguishable from a capture path that silently did nothing,
-            which is the failure this whole iter exists to make impossible.
-    """
-
-    api_duration_ms: Annotated[int, Field(ge=0)] = 0
-    total_duration_ms: Annotated[int, Field(ge=0)] = 0
-    cost_usd: Annotated[float, Field(ge=0.0)] = 0.0
-    input_tokens: Annotated[int, Field(ge=0)] = 0
-    output_tokens: Annotated[int, Field(ge=0)] = 0
-    cache_creation_input_tokens: Annotated[int, Field(ge=0)] = 0
-    cache_read_input_tokens: Annotated[int, Field(ge=0)] = 0
-    sessions_folded: Annotated[int, Field(ge=0)] = 0
-    counter_resets: Annotated[int, Field(ge=0)] = 0
-
-
-class CriteriaFloorWaiver(_StrictModel):
-    """Typed waiver of the plan-time typed-criteria floor on one wave.
-
-    The floor rejects a wave authored with legacy-string (untyped)
-    criteria; repair-burst authoring stays possible by attaching this
-    record instead -- visible on the wave row rather than silently
-    bypassed. The 20-char reason floor forces a real rationale, mirroring
-    :class:`~eawf.kernel.spec.common.DeferredDeliverable`.
-
-    Attributes:
-        reason: Why typed criteria could not be authored now (>= 20 chars).
-        waived_at: When the waiver was granted.
-        waived_by: The granting session / actor id, when known.
-    """
-
-    reason: Annotated[str, Field(min_length=20, max_length=500)]
-    waived_at: UtcDatetime
-    waived_by: str | None = None
-
-
-class Wave(_DescribedEntity):
-    """Atomic execution unit under an iter.
-
-    ``opened_at`` records *plan/creation* time (stamped when the wave row
-    is inserted), while ``claimed_at`` records *work-start* time (stamped
-    on the first claim). The two diverge under plan-all-then-execute,
-    where creation can precede the claim by hours, so elapsed-clock
-    consumers anchor on ``claimed_at`` (not ``opened_at``) and render no
-    clock at all while ``claimed_at`` is ``None`` -- a wave that has not
-    been claimed has no work-start fact to elapse from. The field is
-    additive + optional so on-disk state written before the v1.3 schema
-    bump re-validates unchanged.
-
-    The optional ``description`` carries a clarity floor when present (see
-    :class:`_DescribedEntity`): grandfathered when ``None``, else floored at
-    a useful length and rejected when it merely restates the title.
-    """
-
-    id: WaveIdStr
-    iter_id: IterIdStr
-    title: Annotated[str, Field(min_length=1, max_length=72)]
-    description: Annotated[str, Field(max_length=500)] | None = None
-    status: WaveStatus
-    deps: list[WaveIdStr] = Field(default_factory=list)
-    blocks: list[WaveIdStr] = Field(default_factory=list)
-    file_scopes: list[str] = Field(default_factory=list)
-    success_criteria: list[CriterionSpec] = Field(default_factory=list)
-    gates: list[GateSpec] = Field(default_factory=list)
-    agent_role: AgentSessionRole | None = None
-    effort_bucket: EffortBucket | None = None
-    claim_session_id: str | None = None
-    worktree_id: str | None = None
-    token_budget: Annotated[int | None, Field(ge=0)] = None
-    tokens_consumed: Annotated[int, Field(ge=0)] = 0
-    outcome: str | None = None
-    commit: ShaStr | None = None
-    commit_identity_digest: Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")] | None = None
-    opened_at: UtcDatetime
-    claimed_at: UtcDatetime | None = None
-    runtime_baseline: RuntimeBaseline | None = None
-    runtime_latest: RuntimeLatest | None = None
-    runtime_carry: RuntimeCarry | None = None
-    closed_at: UtcDatetime | None = None
-    sessions: dict[int, SessionAttempt] = Field(default_factory=dict)
-    runtime_preference: list[str] | None = None
-    dispatch_history: list[DispatchAnnotation] = Field(default_factory=list)
-    intent: IntentBrief | None = None
-    criteria_floor_waiver: CriteriaFloorWaiver | None = None
 
 
 class Hypothesis(_StrictModel):
@@ -1439,20 +967,6 @@ class AgentSession(_StrictModel):
     summary: str | None = None
     agent_principal_id: PrincipalIdStr | None = None
     runtime_session_id: Annotated[str, Field(min_length=1)] | None = None
-
-
-class WorktreeRecord(_StrictModel):
-    """git-worktree provenance record."""
-
-    id: IdStr
-    wave_id: WaveIdStr
-    branch: str
-    path: str
-    base_branch: str
-    status: WorktreeStatus
-    owner_session_id: str | None = None
-    created_at: UtcDatetime
-    merged_commit: str | None = None
 
 
 class McpServer(_StrictModel):
@@ -1996,13 +1510,3 @@ class FleetRun(_StrictModel):
     elapsed_hours: Annotated[float, Field(ge=0.0)] | None = None
     throughput: Annotated[float, Field(ge=0.0)] | None = None
     armed_at: UtcDatetime
-
-
-# Importing :mod:`eawf.kernel.spec.common` triggers its module-bottom
-# ``_rebuild_state_models`` call, which resolves the ``list[CriterionSpec]``
-# forward reference on :attr:`Wave.success_criteria`. This is a bare MODULE
-# import (no attribute access) so it is cycle-safe regardless of entry point:
-# when ``common`` is the import entry it is already mid-init in ``sys.modules``
-# and this just binds the partial module without touching an undefined name;
-# when ``state.models`` is the entry ``common`` loads fully here and rebuilds.
-import eawf.kernel.spec.common as _spec_common  # noqa: E402, F401

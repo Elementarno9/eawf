@@ -23,14 +23,14 @@ import yaml
 from pydantic import ValidationError
 
 from eawf.kernel.config.layered import resolve_dispatch_provider_tuple
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.measured_contract import MeasurementEnvironment
 from eawf.kernel.state.epoch2.plan_revision import PlanBody, PlanRevision, plan_content_digest
 from eawf.kernel.state.models import Artifact
 from eawf.surfaces.cli.errors import UserError
-from eawf.workflow.evidence import _io
+from eawf.workflow.evidence._io import ContractView
 from eawf.workflow.evidence.measured_contract import CONTRACT_BODY_URI, resolve_contract_citation
 from eawf.workflow.planning.revision import ungrounded_approval_criteria
+from tests._contract_view import contract_view
 
 pytestmark = pytest.mark.unit
 
@@ -64,12 +64,12 @@ def _contract(contract_id: str, metadata: dict[str, Any], uri: str = CONTRACT_BO
 
 
 @pytest.fixture
-def consuming(tmp_path: Path) -> State:
+def consuming(tmp_path: Path) -> ContractView:
     """The consuming project's state, holding contracts published into it."""
     target = tmp_path / "state.json"
     shutil.copy(STATE, target)
-    state = _io.load_state(target)
-    assert state.project is not None and state.project.code == "QR"
+    state = contract_view(target)
+    assert state.project_code == "QR"
     rows = [
         _contract("MCT-00000001", {"probe_command": PROBE, "environment": _environment("QR")}),
         _contract("MCT-00000002", {"probe_command": PROBE, "environment": _environment("PUB")}),
@@ -81,7 +81,7 @@ def consuming(tmp_path: Path) -> State:
     return state
 
 
-def _resolves(state: State) -> Any:
+def _resolves(state: ContractView) -> Any:
     def contract_resolves(ref: str) -> bool:
         try:
             resolve_contract_citation(state, ref)
@@ -98,12 +98,14 @@ def _measured_body(contract_id: str) -> PlanBody:
     return PlanBody.model_validate(payload)
 
 
-def test_plan_040_a_contract_measured_here_stays_measured(consuming: State) -> None:
+def test_plan_040_a_contract_measured_here_stays_measured(consuming: ContractView) -> None:
     body = _measured_body("MCT-00000001")
     assert ungrounded_approval_criteria(body, contract_is_resolvable=_resolves(consuming)) == ()
 
 
-def test_plan_040_a_foreign_repository_contract_is_never_admissible(consuming: State) -> None:
+def test_plan_040_a_foreign_repository_contract_is_never_admissible(
+    consuming: ContractView,
+) -> None:
     with pytest.raises(UserError) as caught:
         resolve_contract_citation(consuming, "MCT-00000002")
     assert caught.value.kind == "contract_environment_incompatible"
@@ -111,7 +113,7 @@ def test_plan_040_a_foreign_repository_contract_is_never_admissible(consuming: S
 
 
 def test_plan_040_a_published_plan_citing_a_foreign_contract_is_not_reported_measured(
-    consuming: State,
+    consuming: ContractView,
 ) -> None:
     body = _measured_body("MCT-00000002")
     ungrounded = ungrounded_approval_criteria(body, contract_is_resolvable=_resolves(consuming))
@@ -119,7 +121,7 @@ def test_plan_040_a_published_plan_citing_a_foreign_contract_is_not_reported_mea
 
 
 def test_plan_040_a_contract_with_no_environment_is_citable_only_in_its_report(
-    consuming: State,
+    consuming: ContractView,
 ) -> None:
     with pytest.raises(UserError, match="only inside the report that produced it") as caught:
         resolve_contract_citation(consuming, "MCT-00000003")
@@ -128,17 +130,17 @@ def test_plan_040_a_contract_with_no_environment_is_citable_only_in_its_report(
     assert ungrounded_approval_criteria(body, contract_is_resolvable=_resolves(consuming))
 
 
-def test_plan_040_an_unrestricted_environment_transfers(consuming: State) -> None:
+def test_plan_040_an_unrestricted_environment_transfers(consuming: ContractView) -> None:
     assert resolve_contract_citation(consuming, "MCT-00000004").id == "MCT-00000004"
 
 
 def test_plan_040_a_non_contract_artifact_is_not_judged_as_a_measurement(
-    consuming: State,
+    consuming: ContractView,
 ) -> None:
     assert resolve_contract_citation(consuming, "ART-0005").id == "ART-0005"
 
 
-def test_plan_040_an_unreachable_contract_is_not_reported_measured(consuming: State) -> None:
+def test_plan_040_an_unreachable_contract_is_not_reported_measured(consuming: ContractView) -> None:
     body = _measured_body("MCT-00000099")
     assert ungrounded_approval_criteria(body, contract_is_resolvable=_resolves(consuming))
 
@@ -152,7 +154,7 @@ def _provider_scoped(contract_id: str, provider_tuple: list[str]) -> Artifact:
 
 
 @pytest.fixture
-def providers(consuming: State) -> State:
+def providers(consuming: ContractView) -> ContractView:
     """The consuming state, holding contracts measured through named providers."""
     rows = [
         _provider_scoped("MCT-00000011", ["claude"]),
@@ -162,7 +164,7 @@ def providers(consuming: State) -> State:
     return consuming
 
 
-def _resolves_under(state: State, provider_tuple: tuple[str, ...]) -> Any:
+def _resolves_under(state: ContractView, provider_tuple: tuple[str, ...]) -> Any:
     def contract_resolves(ref: str) -> bool:
         try:
             resolve_contract_citation(state, ref, provider_tuple=provider_tuple)
@@ -174,7 +176,7 @@ def _resolves_under(state: State, provider_tuple: tuple[str, ...]) -> Any:
 
 
 def test_plan_040_a_provider_scoped_contract_transfers_on_an_exact_match(
-    providers: State,
+    providers: ContractView,
 ) -> None:
     resolved = resolve_contract_citation(
         providers, "MCT-00000012", provider_tuple=("claude", "codex")
@@ -193,7 +195,7 @@ def test_plan_040_a_provider_scoped_contract_transfers_on_an_exact_match(
     ids=["disjoint", "plan-wider", "plan-narrower", "plan-records-none"],
 )
 def test_plan_040_a_provider_scoped_contract_is_refused_without_an_exact_match(
-    providers: State, contract_id: str, plan_providers: tuple[str, ...]
+    providers: ContractView, contract_id: str, plan_providers: tuple[str, ...]
 ) -> None:
     with pytest.raises(UserError, match="exact provider match") as caught:
         resolve_contract_citation(providers, contract_id, provider_tuple=plan_providers)
@@ -201,7 +203,7 @@ def test_plan_040_a_provider_scoped_contract_is_refused_without_an_exact_match(
     assert PROBE in str(caught.value)
 
 
-def test_plan_040_a_provider_mismatch_is_not_reported_measured(providers: State) -> None:
+def test_plan_040_a_provider_mismatch_is_not_reported_measured(providers: ContractView) -> None:
     body = _measured_body("MCT-00000011")
     resolves = _resolves_under(providers, ("codex",))
     ungrounded = ungrounded_approval_criteria(body, contract_is_resolvable=resolves)
@@ -211,7 +213,7 @@ def test_plan_040_a_provider_mismatch_is_not_reported_measured(providers: State)
 
 
 def test_plan_040_a_contract_that_is_not_provider_scoped_transfers_to_any_providers(
-    providers: State,
+    providers: ContractView,
 ) -> None:
     for plan_providers in ((), ("claude",), ("claude", "codex")):
         resolved = resolve_contract_citation(
@@ -221,13 +223,13 @@ def test_plan_040_a_contract_that_is_not_provider_scoped_transfers_to_any_provid
 
 
 def test_plan_040_a_citation_read_outside_a_plan_is_not_judged_by_provider(
-    providers: State,
+    providers: ContractView,
 ) -> None:
     assert resolve_contract_citation(providers, "MCT-00000011").id == "MCT-00000011"
 
 
 def test_plan_040_the_repository_boundary_still_holds_under_a_matching_provider(
-    consuming: State,
+    consuming: ContractView,
 ) -> None:
     foreign = {**_environment("PUB"), "provider_tuple": ["claude"]}
     consuming.artifacts["MCT-00000013"] = _contract(

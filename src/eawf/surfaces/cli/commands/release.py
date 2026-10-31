@@ -22,7 +22,9 @@ The two train-walking verbs, ``receipts`` and ``advance``, live in
 verbs, ``tag`` and ``preflight``, live in
 :mod:`eawf.surfaces.cli.commands.release_tag`; the local evidence
 export, ``canary-export``, lives in
-:mod:`eawf.surfaces.cli.commands.release_export`; and the post-merge walk,
+:mod:`eawf.surfaces.cli.commands.release_export`; the local packet run,
+``packet-run``, lives in :mod:`eawf.surfaces.cli.commands.release_packet`;
+and the post-merge walk,
 ``pipeline``, lives in :mod:`eawf.surfaces.cli.commands.release_pipeline`.
 All of them attach their verbs to :data:`release_app` when this module is
 imported.
@@ -1024,6 +1026,7 @@ def release_cancel(
 # every shared symbol is defined, so the siblings can import them from here.
 from eawf.surfaces.cli.commands import release_candidate as _release_candidate  # noqa: E402, F401
 from eawf.surfaces.cli.commands import release_export as _release_export  # noqa: E402, F401
+from eawf.surfaces.cli.commands import release_packet as _release_packet  # noqa: E402, F401
 from eawf.surfaces.cli.commands import release_pipeline as _release_pipeline  # noqa: E402, F401
 from eawf.surfaces.cli.commands import release_regime as _release_regime  # noqa: E402, F401
 from eawf.surfaces.cli.commands import release_tag as _release_tag  # noqa: E402, F401

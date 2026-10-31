@@ -2,8 +2,8 @@
 
 Covers boundary cases (empty list / single / multi) and error paths
 (extra key, wrong type, schema_version mismatch, missing required
-fields, id-nesting violations) for PhaseSpec, IterSpec, WaveSpec and
-their shared building blocks under :mod:`eawf.kernel.spec.common`.
+fields, id-nesting violations) for PhaseSpec, IterSpec, the rubric
+WaveBehavior and their shared building blocks under :mod:`eawf.kernel.spec.common`.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from eawf.kernel.spec.common import (
     EvidenceRef,
+    QualityDimension,
     VerdictCitation,
 )
 from eawf.kernel.spec.iter import IterAuditCadence, IterSpec, IterWaveGroup
@@ -24,8 +25,7 @@ from eawf.kernel.spec.phase import (
     PhaseShipCriterion,
     PhaseSpec,
 )
-from eawf.kernel.spec.wave import QualityDimension, WaveBehavior, WaveMockup, WaveSpec
-from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
+from eawf.kernel.spec.visual import WaveBehavior
 
 # ---- Common building blocks -------------------------------------------------
 
@@ -473,143 +473,7 @@ def test_iter_wave_group_rejects_short_rationale() -> None:
         IterWaveGroup(label="x", wave_ids=["P25-I01-W01"], rationale="short")
 
 
-# ---- WaveSpec ---------------------------------------------------------------
-
-
-def _wave_spec_factory(**overrides: Any) -> WaveSpec:
-    defaults: dict[str, Any] = {
-        "id": "P25-I01-W01",
-        "iter_id": "P25-I01",
-        "phase_id": "P25",
-        "title": "C03 schemas + common types",
-        "agent_role": AgentSessionRole.EXECUTOR,
-        "effort_bucket": EffortBucket.L,
-        "file_scopes": ["src/eawf/spec/common.py"],
-        "implements": [_verdict_citation()],
-        "behaviors": [
-            WaveBehavior(
-                id="B1",
-                text="phase/iter/wave Pydantic schemas import without cycles",
-            )
-        ],
-        "failure_modes": ["circular import between spec modules"],
-    }
-    defaults.update(overrides)
-    return WaveSpec.model_validate(defaults)
-
-
-def test_wave_spec_minimal() -> None:
-    spec = _wave_spec_factory()
-    assert spec.schema_version == "1.0"
-    assert spec.kind == "WaveSpec"
-    assert spec.tests == []
-    assert spec.mockup is None
-
-
-def test_wave_spec_full() -> None:
-    spec = _wave_spec_factory(
-        deps=[],
-        file_scopes=[
-            "src/eawf/spec/common.py",
-            "src/eawf/spec/phase.py",
-            "src/eawf/spec/iter.py",
-            "src/eawf/spec/wave.py",
-        ],
-        behaviors=[
-            WaveBehavior(
-                id="B1",
-                text="phase/iter/wave Pydantic schemas import without cycles",
-                latency_budget_ms=50,
-                test_refs=["tests/unit/test_spec_schemas.py"],
-            ),
-            WaveBehavior(
-                id="B2",
-                text="extra keys raise pydantic.ValidationError on model_validate",
-            ),
-        ],
-        tests=["tests/unit/test_spec_schemas.py"],
-        mockup=WaveMockup(ascii="(no UI)", note="non-UI scope"),
-    )
-    assert len(spec.behaviors) == 2
-    assert spec.behaviors[0].latency_budget_ms == 50
-
-
-def test_wave_spec_rejects_extra_key() -> None:
-    with pytest.raises(ValidationError):
-        WaveSpec.model_validate(
-            {
-                "id": "P25-I01-W01",
-                "iter_id": "P25-I01",
-                "phase_id": "P25",
-                "title": "x",
-                "agent_role": "executor",
-                "effort_bucket": "L",
-                "file_scopes": ["src/eawf/spec/common.py"],
-                "implements": [
-                    {
-                        "verdict_id": "V12",
-                        "brief": ".ea/local/research/2026-05-19-x.md",
-                    }
-                ],
-                "behaviors": [
-                    {
-                        "id": "B1",
-                        "text": "x" * 21,
-                    }
-                ],
-                "failure_modes": ["m"],
-                "extra": "nope",
-            }
-        )
-
-
-def test_wave_spec_rejects_wrong_schema_version() -> None:
-    with pytest.raises(ValidationError):
-        _wave_spec_factory(schema_version="1.1")
-
-
-def test_wave_spec_rejects_empty_file_scopes() -> None:
-    with pytest.raises(ValidationError):
-        _wave_spec_factory(file_scopes=[])
-
-
-def test_wave_spec_rejects_empty_implements() -> None:
-    with pytest.raises(ValidationError):
-        _wave_spec_factory(implements=[])
-
-
-def test_wave_spec_rejects_empty_behaviors() -> None:
-    with pytest.raises(ValidationError):
-        _wave_spec_factory(behaviors=[])
-
-
-def test_wave_spec_rejects_empty_failure_modes() -> None:
-    with pytest.raises(ValidationError):
-        _wave_spec_factory(failure_modes=[])
-
-
-def test_wave_spec_rejects_inconsistent_iter_phase_nesting() -> None:
-    # iter id "P25-I01" does not nest under phase "P26"
-    with pytest.raises(ValidationError) as excinfo:
-        _wave_spec_factory(phase_id="P26")
-    assert "iter id does not nest under phase" in str(excinfo.value)
-
-
-def test_wave_spec_rejects_inconsistent_wave_iter_nesting() -> None:
-    # wave id "P25-I01-W01" does not nest under iter "P25-I02"
-    with pytest.raises(ValidationError) as excinfo:
-        _wave_spec_factory(iter_id="P25-I02")
-    assert "wave id does not nest under iter" in str(excinfo.value)
-
-
-def test_wave_spec_rejects_wrong_agent_role() -> None:
-    with pytest.raises(ValidationError):
-        _wave_spec_factory(agent_role="bogus-role")
-
-
-def test_wave_spec_rejects_wrong_effort_bucket() -> None:
-    with pytest.raises(ValidationError):
-        _wave_spec_factory(effort_bucket="XXL")
+# ---- WaveBehavior -----------------------------------------------------------
 
 
 def test_wave_behavior_rejects_bad_id() -> None:
@@ -627,11 +491,6 @@ def test_wave_behavior_rejects_negative_latency() -> None:
         WaveBehavior(id="B1", text="x" * 21, latency_budget_ms=-1)
 
 
-def test_wave_mockup_rejects_empty_ascii() -> None:
-    with pytest.raises(ValidationError):
-        WaveMockup(ascii="")
-
-
 # ---- Cross-spec schema_version lock -----------------------------------------
 
 
@@ -640,7 +499,6 @@ def test_wave_mockup_rejects_empty_ascii() -> None:
     [
         (PhaseSpec, _phase_spec_factory),
         (IterSpec, _iter_spec_factory),
-        (WaveSpec, _wave_spec_factory),
     ],
 )
 def test_schema_version_defaults_to_1_0(model_cls: type, factory: Any) -> None:
@@ -654,7 +512,7 @@ def test_schema_version_defaults_to_1_0(model_cls: type, factory: Any) -> None:
 )
 @pytest.mark.parametrize(
     "factory",
-    [_phase_spec_factory, _iter_spec_factory, _wave_spec_factory],
+    [_phase_spec_factory, _iter_spec_factory],
 )
 def test_schema_version_rejects_non_1_0(bad_version: str, factory: Any) -> None:
     with pytest.raises(ValidationError):
@@ -679,22 +537,6 @@ def test_phase_spec_default_kpis_empty() -> None:
     assert spec.kpis == []
 
 
-def test_wave_spec_accepts_single_behavior() -> None:
-    spec = _wave_spec_factory()
-    assert len(spec.behaviors) == 1
-
-
-def test_wave_spec_accepts_multi_file_scopes() -> None:
-    spec = _wave_spec_factory(
-        file_scopes=[
-            "src/eawf/spec/common.py",
-            "src/eawf/spec/phase.py",
-            "src/eawf/spec/iter.py",
-        ]
-    )
-    assert len(spec.file_scopes) == 3
-
-
 # ---- Public re-exports from package root ------------------------------------
 
 
@@ -716,13 +558,21 @@ def test_package_reexports() -> None:
         "VerdictCitation",
         "VerdictIdStr",
         "WaveBehavior",
-        "WaveMockup",
-        "WaveSpec",
     }
     assert expected.issubset(set(spec.__all__))
     # Ensure each name actually resolves on the module.
     for name in expected:
         assert hasattr(spec, name)
+
+
+def test_wave_spec_module_is_gone() -> None:
+    import importlib.util
+
+    from eawf.kernel import spec
+
+    assert importlib.util.find_spec("eawf.kernel.spec.wave") is None
+    assert "WaveSpec" not in spec.__all__
+    assert "WaveMockup" not in spec.__all__
 
 
 # --- W01: rubric (quality_dimension + jury_scorable) ---------------------------

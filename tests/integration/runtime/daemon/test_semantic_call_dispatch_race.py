@@ -164,7 +164,27 @@ def test_a_call_sent_before_running_is_recorded_is_served_once_it_is(tmp_path: P
     assert receipt["refused_check"] is None
 
 
-def test_a_queued_run_with_no_dispatch_in_flight_is_refused_at_once(tmp_path: Path) -> None:
+def count_serves(monkeypatch: pytest.MonkeyPatch) -> list[bool]:
+    """Record, per gateway attempt, whether it found the call still settling.
+
+    A refusal "at once" is one attempt that answers: a second attempt means the
+    gateway slept a settle poll waiting on a dispatch that was never coming.
+    """
+    attempts: list[bool] = []
+    real = semantic_gateway._serve_once
+
+    def _counting(*args: Any, **kwargs: Any) -> Any:
+        receipt = real(*args, **kwargs)
+        attempts.append(receipt is None)
+        return receipt
+
+    monkeypatch.setattr(semantic_gateway, "_serve_once", _counting)
+    return attempts
+
+
+def test_a_queued_run_with_no_dispatch_in_flight_is_refused_at_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     canary = make_canary(tmp_path / "repo")
     ctx = method_ctx(tmp_path / "runtime")
     probe = LedgerReadingLauncher(canary, tmp_path / "probe", die=True)
@@ -175,14 +195,16 @@ def test_a_queued_run_with_no_dispatch_in_flight_is_refused_at_once(tmp_path: Pa
         dispatch(method_ctx(tmp_path / "probe"), other, probe, now=datetime.now(UTC))
     sealed: AuthorityCapsule = probe.calls[0]["capsule"]
 
-    started = time.monotonic()
+    serves = count_serves(monkeypatch)
     receipt = asyncio.run(send_call(ctx, canary, budget_call(sealed), sealed))
 
-    assert time.monotonic() - started < semantic_gateway.DISPATCH_SETTLE_SECONDS
+    assert serves == [False]
     assert_run_not_active(receipt)
 
 
-def test_a_dispatch_whose_lease_has_lapsed_is_not_waited_for(tmp_path: Path) -> None:
+def test_a_dispatch_whose_lease_has_lapsed_is_not_waited_for(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     canary = make_canary(tmp_path / "repo")
     runtime = tmp_path / "runtime"
     lost = LedgerReadingLauncher(canary, runtime, die=True)
@@ -191,10 +213,10 @@ def test_a_dispatch_whose_lease_has_lapsed_is_not_waited_for(tmp_path: Path) -> 
         dispatch(method_ctx(runtime), canary, lost)
     sealed: AuthorityCapsule = lost.calls[0]["capsule"]
 
-    started = time.monotonic()
+    serves = count_serves(monkeypatch)
     receipt = asyncio.run(send_call(method_ctx(runtime), canary, budget_call(sealed), sealed))
 
-    assert time.monotonic() - started < semantic_gateway.DISPATCH_SETTLE_SECONDS
+    assert serves == [False]
     assert_run_not_active(receipt)
 
 

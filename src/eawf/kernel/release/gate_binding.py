@@ -211,11 +211,38 @@ FLAG_DAY_ADDED_GATES: Final[tuple[ReleaseGateName, ...]] = (ReleaseGateName.EPOC
 #: second platform, so it is where the row becomes required.
 CROSS_PROVIDER_ADDED_GATES: Final[tuple[ReleaseGateName, ...]] = (ReleaseGateName.PLATFORM,)
 
-#: The gate names each profile admits. ``dev1`` through
-#: ``cross_provider`` are authored: the later profiles add their gates
-#: with the Tasks that build their producers, and an unauthored profile
-#: is a loud :attr:`GateBindingRejection.UNDECLARED_PROFILE` rather than
-#: a silently empty gate set.
+#: The gates ``cross_provider`` admits: every candidate rung up to rc4.
+CROSS_PROVIDER_GATES: Final[tuple[ReleaseGateName, ...]] = (
+    *DEV1_GATES,
+    *DEV2_ADDED_GATES,
+    *NATIVE_CANARY_ADDED_GATES,
+    *PRODUCT_CANARY_PRE_MERGE_GATES,
+    *PRODUCT_CANARY_POST_MERGE_GATES,
+    *FLAG_DAY_ADDED_GATES,
+    *CROSS_PROVIDER_ADDED_GATES,
+)
+
+#: The gates the ``stable`` profile admits: the rc4 set, with three
+#: changes. The whole suite is settled under ``full_suite`` in the slot
+#: ``epoch1_stabilization`` held, whose name stays with the dev1 to rc4
+#: rungs and the receipts bound to it. The ``migration`` row is left
+#: behind, because it reads the committed rehearsal of the epoch-1
+#: cutover and this release no longer ships that cutover. ``packet_run``
+#: joins last: the realization row only requires the packet run on the
+#: stable channel, and no earlier profile bound the row, so without the
+#: gate the sweep would report it without requiring it.
+STABLE_GATES: Final[tuple[ReleaseGateName, ...]] = (
+    *(
+        ReleaseGateName.FULL_SUITE if gate is ReleaseGateName.EPOCH1_STABILIZATION else gate
+        for gate in CROSS_PROVIDER_GATES
+        if gate is not ReleaseGateName.MIGRATION
+    ),
+    ReleaseGateName.PACKET_RUN,
+)
+
+#: The gate names each profile admits. A profile missing here is a loud
+#: :attr:`GateBindingRejection.UNDECLARED_PROFILE` rather than a silently
+#: empty gate set.
 PROFILE_GATES: Final[Mapping[ReleaseGateProfile, tuple[ReleaseGateName, ...]]] = {
     ReleaseGateProfile.DEV1: DEV1_GATES,
     ReleaseGateProfile.DEV2: (*DEV1_GATES, *DEV2_ADDED_GATES),
@@ -239,15 +266,8 @@ PROFILE_GATES: Final[Mapping[ReleaseGateProfile, tuple[ReleaseGateName, ...]]] =
         *PRODUCT_CANARY_POST_MERGE_GATES,
         *FLAG_DAY_ADDED_GATES,
     ),
-    ReleaseGateProfile.CROSS_PROVIDER: (
-        *DEV1_GATES,
-        *DEV2_ADDED_GATES,
-        *NATIVE_CANARY_ADDED_GATES,
-        *PRODUCT_CANARY_PRE_MERGE_GATES,
-        *PRODUCT_CANARY_POST_MERGE_GATES,
-        *FLAG_DAY_ADDED_GATES,
-        *CROSS_PROVIDER_ADDED_GATES,
-    ),
+    ReleaseGateProfile.CROSS_PROVIDER: CROSS_PROVIDER_GATES,
+    ReleaseGateProfile.STABLE: STABLE_GATES,
 }
 
 
@@ -707,6 +727,7 @@ __all__ = [
     "PRODUCT_CANARY_POST_MERGE_GATES",
     "PRODUCT_CANARY_PRE_MERGE_GATES",
     "PROFILE_GATES",
+    "STABLE_GATES",
     "WAIVER_BLOCK_REF",
     "GateBinding",
     "GateBindingError",

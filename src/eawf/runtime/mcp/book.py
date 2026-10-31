@@ -26,7 +26,6 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.migration.epoch2.native_records import ImportedNativeRecord
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.epoch2.base import StrictPositiveInt
 from eawf.kernel.state.models import McpGrant, McpServer
@@ -239,27 +238,23 @@ def owned_registry(
 ) -> tuple[list[tuple[McpServer, int | None]], list[tuple[McpGrant, int]]]:
     """Return the Eä-owned servers and the standing grants a tree holds, each at its revision.
 
-    An epoch-2 tree answers from its generation. An epoch-1 tree answers from
-    its frozen document, which carries no revisions and lists no grants. A tree
-    with no ``state.json`` yet holds nothing.
+    The tree answers from its selected generation; a tree that selects none
+    holds nothing.
 
     Args:
         state_path: The tree's ``state.json``.
 
     Returns:
-        The owned servers in id order with their revisions, ``None`` on an
-        epoch-1 tree, and the standing grants in id order with theirs.
+        The owned servers in id order with their revisions, and the standing
+        grants in id order with theirs.
 
     Raises:
         McpRowError: A generation row reads as neither an imported nor a native row.
-        ValidationError: The frozen document or a native row violates its model.
+        ValidationError: A native row violates its model.
     """
     document_path = generation_document(state_path.parent)
     if document_path is None:
-        if not state_path.exists():
-            return [], []
-        frozen = State.model_validate_json(state_path.read_bytes()).mcp_servers or {}
-        return [(frozen[key], None) for key in sorted(frozen) if frozen[key].owner == "eawf"], []
+        return [], []
     document = read_document(document_path)
     owned: list[tuple[McpServer, int | None]] = [
         (s.server, s.revision)

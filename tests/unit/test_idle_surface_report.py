@@ -131,7 +131,11 @@ _CALLER_ROOTS = [_REPO_ROOT / "tools"]
 #: ``generated_changelog_lines`` stranded ``build_role_contract``,
 #: ``estimate_unavailable_reason`` and ``render_context``, whose only
 #: callers were the deleted wave prompt builders. 194.
-IDLE_CEILING = 194
+#:
+#: Removing the epoch-1 migration stack deleted the helpers only it called
+#: and left the epoch-2 cutover's entry points, which only the removed
+#: ``migrate`` verbs called, uncalled. 189.
+IDLE_CEILING = 189
 
 
 def _load_tool() -> Any:

@@ -126,76 +126,6 @@ def test_project_rejects_bad_urn() -> None:
         )
 
 
-def test_phase_round_trip() -> None:
-    now = datetime.now(UTC)
-    phase = models.Phase(
-        id="P01",
-        scope_id="QR",
-        title="Bootstrap",
-        status="planned",
-        iter_ids=[],
-        outcome_ids=[],
-        opened_at=now,
-        closed_at=None,
-        audit_id=None,
-    )
-    dumped = phase.model_dump(mode="json")
-    restored = models.Phase.model_validate(dumped)
-    assert restored == phase
-
-
-def test_phase_rejects_bad_id() -> None:
-    now = datetime.now(UTC)
-    with pytest.raises(ValidationError):
-        models.Phase(
-            id="P1",
-            scope_id="QR",
-            title="Bootstrap",
-            status="planned",
-            iter_ids=[],
-            outcome_ids=[],
-            opened_at=now,
-            closed_at=None,
-            audit_id=None,
-        )
-
-
-def test_wave_deps_validation() -> None:
-    now = datetime.now(UTC)
-    wave = models.Wave(
-        id="P01-I02-W03",
-        iter_id="P01-I02",
-        title="Build feature",
-        status="pending",
-        deps=["P01-I02-W01", "P01-I02-W02"],
-        file_scopes=["src/foo/"],
-        claim_session_id=None,
-        worktree_id=None,
-        outcome=None,
-        opened_at=now,
-        closed_at=None,
-    )
-    assert wave.deps == ["P01-I02-W01", "P01-I02-W02"]
-
-
-def test_wave_rejects_bad_dep() -> None:
-    now = datetime.now(UTC)
-    with pytest.raises(ValidationError):
-        models.Wave(
-            id="P01-I02-W03",
-            iter_id="P01-I02",
-            title="Build feature",
-            status="pending",
-            deps=["not-a-wave-id"],
-            file_scopes=[],
-            claim_session_id=None,
-            worktree_id=None,
-            outcome=None,
-            opened_at=now,
-            closed_at=None,
-        )
-
-
 def test_outcome_direction_enum() -> None:
     now = datetime.now(UTC)
     outcome = models.Outcome(
@@ -261,26 +191,6 @@ def test_hypothesis_thresholds_required_when_populated() -> None:
     assert hypothesis.reject == ">= 200"
 
 
-def test_workspace_index_repos_typed() -> None:
-    ws = models.WorkspaceIndex(
-        code="MAIN",
-        title="Main workspace",
-        repos={
-            "QR": models.WorkspaceRepoRef(
-                code="QR",
-                path="/abs/path/qr",
-                state_urn="urn:eawf:v1:state:QR",
-                project_code="QR",
-                title="Quant Research",
-                status="active",
-            )
-        },
-        current_repo_code="QR",
-    )
-    assert ws.repos["QR"].path == "/abs/path/qr"
-    assert ws.repos["QR"].status == "active"
-
-
 def test_memory_summary_confidence_enum() -> None:
     summary = models.MemorySummary(
         id="MEM-001",
@@ -305,100 +215,6 @@ def test_memory_summary_rejects_bad_confidence() -> None:
             store_record_id="REC-001",
             review_due=None,
         )
-
-
-def test_worktree_record_requires_base_branch_and_branch() -> None:
-    now = datetime.now(UTC)
-    record = models.WorktreeRecord(
-        id="WT-001",
-        wave_id="P01-I02-W01",
-        branch="feature/p01-i02-w01",
-        path="/abs/path/wt",
-        base_branch="feature/eawf-v0.1",
-        status="active",
-        owner_session_id=None,
-        created_at=now,
-        merged_commit=None,
-    )
-    assert record.base_branch == "feature/eawf-v0.1"
-    assert record.branch == "feature/p01-i02-w01"
-
-
-def test_worktree_record_missing_base_branch_raises() -> None:
-    now = datetime.now(UTC)
-    with pytest.raises(ValidationError):
-        models.WorktreeRecord(  # type: ignore[call-arg]
-            id="WT-001",
-            wave_id="P01-I02-W01",
-            branch="feature/p01-i02-w01",
-            path="/abs/path/wt",
-            status="active",
-            owner_session_id=None,
-            created_at=now,
-            merged_commit=None,
-        )
-
-
-def test_iter_round_trip() -> None:
-    now = datetime.now(UTC)
-    it = models.Iter(
-        id="P01-I02",
-        phase_id="P01",
-        title="First iter",
-        status="planned",
-        wave_ids=[],
-        estimate_id=None,
-        audit_id=None,
-        opened_at=now,
-        closed_at=None,
-    )
-    dumped = it.model_dump(mode="json")
-    restored = models.Iter.model_validate(dumped)
-    assert restored == it
-
-
-def _iter_kwargs() -> dict[str, object]:
-    """Return the minimal keyword set for a valid :class:`Iter`."""
-    return {
-        "id": "P01-I02",
-        "phase_id": "P01",
-        "title": "First iter",
-        "status": "planned",
-        "opened_at": datetime.now(UTC),
-    }
-
-
-def test_iter_candidate_tag_defaults_none() -> None:
-    """``candidate_tag`` is additive: an iter without it loads as ``None``."""
-    it = models.Iter(**_iter_kwargs())  # type: ignore[arg-type]
-    assert it.candidate_tag is None
-    # An on-disk row predating the field re-validates under ``extra="forbid"``.
-    restored = models.Iter.model_validate(it.model_dump(mode="json"))
-    assert restored.candidate_tag is None
-
-
-def test_iter_candidate_tag_accepts_valid_release_label() -> None:
-    """A ``vMAJOR.MINOR.PATCH`` tag is accepted and round-trips."""
-    it = models.Iter(candidate_tag="v0.5.0", **_iter_kwargs())  # type: ignore[arg-type]
-    assert it.candidate_tag == "v0.5.0"
-    restored = models.Iter.model_validate(it.model_dump(mode="json"))
-    assert restored.candidate_tag == "v0.5.0"
-
-
-@pytest.mark.parametrize(
-    "bad_tag",
-    [
-        "0.5",  # missing v prefix + patch segment
-        "v0.5",  # missing patch segment
-        "foo",  # not a version at all
-        "v0.5.0-junk",  # trailing junk past the semver core
-        "0.5.0",  # missing v prefix
-    ],
-)
-def test_iter_candidate_tag_rejects_malformed(bad_tag: str) -> None:
-    """A tag that violates the ``ReleaseStr`` pattern fails validation."""
-    with pytest.raises(ValidationError):
-        models.Iter(candidate_tag=bad_tag, **_iter_kwargs())  # type: ignore[arg-type]
 
 
 def test_artifact_basic() -> None:
@@ -541,13 +357,6 @@ def test_track_status_rejects_unknown_value() -> None:
         )
 
 
-def test_workspace_index_code_pattern() -> None:
-    with pytest.raises(ValidationError):
-        models.WorkspaceIndex(code="lower-case", title="bad", repos={})
-    ws = models.WorkspaceIndex(code="MAIN", title="ok", repos={})
-    assert ws.code == "MAIN"
-
-
 def test_project_description_optional() -> None:
     project = models.Project(
         code="QR",
@@ -560,23 +369,6 @@ def test_project_description_optional() -> None:
         repo_urn="urn:eawf:v1:repo:QR",
     )
     assert project.description is None
-
-
-def test_phase_track_id_optional() -> None:
-    now = datetime.now(UTC)
-    phase = models.Phase(
-        id="P01",
-        scope_id="QR",
-        track_id=None,
-        title="Bootstrap",
-        status="planned",
-        iter_ids=[],
-        outcome_ids=[],
-        opened_at=now,
-        closed_at=None,
-        audit_id=None,
-    )
-    assert phase.track_id is None
 
 
 def test_plugin_install_owner_required() -> None:
@@ -713,50 +505,6 @@ def test_id_str_accepts_minimum_token() -> None:
 
 
 # ---- Bounded title + description ------------------------------
-
-
-def _wave_kwargs(**overrides: object) -> dict[str, object]:
-    """Return Wave constructor kwargs with sane defaults for cap tests."""
-    base: dict[str, object] = {
-        "id": "P00-I01-W01",
-        "iter_id": "P00-I01",
-        "title": "Wave one",
-        "status": "pending",
-        "opened_at": datetime.now(UTC),
-    }
-    base.update(overrides)
-    return base
-
-
-def test_wave_title_at_cap_validates() -> None:
-    wave = models.Wave(**_wave_kwargs(title="t" * 72))
-    assert len(wave.title) == 72
-
-
-def test_wave_title_over_cap_rejected() -> None:
-    with pytest.raises(ValidationError):
-        models.Wave(**_wave_kwargs(title="t" * 73))
-
-
-def test_wave_title_empty_rejected() -> None:
-    with pytest.raises(ValidationError):
-        models.Wave(**_wave_kwargs(title=""))
-
-
-def test_wave_description_at_cap_validates() -> None:
-    wave = models.Wave(**_wave_kwargs(description="d" * 500))
-    assert wave.description is not None
-    assert len(wave.description) == 500
-
-
-def test_wave_description_over_cap_rejected() -> None:
-    with pytest.raises(ValidationError):
-        models.Wave(**_wave_kwargs(description="d" * 501))
-
-
-def test_wave_description_defaults_none() -> None:
-    wave = models.Wave(**_wave_kwargs())
-    assert wave.description is None
 
 
 def test_decision_title_over_cap_rejected() -> None:

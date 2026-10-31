@@ -75,11 +75,12 @@ _RUNTIME_TIER_MODEL: dict[str, tuple[str, str, str]] = {
     "claude": (_MODEL_HAIKU, _MODEL_SONNET, _MODEL_OPUS),
     # ChatGPT-account codex (the agent-driven default lane) rejects the
     # API-key-only ``gpt-5-mini`` / ``gpt-5`` / ``gpt-5-codex`` ids with a 400
-    # "not supported when using Codex with a ChatGPT account"; the small
-    # ``gpt-5.3-codex-spark`` and the ``gpt-5.5`` flagship are the ids that
-    # account actually serves. A repo on an API-key account overrides this tier
-    # ladder via the ``runtime.models`` config block (resolve_runtime_tier_models).
-    "codex": ("gpt-5.3-codex-spark", "gpt-5.5", "gpt-5.5"),
+    # "not supported when using Codex with a ChatGPT account"; the fast
+    # ``gpt-6-luna`` and the ``gpt-6.1-sol`` workhorse are ids that account
+    # serves. Every id here is one the codex launcher manifest lists. A repo on
+    # another account overrides this tier ladder via the ``runtime.models``
+    # config block (resolve_runtime_tier_models).
+    "codex": ("gpt-6-luna", "gpt-6.1-sol", "gpt-6.1-sol"),
     "opencode": (
         f"anthropic/{_MODEL_HAIKU}",
         f"anthropic/{_MODEL_SONNET}",

@@ -64,6 +64,7 @@ from eawf.runtime.daemon.gate_receipt_hygiene import (
 )
 from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.runtime.lock import portalock
+from eawf.runtime.sandbox.test_fixtures import ResolvedTestFixture, test_fixture_context
 from eawf.runtime.verification.progress import PROGRESS_CHANNEL_ENTRIES
 from eawf.workflow.audit_dsl.models import (
     CheckResult,
@@ -351,6 +352,8 @@ class GateExecutionContext(BaseModel):
 
     state_path: Path
     attempt_id: str = Field(min_length=1)
+    fixtures: tuple[ResolvedTestFixture, ...] = ()
+    diagnostic_state_path: Path | None = None
 
 
 #: Ambient durable-close identity for the gate runner. The oracle sits four
@@ -408,6 +411,7 @@ class _GateChildRequest(BaseModel):
     #: Sandbox runtime directory the child offers its progress channel in.
     channel_dir: Path | None = None
     resume: bool = False
+    fixtures: tuple[ResolvedTestFixture, ...] = ()
 
 
 class _GateChildResponse(BaseModel):
@@ -696,6 +700,7 @@ def run_gate_out_of_process(
                 gate_id=gate_id,
                 channel_dir=sandbox.runtime_dir,
                 resume=resume,
+                fixtures=context.fixtures,
             )
             request_path.write_bytes(orjson.dumps(request.model_dump(mode="json")))
             completed = subprocess.run(
@@ -931,7 +936,8 @@ def _run_claimed_leg(request: _GateChildRequest) -> CheckResult:
         return claimed
 
     try:
-        result = run_checks([spec], cwd=request.cwd, before_execute=_before_execute)[0]
+        with test_fixture_context(request.fixtures):
+            result = run_checks([spec], cwd=request.cwd, before_execute=_before_execute)[0]
     except BaseException:
         if observation.publisher is not None:
             _close_publisher(observation.publisher, outcome=LegOutcome.ERRORED, result=None)

@@ -31,6 +31,7 @@ runner.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import platform
 import re
@@ -44,17 +45,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from eawf._version import __version__
 from eawf.kernel.delivery.adoption import LandedAdoption
-from eawf.kernel.delivery.receipts import ProofReceipt, canonical_digest
+from eawf.kernel.delivery.receipts import ExternalInputDigest, ProofReceipt, canonical_digest
 from eawf.kernel.identity import EntityKind, IdentityError, format_entity_key
 from eawf.kernel.spec.common import GateSpec
 from eawf.kernel.state.enums import GateReceiptResult
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.urns import TaskUrn
+from eawf.kernel.store.kinds.gate_receipt import GateDiagnostic
 from eawf.kernel.store.ledger import LedgerRecord, effective_records, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.subprocess_detach import no_window_kwargs
@@ -63,8 +65,10 @@ from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.gate_execution import (
     GateChildCrashError,
     GateExecutionContext,
+    gate_receipt_id,
     run_gate_out_of_process,
 )
+from eawf.runtime.daemon.gate_receipt_hygiene import diagnostic_id, write_gate_diagnostic
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.delivery import (
     IdempotencyKey,
@@ -89,8 +93,14 @@ from eawf.runtime.daemon.methods.delivery_completion import (
 )
 from eawf.runtime.daemon.native_dispatch import run_ledger
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
+from eawf.runtime.sandbox.test_fixtures import (
+    ResolvedTestFixture,
+    TestFixtureBinding,
+    TestFixtureInput,
+    resolve_test_fixtures,
+)
 from eawf.runtime.verification.receipts import ProofRuntimeFacts, VerificationLeg
-from eawf.workflow.audit_dsl.models import CheckResult
+from eawf.workflow.audit_dsl.models import CheckResult, CommandExitZeroArgs, GateFreshnessInput
 from eawf.workflow.delivery.completion import CompletionRefusedError, completion_legs
 from eawf.workflow.delivery.criteria import ExecutionContractSet
 
@@ -128,6 +138,9 @@ class TaskProveParams(BaseModel):
     idempotency_key: IdempotencyKey
     expected_revision: StrictPositiveInt | None = None
     gates: tuple[GateSpec, ...] = ()
+    fixture_bindings: tuple[TestFixtureBinding, ...] = Field(
+        default=(), exclude_if=lambda value: not value
+    )
 
 
 class ProvedLeg(BaseModel):
@@ -147,6 +160,8 @@ class ProvedLeg(BaseModel):
     head_sha: str
     result: str
     receipt_id: str
+    diagnostic_digest: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    diagnostic_ref: str | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class TaskProveAnswer(BaseModel):
@@ -223,7 +238,25 @@ def daemon_proof_facts(contracts: ExecutionContractSet) -> ProofRuntimeFacts:
         environment_digest=canonical_digest(
             {"platform": sys.platform, "machine": platform.machine()}
         ),
+        external_inputs=tuple(
+            ExternalInputDigest(name=item.id, digest=item.digest)
+            for item in _fixture_inputs(tuple(contract.gate for contract in gates))
+        ),
     )
+
+
+def _fixture_inputs(gates: Sequence[GateSpec]) -> tuple[TestFixtureInput, ...]:
+    """Resolve each portable input once and refuse conflicting declarations."""
+    declarations: dict[str, TestFixtureInput] = {}
+    for gate in gates:
+        if gate.kind != "command_exit_zero":
+            continue
+        args = CommandExitZeroArgs.model_validate(gate.args)
+        for item in args.fixture_inputs:
+            if item.id in declarations and declarations[item.id] != item:
+                raise ValueError(f"fixture {item.id!r} has conflicting declarations")
+            declarations[item.id] = item
+    return tuple(declarations[key] for key in sorted(declarations))
 
 
 def _latest_gates(proofs: Sequence[FiledProof]) -> tuple[GateSpec, ...]:
@@ -293,7 +326,13 @@ def run_leg(leg: VerificationLeg, *, cwd: Path, gate_context: GateExecutionConte
     assert contract.check is not None, "only a deterministic leg is run"
     try:
         result = run_gate_out_of_process(
-            contract.check,
+            contract.check.model_copy(
+                update={
+                    "freshness": GateFreshnessInput(
+                        full_log_ref=f".ea/local/proof-output/{leg.expected.digest()}.log"
+                    )
+                }
+            ),
             cwd=cwd,
             context=gate_context,
             criterion_id=contract.gate.criterion_id,
@@ -304,7 +343,43 @@ def run_leg(leg: VerificationLeg, *, cwd: Path, gate_context: GateExecutionConte
             f"validation_failed: proof_gate_crashed: gate {contract.gate_id} crashed before it "
             f"produced a result ({error!s})"
         ) from error
-    return result
+    return _retain_diagnostic(leg, result, cwd=cwd, gate_context=gate_context)
+
+
+def _retain_diagnostic(
+    leg: VerificationLeg, result: CheckResult, *, cwd: Path, gate_context: GateExecutionContext
+) -> CheckResult:
+    """Copy exact output into durable owner-local storage before checkout deletion."""
+    token = hashlib.sha256(
+        f"{gate_context.attempt_id}:{leg.expected.digest()}".encode()
+    ).hexdigest()
+    reference = gate_receipt_id(token)
+    log = cwd / result.full_log_ref if result.full_log_ref is not None else None
+    log_bytes = log.read_bytes() if log is not None and log.is_file() else None
+    diagnostic = GateDiagnostic(
+        id=diagnostic_id(reference),
+        receipt_id=reference,
+        attempt_id=gate_context.attempt_id,
+        scope_id=leg.contract.scope_id,
+        criterion_id=leg.contract.gate.criterion_id,
+        gate_id=leg.contract.gate_id,
+        captured_at=result.ended_at or datetime.now(UTC),
+        argv=result.argv,
+        command=result.command,
+        details=result.details[:4000] if result.details is not None else None,
+        stdout_tail=result.stdout_tail,
+        stderr_tail=result.stderr_tail,
+        log_present=log_bytes is not None,
+        log_digest=hashlib.sha256(log_bytes).hexdigest() if log_bytes is not None else None,
+    )
+    digest = write_gate_diagnostic(
+        gate_context.diagnostic_state_path or gate_context.state_path,
+        diagnostic,
+        log_bytes=log_bytes,
+    )
+    return result.model_copy(
+        update={"diagnostic_digest": f"sha256:{digest}", "diagnostic_ref": reference}
+    )
 
 
 def _receipt(
@@ -336,6 +411,8 @@ def _receipt(
         exit_status=result.exit_status,
         started_at=started,
         ended_at=max(result.ended_at or now, started),
+        diagnostic_digest=result.diagnostic_digest,
+        diagnostic_ref=result.diagnostic_ref,
     )
 
 
@@ -385,8 +462,17 @@ def _require_portable_argv(gates: Iterable[GateSpec]) -> None:
 
 
 def _proof_legs(
-    context: Epoch2RootContext, urn: TaskUrn, gates: Sequence[GateSpec]
-) -> tuple[list[VerificationLeg], dict[str, FiledProof], tuple[GateSpec, ...]]:
+    context: Epoch2RootContext,
+    urn: TaskUrn,
+    gates: Sequence[GateSpec],
+    *,
+    fixture_bindings: Sequence[TestFixtureBinding] | None = None,
+) -> tuple[
+    list[VerificationLeg],
+    dict[str, FiledProof],
+    tuple[GateSpec, ...],
+    tuple[ResolvedTestFixture, ...],
+]:
     """Read the tree and return the Task's legs, its filed proofs, and its gates.
 
     Raises:
@@ -410,12 +496,20 @@ def _proof_legs(
         )
     contracts = compiled_contracts(task, named)
     try:
+        fixtures = (
+            resolve_test_fixtures(_fixture_inputs(named), fixture_bindings)
+            if fixture_bindings is not None
+            else ()
+        )
+    except ValueError as error:
+        raise DaemonValidationError(f"validation_failed: proof_fixture_invalid: {error}") from error
+    try:
         legs, _, _ = completion_legs(
             task, ledger=ledger, contracts=contracts, facts=daemon_proof_facts(contracts)
         )
     except CompletionRefusedError as error:
         raise DaemonValidationError(f"validation_failed: {error}") from error
-    return legs, {item.receipt.freshness_key: item for item in proofs}, named
+    return legs, {item.receipt.freshness_key: item for item in proofs}, named, fixtures
 
 
 def prove_task(
@@ -437,13 +531,15 @@ def prove_task(
             crashed.
     """
     params = args.model_dump(mode="json")
+    legs, filed, _, fixtures = _proof_legs(
+        context, args.urn, args.gates, fixture_bindings=args.fixture_bindings
+    )
     replayed = keyed_answer(
         context, method=DELIVERY_PROVE_METHOD, key=args.idempotency_key, params=params
     )
     if replayed is not None:
         logger.info(f"prove_task task={args.urn.entity_key} replayed=True")
         return TaskProveAnswer.model_validate(replayed)
-    legs, filed, _ = _proof_legs(context, args.urn, args.gates)
     standing = {
         digest: item.receipt
         for digest, item in filed.items()
@@ -457,7 +553,17 @@ def prove_task(
     repository = context.identity.tree_root.parent
     run_dir = context.identity.tree_root / "local" / _PROOF_DIRNAME / uuid.uuid4().hex
     gate_context = GateExecutionContext(
-        state_path=run_dir / "claims" / "state.json", attempt_id=run_dir.name
+        state_path=context.identity.tree_root
+        / "local"
+        / "proof-evidence"
+        / run_dir.name
+        / "state.json",
+        diagnostic_state_path=context.identity.tree_root
+        / "local"
+        / "proof-evidence"
+        / "state.json",
+        attempt_id=run_dir.name,
+        fixtures=fixtures,
     )
     ran: list[tuple[VerificationLeg, ProofReceipt | CheckResult]] = []
     try:
@@ -531,6 +637,8 @@ def file_proofs(
                     head_sha=leg.expected.revision_binding.head_sha,
                     result=result,
                     receipt_id=receipt.id,
+                    diagnostic_digest=receipt.diagnostic_digest,
+                    diagnostic_ref=receipt.diagnostic_ref,
                 )
             )
     return outcomes
@@ -552,7 +660,7 @@ def task_assessment(context: Epoch2RootContext, args: TaskAssessmentParams) -> T
             generation carries it, no proof run filed its gates, or the
             judgment refused.
     """
-    _, filed, gates = _proof_legs(context, args.urn, ())
+    _, filed, gates, _ = _proof_legs(context, args.urn, ())
     with context.session([str(args.urn)]) as session:
         task = task_of(session, args.urn)
         assert task.batch_ref is not None, "the legs were computed for a placed Task"

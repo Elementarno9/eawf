@@ -613,6 +613,33 @@ def test_a_tool_with_no_handler_is_reported_as_denied_rather_than_transient(
     assert_closed_error(answer, code=SemanticToolErrorCode.CAPABILITY_DENIED)
 
 
+def test_semantic_stdio_repro_handler_refusal_reported_transient(
+    tmp_path: Path, ctx: MethodContext, canary: CanaryProvision
+) -> None:
+    """A handler's refusal is an answer: it names its code and asks for a changed request."""
+    capsule = seal_capsule(tool_grants=("repo_read",))
+    bind_contract(ctx, canary, capsule)
+    server = build_server(
+        tmp_path, canary=canary, capsule=capsule, transport=RecordingTransport(ctx)
+    )
+
+    answer = answer_of(
+        server.handle(
+            request(
+                "tools/call",
+                name="repo_read",
+                arguments={
+                    "resource_handle": COMMAND_ARGUMENTS["cwd_handle"],
+                    "path": "notes/absent.txt",
+                },
+            )
+        )
+    )
+
+    assert_closed_error(answer, code=SemanticToolErrorCode.PAYLOAD_INVALID)
+    assert "repo_path_not_found" in answer["structuredContent"]["message"]
+
+
 # ---------------------------------------------------------------------------
 # The stdio loop itself
 # ---------------------------------------------------------------------------

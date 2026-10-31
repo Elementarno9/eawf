@@ -38,7 +38,7 @@ import re
 import shlex
 import sys
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Final
@@ -131,6 +131,8 @@ _GLOB_CHARS: Final = frozenset("*?[")
 _REDIRECT_OUT: Final = frozenset({">", ">>", ">|", "&>", "&>>", "<>"})
 _REDIRECT_IN: Final = frozenset({"<", "<<", "<<<", "<<-", "<&", ">&"})
 _PUNCTUATION: Final = "();<>|&\n"
+#: Closings tried on a line that ends inside a quote.
+_QUOTE_REPAIRS: Final = ("", "'", '"')
 _ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 _HEREDOC = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 _SUBSTITUTION = re.compile(r"\$\(([^()]*)\)|`([^`]*)`")
@@ -413,7 +415,9 @@ def _removal_denial(path: Path, shell: _Shell, *, verb: str) -> DataLossDenial |
     return _deny(
         DataLossPattern.FOREIGN_WORKTREE_MUTATION,
         f"{verb} a managed worktree outside Eawf is refused; "
-        "remove it with eawf worktree cleanup once its work has landed",
+        "the daemon removes a Run's clean worktree when the Run ends "
+        "if worktrees.remove_when_clean is set, "
+        "and the operator removes any other from their own shell once its work has landed",
     )
 
 
@@ -434,20 +438,29 @@ def _strip_heredocs(command: str) -> str:
     return "\n".join(kept)
 
 
-def _segments(command: str) -> Iterator[tuple[list[str], list[tuple[str, str]], bool]]:
-    """Yield each simple command's words, its redirections, and whether a pipe feeds it.
+def _tokens(command: str) -> list[str]:
+    """Return the shell words and operators of *command*.
 
     Raises:
-        ValueError: The line does not tokenize (an unclosed quote, say).
+        ValueError: The line ends inside a quote or after an escaping backslash.
     """
     lexer = shlex.shlex(command, posix=True, punctuation_chars=_PUNCTUATION)
     lexer.whitespace = " \t\r"
     lexer.whitespace_split = True
+    return list(lexer)
+
+
+def _segments(tokens: list[str]) -> Iterator[tuple[list[str], list[tuple[str, str]], bool]]:
+    """Yield each simple command's words, its redirections, and whether a pipe feeds it.
+
+    Raises:
+        ValueError: A redirection names no target.
+    """
     words: list[str] = []
     redirects: list[tuple[str, str]] = []
     pending: str | None = None
     piped = False
-    for token in lexer:
+    for token in tokens:
         if pending is not None:
             redirects.append((pending, token))
             pending = None
@@ -485,8 +498,54 @@ def _judge_line(command: str, shell: _Shell, *, depth: int) -> DataLossDenial | 
         denial = _judge_line(inner, shell, depth=depth + 1)
         if denial is not None:
             return denial
+    command = _strip_heredocs(command)
+    try:
+        tokens = _tokens(command)
+    except ValueError as exc:
+        return _judge_repaired(command, shell, depth=depth, error=exc)
+    return _judge_tokens(tokens, shell, depth=depth)
+
+
+def _judge_repaired(
+    command: str, shell: _Shell, *, depth: int, error: ValueError
+) -> DataLossDenial | None:
+    """Judge a line that does not lex by every closing of its last quote or escape that does.
+
+    A stray apostrophe in free text should not refuse a harmless line, yet
+    reading the line with its quotes ignored splits quoted scripts and values
+    into loose words. Each repaired reading keeps the real quoting, so a
+    ``sh -c`` script stays whole; the guard fails closed, denying when any
+    reading denies and admitting only when one lexes and none denies.
+
+    Raises:
+        ValueError: No repaired reading lexes.
+    """
+    bases = [command, command[:-1]] if command.endswith("\\") else [command]
+    admitted: _Shell | None = None
+    for base in bases:
+        for closing in _QUOTE_REPAIRS:
+            if base == command and not closing:
+                continue
+            try:
+                tokens = _tokens(base + closing)
+            except ValueError:
+                continue
+            # Each reading moves its own copy, so a cd in one cannot steer another.
+            trial = replace(shell)
+            denial = _judge_tokens(tokens, trial, depth=depth)
+            if denial is not None:
+                return denial
+            admitted = admitted or trial
+    if admitted is None:
+        raise ValueError(f"the line does not lex ({error})")
+    shell.cwd, shell.moved = admitted.cwd, admitted.moved
+    return None
+
+
+def _judge_tokens(tokens: list[str], shell: _Shell, *, depth: int) -> DataLossDenial | None:
+    """Judge the simple commands of one lexed line, in order."""
     producer: list[str] | None = None
-    for raw_words, redirects, piped in _segments(_strip_heredocs(command)):
+    for raw_words, redirects, piped in _segments(tokens):
         words = [_expand_pwd(word, shell.cwd) for word in raw_words]
         for operator, raw_target in redirects:
             target = _expand_pwd(raw_target, shell.cwd)
@@ -858,7 +917,9 @@ def _judge_git_worktree(args: list[str], where: Path, shell: _Shell) -> DataLoss
         return _deny(
             DataLossPattern.FOREIGN_WORKTREE_MUTATION,
             f"{verb} a managed worktree with git is refused; "
-            "remove it with eawf worktree cleanup once its work has landed",
+            "the daemon removes a Run's clean worktree when the Run ends "
+            "if worktrees.remove_when_clean is set, "
+            "and the operator removes any other from their own shell once its work has landed",
         )
     return None
 

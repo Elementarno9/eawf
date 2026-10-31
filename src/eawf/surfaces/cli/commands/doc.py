@@ -49,7 +49,7 @@ def _generation_document(flags: GlobalFlags) -> tuple[Path, Path]:
     """
     from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
     from eawf.kernel.state.epoch2.authority import resolve_authority
-    from eawf.surfaces.cli.flag_day_gate import MIGRATION_REQUIRED_KIND, MIGRATION_VERB
+    from eawf.surfaces.cli.upgrade_refusal import MIGRATION_REQUIRED_KIND, UPGRADE_STEPS
 
     state_path, _reason = resolve_with_reason(flags.workspace)
     if not state_path.parent.is_dir():
@@ -57,8 +57,8 @@ def _generation_document(flags: GlobalFlags) -> tuple[Path, Path]:
     authority = resolve_authority(state_path.parent)
     if authority.target is None or authority.generation_id is None:
         raise cli_errors.MigrationRequired(
-            f"{state_path.parent} is an epoch-1 tree and doc verify reads only an epoch-2 "
-            f"generation; migrate it with `{MIGRATION_VERB} --plan` then `--apply`",
+            f"{state_path.parent} holds no epoch-2 generation and doc verify reads only an epoch-2 "
+            f"generation; {UPGRADE_STEPS}",
             kind=MIGRATION_REQUIRED_KIND,
         )
     document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT

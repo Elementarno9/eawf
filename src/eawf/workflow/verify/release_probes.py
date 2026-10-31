@@ -45,6 +45,7 @@ from pathlib import Path
 from typing import Final
 
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.spec.release import ReleaseChannel
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -423,15 +424,20 @@ def _probe_changelog(
 ) -> ReleaseSignalOutcome:
     """Report whether the changelog carries a non-empty section for the version.
 
+    A stable section must also state its migration outcome. The candidates
+    left that to the ``migration`` row, which the stable profile no longer
+    requires, so without this check a stable release could ship without
+    telling an earlier install how to upgrade.
+
     Args:
         inputs: The chokepoint's inputs.
-        context: The sweep's context (unused; the section is keyed on
-            the version being tagged).
+        context: The sweep's context; its channel decides whether the
+            migration note is required.
 
     Returns:
-        Passing when the section exists and carries at least one bullet.
+        Passing when the section exists, carries at least one bullet and,
+        on the stable channel, names the migration outcome.
     """
-    del context
     text = _source_text(inputs, CHANGELOG_FILENAME)
     if text is None:
         return _failing(f"{CHANGELOG_FILENAME} is absent from {_source_label(inputs)}; add it")
@@ -446,6 +452,10 @@ def _probe_changelog(
             f"the {inputs.version!r} changelog section carries no entry; a release with "
             f"nothing to say is not a release"
         )
+    if context.config.channel is ReleaseChannel.STABLE:
+        note_gap = _migration_note_gap(inputs)
+        if note_gap:
+            return _failing(note_gap)
     return _passing(f"{CHANGELOG_FILENAME}:{inputs.version}")
 
 
@@ -784,7 +794,12 @@ def _probe_perfect_realization(
         RealizationAssertion.REQUIREMENT_TRACE: requirement_trace_outcome(inputs.repo_root),
         RealizationAssertion.RENDERED_RULES: rendered_rules_outcome(inputs.repo_root),
         RealizationAssertion.CLI_CLOSURE: cli_closure_outcome(),
-        RealizationAssertion.PACKET_RUN: packet_run_outcome(),
+        RealizationAssertion.PACKET_RUN: packet_run_outcome(
+            inputs.repo_root,
+            version=inputs.version,
+            release_key=context.config.release_key,
+            release_commit=inputs.revision or "HEAD",
+        ),
     }
     return realization_outcome(verdicts, channel=context.config.channel)
 

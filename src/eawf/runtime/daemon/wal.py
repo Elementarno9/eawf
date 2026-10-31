@@ -127,7 +127,7 @@ class WalRecord(BaseModel):
             construction time and verified on replay -- a tampered record
             body recomputes to a different digest than the one stored on
             disk, which replay refuses (see
-            :func:`eawf.runtime.daemon.recovery.replay_wal`).
+            :func:`eawf.runtime.daemon.epoch2_recovery.replay_native_wal`).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -329,7 +329,8 @@ def mark_applied(wal_dir: Path, record_id: str) -> Path:
     The caller is responsible for ordering: state.json is written before
     this rename (the durable point of no return); event.jsonl is appended
     AFTER, so a crash between this rename and the event append leaves an
-    APPLIED record that :func:`eawf.runtime.daemon.recovery.replay_wal` re-issues.
+    APPLIED record that
+    :func:`eawf.runtime.daemon.epoch2_recovery.replay_native_wal` re-issues.
     fsync happens in :func:`mark_fsynced`, after the event append.
     """
     dst = _rename_status(wal_dir, record_id, WalStatus.PENDING, WalStatus.APPLIED)

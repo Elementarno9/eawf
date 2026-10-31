@@ -277,8 +277,8 @@ class JuryAuthorityConfig(BaseModel):
 logger = logging.getLogger(__name__)
 
 #: ``verify`` fields a profile may still set though nothing reads them: the
-#: epoch-1 iter close they gated is gone.
-_RETIRED_VERIFY_FIELDS: Final = frozenset({"require_iter_audit_accepted"})
+#: epoch-1 wave and iter closes they gated are gone.
+_RETIRED_VERIFY_FIELDS: Final = frozenset({"require_iter_audit_accepted", "uiux_bands"})
 
 
 class VerifyBlock(BaseModel):
@@ -332,23 +332,6 @@ class VerifyBlock(BaseModel):
             ``"always"`` subset and a split (no quorum) routes to the
             operator. The path degrades to the single-auditor gate when the
             cross-vendor CLI lanes are unavailable on the host.
-        uiux_bands: Substring tokens that mark a wave as UI/UX-banded for
-            the spec-jury close gate
-            (:func:`eawf.workflow.dispatch.spec_jury.wave_in_uiux_band`). A
-            wave is banded when its ``file_scopes`` are UI surface (per
-            :func:`eawf.kernel.spec.heuristics.is_ui_scope`) OR any token here
-            matches its id / title. The UI-surface ``file_scopes`` arm is the
-            structural band definition — a wave touching ``surfaces/tui/`` or
-            ``surfaces/render/`` is UI/UX-risky regardless of its title —
-            while the token list is the override for waves a profile wants
-            banded by name. Defaults to an empty list so no wave is banded by
-            *token* until a profile opts in; the ``file_scopes`` arm bands UI
-            waves with no config. Band membership drives band-conditional
-            enforcement
-            (:func:`eawf.workflow.verify.readiness.resolve_wave_verify_block`),
-            so this is meaningful even when the merged ``enforce`` bit is
-            ``False`` — the resolver turns enforcement ON for a band wave and
-            OFF for a non-band wave rather than flipping it fleet-wide.
         jury_vendors: The disjoint-vendor panel the band-scoped spec jury
             convenes one juror from each of. Declared as config so the panel
             is auditable from the profile (defaults to the full cross-vendor
@@ -408,7 +391,6 @@ class VerifyBlock(BaseModel):
     #: as a structured juror-error outcome instead. Operator-ratified
     #: default: 600s.
     juror_wall_clock_seconds: Annotated[float, Field(gt=0)] = 600.0
-    uiux_bands: list[str] = Field(default_factory=list)
     jury_vendors: list[str] = Field(default_factory=lambda: ["claude", "codex", "opencode"])
     odr_floor: float = Field(default=0.80, ge=0.0, le=1.0)
     odr_blocking: bool = False

@@ -413,6 +413,8 @@ class _Turn:
         run_dir: The Run's MCP artifact directory, holding the wrapper's output.
         pgid: The worker's process group, once recorded.
         thread_id: The thread the turn runs on, once open.
+        thread_path: The file the server writes the thread's rollout to, when
+            it names one.
         turn_id: The turn, once started.
         terminated: Whether the budget reaped the worker.
         error_text: The last error the server reported without retrying.
@@ -430,6 +432,7 @@ class _Turn:
     run_dir: Path
     pgid: int | None = None
     thread_id: str = ""
+    thread_path: str | None = None
     turn_id: str = ""
     terminated: bool = False
     error_text: str | None = None
@@ -656,6 +659,7 @@ async def _open_turn(turn: _Turn, *, sandbox: SandboxMode) -> None:
     )
     opened = await _call("thread/start", lambda: client.thread_start(params))
     turn.thread_id = opened.thread.id
+    turn.thread_path = opened.thread.path
     turn.runtime = observed_runtime_tuple(
         turn.adapter.id,
         harness_version=_user_agent_version(initialized.userAgent),
@@ -795,6 +799,7 @@ async def launch_codex_run(
         ),
         turn=asyncio.create_task(turn.run(), name=f"codex-turn-{spec.run_ref}"),
         runtime_tuple=turn.runtime,
+        transcript_path=turn.thread_path,
     )
 
 

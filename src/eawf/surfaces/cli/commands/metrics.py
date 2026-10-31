@@ -223,7 +223,7 @@ def _generation_document_or_emit(flags: GlobalFlags) -> tuple[Path, Path] | None
     """
     from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
     from eawf.kernel.state.epoch2.authority import resolve_authority
-    from eawf.surfaces.cli.flag_day_gate import MIGRATION_REQUIRED_KIND, MIGRATION_VERB
+    from eawf.surfaces.cli.upgrade_refusal import MIGRATION_REQUIRED_KIND, UPGRADE_STEPS
 
     state_path = _resolve_state_or_emit(flags)
     if state_path is None:
@@ -238,8 +238,8 @@ def _generation_document_or_emit(flags: GlobalFlags) -> tuple[Path, Path] | None
     if authority.target is None or authority.generation_id is None:
         cli_errors.emit_error(
             cli_errors.MigrationRequired(
-                f"{state_path.parent} is an epoch-1 tree and metrics read only an epoch-2 "
-                f"generation; migrate it with `{MIGRATION_VERB} --plan` then `--apply`",
+                f"{state_path.parent} holds no epoch-2 generation and metrics read only an epoch-2 "
+                f"generation; {UPGRADE_STEPS}",
                 kind=MIGRATION_REQUIRED_KIND,
             ),
             flags=flags,

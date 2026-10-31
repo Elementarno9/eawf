@@ -46,7 +46,7 @@ _EAGER_MODULES = frozenset({"daemon", "event", "state_subscribe"})
 _NON_METHOD_MEMBERS = frozenset({"__init__", "__pycache__"})
 
 #: A verb owned by a deferred module, used to prove on-demand registration.
-_DEFERRED_VERB = "state.read"
+_DEFERRED_VERB = "wal.gc"
 
 
 def _methods_package_dir() -> Path:
@@ -101,7 +101,7 @@ def test_a_ping_only_interpreter_does_not_load_the_deferred_modules() -> None:
         "import sys;"
         "import eawf.runtime.daemon.server;"
         "from eawf.runtime.daemon.methods import _REGISTRY;"
-        "print('daemon.ping' in _REGISTRY, 'state.read' in _REGISTRY)"
+        "print('daemon.ping' in _REGISTRY, 'wal.gc' in _REGISTRY)"
     )
     result = subprocess.run(
         [sys.executable, "-c", probe],

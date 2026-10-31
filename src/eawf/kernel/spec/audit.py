@@ -47,10 +47,7 @@ class AuditSpec(_StrictModel):
     * ``ship`` — fires on the ship-CI / pre-merge gauntlet.
     * ``manual`` — only operator-driven invocation fires the audit.
 
-    The audit-DSL runner reads ``cadence`` at the close event firing
-    the audit and short-circuits the dispatched check kinds when the
-    cadence does not match the trigger (see
-    :func:`~eawf.workflow.audit_dsl.kinds.verify_implements.check_verify_implements`).
+    ``cadence`` names the close event that fires the audit.
     """
 
     schema_version: Literal["1.0"] = "1.0"

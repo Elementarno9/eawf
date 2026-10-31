@@ -26,8 +26,6 @@ _ANSI = re.compile(r"\x1b\[[0-9;]*m")
     [
         (["status", "--scope", "P01"], "--scope"),
         (["config", "validate", "--scope", "repo"], "--scope"),
-        (["memory", "compact", "--scope", "P01"], "--scope"),
-        (["memory", "compact", "--budget", "1024"], "--budget"),
         (["store", "compact", "--scope", "P01"], "--scope"),
         (["store", "compact", "--budget", "1024"], "--budget"),
         (["init", "--acceptance-tests"], "--acceptance-tests"),

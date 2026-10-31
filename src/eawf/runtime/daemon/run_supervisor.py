@@ -1046,7 +1046,20 @@ def release_lease(context: Epoch2RootContext, *, lease_id: str, now: datetime) -
     except LeaseRefusedError as error:
         # Already withdrawn or expired: the reconcile below still judges it.
         logger.info(f"release_lease lease={lease_id} code={error.code.value}")
-    reconcile_root(context, now=now)
+    reconcile_root(context, now=now, busy=supervisor_of(context).busy)
+
+
+def release_run_leases(context: Epoch2RootContext, urn: QualifiedUrn, *, now: datetime) -> None:
+    """Withdraw every lease a stopped Run still holds, through :func:`release_lease`.
+
+    Args:
+        context: The root the Run lives in.
+        urn: The stopped Run.
+        now: When the withdrawal was decided.
+    """
+    for lease in root_leases(context):
+        if str(lease.run_ref) == str(urn) and lease.status is LeaseStatus.ACTIVE:
+            release_lease(context, lease_id=lease.lease_id, now=now)
 
 
 def fail_unlaunched_run(
@@ -1119,9 +1132,7 @@ def fail_unlaunched_run(
             return envelopes
     elif status not in TERMINAL_RUN_STATUSES:
         return ()
-    for lease in root_leases(context):
-        if str(lease.run_ref) == str(urn) and lease.status is LeaseStatus.ACTIVE:
-            release_lease(context, lease_id=lease.lease_id, now=now)
+    release_run_leases(context, urn, now=now)
     logger.info(f"fail_unlaunched_run run={urn.entity_key!r} status={status.value} code={code}")
     return envelopes
 

@@ -214,7 +214,8 @@ def doctor_plugin(target_dir: Path, *, marketplace_installed: bool = False) -> D
         target_dir: Workspace root that hosts ``.claude/``.
         marketplace_installed: The eawf plugin is also installed for the
             user from the marketplace, so its ``hooks/hooks.json`` loads
-            beside the project ``settings.json`` hooks.
+            beside the project ``settings.json`` hooks, and it serves the
+            agents, so no project agent file is expected.
 
     Returns:
         :class:`DoctorReport` summarising every file Eä installs.
@@ -229,7 +230,7 @@ def doctor_plugin(target_dir: Path, *, marketplace_installed: bool = False) -> D
     """
     target_dir = Path(target_dir).resolve()
     manifest = _load_manifest(target_dir)
-    paths, settings_path = expected_paths(target_dir)
+    paths, settings_path = expected_paths(target_dir, marketplace_installed=marketplace_installed)
     # Drift is byte-equality, so the comparison must render with the same
     # tool grant the install resolved — anchored at the same target_dir.
     extra_tools = resolve_agent_extra_tools(target_dir)

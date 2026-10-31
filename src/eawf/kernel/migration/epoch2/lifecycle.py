@@ -2,9 +2,7 @@
 
 A phase becomes a Milestone, an iter a DeliveryBatch, a wave a Task and a
 backlog row the draft head of a Task. Each mapping is a table rather than
-a procedure: one route per source field, checked total against the live
-epoch-1 model, so adding a field to ``Phase`` fails here instead of
-silently dropping it at cutover.
+a procedure: one route per source field of the frozen epoch-1 model.
 
 Three things the target models require, epoch 1 never recorded: a
 Milestone's acceptance journey, a Batch's head binding, a Task's contract
@@ -51,7 +49,6 @@ from eawf.kernel.migration.epoch2.status_map import (
     map_source_status,
 )
 from eawf.kernel.state.epoch2.values import EntityOrigin, OriginConfidence
-from eawf.kernel.state.models import BacklogItem, Iter, Phase, Wave
 
 logger = logging.getLogger(__name__)
 
@@ -237,35 +234,6 @@ LIFECYCLE_FIELD_ROUTES: Mapping[SourceLifecycle, Mapping[str, LifecycleFieldRout
 COMPUTED_NATIVE_KEYS: frozenset[str] = frozenset(
     {"status", "primary_track_ref", "intent", "priority", "criteria"}
 )
-
-_SOURCE_MODEL_FIELDS: Mapping[SourceLifecycle, Iterable[str]] = {
-    SourceLifecycle.PHASE: Phase.model_fields,
-    SourceLifecycle.ITER: Iter.model_fields,
-    SourceLifecycle.WAVE: Wave.model_fields,
-    SourceLifecycle.BACKLOG: BacklogItem.model_fields,
-}
-
-
-def _assert_routes_total(lifecycle: SourceLifecycle) -> None:
-    """Fail import unless the route table covers the source model exactly.
-
-    Raises:
-        ValueError: When a model field has no route, which would drop it
-            at cutover, or a route names a field the model does not have,
-            which would carry a fact nobody recorded.
-    """
-    declared = set(_SOURCE_MODEL_FIELDS[lifecycle])
-    routed = set(LIFECYCLE_FIELD_ROUTES[lifecycle])
-    if declared != routed:
-        unrouted = sorted(declared - routed)
-        unknown = sorted(routed - declared)
-        raise ValueError(
-            f"{lifecycle.value} field routes are not total: unrouted={unrouted}, unknown={unknown}"
-        )
-
-
-for _lifecycle in SourceLifecycle:
-    _assert_routes_total(_lifecycle)
 
 
 class DeferralReason(StrEnum):

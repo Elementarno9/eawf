@@ -167,7 +167,9 @@ class SkillReport(BaseModel):
 
     skill_id: str
     outcome: str
-    summary: str = ""
+    summary: str = Field(
+        default="", description="Explanation of the outcome and what supports it; never the result."
+    )
 
 
 class NotCovered(BaseModel):
@@ -175,8 +177,8 @@ class NotCovered(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    item: str = Field(min_length=1)
-    reason: str = Field(min_length=1)
+    item: str = Field(min_length=1, description="What the pass did not reach.")
+    reason: str = Field(min_length=1, description="Why it was not reached.")
 
 
 class CoverageBlock(BaseModel):
@@ -188,8 +190,10 @@ class CoverageBlock(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    covered: tuple[str, ...] = Field(min_length=1)
-    not_covered: tuple[NotCovered, ...]
+    covered: tuple[str, ...] = Field(min_length=1, description="What the pass covered.")
+    not_covered: tuple[NotCovered, ...] = Field(
+        description="What the pass did not cover, with a reason each."
+    )
 
 
 class OutputSchema(BaseModel):
@@ -239,19 +243,18 @@ def _report_model(
     # enum field on a generated model; mypy cannot follow it, pydantic can.
     outcome_type = Literal[outcomes]  # type: ignore[valid-type]
     skill_type = Literal[skill_id]  # type: ignore[valid-type]
+    skill_field = (skill_type, Field(description="The id of the skill that produced the report."))
+    outcome_field = (outcome_type, Field(description="How the invocation ended; the result."))
     if coverage:
         return create_model(
             schema_name,
             __base__=SkillReport,
-            skill_id=(skill_type, ...),
-            outcome=(outcome_type, ...),
-            coverage=(CoverageBlock, ...),
+            skill_id=skill_field,
+            outcome=outcome_field,
+            coverage=(CoverageBlock, Field(description="What the pass covered and did not.")),
         )
     return create_model(
-        schema_name,
-        __base__=SkillReport,
-        skill_id=(skill_type, ...),
-        outcome=(outcome_type, ...),
+        schema_name, __base__=SkillReport, skill_id=skill_field, outcome=outcome_field
     )
 
 
@@ -1001,9 +1004,12 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
         subject="question",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
-        description="Answer one question with a swift one-page investigation; no Campaign.",
+        description=(
+            "Answer one question as a one-page local brief, swift or in rounds; no Campaign."
+        ),
         grammar=_grammar(
             "/research <topic...> [--question <text>] [--scope <urn>] [--from <ref>...]"
+            " [--depth <shallow|medium|deep|exhaustive>] [--rounds <1..5>]"
             " [--include <selector>...] [--exclude <selector>...]"
             " [--sources <repo|external|both>] [--web <auto|allow|deny|required>]"
             " [--domains <domain>...] [--recency-days <N>] [--max-sources <1..20>]"
@@ -1012,8 +1018,9 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             subject_field="topic",
         ),
         effects=EffectsBoundary(
-            summary="Evidence read and repository reads; optional gitignored local brief.",
+            summary="Evidence read and repository reads; one gitignored local brief.",
             rpcs=("projection.evidence.read",),
+            verbs=("research check",),
             tools=(
                 SemanticToolId.EAWF_STATE_QUERY,
                 SemanticToolId.REPO_READ,

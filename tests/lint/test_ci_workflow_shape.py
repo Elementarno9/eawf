@@ -6,15 +6,17 @@ which runs it selects. These tests evaluate the expressions the workflow
 actually carries against each event, ref and runner, and pin the outcome:
 twice-green on the release train, nightly and manual runs only; one lint
 job instead of a lint pass inside every test leg; a pull request that runs
-the wave and iter tiers only; a green-tree record that still lands on a
-main push now that twice-green skips there; and an ubuntu leg split into
-three pytest-split shards whose union is the unsharded suite, each leg
-uploading its JUnit report, with one coverage job judging the combined
-shard data.
+the same tests, serial steps and coverage gate as a push; a green-tree record that still lands on a
+main push now that twice-green skips there; an ubuntu and a macOS leg each
+split into three pytest-split shards whose union is the unsharded suite,
+each shard uploading its JUnit report, with one coverage job judging the
+combined ubuntu shard data; and a resvg build restored from a cache keyed
+on its pinned version.
 """
 
 from __future__ import annotations
 
+import fnmatch
 import importlib.util
 import json
 import re
@@ -29,7 +31,7 @@ from typing import Any
 import pytest
 import yaml
 
-from eawf.platform.lint.kind_taxonomy import KIND_GATE_TIERS, GateTier
+from tests.lint.test_no_wall_clock_budget_asserts import PERF_LANE
 
 pytestmark = pytest.mark.unit
 
@@ -39,11 +41,6 @@ _TOOL_PATH = _REPO_ROOT / "tools" / "ci_green_tree.py"
 _DURATION_TOOL_PATH = _REPO_ROOT / "tools" / "duration_budget_gate.py"
 _BASELINE = _REPO_ROOT / "tests" / "duration-baseline.json"
 
-_LIVE_CONSOLE_GLOB = "tests/tui/surfaces/tui/console/test_console_live_*.py"
-_SERIAL_MIGRATION_NODE = (
-    "tests/integration/kernel/migration/test_v07_rehearsal.py::"
-    "test_largest_supported_state_applies_inside_its_declared_budget"
-)
 _LINT_COMMANDS = ("pre-commit run --all-files", "deptry .", "mypy src/")
 _EVENTS = ("push", "pull_request", "schedule", "workflow_dispatch")
 _SHA = "a" * 40
@@ -70,7 +67,7 @@ def _evaluate(expression: str, context: Mapping[str, str]) -> Any:
     """Evaluate one Actions expression against *context*.
 
     Covers the subset ci.yaml uses: string literals, context references,
-    ``==``/``!=``, ``&&``/``||`` (which return an operand, as Python's
+    ``true``/``false``, ``==``/``!=``, ``&&``/``||`` (which return an operand, as Python's
     ``and``/``or`` do), ``!``, ``startsWith``, ``format`` and ``cancelled()``,
     read as a run nobody cancelled.
 
@@ -89,6 +86,8 @@ def _evaluate(expression: str, context: Mapping[str, str]) -> Any:
         "starts_with": _starts_with,
         "format_": _format,
         "cancelled": lambda: False,
+        "true": True,
+        "false": False,
     }
     return eval("".join(pieces), {"__builtins__": {}}, names)
 
@@ -200,17 +199,17 @@ def test_green_tree_needs_the_lint_job() -> None:
     assert "lint" in _jobs()["green-tree"]["needs"]
 
 
-# --- pull-request tier selection ---------------------------------------------
+# --- one test shape on every event -------------------------------------------
 
 
-def _pr_marker() -> str:
-    release = [kind.value for kind, tier in KIND_GATE_TIERS.items() if tier is GateTier.RELEASE]
-    return " and ".join(f"not {marker}" for marker in ["slow", *release])
+_OS = ("ubuntu-24.04", "macos-26")
+_SERIAL_PREFIX = "Pytest (serial "
+_EXCLUDE_FLAGS = ("--exclude", "--omit", "--ignore", "--deselect", "-m")
 
 
-def _parallel_argv(event: str, os: str = "ubuntu-24.04") -> list[str]:
+def _parallel_argv(event: str, os: str = "ubuntu-24.04", shard: str = "1") -> list[str]:
     run = str(_step("test", "Pytest (parallel)")["run"])
-    return shlex.split(_render(run, _context(event, os=os)))
+    return shlex.split(_render(run, _context(event, os=os, shard=shard)))
 
 
 def _option(argv: list[str], flag: str) -> list[str]:
@@ -219,35 +218,69 @@ def _option(argv: list[str], flag: str) -> list[str]:
     ]
 
 
-def test_pr_marker_is_the_documented_tier_selection() -> None:
-    assert _pr_marker() == "not slow and not e2e and not perf"
+def _serial_steps_run(event: str, os: str, shard: str) -> list[str]:
+    context = _context(event, os=os, shard=shard)
+    return [
+        str(step["name"])
+        for step in _jobs()["test"]["steps"]
+        if str(step.get("name", "")).startswith(_SERIAL_PREFIX)
+        and bool(_evaluate(str(step.get("if", "true")), context))
+    ]
 
 
-@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
-def test_pull_request_leg_deselects_release_tiers_slow_and_live_console(os: str) -> None:
-    argv = _parallel_argv("pull_request", os)
-    assert _option(argv, "-m") == [_pr_marker()]
-    assert _option(argv, "--ignore-glob") == [_LIVE_CONSOLE_GLOB]
-    assert "tests/eval" in _option(argv, "--ignore")
-    assert sorted(_REPO_ROOT.glob(_LIVE_CONSOLE_GLOB))
+def _coverage_gate_argv(event: str) -> list[str]:
+    step = next(
+        step
+        for step in _jobs()["coverage"]["steps"]
+        if "tools/coverage_gate.py" in str(step.get("run", ""))
+    )
+    return shlex.split(_render(str(step["run"]), _context(event)))
 
 
-@pytest.mark.parametrize("event", ["push", "schedule", "workflow_dispatch"])
-def test_push_and_nightly_legs_keep_the_full_set(event: str) -> None:
-    argv = _parallel_argv(event)
-    assert _option(argv, "-m") == []
-    assert _option(argv, "--ignore-glob") == []
-    assert "tests/eval" not in _option(argv, "--ignore")
+@pytest.mark.parametrize("os", _OS)
+@pytest.mark.parametrize("shard", ["1", "2", "3"])
+def test_pull_request_and_push_select_the_same_parallel_tests(os: str, shard: str) -> None:
+    pull_request = _parallel_argv("pull_request", os, shard)
+    assert pull_request == _parallel_argv("push", os, shard)
+    assert _option(pull_request, "-m") == []
+    assert _option(pull_request, "--ignore-glob") == []
+    assert "tests/eval" not in _option(pull_request, "--ignore")
 
 
 @pytest.mark.parametrize("event", _EVENTS)
-def test_serial_perf_step_skips_only_on_a_pull_request(event: str) -> None:
-    condition = _step("test", "Pytest (serial perf timing)")["if"]
-    assert bool(_evaluate(condition, _context(event))) is (event != "pull_request")
+def test_every_event_keeps_the_default_marker_selection(event: str) -> None:
+    assert _option(_parallel_argv(event), "-m") == []
+
+
+@pytest.mark.parametrize("os", _OS)
+@pytest.mark.parametrize("shard", ["1", "2", "3"])
+def test_pull_request_and_push_run_the_same_serial_steps(os: str, shard: str) -> None:
+    assert _serial_steps_run("pull_request", os, shard) == _serial_steps_run("push", os, shard)
 
 
 @pytest.mark.parametrize("event", _EVENTS)
-@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
+@pytest.mark.parametrize("os", _OS)
+def test_serial_e2e_and_perf_steps_run_on_shard_one_of_every_event(event: str, os: str) -> None:
+    assert _serial_steps_run(event, os, "1") == [
+        "Pytest (serial e2e timing)",
+        "Pytest (serial perf structure)",
+    ]
+    assert _serial_steps_run(event, os, "2") == []
+
+
+@pytest.mark.parametrize("event", _EVENTS)
+def test_coverage_gate_passes_no_exclude_flag(event: str) -> None:
+    argv = _coverage_gate_argv(event)
+    assert argv == ["uv", "run", "python", "tools/coverage_gate.py"]
+    assert not [arg for arg in argv if arg.split("=", 1)[0] in _EXCLUDE_FLAGS]
+
+
+def test_coverage_gate_is_the_same_on_pull_request_and_push() -> None:
+    assert _coverage_gate_argv("pull_request") == _coverage_gate_argv("push")
+
+
+@pytest.mark.parametrize("event", _EVENTS)
+@pytest.mark.parametrize("os", _OS)
 @pytest.mark.parametrize("shard", ["1", "2", "3"])
 def test_end_to_end_suite_runs_serially_once_per_release_tier_leg(
     event: str, os: str, shard: str
@@ -255,7 +288,7 @@ def test_end_to_end_suite_runs_serially_once_per_release_tier_leg(
     assert _option(_parallel_argv(event, os), "--ignore").count("tests/e2e") == 1
     step = _step("test", "Pytest (serial e2e timing)")
     context = _context(event, os=os, shard=shard)
-    assert bool(_evaluate(str(step["if"]), context)) is (event != "pull_request" and shard == "1")
+    assert bool(_evaluate(str(step["if"]), context)) is (shard == "1")
     argv = shlex.split(_render(str(step["run"]), context))
     expected = ["uv", "run", "pytest", "-n0", "tests/e2e"]
     if os.startswith("ubuntu-"):
@@ -267,68 +300,55 @@ def test_end_to_end_suite_runs_serially_once_per_release_tier_leg(
     assert steps.index(step) < steps.index(_step("test", "Upload coverage data"))
 
 
+# --- the perf lane: structure blocks, budgets report nightly -----------------
+
+_PERF_STRUCTURE = "Pytest (serial perf structure)"
+_PERF_LANE_STEP = "Perf lane (nightly, reports, never blocks)"
+
+
 @pytest.mark.parametrize("event", _EVENTS)
 @pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
 @pytest.mark.parametrize("shard", ["1", "2", "3"])
-def test_serial_render_probe_runs_only_on_pull_request_shard_one(
+def test_parallel_legs_ignore_every_perf_lane_path_and_deselect_nothing(
     event: str, os: str, shard: str
 ) -> None:
-    condition = _step("test", "Pytest (serial render probe)")["if"]
-    assert bool(_evaluate(condition, _context(event, os=os, shard=shard))) is (
-        event == "pull_request" and shard == "1"
-    )
-
-
-@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
-def test_serial_render_probe_keeps_only_the_frame_budget_blocking(os: str) -> None:
-    step = _step("test", "Pytest (serial render probe)")
-    argv = shlex.split(_render(str(step["run"]), _context("pull_request", os=os)))
-    expected = [
-        "uv",
-        "run",
-        "pytest",
-        "-n0",
-        "tests/perf/surfaces/tui/console/test_task_frame_budget.py",
-    ]
-    if os.startswith("ubuntu-"):
-        expected.extend(["--cov=eawf", "--cov-append", "--cov-report=", "--cov-fail-under=0"])
-    assert argv == expected
-    assert not step.get("continue-on-error", False)
-    assert not _jobs()["test"].get("continue-on-error", False)
+    argv = _leg_argv(os, shard, event)
+    assert _option(argv, "--deselect") == []
+    assert [path for path in PERF_LANE if path not in _option(argv, "--ignore")] == []
 
 
 @pytest.mark.parametrize("event", _EVENTS)
 @pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
-@pytest.mark.parametrize("shard", ["1", "2", "3"])
-def test_parallel_legs_deselect_only_the_serial_migration_timing_node(
-    event: str, os: str, shard: str
-) -> None:
-    assert _option(_leg_argv(os, shard, event), "--deselect") == [_SERIAL_MIGRATION_NODE]
-
-
-@pytest.mark.parametrize("event", _EVENTS)
-@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
-@pytest.mark.parametrize("shard", ["1", "2", "3"])
-def test_serial_migration_timing_runs_only_on_shard_one(event: str, os: str, shard: str) -> None:
-    assert _runs_on("Pytest (serial migration timing)", os, shard, event) is (shard == "1")
-
-
-@pytest.mark.parametrize("event", _EVENTS)
-@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
-def test_serial_migration_timing_keeps_only_the_exact_node_blocking(event: str, os: str) -> None:
-    step = _step("test", "Pytest (serial migration timing)")
+def test_blocking_perf_step_runs_the_lane_with_its_budgets_skipped(event: str, os: str) -> None:
+    step = _step("test", _PERF_STRUCTURE)
     argv = shlex.split(_render(str(step["run"]), _context(event, os=os)))
-    expected = ["uv", "run", "pytest", "-n0", _SERIAL_MIGRATION_NODE]
+    expected = ["uv", "run", "pytest", "-n0", *PERF_LANE]
     if os.startswith("ubuntu-"):
         expected.extend(["--cov=eawf", "--cov-append", "--cov-report=", "--cov-fail-under=0"])
     assert argv == expected
+    assert step["env"] == {"EAWF_SKIP_PERF": "1"}
     assert not step.get("continue-on-error", False)
-    assert not _jobs()["test"].get("continue-on-error", False)
 
 
-def test_serial_migration_timing_finishes_before_coverage_is_uploaded() -> None:
+@pytest.mark.parametrize("os", ["ubuntu-24.04", "macos-26"])
+@pytest.mark.parametrize("shard", ["1", "2", "3"])
+def test_perf_lane_with_budgets_runs_nightly_on_shard_one_and_never_blocks(
+    os: str, shard: str
+) -> None:
+    step = _step("test", _PERF_LANE_STEP)
+    ran = {event for event in _EVENTS if _runs_on(_PERF_LANE_STEP, os, shard, event)}
+    assert ran == ({"schedule", "workflow_dispatch"} if shard == "1" else set())
+    assert step["continue-on-error"] is True
+    assert "env" not in step
+    argv = shlex.split(_render(str(step["run"]), _context("schedule", os=os)))
+    assert argv == ["uv", "run", "pytest", "-n0", *PERF_LANE]
+
+
+def test_perf_lane_steps_finish_before_coverage_is_uploaded() -> None:
     names = [step.get("name") for step in _jobs()["test"]["steps"]]
-    assert names.index("Pytest (serial migration timing)") < names.index("Upload coverage data")
+    upload = names.index("Upload coverage data")
+    assert names.index(_PERF_STRUCTURE) < upload
+    assert names.index(_PERF_LANE_STEP) < upload
 
 
 # --- the green-tree record without twice-green -------------------------------
@@ -405,7 +425,7 @@ def test_green_tree_refuses_a_pull_request_run(tool: ModuleType) -> None:
 # --- the sharded ubuntu leg --------------------------------------------------
 
 _SHARDS = ("1", "2", "3")
-_LEGS = [("ubuntu-24.04", shard) for shard in _SHARDS] + [("macos-26", "1")]
+_LEGS = [(os, shard) for os in _OS for shard in _SHARDS]
 _SPLIT_FILE = "split-durations.json"
 #: A small, real test tree the shard partition is proven on by collection.
 _SPLIT_PROBE = "tests/unit/platform/lint"
@@ -434,23 +454,23 @@ def _runs_on(step: str, os: str, shard: str, event: str = "push") -> bool:
     return bool(_evaluate(str(condition), _context(event, os=os, shard=shard)))
 
 
-def test_matrix_runs_three_ubuntu_shards_and_one_macos_leg() -> None:
+def test_matrix_runs_three_shards_on_each_os() -> None:
     assert sorted(_matrix_legs()) == sorted(_LEGS)
 
 
-@pytest.mark.parametrize("shard", _SHARDS)
-def test_each_ubuntu_shard_selects_its_own_group_by_the_split_durations(shard: str) -> None:
-    argv = _leg_argv("ubuntu-24.04", shard)
+@pytest.mark.parametrize(("os", "shard"), _LEGS)
+def test_each_shard_selects_its_own_group_by_the_split_durations(os: str, shard: str) -> None:
+    argv = _leg_argv(os, shard)
     assert _option(argv, "--splits") == ["3"]
     assert _option(argv, "--group") == [shard]
     assert _option(argv, "--durations-path") == [_SPLIT_FILE]
-    assert _option(argv, "--cov") == ["eawf"]
+    assert _option(argv, "--splitting-algorithm") == ["least_duration"]
 
 
-def test_macos_leg_runs_the_whole_suite_without_coverage() -> None:
-    argv = _leg_argv("macos-26", "1")
-    for flag in ("--splits", "--group", "--durations-path", "--cov"):
-        assert _option(argv, flag) == []
+@pytest.mark.parametrize("shard", _SHARDS)
+def test_only_the_ubuntu_shards_collect_coverage(shard: str) -> None:
+    assert _option(_leg_argv("ubuntu-24.04", shard), "--cov") == ["eawf"]
+    assert _option(_leg_argv("macos-26", shard), "--cov") == []
 
 
 def test_split_durations_are_written_before_the_sharded_run() -> None:
@@ -458,7 +478,7 @@ def test_split_durations_are_written_before_the_sharded_run() -> None:
     assert names.index("Shard durations") < names.index("Pytest (parallel)")
     run = str(_step("test", "Shard durations")["run"])
     assert shlex.split(run)[-3:] == ["split", "tests/duration-baseline.json", _SPLIT_FILE]
-    assert all(_runs_on("Shard durations", "ubuntu-24.04", shard) for shard in _SHARDS)
+    assert all(_runs_on("Shard durations", os, shard) for os, shard in _LEGS)
 
 
 @pytest.mark.parametrize(("os", "shard"), _LEGS)
@@ -478,9 +498,7 @@ def test_junit_artifact_names_are_unique_per_leg() -> None:
     assert len(rendered) == len(_LEGS)
 
 
-@pytest.mark.parametrize(
-    "step", ["Quarantine lane (reports, never blocks)", "Pytest (serial perf timing)"]
-)
+@pytest.mark.parametrize("step", ["Pytest (serial perf structure)"])
 def test_once_per_run_steps_run_on_one_ubuntu_shard(step: str) -> None:
     ran = [shard for shard in _SHARDS if _runs_on(step, "ubuntu-24.04", shard)]
     assert ran == ["1"]
@@ -489,6 +507,69 @@ def test_once_per_run_steps_run_on_one_ubuntu_shard(step: str) -> None:
 def test_telemetry_sync_runs_once_per_leg() -> None:
     ran = [leg for leg in _LEGS if _runs_on("Telemetry sync (REL-009)", *leg)]
     assert ran == [("ubuntu-24.04", "1"), ("macos-26", "1")]
+
+
+def test_coverage_job_collects_exactly_the_ubuntu_shards() -> None:
+    step = _step("test", "Upload coverage data")
+    pattern = str(_step("coverage", "Download shard coverage data")["with"]["pattern"])
+    uploads = {
+        (os, shard): _render(str(step["with"]["name"]), _context("push", os=os, shard=shard))
+        for os, shard in _matrix_legs()
+        if _runs_on("Upload coverage data", os, shard)
+    }
+    assert sorted(uploads) == [("ubuntu-24.04", shard) for shard in _SHARDS]
+    assert len(set(uploads.values())) == len(_SHARDS)
+    assert all(fnmatch.fnmatchcase(name, pattern) for name in uploads.values())
+    skipped = sorted(leg for leg in _matrix_legs() if leg not in uploads)
+    assert skipped == [("macos-26", shard) for shard in _SHARDS]
+
+
+# --- the cached resvg build ---------------------------------------------------
+
+_RESVG_RESTORE = "Restore resvg (cached by pinned version)"
+_RESVG_INSTALL = "Install resvg (pinned, T5 SVG pixel-diff oracle)"
+
+
+def _resvg_context(os: str, shard: str, cache_hit: str) -> dict[str, str]:
+    return {
+        **_context("push", os=os, shard=shard),
+        "env.RESVG_VERSION": str(_jobs()["test"]["env"]["RESVG_VERSION"]),
+        "runner.os": "Linux",
+        "runner.arch": "X64",
+        "steps.resvg-cache.outputs.cache-hit": cache_hit,
+    }
+
+
+def test_resvg_install_builds_the_pinned_version() -> None:
+    version = str(_jobs()["test"]["env"]["RESVG_VERSION"])
+    assert re.fullmatch(r"\d+\.\d+\.\d+", version)
+    argv = shlex.split(str(_step("test", _RESVG_INSTALL)["run"]))
+    assert argv[:2] == ["cargo", "install"]
+    assert _option(argv, "--version") == ["$RESVG_VERSION"]
+    assert "--locked" in argv
+
+
+def test_resvg_cache_is_keyed_on_the_pinned_version_and_runner() -> None:
+    names = [step.get("name") for step in _jobs()["test"]["steps"]]
+    assert names.index(_RESVG_RESTORE) + 1 == names.index(_RESVG_INSTALL)
+    restore = _step("test", _RESVG_RESTORE)
+    assert restore["id"] == "resvg-cache"
+    assert str(restore["uses"]).startswith("actions/cache@")
+    assert restore["with"]["path"] == "~/.cargo/bin/resvg"
+    context = _resvg_context("ubuntu-24.04", "1", "")
+    key = _render(str(restore["with"]["key"]), context)
+    assert key == f"resvg-{context['env.RESVG_VERSION']}-Linux-X64"
+
+
+@pytest.mark.parametrize(("os", "shard"), _LEGS)
+@pytest.mark.parametrize("cache_hit", ["true", "false", ""])
+def test_resvg_build_runs_only_on_an_ubuntu_cache_miss(os: str, shard: str, cache_hit: str) -> None:
+    context = _resvg_context(os, shard, cache_hit)
+    ubuntu = os.startswith("ubuntu-")
+    restore = _step("test", _RESVG_RESTORE)["if"]
+    install = _step("test", _RESVG_INSTALL)["if"]
+    assert bool(_evaluate(str(restore), context)) is ubuntu
+    assert bool(_evaluate(str(install), context)) is (ubuntu and cache_hit != "true")
 
 
 def test_every_ubuntu_shard_uploads_its_raw_coverage_data() -> None:
@@ -522,10 +603,7 @@ def test_coverage_job_combines_the_shards_then_runs_the_gate_once() -> None:
     combine = commands.index("uv run coverage combine coverage-data/*/.coverage")
     assert commands[combine + 1 :] == [
         "uv run coverage xml",
-        (
-            "uv run python tools/coverage_gate.py"
-            " ${{ github.event_name == 'pull_request' && '--exclude eval' || '' }}"
-        ),
+        "uv run python tools/coverage_gate.py",
         "uv run coverage report",
     ]
 

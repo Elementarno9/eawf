@@ -368,9 +368,9 @@ def _read_export(
 
 
 #: The ``EAWF_SMOKE_PROVIDER`` value under which the live smoke in
-#: ``tests/e2e/test_smoke_milestone.py`` dispatches to each runtime. The
-#: smoke dispatches only to claude-code, so no other runtime has one.
-_SMOKE_PROVIDERS: Final[Mapping[str, str]] = {"claude-code": "claude"}
+#: ``tests/e2e/test_smoke_milestone.py`` dispatches to each runtime. A
+#: runtime the smoke cannot dispatch to has none.
+_SMOKE_PROVIDERS: Final[Mapping[str, str]] = {"claude-code": "claude", "codex": "codex"}
 
 
 def smoke_remediation(pairs: tuple[tuple[str, str], ...], release_key: str) -> str:

@@ -31,6 +31,7 @@ from eawf.kernel.projection.truth import TruthField, TruthKind
 from eawf.kernel.runtime.events import RunEventKind
 from eawf.kernel.runtime.usage import UsageTotals
 from eawf.kernel.state.epoch2.run import RunStatus
+from eawf.runtime.runtimes.run_transcript import TranscriptEntry, TranscriptSource
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.derive import plural
@@ -51,7 +52,7 @@ from eawf.surfaces.tui.console.frame import (
 )
 from eawf.surfaces.tui.console.keybar import CHROME_KEYS, KEY, KeyEntry, keybar, route_pairs
 from eawf.surfaces.tui.console.keymap import native_keys
-from eawf.surfaces.tui.console.live_reads import held_usage
+from eawf.surfaces.tui.console.live_reads import HeldRawTranscript, held_raw_transcript, held_usage
 from eawf.surfaces.tui.console.navigation import Ctx, busy, copied
 from eawf.surfaces.tui.console.renderers.budget_lines import cost_line
 from eawf.surfaces.tui.console.renderers.read_model import (
@@ -803,6 +804,186 @@ def _outcome_rows(view: View, model: TranscriptReadModel) -> list[str]:
     return [f" OUTCOME   {outcome} · cost {cost}"]
 
 
+#: The cells an entry's text is indented by under its label.
+_RAW_INDENT = 5
+
+#: The key that swaps the blocks for the runtime's transcript files and back.
+_RAW = KEY["raw"].pair()
+
+#: The raw view's bar: the cursor walks lines, since one entry can outgrow the screen.
+_RAW_KEYS = (
+    KeyEntry("line", ("ArrowUp", "ArrowDown")).pair(),
+    _PAGE,
+    _NEWEST,
+    *(pair for pair in _NATIVE_KEYS if pair[1] == "follow"),
+    _RAW,
+    *(pair for pair in _NATIVE_KEYS if pair[1] in ("copy", "back")),
+)
+
+#: What the raw view's body says when the Run has no transcript file to show.
+NO_RAW_ENTRY = "∅ the transcript files hold no entry yet"
+
+
+def _printable(text: str) -> str:
+    """Return one line of *text* with tabs expanded and other control characters made visible.
+
+    Tool output carries terminal escapes, which would move the cursor of the terminal
+    the frame is drawn on.
+    """
+    return "".join(
+        char if char.isprintable() else "\N{REPLACEMENT CHARACTER}" for char in text.expandtabs(4)
+    )
+
+
+def _raw_label(entry: TranscriptEntry) -> str:
+    """Return what an entry's label line says: who spoke, or which tool was called."""
+    if entry.kind == "tool_call":
+        return f"tool call {entry.tool_name}"
+    if entry.kind == "tool_result":
+        failed = " error" if entry.is_error else ""
+        return f"tool result{failed} {entry.tool_name or 'of an unnamed call'}"
+    return entry.kind
+
+
+def _raw_heading(source: TranscriptSource) -> str:
+    """Return the line that opens one transcript file's entries."""
+    whose = "subagent transcript" if source.subagent else "transcript"
+    of = source.run_key or "no Run"
+    return f" ── {source.runtime} {whose} of {of}"
+
+
+def raw_lines(held: HeldRawTranscript, room: int) -> list[tuple[int, str]]:
+    """Return every line the raw view draws, with the entry each belongs to.
+
+    Each entry is a label line, then its whole text, line by line, wrapped at words to
+    *room* cells and never cut. A heading opens the entries of each file whenever the
+    file read from changes.
+
+    Args:
+        held: The entries read so far.
+        room: The cells an entry's text may take after its indent.
+
+    Returns:
+        ``(entry index, line)`` pairs in drawing order; a heading belongs to the entry
+        under it.
+    """
+    lines: list[tuple[int, str]] = []
+    last: TranscriptSource | None = None
+    for index, (source, entry) in enumerate(held.entries):
+        if source != last:
+            lines.append((index, _raw_heading(source)))
+            last = source
+        lines.append((index, f" {_raw_label(entry)}"))
+        for paragraph in entry.text.splitlines() or [""]:
+            pieces = _wrap_to(_printable(paragraph), room) or [""]
+            lines.extend((index, " " * _RAW_INDENT + piece) for piece in pieces)
+    return lines
+
+
+def _raw_room(w: int) -> int:
+    """Return the cells an entry's text takes at frame width *w*, its scrollbar paid for."""
+    return max(8, w - 2 - _RAW_INDENT - 1)
+
+
+def _raw_context(
+    view: View, model: TranscriptReadModel, held: HeldRawTranscript, total: int
+) -> str:
+    """Return the line under the header while the raw view is on."""
+    s = view.session
+    run = s.subj_id or (model.rows[0].key if model.rows else "no run")
+    files = len({source.path for source, _entry in held.entries})
+    parts = [f"Run {run}", "runtime transcript"]
+    if held.unindexed is None:
+        entries = len(held.entries)
+        parts += [
+            f"{group(entries)} {'entry' if entries == 1 else 'entries'}",
+            plural(files, "file"),
+        ]
+    parts.append(follow_word(s, total))
+    return " · ".join(parts)
+
+
+def raw_frame(view: View, model: TranscriptReadModel, held: HeldRawTranscript) -> list[str]:
+    """Return the Transcript frame drawing the runtime's own transcript files in full.
+
+    The header, state and outcome rows are the event view's, since they are about the
+    Run. The body is every entry whole, read from the files indexed for the Run; a
+    following view ends on the newest line, and a held one keeps its line and counts
+    the lines that arrived since.
+
+    Args:
+        view: The render being built; its session's ``tr_sel`` is the line under the
+            cursor.
+        model: The route's read model, which the header and state rows are drawn from.
+        held: The raw read's answer for the Run.
+
+    Returns:
+        The full frame, keybar last.
+    """
+    session, w, h = view.session, view.w, view.h
+    lines = raw_lines(held, _raw_room(w))
+    total = len(lines)
+    sel = cursor(session, total)
+    opening: list[str] = [
+        native_header(view, _crumb(view, model), model.scope_id),
+        Fixed(pad(" " + _raw_context(view, model, held, total), w)),
+        bar(w),
+        *_state_rows(view, model, w),
+        thin(w),
+    ]
+    closing: list[str] = [thin(w), *_outcome_rows(view, model)]
+    track = max(1, h - len(opening) - len(closing) - 1)
+    body: list[str] = []
+    if held.unindexed is not None:
+        body.append(f" ENTRIES   ∅ {held.unindexed}")
+    elif not lines:
+        body.append(f" ENTRIES   {NO_RAW_ENTRY}")
+    else:
+        flat = [Line(n, True, raw) for n, (_index, raw) in enumerate(lines)]
+        win = _window(flat, sel, track)
+        session.tr_page = max(1, len(win.lines))
+        sliced = bool(win.above or win.below)
+        width = w - 2 if sliced else w
+        if win.above:
+            body.append(pad(f" … {win.above} above", width))
+        body.extend(
+            g_pad(("▸" if line.block == sel else " ") + line.raw[1:], width) for line in win.lines
+        )
+        if win.below:
+            body.append(pad(f" … {win.below} below", width))
+        if sliced:
+            body = _scrollbar(body, win, total)
+    body.extend([pad("", w)] * max(0, track - len(body)))
+    drawn = [Fixed(pad(strip_chips(row), w)) for row in body]
+    pairs = [pair for pair in _RAW_KEYS if lines or pair[0] in (_RAW[0], "Esc")]
+    return build(view, [*opening, *drawn, *closing], keybar(acting_pairs(view, pairs), w))
+
+
+def _native_pairs(view: View, model: TranscriptReadModel, sel: int) -> list[tuple[str, str]]:
+    """Return the block view's bar pairs for the block under the caret, *sel*."""
+    folded = native_hidden(view, model, sel) if model.block_at(sel) is not None else 0
+    # Enter folds the block under the caret, so a block with nothing folded offers nothing,
+    # and y copies it, so a Run with no block offers no copy
+    held = model.block_at(sel) is not None
+    pairs = [
+        pair
+        for pair in _NATIVE_KEYS
+        if (folded or pair[0] != "Enter") and (held or pair[0] != "y") and pair != _RAW
+    ]
+    # the raw key is offered once the console has read the Run's transcript files, which
+    # only a console launched in the tree that indexed them does
+    if held_raw_transcript(view.live) is not None:
+        pairs.insert(len(pairs) - 1, _RAW)
+    # a live Run's blocks grow under a held view, so End, back to the newest block and
+    # following it, sits beside follow; the prototype's golden bars stay the table's own
+    after_follow = next(i for i, pair in enumerate(pairs) if pair[1] == "follow") + 1
+    pairs.insert(after_follow, _NEWEST)
+    # the page keys step as the arrows do, a window at a time, so they sit beside them
+    after_block = next(i for i, pair in enumerate(pairs) if pair[1] == "block") + 1
+    pairs.insert(after_block, _PAGE)
+    return pairs
+
+
 def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
     """Return the Transcript frame drawn from the read model the daemon served.
 
@@ -880,20 +1061,7 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
         drawn[-1] = Receded(drawn[-1])
     rows = [*opening, *drawn, *closing]
     session.nav_rows = len(model.blocks)
-    folded = native_hidden(view, model, sel) if model.block_at(sel) is not None else 0
-    # Enter folds the block under the caret, so a block with nothing folded offers nothing,
-    # and y copies it, so a Run with no block offers no copy
-    held = model.block_at(sel) is not None
-    pairs = [
-        pair for pair in _NATIVE_KEYS if (folded or pair[0] != "Enter") and (held or pair[0] != "y")
-    ]
-    # a live Run's blocks grow under a held view, so End, back to the newest block and
-    # following it, sits beside follow; the prototype's golden bars stay the table's own
-    after_follow = next(i for i, pair in enumerate(pairs) if pair[1] == "follow") + 1
-    pairs.insert(after_follow, _NEWEST)
-    # the page keys step as the arrows do, a window at a time, so they sit beside them
-    after_block = next(i for i, pair in enumerate(pairs) if pair[1] == "block") + 1
-    pairs.insert(after_block, _PAGE)
+    pairs = _native_pairs(view, model, sel)
     return build(view, rows, keybar(acting_pairs(view, pairs), w))
 
 
@@ -901,6 +1069,9 @@ def render(view: View) -> list[str]:
     """Return the Transcript frame, native when a read model is held, epoch-1 otherwise."""
     model = native(view)
     if isinstance(model, TranscriptReadModel):
+        raw = held_raw_transcript(view.live)
+        if view.session.tr_raw and raw is not None:
+            return raw_frame(view, model, raw)
         return native_frame(view, model)
     return _proto_frame(view)
 
@@ -1033,13 +1204,87 @@ def _native_seam(ctx: Ctx, key: str, model: TranscriptReadModel) -> bool:
     return False
 
 
+#: What the raw key answers in a console that has read no transcript file for the Run.
+NO_RAW_READ = "no transcript file read · the console reads them in the tree it was launched in"
+
+
+def _toggle_raw(ctx: Ctx, raw: HeldRawTranscript | None) -> None:
+    """Swap the blocks for the runtime's transcript files, or back, at the newest line."""
+    s = ctx.s
+    if raw is None:
+        ctx.notify(NO_RAW_READ, _RAW[0])
+        ctx.log(_RAW[0], NO_RAW_READ)
+        return
+    s.tr_raw = not s.tr_raw
+    # the two views walk different things, so each opens following its own tail
+    s.tr_sel = None
+    s.follow = True
+    s.tr_held_from = None
+    ctx.log(_RAW[0], "the runtime's transcript files" if s.tr_raw else "the event blocks")
+
+
+def _raw_seam(ctx: Ctx, key: str, raw: HeldRawTranscript) -> bool:
+    """Walk, hold, follow and copy the lines of the runtime's transcript files.
+
+    The cursor walks lines rather than entries, so an entry taller than the screen is
+    read through line by line. Landing on the newest line follows the tail, as ``End``
+    does; any other line holds the view.
+    """
+    s = ctx.s
+    total = s.count
+    newest = max(0, total - 1)
+    sel = newest if s.tr_sel is None else s.tr_sel
+    if key in _MOVES:
+        page = max(1, s.tr_page) if key in ("PageUp", "PageDown") else 1
+        s.tr_sel = max(0, min(newest, sel + _MOVES[key] * page))
+        if s.tr_sel == newest:
+            _resume(s, total)
+        else:
+            _hold(s, total)
+        ctx.log(key, f"line {s.tr_sel + 1} of {total}")
+        return True
+    if key in ("f", " "):
+        if s.follow:
+            _hold(s, total)
+        else:
+            _resume(s, total)
+        ctx.log("Space" if key == " " else key, "following the tail" if s.follow else "held")
+        return True
+    if key == "End":
+        _resume(s, total)
+        ctx.log("End", "the newest line · following the tail")
+        return True
+    if key == "y":
+        lines = raw_lines(raw, _raw_room(ctx.w))
+        if not lines:
+            ctx.notify(NO_RAW_ENTRY, "y")
+            return True
+        source, entry = raw.entries[lines[min(sel, len(lines) - 1)][0]]
+        what = f"{_raw_label(entry)} of {source.run_key or 'a subagent'}"
+        written = ctx.copy(entry.text, shown=what)
+        ctx.log("y", f"{copied(written)} the entry under the cursor")
+        return True
+    return False
+
+
+def _linked_seam(ctx: Ctx, key: str, model: TranscriptReadModel) -> bool:
+    """Act on a key over a held read model: in the raw view, or over the blocks."""
+    raw = held_raw_transcript(ctx.live)
+    if key == _RAW[0]:
+        _toggle_raw(ctx, raw)
+        return True
+    if ctx.s.tr_raw and raw is not None:
+        return _raw_seam(ctx, key, raw)
+    return _native_seam(ctx, key, model)
+
+
 def seam(ctx: Ctx, key: str, shift: bool) -> bool:
     """Walk the blocks, fold the selected one, toggle following and copy a block."""
     s = ctx.s
     if s.route != "transcript" or busy(s):
         return False
     if isinstance(ctx.projection, TranscriptReadModel):
-        return _native_seam(ctx, key, ctx.projection)
+        return _linked_seam(ctx, key, ctx.projection)
     blocks = blocks_now(ctx.fixture.registers.tr_blocks)
     # the frame publishes the run it drew, so the arrows reach the tail of a native run
     # longer than the prototype feed and stop at the end of a shorter one

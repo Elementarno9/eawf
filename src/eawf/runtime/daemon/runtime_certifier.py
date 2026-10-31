@@ -62,7 +62,11 @@ from typing import TYPE_CHECKING, Final
 from eawf.kernel.config.layered import resolve_auto_certify
 from eawf.kernel.config.providers import ProviderConfigError
 from eawf.kernel.identity import EntityKind, QualifiedUrn, format_entity_key
-from eawf.kernel.runtime.certification import CapabilityCertification
+from eawf.kernel.runtime.certification import (
+    CapabilityCertification,
+    CertifiedVersionRange,
+    QuarantineTrigger,
+)
 from eawf.kernel.runtime.compiled import (
     CapabilityObservation,
     CompiledRunSpec,
@@ -100,6 +104,7 @@ from eawf.runtime.runtimes.containment_observation import (
     ContainmentTargets,
     observe_containment,
 )
+from eawf.runtime.runtimes.host_transcript import scrubbed_words
 from eawf.runtime.runtimes.probes.sdk_baseline import probe_runtime
 from eawf.runtime.runtimes.quarantine import is_quarantined
 from eawf.runtime.sandbox.jail import _CRED_DENY_DIRS
@@ -162,8 +167,9 @@ class RuntimeNotProbedError(ValueError):
     """The installed runtime could not be probed, so nothing was recorded.
 
     The message leads with the refusal code: ``runtime_not_installed``,
-    ``runtime_probe_incomplete``, ``runtime_platform_unknown`` or
-    ``runtime_capabilities_unruled``.
+    ``runtime_probe_incomplete``, ``runtime_platform_unknown``,
+    ``runtime_capabilities_unruled``, or ``runtime_range_excludes_installed``,
+    the one refusal raised after a probe, whose row stays recorded.
     """
 
 
@@ -663,6 +669,8 @@ class _CanaryRun:
         observed_model: The model its runtime reported running, if it did.
         reported: Whether the worker filed its report through a semantic tool.
         semantic_protocol_version: The semantic protocol its driver speaks.
+        turn_failure: Why the worker's turn failed, scrubbed as a record may
+            hold it; ``None`` when the turn did not fail.
     """
 
     served: CompiledRunSpec
@@ -673,6 +681,7 @@ class _CanaryRun:
     observed_model: str | None
     reported: bool
     semantic_protocol_version: str
+    turn_failure: str | None
 
 
 def _under_test(
@@ -849,9 +858,12 @@ async def _dispatch_canary(
     observer = observed[canary.provider_options.provider_kind]
     launched = observer.launched
     assert launched is not None, "an announced dispatch launched its worker"
-    turn, answer = launched.turn, None
+    turn, answer, turn_failure = launched.turn, None, None
     if turn is not None and turn.done() and not turn.cancelled() and turn.exception() is None:
-        answer = turn.result().answer_text
+        outcome = turn.result()
+        answer = outcome.answer_text
+        if outcome.exit_kind == "failed":
+            turn_failure = scrubbed_words(outcome.error_text or "") or "the launcher said nothing"
     with context.session([request.urn]) as session:
         records = read_ledger_records(run_ledger(session))
     binding = next(
@@ -859,7 +871,7 @@ async def _dispatch_canary(
     )
     logger.info(
         f"_dispatch_canary run={run_key} provider={provider} answered={answer is not None} "
-        f"observed={len(observer.observed)}"
+        f"observed={len(observer.observed)} turn_failed={turn_failure is not None}"
     )
     return _CanaryRun(
         served=served,
@@ -870,6 +882,7 @@ async def _dispatch_canary(
         observed_model=None if launched.runtime_tuple is None else launched.runtime_tuple.model,
         reported=accepted_report_of(records, str(request.urn)) is not None,
         semantic_protocol_version=binding.manifest.semantic_protocol_versions[0],
+        turn_failure=turn_failure,
     )
 
 
@@ -880,6 +893,8 @@ def _canary_findings(result: CanaryStageResult) -> tuple[str, ...]:
             f"{axis.value}: the canary spec differs from the served spec"
             for axis in result.parity_mismatches
         )
+    if result.quarantine_trigger is QuarantineTrigger.TERMINAL_OUTCOME_ANOMALY:
+        return (f"worker_turn: failed: {result.turn_failure}",)
     graded = (
         ("escaped containment", result.containment.escaped),
         ("returned bytes through its denial", result.containment.observed),
@@ -898,6 +913,7 @@ def _conclude_walk(
     *,
     evidence_ref: str,
     last: bool,
+    version_range: CertifiedVersionRange | None,
 ) -> MachineCertification:
     """Grade the canary, walk the certify stage after a pass, and record the row.
 
@@ -914,6 +930,8 @@ def _conclude_walk(
         evidence_ref: The canary's evidence reference.
         last: Whether no further canary follows this one, so a row without
             the semantic tools says how a later walk can earn them.
+        version_range: The versions the driver certification stands for,
+            kept only when the certify stage wrote one.
 
     Returns:
         The recorded row: a quarantine naming every failed attempt, or a
@@ -928,6 +946,7 @@ def _conclude_walk(
             canary_spec=run.canary,
             outcomes=run.observed,
             reported=run.answered,
+            turn_failure=run.turn_failure,
             evidence_ref=evidence_ref,
         )
     )
@@ -937,6 +956,11 @@ def _conclude_walk(
     ) | {"observed_model": run.observed_model}
     if not result.passed:
         findings = _canary_findings(result)
+        failed = (
+            f"its worker's turn failed: {result.turn_failure}"
+            if result.quarantine_trigger is QuarantineTrigger.TERMINAL_OUTCOME_ANOMALY
+            else ", ".join(line.split(":")[0] for line in findings)
+        )
         row = MachineCertification.model_validate(
             {
                 **common,
@@ -946,8 +970,7 @@ def _conclude_walk(
                 "stages": (result.record,),
                 "verified_at": result.record.completed_at,
                 "reason": (
-                    f"{named} failed the containment canary ({result.record.reason_code}): "
-                    f"{', '.join(line.split(':')[0] for line in findings)}"
+                    f"{named} failed the containment canary ({result.record.reason_code}): {failed}"
                 ),
             }
         )
@@ -1001,6 +1024,7 @@ def _conclude_walk(
             "verified_at": certify.completed_at,
             "expires_at": probed.expires_at,
             "certification": certified.certification,
+            "version_range": None if certified.certification is None else version_range,
             "reason": (
                 f"{named} passed the containment canary and the certify stage "
                 f"{certify.outcome}{refusal}; certified until {probed.expires_at:%Y-%m-%d}"
@@ -1020,6 +1044,7 @@ async def walk_certification(
     actor: str,
     launchers: Mapping[str, NativeRunLauncher] | None = None,
     publish: Publish | None = None,
+    version_range: CertifiedVersionRange | None = None,
 ) -> MachineCertification:
     """Walk the probe, canary and certify stages of the installed *runtime_id*.
 
@@ -1035,6 +1060,9 @@ async def walk_certification(
         actor: The principal the canary Run is recorded against.
         launchers: The launcher table, defaulting to the shipped one.
         publish: Where each committed transition is handed for the fan-out.
+        version_range: The versions the earned certification stands for
+            once each passes a re-probe; ``None`` certifies the installed
+            version alone.
 
     Returns:
         The last recorded row: the probe's quarantine, the canary's
@@ -1042,7 +1070,9 @@ async def walk_certification(
 
     Raises:
         RuntimeNotProbedError: The runtime could not be probed, or no shipped
-            launcher dispatches it; nothing was recorded.
+            launcher dispatches it, and nothing was recorded; or
+            *version_range* excludes the installed version, and only the
+            probe's row was recorded, before any canary spent tokens.
         DaemonValidationError: The canary did not compile, was not created
             or was not dispatched; only the probe's row was recorded.
     """
@@ -1059,6 +1089,11 @@ async def walk_certification(
         probed, runtime_tuple = await asyncio.to_thread(certifier_for(tree_root).probe, runtime_id)
         if probed.outcome != "certified":
             return probed
+        if version_range is not None and not version_range.covers(probed.harness_version):
+            raise RuntimeNotProbedError(
+                f"runtime_range_excludes_installed: {runtime_id} {probed.harness_version} is "
+                f"installed, outside the range {version_range} it would certify"
+            )
         evidence_ref = (
             f"artifact://runtime-certification/{runtime_id}/{probed.harness_version}/canary"
         )
@@ -1080,6 +1115,7 @@ async def walk_certification(
             run,
             evidence_ref=evidence_ref,
             last=attempt == CANARY_ATTEMPTS,
+            version_range=version_range,
         )
         logger.info(
             f"walk_certification runtime={runtime_id!r} version={row.harness_version!r} "

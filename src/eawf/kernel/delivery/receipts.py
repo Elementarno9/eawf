@@ -356,6 +356,12 @@ class ProofReceipt(_FrozenModel):
     started_at: UtcDatetime
     ended_at: UtcDatetime
     supersedes_id: ReceiptKey | None = None
+    diagnostic_digest: Sha256DigestStr | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    diagnostic_ref: Annotated[str, Field(pattern=r"^GR-[0-9a-f]{16,64}$")] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def _key_matches_inputs(self) -> Self:
@@ -382,6 +388,8 @@ class ProofReceipt(_FrozenModel):
             raise ValueError(f"receipt {self.id!r} repeats a criterion id")
         if self.supersedes_id == self.id:
             raise ValueError(f"receipt {self.id!r} cannot supersede itself")
+        if (self.diagnostic_ref is None) != (self.diagnostic_digest is None):
+            raise ValueError("diagnostic reference and digest must be provided together")
         return self
 
 

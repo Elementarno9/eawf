@@ -44,9 +44,8 @@ CriterionStatus = Literal["pass", "fail", "blocked", "pending", "waived"]
 #: Source of the criterion view — typed spec, the legacy string list, or
 #: the profile-fed floor pack.
 #:
-#: ``legacy`` views carry no gate results because the legacy
-#: :attr:`~eawf.kernel.state.models.Wave.success_criteria` field is a
-#: free-form ``list[str]``; ``spec`` views carry the criterion's typed
+#: ``legacy`` views carry no gate results because an epoch-1 wave's success
+#: criteria were a free-form ``list[str]``; ``spec`` views carry the criterion's typed
 #: gate results; ``floor`` views are synthesised one-per-
 #: :class:`~eawf.platform.profiles.models.FloorCheck` when the active
 #: profile carries a non-empty

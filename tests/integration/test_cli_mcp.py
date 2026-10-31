@@ -397,5 +397,5 @@ def test_mcp_writes_on_an_epoch1_tree_are_refused(
         ],
     )
     assert result.exit_code == 1, result.output
-    assert "eawf migrate" in result.output
+    assert "selects no epoch-2 generation" in result.output
     assert state_path.read_bytes() == before

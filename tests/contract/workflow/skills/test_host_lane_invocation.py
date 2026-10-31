@@ -21,7 +21,7 @@ from typer.testing import CliRunner
 from eawf.runtime.hooks.event import HookEvent, HookEventType
 from eawf.runtime.hooks.host_lane import HOST_SKILL_HOOK, judge_host_skill_invocation
 from eawf.surfaces.cli.app import app
-from eawf.workflow.skills.arguments import InvocationRefusedError, parse_host_arguments
+from eawf.workflow.skills.arguments import parse_host_arguments
 from eawf.workflow.skills.catalog import SKILL_CATALOG
 
 runner = CliRunner()
@@ -86,9 +86,11 @@ def test_surf_112_empty_text_is_no_arguments() -> None:
     assert parse_host_arguments(_entry("research"), "") == {}
 
 
-def test_surf_112_text_that_does_not_split_is_refused() -> None:
-    with pytest.raises(InvocationRefusedError, match="unparseable_arguments"):
-        parse_host_arguments(_entry("research"), '"unterminated')
+def test_surf_112_text_that_does_not_split_is_read_word_by_word() -> None:
+    assert parse_host_arguments(_entry("research"), '"unterminated --depth deep') == {
+        "topic": ['"unterminated'],
+        "depth": "deep",
+    }
 
 
 @pytest.mark.parametrize(
@@ -145,7 +147,7 @@ def test_surf_109_a_stale_bundle_refuses_an_eawf_skill_with_migration_guidance(
     document = json.loads(result.stdout)
     assert document["decision"] == "block"
     assert "targets schema epoch 2 but the repository is at epoch 1" in document["reason"]
-    assert "eawf migrate status" in document["reason"]
+    assert "eawf help upgrade-from-0.6" in document["reason"]
 
 
 def test_surf_109_a_stale_bundle_refuses_a_model_skill_call_through_the_tool_hook(
@@ -168,7 +170,7 @@ def test_surf_109_a_stale_bundle_refuses_a_model_skill_call_through_the_tool_hoo
     assert result.exit_code == 0
     decision = json.loads(result.stdout)["hookSpecificOutput"]
     assert decision["permissionDecision"] == "deny"
-    assert "eawf migrate status" in decision["permissionDecisionReason"]
+    assert "eawf help upgrade-from-0.6" in decision["permissionDecisionReason"]
 
 
 def test_surf_109_a_stale_bundle_stands_down_on_a_prompt_that_invokes_no_eawf_skill(
@@ -177,4 +179,4 @@ def test_surf_109_a_stale_bundle_stands_down_on_a_prompt_that_invokes_no_eawf_sk
     result = _prompt_hook(tmp_path, "hello", target_epoch=2)
     assert result.exit_code == 0
     assert result.stdout == ""
-    assert "eawf migrate status" in result.stderr
+    assert "eawf help upgrade-from-0.6" in result.stderr

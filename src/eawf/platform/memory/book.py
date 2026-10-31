@@ -21,7 +21,6 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from eawf.kernel.migration.epoch2.envelopes import ImportedLedgerRow, LedgerCollection
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
@@ -40,10 +39,6 @@ from eawf.kernel.store.ledger import (
 )
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.platform.memory.store import read_envelopes
-
-if TYPE_CHECKING:
-    from eawf.kernel.migration.v1_state import State
 
 logger = logging.getLogger(__name__)
 
@@ -94,39 +89,6 @@ def generation_memory_ledger(tree_root: Path) -> Path | None:
         return None
     document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
     return ledger_path(document, Epoch2Collection.MEMORY)
-
-
-def notes_from_state(state: State, memory_path: Path) -> dict[str, MemoryNote]:
-    """Return the notes an epoch-1 tree holds.
-
-    Args:
-        state: The epoch-1 document; its ``memory_index`` names the notes.
-        memory_path: The epoch-1 memory store, whose latest envelope per id
-            carries the body and the creation time.
-
-    Returns:
-        One note per index row, keyed by id. A row the store holds no
-        envelope for reads with an empty body and no creation time.
-    """
-    latest = {env.id: env for env in read_envelopes(memory_path)}
-    notes: dict[str, MemoryNote] = {}
-    for mid, summary in (state.memory_index or {}).items():
-        env = latest.get(mid)
-        body = env.payload.get("body") if env is not None else None
-        notes[mid] = MemoryNote(
-            id=mid,
-            scope_id=summary.scope_id,
-            title=summary.summary,
-            summary=summary.summary,
-            body=str(body) if body is not None else "",
-            confidence=summary.confidence,
-            status=summary.status,
-            tier=summary.tier,
-            review_due=summary.review_due,
-            promoted_to_artifact_id=summary.promoted_to_artifact_id,
-            created_at=env.created_at if env is not None else None,
-        )
-    return notes
 
 
 def _imported_note(
@@ -355,7 +317,6 @@ __all__ = [
     "generation_memory_ledger",
     "next_note_id",
     "note_line",
-    "notes_from_state",
     "read_book",
     "select_archivable",
     "select_prunable",

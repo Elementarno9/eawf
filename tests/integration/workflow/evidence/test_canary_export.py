@@ -19,6 +19,7 @@ from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from eawf.kernel.runtime.certification import DriverCertification
+from eawf.kernel.spec.release_config import ReleaseRuntimeClaim
 from eawf.kernel.store.kinds.runtime_certification import MachineCertification
 from eawf.runtime.runtimes.probes import sdk_baseline
 from eawf.surfaces.cli import exit_codes
@@ -65,8 +66,9 @@ def driver_certification(
     version: str = VERSION,
     shift: int = 0,
     lifetime: timedelta = LIFETIME,
+    runtime_id: str = "claude-code",
 ) -> DriverCertification:
-    """Return a verified certification of claude-code *version* on *os_class*.
+    """Return a verified certification of *runtime_id* *version* on *os_class*.
 
     The certification lasts *lifetime* from its verification, so the write
     path, which measures expiry against the wall clock, stays live.
@@ -78,7 +80,7 @@ def driver_certification(
         stage["started_at"] = stage["completed_at"] = verified_at.isoformat()
     document.update(
         os_class=os_class,
-        manifest_ref=f"driver://claude-code/{version}",
+        manifest_ref=f"driver://{runtime_id}/{version}",
         distribution_version=version,
         sdk_or_server_version=version,
         verified_at=verified_at.isoformat(),
@@ -120,7 +122,10 @@ def quarantined(base: DriverCertification, *, shift: int) -> MachineCertificatio
 
 
 def stored(
-    certification: DriverCertification | None, *, base: DriverCertification
+    certification: DriverCertification | None,
+    *,
+    base: DriverCertification,
+    runtime_id: str = "claude-code",
 ) -> MachineCertification:
     """Return the walk row that stored *certification*, or an older row without one."""
     record = base if certification is None else certification
@@ -128,10 +133,10 @@ def stored(
     return MachineCertification.model_validate(
         {
             "certification_urn": (
-                f"certification://claude-code/{record.distribution_version}/"
+                f"certification://{runtime_id}/{record.distribution_version}/"
                 f"{record.verified_at:%Y-%m-%d}"
             ),
-            "runtime_id": "claude-code",
+            "runtime_id": runtime_id,
             "harness_version": record.distribution_version,
             "tuple_digest": DIGEST,
             "outcome": "certified",
@@ -159,11 +164,17 @@ def export(
     return build_canary_export(
         release_key,
         prior=committed,
+        declared=(),
         rows=rows,
         installed={"claude-code": installed},
         os_classes=os_classes,
         now=committed.certifications[0].certification.verified_at + timedelta(days=1),
+        reprobe=_no_reprobe,
     )
+
+
+def _no_reprobe(runtime_id: str) -> MachineCertification:
+    raise AssertionError(f"{runtime_id} was re-probed though no certified range was consulted")
 
 
 # ---------- the stored row ----------
@@ -587,10 +598,12 @@ def _re_export(
     return build_canary_export(
         EXPORT_KEY,
         prior=prior,
+        declared=(),
         rows=rows,
         installed={"claude-code": VERSION},
         os_classes=(os_class,),
         now=now,
+        reprobe=_no_reprobe,
     )
 
 
@@ -657,3 +670,102 @@ def test_a_kept_class_of_another_version_is_kept_but_not_claimed(
 
     assert evidence.advertised[0].os_classes == ("linux",)
     assert evidence.certifications[-1] == macos
+
+
+# ---------- the declared runtimes ----------
+
+STABLE_KEY: Final = "REL-0.7.0"
+BOTH: Final = (
+    ReleaseRuntimeClaim(runtime_id="claude-code", required_capabilities=("tool_use", "streaming")),
+    ReleaseRuntimeClaim(runtime_id="codex", required_capabilities=("tool_use", "streaming")),
+)
+
+
+def _certified(committed: CanaryEvidence, runtime_id: str) -> MachineCertification:
+    certification = driver_certification(committed, runtime_id=runtime_id)
+    return stored(certification, base=certification, runtime_id=runtime_id)
+
+
+def _declared_export(
+    committed: CanaryEvidence,
+    rows: list[MachineCertification],
+    declared: tuple[ReleaseRuntimeClaim, ...],
+) -> CanaryEvidence:
+    return build_canary_export(
+        EXPORT_KEY,
+        prior=committed,
+        declared=declared,
+        rows=rows,
+        installed={"claude-code": VERSION, "codex": VERSION},
+        os_classes=("linux",),
+        now=committed.certifications[0].certification.verified_at + timedelta(days=1),
+        reprobe=_no_reprobe,
+    )
+
+
+def test_a_declared_runtime_is_advertised_though_the_prior_lacked_it(
+    committed: CanaryEvidence,
+) -> None:
+    assert [claim.runtime_id for claim in committed.advertised] == ["claude-code"]
+    rows = [_certified(committed, "claude-code"), _certified(committed, "codex")]
+
+    evidence = _declared_export(committed, rows, BOTH)
+
+    assert [claim.runtime_id for claim in evidence.advertised] == ["claude-code", "codex"]
+    codex = evidence.advertised[1]
+    assert codex.manifest_ref == f"driver://codex/{VERSION}"
+    assert codex.required_capabilities == ("tool_use", "streaming")
+    assert [record.runtime_id for record in evidence.certifications] == ["claude-code", "codex"]
+    assert provider_findings(evidence) == ()
+
+
+def test_a_single_declared_runtime_is_the_only_one_advertised(committed: CanaryEvidence) -> None:
+    evidence = _declared_export(committed, [_certified(committed, "codex")], BOTH[1:])
+
+    assert [claim.runtime_id for claim in evidence.advertised] == ["codex"]
+
+
+def test_an_empty_declaration_carries_the_prior_s_runtimes_forward(
+    committed: CanaryEvidence,
+) -> None:
+    evidence = _declared_export(committed, [_certified(committed, "claude-code")], ())
+
+    assert [claim.runtime_id for claim in evidence.advertised] == ["claude-code"]
+    assert evidence.advertised[0].required_capabilities == (
+        committed.advertised[0].required_capabilities
+    )
+
+
+def test_a_declared_runtime_without_a_certification_is_refused_naming_it(
+    committed: CanaryEvidence,
+) -> None:
+    with pytest.raises(ValueError, match=r"canary_export_uncovered: .* codex "):
+        _declared_export(committed, [_certified(committed, "claude-code")], BOTH)
+
+
+def test_the_stable_export_advertises_what_its_configuration_declares(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, committed: CanaryEvidence
+) -> None:
+    _commit_export(tmp_path, STABLE_KEY)
+    state_path = tmp_path / ".ea" / "state.json"
+    for runtime_id in ("claude-code", "codex"):
+        append_machine_certification(state_path, _certified(committed, runtime_id))
+    _installed(monkeypatch, VERSION)
+
+    evidence = write_canary_export(state_path, STABLE_KEY, os_classes=("linux",))
+
+    assert [claim.runtime_id for claim in evidence.advertised] == ["claude-code", "codex"]
+    assert load_canary_evidence(tmp_path, STABLE_KEY) == evidence
+
+
+def test_the_stable_export_refuses_an_uncertified_declared_runtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, committed: CanaryEvidence
+) -> None:
+    _commit_export(tmp_path, STABLE_KEY)
+    state_path = tmp_path / ".ea" / "state.json"
+    append_machine_certification(state_path, _certified(committed, "claude-code"))
+    _installed(monkeypatch, VERSION)
+
+    with pytest.raises(ValueError, match=r"canary_export_uncovered: .* codex "):
+        write_canary_export(state_path, STABLE_KEY, os_classes=("linux",))
+    assert load_canary_evidence(tmp_path, STABLE_KEY) == load_canary_evidence(REPO_ROOT, STABLE_KEY)

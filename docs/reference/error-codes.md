@@ -12,29 +12,13 @@ Every `ErrorCode` member has exactly one anchor here. The `tests/unit/test_error
 
 Strict invariant validation rejected the candidate `state.json`. Bucket: `VALIDATION_ERROR (2)`. Inspect the violation list, then fix the offending field and retry.
 
-### STATE_VERSION_MISMATCH
-
-The on-disk `state.json` schema version does not match the version the running binary expects. Bucket: `STATE_CONFLICT (3)`. Run `eawf migrate` to bring the state file forward (or upgrade/downgrade the binary to match).
-
 ### BACKUP_WRITE_FAILED
 
 Writing a pre-mutation backup file failed (disk full, permission denied). Bucket: `INTERNAL_ERROR (5)`. Free space or fix permissions on the backup directory, then retry the mutating verb.
 
-### MIGRATION_STEP_FAILED
-
-A migration step raised mid-chain. Bucket: `INTERNAL_ERROR (5)`. Resume from the last committed step with `eawf migrate --resume <from-version>` after addressing the underlying failure.
-
-### MIGRATION_POSTCONDITION_FAILED
-
-A migration step ran but its postcondition assertion did not hold. Bucket: `VALIDATION_ERROR (2)`. The state was restored from backup; file an issue with the migration name and the postcondition that failed.
-
-### MIGRATION_TARGET_UNKNOWN
-
-The requested migration target version is not a known migration step. Bucket: `USER_ERROR (1)`. Run `eawf migrate --list` to see available targets.
-
 ### MIGRATION_REQUIRED
 
-A mutating verb was aimed at a plain epoch-1 tree after the flag day, or an epoch-1 verb was run where no tree exists. The envelope names its own `MigrationRequired` bucket with exit name `ATTACH_FAILURE (4)`, the code a tree in the migration-required state exits with; it shares the value with an unreachable daemon but never presents as one. Migrate the tree with `eawf migrate epoch2 --plan` then `--apply`, or create an epoch-2 tree with `eawf init`.
+A writing verb of a contract group, the console or a bare `eawf` was aimed at a 0.6 tree, which this release does not write. The envelope names its own `MigrationRequired` bucket with exit name `ATTACH_FAILURE (4)`; it shares the value with an unreachable daemon but never presents as one. Cut the tree over with 0.7.0rc4 and then upgrade, as `eawf help upgrade-from-0.6` describes.
 
 ## Daemon / IPC
 

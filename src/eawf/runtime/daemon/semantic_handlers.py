@@ -345,6 +345,12 @@ class HandlerInputs:
     lease: WorkLease | None = None
 
 
+#: The stable code the daemon answers a handler's refusal with. The
+#: handler's own code leads the detail, so one code covers every handler
+#: and the caller still learns which check refused.
+HANDLER_REFUSED: Final = "handler_refused"
+
+
 class HandlerRefusalError(ValueError):
     """A call reached its handler and still cannot be answered as made.
 
@@ -1060,13 +1066,13 @@ def _submit_evidence(inputs: HandlerInputs) -> SemanticToolOutput:
             code="no_promoted_contract_store",
             message="the tree's generation holds no readable promoted-contract store",
         )
-    if state.project is None:
+    if state.project_code is None:
         return _refused_evidence(
             code="no_promoted_contract_store",
             message="the tree's generation holds no project to scope a promotion under",
         )
     try:
-        promotions = promote_spike_evidence(state, report=report, scope_id=state.project.code)
+        promotions = promote_spike_evidence(state, report=report, scope_id=state.project_code)
     except UserError as error:
         code = _evidence_finding_code(error.kind or "measured_contract_rejected")
         return _refused_evidence(code=code, message=str(error))
@@ -1343,6 +1349,7 @@ REPORTABLE_PLAN_CODES: Final[frozenset[PlanRefusalCode]] = _compile_finding_code
 __all__ = [
     "BROKERED_TOOLS",
     "EVIDENCE_SPIKE_REPORT_FILE_METHOD",
+    "HANDLER_REFUSED",
     "PLAN_PROPOSAL_PAYLOAD_KIND",
     "REPORTABLE_PLAN_CODES",
     "SEMANTIC_HANDLERS",

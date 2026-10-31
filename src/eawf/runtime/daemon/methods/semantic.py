@@ -41,6 +41,7 @@ from eawf.runtime.daemon.semantic_gateway import (
     read_receipt,
     serve_semantic_call,
 )
+from eawf.runtime.daemon.semantic_handlers import HANDLER_REFUSED, HandlerRefusalError
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +119,15 @@ def _parsed[ParamsT: BaseModel](model: type[ParamsT], params: dict[str, Any]) ->
 
 
 def _refused(error: SemanticGatewayError) -> DaemonValidationError:
-    """Return the wire form of a call the gateway cannot answer for."""
+    """Return the wire form of a call the gateway cannot answer for.
+
+    A handler's refusal is labelled as one, so the per-Run server can tell
+    an answer that asks for a changed request from a daemon that failed.
+    """
+    if isinstance(error.__cause__, HandlerRefusalError):
+        return DaemonValidationError(
+            f"validation_failed: {HANDLER_REFUSED}: {error.code}: {error.detail}"
+        )
     return DaemonValidationError(f"validation_failed: {error.code}: {error.detail}")
 
 

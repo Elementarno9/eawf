@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final
@@ -41,14 +41,17 @@ from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, re
 from eawf.runtime.daemon.methods.release_context import require_state_path, resolve_config
 from eawf.runtime.release.chokepoint import sweep_pinned_source
 from eawf.workflow.release.advance import (
+    CheckpointGateReceipt,
     TrainAdvanceDenialCode,
     TrainAdvanceError,
     advance_train,
+    assert_prerequisite_receipts,
     derive_train,
     render_train_ladder,
 )
 from eawf.workflow.release.checkpoint_receipts import (
     DEFAULT_RECEIPT_TTL_SECONDS,
+    GateRefusal,
     ReceiptProduction,
     pinned_source,
     pinned_worktree,
@@ -186,6 +189,8 @@ def _produce(
     config: ReleaseConfig,
     bindings: Mapping[ReleaseGateName, GateBinding],
     args: ProduceReceiptsParams,
+    *,
+    required: Sequence[ReleaseGateName],
 ) -> ReceiptProduction:
     """Sweep the pinned source, run its proofs in a worktree and settle every gate.
 
@@ -199,6 +204,7 @@ def _produce(
         config: Its loaded configuration.
         bindings: Its profile's binding table.
         args: The verb's params.
+        required: Required gates that have no reusable receipt.
 
     Returns:
         The issued receipts and the refused gates.
@@ -226,7 +232,7 @@ def _produce(
     ) as run_proof:
         return produce_checkpoint_receipts(
             release,
-            required=config.gates.required,
+            required=required,
             bindings=bindings,
             readiness=readiness,
             run_proof=run_proof,
@@ -241,8 +247,11 @@ async def produce_receipts(ctx: MethodContext, params: dict[str, Any]) -> dict[s
     Each gate that passes gets one stored receipt bound to the record's
     ``source_sha`` and ``manifest_digest``. A gate that does not pass,
     including a proof command that exits non-zero, gets none, and the
-    reply names why. A rerun stores fresh receipts beside the old ones.
-    The advance reads the newest of each.
+    reply names why. A retry reuses fresh receipts bound to this source and
+    manifest, preserving their original timestamps, and proves only the
+    remaining required gates. Newly earned receipts append beside the old ones.
+    A receipt expiring during that work is returned as a refusal to retry,
+    rather than being reported as fresh or having its expiry extended.
 
     Args:
         ctx: Server context; supplies the state root the record is read
@@ -276,7 +285,37 @@ async def produce_receipts(ctx: MethodContext, params: dict[str, Any]) -> dict[s
     release = _stored_record(state_path, rung.release_key)
     bindings = _bindings(rung)
     try:
-        production = await asyncio.to_thread(_produce, state_path, release, config, bindings, args)
+        pinned_source(release)
+    except ValueError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    now = datetime.now(UTC)
+    existing = {
+        receipt.gate: receipt for receipt in read_checkpoint_receipts(state_path, release.key)
+    }
+    reused: dict[ReleaseGateName, CheckpointGateReceipt] = {}
+    for gate in config.gates.required:
+        receipt = existing.get(gate)
+        if receipt is None:
+            continue
+        gate_config = config.model_copy(
+            update={"gates": config.gates.model_copy(update={"required": (gate,)})}
+        )
+        try:
+            assert_prerequisite_receipts(
+                release, gate_config, (receipt,), now=now, train_id=V07_TRAIN.train_id
+            )
+        except TrainAdvanceError:
+            continue
+        reused[gate] = receipt
+    missing = tuple(gate for gate in config.gates.required if gate not in reused)
+    try:
+        production = (
+            await asyncio.to_thread(
+                _produce, state_path, release, config, bindings, args, required=missing
+            )
+            if missing
+            else ReceiptProduction((), ())
+        )
     except ValueError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
     recorded_at = datetime.now(UTC)
@@ -287,22 +326,40 @@ async def produce_receipts(ctx: MethodContext, params: dict[str, Any]) -> dict[s
             recorded_at=recorded_at,
             summary=f"receipt {release.key} {issued.receipt.gate.value}: {issued.evidence}",
         )
+    receipts = {**reused, **{issued.receipt.gate: issued.receipt for issued in production.receipts}}
+    refusals = list(production.refusals)
+    finished_at = datetime.now(UTC)
+    for gate, receipt in tuple(receipts.items()):
+        gate_config = config.model_copy(
+            update={"gates": config.gates.model_copy(update={"required": (gate,)})}
+        )
+        try:
+            assert_prerequisite_receipts(
+                release, gate_config, (receipt,), now=finished_at, train_id=V07_TRAIN.train_id
+            )
+        except TrainAdvanceError as exc:
+            del receipts[gate]
+            refusals.append(GateRefusal(gate, bindings[gate].evidence_ref, str(exc)))
     logger.info(
         f"produce_receipts key={release.key!r} stored={len(production.receipts)} "
-        f"refused={len(production.refusals)}"
+        f"reused={len(reused.keys() & receipts.keys())} refused={len(refusals)}"
     )
     return {
         "release_key": release.key,
         "source_sha": release.source_sha,
         "manifest_digest": release.manifest_digest,
-        "receipts": [issued.receipt.model_dump(mode="json") for issued in production.receipts],
+        "receipts": [
+            receipts[gate].model_dump(mode="json")
+            for gate in config.gates.required
+            if gate in receipts
+        ],
         "refused": [
             {
                 "gate": refusal.gate.value,
                 "evidence_ref": refusal.evidence_ref,
                 "detail": refusal.detail,
             }
-            for refusal in production.refusals
+            for refusal in refusals
         ],
     }
 

@@ -169,6 +169,8 @@ def test_compile_gate_threads_all_w15_kwargs() -> None:
         "scope": "all",
         "wave_id": "P01-I01-W01",
         "wave_file_scopes": ["src/eawf/"],
+        "fixture_inputs": [],
+        "dotnet_counts": {"passed": 1, "failed": 0, "skipped": 0, "total": 1},
     }
     gate = _command_exit_zero_gate(extra_args=extra)
     criterion = _criterion()

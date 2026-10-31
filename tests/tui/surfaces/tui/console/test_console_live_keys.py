@@ -12,12 +12,19 @@ record the caret was on, and none reaches a prototype record.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.store.compaction import document_rows
+from eawf.kernel.store.ledger import read_ledger_records
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.daemon.methods.projection import document_path
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.harness import settle
 from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
@@ -117,6 +124,17 @@ def test_the_key_walks_cover_every_route_but_entry() -> None:
     assert len(walked) == len(set(walked)) == len(_ROUTES) + len(DETAIL_ROUTES)
 
 
+def test_the_grammar_walks_cover_every_route_group_and_every_global_key() -> None:
+    """Each route group presses the whole grammar on one bare walk, and no key is unpressed."""
+    groups = {REGISTRY.by_id[route].group for route, _held in _GRAMMAR_WALKS}
+    assert groups == {REGISTRY.by_id[route].group for route in _ROUTES}
+    assert len(_GRAMMAR_WALKS) == len(groups)
+    assert all((route, False) in {p.values for p in _KEY_WALKS} for route, _h in _GRAMMAR_WALKS)
+    pressed = {key for route, held in _GRAMMAR_WALKS for key in _claim_keys(set(), route, held)}
+    assert pressed == set(_GLOBAL_GRAMMAR) | MOTION
+    assert _claim_keys(set(), "track", True) == _MOTION_KEYS
+
+
 @pytest.mark.parametrize(("route", "held"), _KEY_WALKS)
 def test_live_every_advertised_key_acts_on_every_route(
     tmp_path: Path, route: str, held: bool
@@ -158,15 +176,32 @@ def test_live_every_advertised_key_acts_on_every_route(
     assert authority_digests(root) == before, "the live serve wrote to the authority tree"
 
 
-#: The keys every route is pressed with beside its own table: the global grammar and
-#: the motion keys, each of which the refusal gate admits on every route. Ctrl+C is left
-#: out because it quits.
-_CLAIMABLE = (
+#: The global grammar, which the refusal gate admits on every route and which reaches one
+#: handler whatever the route. Ctrl+C is left out because it quits.
+_GLOBAL_GRAMMAR = (
     *(key for g in GLOBAL_KEYS for key in g.keys if key != "ctrl+c"),
-    *sorted(MOTION),
     HELP_KEY,
     ATTENTION_JUMP_KEY,
 )
+
+#: The keys every walk is pressed with beside its own table: the motion keys, which a
+#: route may claim for its own rows whether or not its table prints them.
+_MOTION_KEYS = tuple(sorted(MOTION))
+
+#: The bare walk of the first route of each route group, which also presses the global
+#: grammar. The grammar's handler does not depend on the route, so one route per group
+#: proves it without pressing it on every walk; each walk still presses its own table.
+_GRAMMAR_WALKS = frozenset(
+    # walking the routes backwards leaves each group keyed to its first route
+    (route, False)
+    for route in {REGISTRY.by_id[r].group: r for r in reversed(_ROUTES)}.values()
+)
+
+
+def _claim_keys(table: set[str], route: str, held: bool) -> tuple[str, ...]:
+    """Return the keys one claimed-key walk presses, its own table first."""
+    grammar = _GLOBAL_GRAMMAR if (route, held) in _GRAMMAR_WALKS else ()
+    return tuple(dict.fromkeys((*sorted(table), *_MOTION_KEYS, *grammar)))
 
 
 #: A key that steps back, and the key that first moves the caret off the top for it: a
@@ -199,7 +234,7 @@ def test_live_every_claimed_key_acts_or_says_why(tmp_path: Path, route: str, hel
             if setup is None:
                 return None
             table = {k for e in ROUTE_KEYS.get(setup.route, ()) for k in e.keys}
-            for key in dict.fromkeys((*sorted(table), *_CLAIMABLE)):
+            for key in _claim_keys(table, route, held):
                 base = await render_setup(app, pilot, setup)
                 if key in _BACKWARD:
                     app.press_key(_BACKWARD[key])
@@ -219,8 +254,9 @@ def test_live_every_claimed_key_acts_or_says_why(tmp_path: Path, route: str, hel
         pytest.skip(f"{route} holds no record on this tree")
     silent, pressed = walked
     assert not silent, "claimed but silent:\n" + "\n".join(silent)
-    # Every route is pressed with at least the global and motion keys.
-    assert pressed >= len(set(_CLAIMABLE))
+    # Every route is pressed with at least the motion keys, a grammar walk with the grammar.
+    grammar = len(set(_GLOBAL_GRAMMAR)) if (route, held) in _GRAMMAR_WALKS else 0
+    assert pressed >= len(set(_MOTION_KEYS)) + grammar
 
 
 def test_an_empty_tree_holds_no_prototype(tmp_path: Path) -> None:
@@ -294,17 +330,51 @@ _RUN_CLIMB: _Walk = (
     ),
 )
 
-_WALKS: tuple[_Walk, ...] = (
-    (
+#: The Track whose Milestones the sibling walk steps through.
+WALKED_TRACK = "TRK-EAWF-CORE"
+
+
+def _track_milestones(root: Path, track: str) -> list[str]:
+    """Return the keys of every Milestone ``root``'s tree files under ``track``, in id order.
+
+    Read from the state document and the Milestone ledger directly, not through the
+    console, so the walk is checked against what the tree holds. A cancelled Milestone
+    is still a sibling: it stays a record under its Track.
+    """
+    state = document_path(resolve_authority(root / ".ea"))
+    rows = document_rows(json.loads(state.read_bytes()), Epoch2Collection.MILESTONE)
+    payloads = [*rows.values()]
+    payloads += [
+        {"key": r.record_key, **r.payload}
+        for r in read_ledger_records(ledger_path(state, Epoch2Collection.MILESTONE))
+        if r.record_key.startswith("MLS-")
+    ]
+    suffix = f"/track/{track}"
+    return sorted(
+        {p["key"] for p in payloads if str(p.get("primary_track_ref", "")).endswith(suffix)}
+    )
+
+
+def _sibling_walk(root: Path) -> _Walk:
+    """Return the ``[ ]`` walk over the Milestones of :data:`WALKED_TRACK` on ``root``.
+
+    The walk starts on the first Milestone, steps forward to the second, back to the
+    first, then back once more, which wraps to the last; Esc then climbs to the Track.
+    """
+    first, second, *_, last = _track_milestones(root, WALKED_TRACK)
+    return (
         "[ ] walk the Milestones of one Track; Esc with no history climbs to it",
-        SessionSetup(route="milestone", size=SIZE, subjId="MLS-0100"),
+        SessionSetup(route="milestone", size=SIZE, subjId=first),
         (
-            ("]", ("milestone", "MLS-0101")),
-            ("[", ("milestone", "MLS-0100")),
-            ("[", ("milestone", "MLS-0105")),
-            ("Escape", ("track", "TRK-EAWF-CORE")),
+            ("]", ("milestone", second)),
+            ("[", ("milestone", first)),
+            ("[", ("milestone", last)),
+            ("Escape", ("track", WALKED_TRACK)),
         ),
-    ),
+    )
+
+
+_WALKS: tuple[_Walk, ...] = (
     (
         "a light verb opens on its Run and u climbs back to that Run",
         SessionSetup(route="run.detail", size=SIZE, subjId="RUN-00000005"),
@@ -354,7 +424,8 @@ def test_live_climbs_and_jumps_land_on_real_records(tmp_path: Path) -> None:
             live_console(root, tmp_path / "runtime", launched=True) as (app, _seam),
             app.run_test(size=SIZES[SIZE]) as pilot,
         ):
-            wrong = await _walked(app, pilot, _WALKS, _unheld_prototypes(root))
+            walks = (_sibling_walk(root), *_WALKS)
+            wrong = await _walked(app, pilot, walks, _unheld_prototypes(root))
             for route in ("evidence", "campaign"):
                 await render_setup(app, pilot, SessionSetup(route=route, size=SIZE))
                 app.press_key("Escape")

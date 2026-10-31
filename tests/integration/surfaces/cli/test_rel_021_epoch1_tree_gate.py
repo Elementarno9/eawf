@@ -1,42 +1,60 @@
-"""REL-021: after the flag day a plain epoch-1 tree refuses every mutating verb.
+"""REL-021: a 0.6 tree refuses every writing verb, with the path that still upgrades it.
 
-Each refused verb is invoked with no arguments against a plain epoch-1 tree:
-the gate runs before the verb parses anything, so the refusal is the same
-whatever the verb would have needed, and it must move nothing. The exempt
-migration-support verbs pass the gate, an epoch-2 tree passes it, and an
-epoch-1 verb refuses even where no tree exists, pointing at ``eawf init``.
+This release reads and writes only the generation store, and the cutover that
+builds one from a 0.6 tree shipped last in 0.7.0rc4. Each verb the effect
+table classifies as writing, and the console, is invoked with no arguments
+against a plain 0.6 tree: the root group refuses before the verb parses
+anything, so the refusal is the same whatever the verb would have needed, and
+it must move nothing. Read verbs and help still answer there, and a tree that
+carries the epoch marker passes.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
-import click
 import pytest
-import typer
 from typer.testing import CliRunner
 
-from eawf.kernel.state.epoch2.authority import resolve_authority
-from eawf.platform.install.epoch2_birth import bear_epoch2_tree
-from eawf.surfaces.cli import exit_codes, flag_day_gate
+from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
+from eawf.surfaces.cli import exit_codes, upgrade_refusal
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.error_codes import ErrorCode
+from eawf.surfaces.cli.verb_contract import CONTRACT_GROUPS
+from eawf.surfaces.cli.verb_effects import CLI_VERB_EFFECTS
 
 pytestmark = pytest.mark.integration
 
 runner = CliRunner()
 
+#: Every verb of a contract group the effect table classifies as writing.
+#: The daemon stop verbs answer on a 0.6 tree so a user can stop an old daemon.
+STOP_VERBS = ("daemon restart", "daemon stop")
+
+WRITING_VERBS = sorted(
+    verb
+    for verb, effect in CLI_VERB_EFFECTS.items()
+    if effect.effect_class != "read"
+    and verb.split(" ", 1)[0] in CONTRACT_GROUPS
+    and verb not in STOP_VERBS
+)
+
 
 def _tree(root: Path) -> Path:
-    """Lay down a plain epoch-1 tree and return its ``state.json``."""
+    """Lay down a plain 0.6 tree and return its ``state.json``."""
     state_path = root / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True)
-    state_path.write_text(json.dumps({"schema_version": "1.0", "scope_kind": "repo"}))
+    state_path.write_text(json.dumps({"schema_version": "1.20", "scope_kind": "repo"}))
     return state_path
+
+
+def _mark(state_path: Path) -> None:
+    """Give the tree holding ``state_path`` the epoch marker."""
+    marker = state_path.parent / GENERATIONS_DIRNAME / MARKER_FILENAME
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("{}")
 
 
 def _digest(root: Path) -> str:
@@ -52,164 +70,157 @@ def _digest(root: Path) -> str:
 
 @pytest.fixture
 def epoch1_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A plain epoch-1 tree the CLI addresses through ``EA_STATE`` and the working directory."""
+    """A plain 0.6 tree the CLI addresses through ``EA_STATE`` and the working directory."""
     root = tmp_path / "repo"
     monkeypatch.setenv("EA_STATE", str(_tree(root)))
     monkeypatch.chdir(root)
-    monkeypatch.setenv("EAWF_REGISTRY_PATH", str(tmp_path / "registry.json"))
     return root
 
 
-@pytest.mark.parametrize("verb", sorted(flag_day_gate.refused_verbs()))
-def test_rel_021_every_refused_verb_refuses_on_a_plain_epoch1_tree(
+@pytest.mark.parametrize("verb", WRITING_VERBS)
+def test_rel_021_every_writing_verb_refuses_on_a_plain_epoch1_tree(
     epoch1_tree: Path, verb: str
 ) -> None:
     before = _digest(epoch1_tree)
     result = runner.invoke(app, ["--json", *verb.split()])
     assert result.exit_code == exit_codes.ATTACH_FAILURE, result.output
     envelope = json.loads(result.output)
-    assert envelope["data"]["kind"] == flag_day_gate.MIGRATION_REQUIRED_KIND
+    assert envelope["data"]["kind"] == upgrade_refusal.MIGRATION_REQUIRED_KIND
     assert envelope["error_code"] == ErrorCode.MIGRATION_REQUIRED.value
-    assert envelope["exit_code"] == ErrorCode.MIGRATION_REQUIRED.exit_code
+    assert upgrade_refusal.UPGRADE_STEPS in envelope["message"]
     assert f"`eawf {verb}` was refused" in envelope["message"]
-    assert "eawf migrate epoch2" in envelope["message"]
+    assert "0.7.0rc4" in envelope["suggested_next_step"]
     assert _digest(epoch1_tree) == before
 
 
-def _gate(argv: list[str]) -> None:
-    """Run only the gate for ``argv``, as the root group would before dispatch."""
-    root = typer.main.get_command(app)
-    assert isinstance(root, click.Group)
-    ctx = root.make_context("eawf", list(argv))
-    flag_day_gate.enforce(root, ctx, [*ctx._protected_args, *ctx.args])
+def test_rel_021_a_bare_invocation_refuses_before_the_console_opens(epoch1_tree: Path) -> None:
+    result = runner.invoke(app, [])
+    assert result.exit_code == exit_codes.ATTACH_FAILURE
+    assert "0.7.0rc4" in result.output
+    assert "migrate epoch2 --apply --plan-digest" not in result.output
 
 
-@pytest.mark.parametrize("verb", sorted(flag_day_gate.exempt_verbs()))
-def test_rel_021_an_exempt_verb_passes_the_gate(epoch1_tree: Path, verb: str) -> None:
-    _gate(verb.split())
+@pytest.mark.parametrize("argv", [["ui"], ["--json", "ui"]])
+def test_rel_021_the_console_refuses_on_an_epoch1_tree(epoch1_tree: Path, argv: list[str]) -> None:
+    result = runner.invoke(app, argv)
+    assert result.exit_code == exit_codes.ATTACH_FAILURE
+    assert "0.7.0rc4" in result.output
 
 
-@pytest.mark.parametrize("verb", ["memory add", "config set", "task create"])
-def test_rel_021_the_gate_refuses_before_dispatch(epoch1_tree: Path, verb: str) -> None:
-    with pytest.raises(click.exceptions.Exit) as caught:
-        _gate(verb.split())
-    assert caught.value.exit_code == exit_codes.ATTACH_FAILURE
-
-
-def test_rel_021_a_group_option_before_the_verb_still_resolves(epoch1_tree: Path) -> None:
-    root = typer.main.get_command(app)
-    assert isinstance(root, click.Group)
-    ctx = click.Context(root)
-    assert flag_day_gate.command_path(root, ctx, ["migrate", "--dry-run", "status"]) == (
-        "migrate status"
-    )
-    assert flag_day_gate.command_path(root, ctx, ["no-such-verb"]) == ""
-
-
-def test_rel_021_an_epoch2_tree_passes_the_gate(epoch1_tree: Path) -> None:
-    state_path = epoch1_tree / ".ea" / "state.json"
-    bear_epoch2_tree(
-        state_path.parent, project_code="QR", project_title="", born_at=datetime.now(UTC)
-    )
-    assert resolve_authority(state_path.parent).epoch == 2
-    _gate(["config", "set", "x", "1"])
-
-
-def test_rel_021_a_cross_cutting_verb_passes_where_no_tree_exists(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("EA_STATE", str(tmp_path / "none" / ".ea" / "state.json"))
-    _gate(["config", "set", "x", "1"])
-
-
-def test_rel_021_a_repo_rooted_verb_is_judged_by_the_tree_it_writes(
-    epoch1_tree: Path, tmp_path: Path
-) -> None:
-    """``task create`` writes the ``--workspace`` tree, not the ``EA_STATE`` document."""
-    native = tmp_path / "native"
-    state_path = _tree(native)
-    bear_epoch2_tree(
-        state_path.parent, project_code="QR", project_title="", born_at=datetime.now(UTC)
-    )
-    _gate(["--workspace", str(native), "task", "create"])
-    with pytest.raises(click.exceptions.Exit):
-        _gate(["--workspace", str(epoch1_tree), "task", "create"])
+def test_rel_021_the_refusal_renders_as_text_without_json(epoch1_tree: Path) -> None:
+    result = runner.invoke(app, ["task", "create"])
+    assert result.exit_code == exit_codes.ATTACH_FAILURE
+    assert "0.7.0rc4" in result.output
 
 
 @pytest.mark.parametrize(
-    ("argv", "replacement"),
+    "argv", [["help"], ["completion", "--help"], ["task", "create", "--help"], ["status"]]
+)
+def test_rel_021_reads_and_help_still_answer_on_an_epoch1_tree(
+    epoch1_tree: Path, argv: list[str]
+) -> None:
+    result = runner.invoke(app, argv)
+    assert result.exit_code != exit_codes.ATTACH_FAILURE, result.output
+
+
+def test_rel_021_a_marked_tree_passes_the_refusal(epoch1_tree: Path) -> None:
+    _mark(epoch1_tree / ".ea" / "state.json")
+    result = runner.invoke(app, ["--json", "validate", str(epoch1_tree / "missing.json")])
+    assert result.exit_code != exit_codes.ATTACH_FAILURE
+
+
+def test_rel_021_the_workspace_flag_addresses_the_refused_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("EA_STATE", raising=False)
+    monkeypatch.chdir(tmp_path)
+    root = tmp_path / "repo"
+    _tree(root)
+    result = runner.invoke(app, ["--json", "--workspace", str(root), "task", "create"])
+    assert result.exit_code == exit_codes.ATTACH_FAILURE, result.output
+
+
+@pytest.mark.parametrize("verb", STOP_VERBS)
+def test_rel_021_a_daemon_stop_verb_is_not_refused_on_a_plain_epoch1_tree(
+    epoch1_tree: Path, verb: str
+) -> None:
+    try:
+        result = runner.invoke(app, ["--json", *verb.split()])
+    finally:
+        # ``daemon restart`` really starts a daemon on the worker runtime dir;
+        # stop it so no later test, nor the session-end leak check, finds it.
+        runner.invoke(app, ["daemon", "stop"])
+    assert result.exit_code != exit_codes.ATTACH_FAILURE, result.output
+    assert upgrade_refusal.MIGRATION_REQUIRED_KIND not in result.output
+
+
+@pytest.mark.parametrize(
+    ("verb", "bare", "expected"),
     [
-        (("workspace", "init", "MAIN"), "workspace add"),
-        (("workspace", "add-repo", "X"), "workspace member add"),
-        (("workspace", "remove-repo", "X"), "workspace member remove"),
-        (("workspace", "validate"), "workspace show"),
-        (("workspace", "status"), "workspace show"),
-        (("repo", "link", "MAIN", "X"), "workspace member add"),
-        (("repo", "link-workspace", "MAIN", "X"), "workspace member add"),
+        ("", True, True),
+        ("ui", False, True),
+        ("task create", False, True),
+        ("status", False, False),
+        ("doctor", False, False),
+        ("backup create", False, False),
+        ("daemon stop", False, False),
+        ("daemon restart", False, False),
+        ("task", False, False),
+        ("no such verb", False, False),
+        ("", False, False),
     ],
 )
-def test_auth_049_a_retired_workspace_pointer_verb_names_its_replacement(
-    epoch1_tree: Path, argv: tuple[str, ...], replacement: str
-) -> None:
-    result = runner.invoke(app, ["--json", *argv])
-    assert result.exit_code == exit_codes.VALIDATION_ERROR, result.output
-    envelope = json.loads(result.output)
-    assert envelope["data"]["kind"] == "LegacyOperationRemoved"
-    assert f"run `eawf {replacement}` instead" in envelope["message"]
-    assert "No such command" not in result.output
+def test_refuses_boundaries(verb: str, bare: bool, expected: bool) -> None:
+    assert upgrade_refusal.refuses(verb, bare=bare) is expected
 
 
-def _retired(*argv: str) -> dict[str, Any]:
-    result = runner.invoke(app, ["--json", *argv])
-    assert result.exit_code == exit_codes.VALIDATION_ERROR, result.output
-    envelope: dict[str, Any] = json.loads(result.output)
-    return envelope
+def test_is_unmigrated_tree_boundaries(tmp_path: Path) -> None:
+    state_path = tmp_path / ".ea" / "state.json"
+    assert not upgrade_refusal.is_unmigrated_tree(state_path)
+    state_path.parent.mkdir()
+    state_path.mkdir()
+    assert not upgrade_refusal.is_unmigrated_tree(state_path)
+    state_path.rmdir()
+    state_path.write_text("{}")
+    assert upgrade_refusal.is_unmigrated_tree(state_path)
+    _mark(state_path)
+    assert not upgrade_refusal.is_unmigrated_tree(state_path)
 
 
-def test_a_retired_verb_on_an_epoch1_tree_says_so_and_points_at_the_upgrade_guide(
-    epoch1_tree: Path,
-) -> None:
-    envelope = _retired("wave", "claim", "P01-I01-W01")
-    assert "this tree still runs on epoch 1" in envelope["message"]
-    assert flag_day_gate.UPGRADE_GUIDE in envelope["message"]
-    assert "runs on epoch 2" not in envelope["suggested_next_step"]
+def test_addressed_document_precedence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    near = tmp_path / "outer" / "inner"
+    _tree(tmp_path / "outer")
+    near.mkdir()
+    monkeypatch.chdir(near)
+    env_target = tmp_path / "env" / ".ea" / "state.json"
+    workspace = tmp_path / "ws"
 
-
-def test_a_retired_verb_on_an_epoch2_tree_says_it_runs_on_epoch_2(epoch1_tree: Path) -> None:
-    bear_epoch2_tree(
-        epoch1_tree / ".ea", project_code="QR", project_title="", born_at=datetime.now(UTC)
+    env = {"EA_STATE": str(env_target)}
+    assert upgrade_refusal.addressed_document("config set", workspace, env) == env_target
+    assert upgrade_refusal.addressed_document("config set", workspace, {}) == (
+        workspace / ".ea" / "state.json"
     )
-    envelope = _retired("wave", "claim", "P01-I01-W01")
-    assert envelope["message"].endswith("this tree runs on epoch 2")
+    walked = upgrade_refusal.addressed_document("config set", None, {"EA_STATE": ""})
+    assert walked == (tmp_path / "outer" / ".ea" / "state.json").resolve()
+    rooted = upgrade_refusal.addressed_document("task create", None, env)
+    assert rooted == (near / ".ea" / "state.json").resolve()
+    assert upgrade_refusal.addressed_document("task create", workspace, env) == (
+        workspace.resolve() / ".ea" / "state.json"
+    )
 
 
-def test_a_retired_verb_where_no_tree_exists_points_at_init(
+def test_addressed_document_finds_a_marked_tree_without_a_document(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("EA_STATE", str(tmp_path / "none" / ".ea" / "state.json"))
-    envelope = _retired("wave", "claim")
-    assert f"create one with `{flag_day_gate.INIT_VERB}`" in envelope["message"]
+    ea_dir = tmp_path / "native" / ".ea"
+    _mark(ea_dir / "state.json")
+    monkeypatch.chdir(ea_dir.parent)
+    found = upgrade_refusal.addressed_document("status", None, {})
+    assert found == (ea_dir / "state.json").resolve()
 
 
-def test_the_retired_tui_alias_names_ui(epoch1_tree: Path) -> None:
-    envelope = _retired("tui")
-    assert "run `eawf ui` instead" in envelope["message"]
-    assert envelope["data"]["kind"] == "LegacyOperationRemoved"
-
-
-def test_a_retired_verb_on_a_native_tree_says_it_runs_on_epoch_2(
+def test_addressed_document_is_none_where_no_tree_is_found(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A tree ``eawf init`` bore holds no ``state.json``; its marker says a tree is here."""
-    repo = tmp_path / "repo"
-    monkeypatch.delenv("EA_STATE", raising=False)
-    monkeypatch.setenv("EAWF_REGISTRY_PATH", str(tmp_path / "registry.json"))
-    init = runner.invoke(
-        app, ["--json", "--no-input", "init", "--project-code", "QR", "--target", str(repo)]
-    )
-    assert init.exit_code == exit_codes.OK, init.output
-    assert not (repo / ".ea" / "state.json").exists()
-    monkeypatch.chdir(repo)
-    envelope = _retired("impact")
-    assert envelope["message"].endswith("this tree runs on epoch 2"), envelope["message"]
-    assert flag_day_gate.INIT_VERB not in envelope["message"]
+    monkeypatch.chdir(tmp_path)
+    assert upgrade_refusal.addressed_document("status", None, {}) is None

@@ -13,10 +13,18 @@ Requirement rows proved here, by id:
 
 from __future__ import annotations
 
+from uuid import UUID
+
 import pytest
 
 from eawf.kernel.release.gate_binding import DEV1_GATES, profile_gates
-from eawf.kernel.spec.release import ReleaseTrain
+from eawf.kernel.spec.release import (
+    Release,
+    ReleaseChannel,
+    ReleaseStatus,
+    ReleaseTrain,
+    release_key,
+)
 from eawf.kernel.spec.release_config import ReleaseGateName
 from eawf.workflow.release.train import V07_TARGET_VERSION, V07_TRAIN
 
@@ -63,3 +71,28 @@ def test_auth_050_the_rung_after_dev1_gates_on_dev1_plus_four() -> None:
 
 def test_auth_050_dev1_admits_exactly_eight_gates() -> None:
     assert len(DEV1_GATES) == 8
+
+
+# --- AUTH-009: a Release packages accepted Milestones and names no Track -------
+
+_BUNDLE = "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/milestone/{0}#MAB-0001-{0}"
+
+
+def test_auth_009_a_release_carries_no_track_field() -> None:
+    assert [name for name in Release.model_fields if "track" in name] == []
+
+
+def test_auth_009_one_release_packages_milestones_of_several_tracks() -> None:
+    refs = (_BUNDLE.format("MLS-0001"), _BUNDLE.format("MLS-0002"))
+
+    release = Release(
+        uid=UUID(int=9),
+        key=release_key("0.7.0.dev3"),
+        version="0.7.0.dev3",
+        channel=ReleaseChannel.DEV,
+        authority_epoch=2,
+        status=ReleaseStatus.DRAFT,
+        membership_refs=refs,
+    )
+
+    assert release.membership_refs == refs

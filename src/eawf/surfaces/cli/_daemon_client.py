@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 import re
 import socket
 import sys
@@ -33,6 +34,11 @@ from typing import Any
 import orjson
 
 from eawf import __version__
+from eawf.runtime.daemon.operator_identity import (
+    AGENT_SESSION_PARAM,
+    agent_session_runtime,
+    names_acting_principal,
+)
 from eawf.runtime.daemon.runtime_dir import runtime_dir as default_runtime_dir
 from eawf.runtime.daemon.spawn import auto_spawn_daemon, daemon_pid_if_ready
 from eawf.surfaces.cli.errors import DaemonVersionMismatch
@@ -307,6 +313,11 @@ class DaemonClient:
         payload_params = dict(params) if params is not None else {}
         if idempotency_key is not None and "idempotency_key" not in payload_params:
             payload_params["idempotency_key"] = idempotency_key
+        # The daemon cannot see this process's environment, and it is the only
+        # place an agent session shows, so the client says which one it is in.
+        runtime = agent_session_runtime(os.environ)
+        if runtime is not None and names_acting_principal(payload_params):
+            payload_params[AGENT_SESSION_PARAM] = runtime
         request: dict[str, Any] = {
             "jsonrpc": "2.0",
             "id": uuid.uuid4().hex,

@@ -9,7 +9,9 @@ To regenerate the fixture (intentional drift). Render into a tmp dir and
 redirect the global config layer the way :mod:`tests.conftest` does:
 ``install_plugin`` otherwise resolves ``agents.extra_tools`` from the live
 layered config and bakes the regenerating machine's own tool grants into the
-fixture, which reds this test everywhere else.
+fixture, which reds this test everywhere else. The marketplace detector is
+stubbed too: with the eawf plugin installed for the regenerating user the
+installer renders no agent file, which would drop the agent fixtures.
 
 .. code-block:: bash
 
@@ -17,14 +19,15 @@ fixture, which reds this test everywhere else.
     import shutil, tempfile
     from pathlib import Path
     from eawf.kernel.config import layered
-    from eawf.runtime.runtimes.claude.plugin_install import install_plugin
+    from eawf.runtime.runtimes.claude import plugin_install
 
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         layered.global_config_path = lambda: root / "absent-global-config.yaml"
+        plugin_install.detect_marketplace_install = lambda: None
         src = root / "render"
         src.mkdir()
-        install_plugin(src, persist_manifest=False)
+        plugin_install.install_plugin(src, persist_manifest=False)
         golden = Path("tests/golden/plugin_install/claude")
         if golden.exists():
             shutil.rmtree(golden)

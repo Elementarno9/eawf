@@ -140,6 +140,6 @@ def test_cr_025_an_epoch1_tree_never_loads_the_epoch1_app(
     assert [m for m in _EPOCH1_MODULES if m in result["loaded"]] == []
     # migration-required is terminal: the console hands over its commands and exits 4
     assert result["rc"] == 4
-    assert "eawf migrate epoch2 --plan" in proc.stderr
+    assert "eawf help upgrade-from-0.6" in proc.stderr
     interactive = tty and not (no_input or plain)
     assert result["opened"] == (["eawf.surfaces.tui.console.app"] if interactive else [])

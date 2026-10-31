@@ -1,0 +1,1424 @@
+{
+  "menus": [
+    {
+      "conn": "LIVE",
+      "route": "scope.home",
+      "availability": {
+        "n": [
+          true,
+          ""
+        ],
+        "p": [
+          true,
+          ""
+        ],
+        "y": [
+          true,
+          ""
+        ],
+        "w": [
+          true,
+          ""
+        ],
+        "r": [
+          false,
+          "the track has 2 batches in flight"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             n    new draft            ",
+          "             p    pin outcome          ",
+          "             y    copy scope URN       ",
+          "             w    switch workspace     ",
+          "             r    retire track         the track has 2 batches in flight"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             n    new draft            ",
+          "             p    pin outcome          ",
+          "             y    copy scope URN       ",
+          "             w    switch workspace     ",
+          "             r    retire track         the track has 2 batches in flight"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             n    new draft            ",
+          "             p    pin outcome          ",
+          "             y    copy scope URN       ",
+          "             w    switch workspace     ",
+          "             r    retire track         the track has 2 batches in flight"
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "activity",
+      "availability": {
+        "f": [
+          true,
+          ""
+        ],
+        "p": [
+          true,
+          ""
+        ],
+        "s": [
+          true,
+          ""
+        ],
+        "*": [
+          true,
+          ""
+        ],
+        "n": [
+          false,
+          "no control outcome is unknown here"
+        ],
+        "c": [
+          false,
+          "nothing is selected"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             f    follow               ",
+          "             p    pause display        ",
+          "             s    sort                 ",
+          "             *    select all shown     ",
+          "             n    reconcile selected   no control outcome is unknown here",
+          "             c    cancel selected      nothing is selected"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             f    follow               ",
+          "             p    pause display        ",
+          "             s    sort                 ",
+          "             *    select all shown     ",
+          "             n    reconcile selected   no control outcome is unknown here",
+          "             c    cancel selected      nothing is selected"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             f    follow               ",
+          "             p    pause display        ",
+          "             s    sort                 ",
+          "             *    select all shown     ",
+          "             n    reconcile selected   no control outcome is unknown here",
+          "             c    cancel selected      nothing is selected"
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "run.detail",
+      "availability": {
+        "l": [
+          true,
+          ""
+        ],
+        "b": [
+          true,
+          ""
+        ],
+        "m": [
+          true,
+          ""
+        ],
+        "s": [
+          true,
+          ""
+        ],
+        "n": [
+          true,
+          ""
+        ],
+        "c": [
+          true,
+          ""
+        ],
+        "t": [
+          false,
+          "the run has not ended"
+        ],
+        "f": [
+          false,
+          "requires a terminal run"
+        ],
+        "p": [
+          false,
+          "not certified for your class"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             l    open transcript      ",
+          "             b    open branch and PR   ",
+          "             m    open cost ceiling    ",
+          "             s    steer                ",
+          "             n    interrupt            ",
+          "             c    cancel               ",
+          "             t    retry                the run has not ended",
+          "             f    fork                 requires a terminal run",
+          "             p    purge events         not certified for your class"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             l    open transcript      ",
+          "             b    open branch and PR   ",
+          "             m    open cost ceiling    ",
+          "             s    steer                ",
+          "             n    interrupt            ",
+          "             c    cancel               ",
+          "             t    retry                the run has not ended",
+          "             f    fork                 requires a terminal run",
+          "             p    purge events         not certified for your class"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             l    open transcript      ",
+          "             b    open branch and PR   ",
+          "             m    open cost ceiling    ",
+          "             s    steer                ",
+          "             n    interrupt            ",
+          "             c    cancel               ",
+          "             t    retry                the run has not ended",
+          "             f    fork                 requires a terminal run",
+          "             p    purge events         not certified for your class"
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "batch.detail",
+      "availability": {
+        "m": [
+          false,
+          "checks incomplete · 3 of 4 passed"
+        ],
+        "i": [
+          true,
+          ""
+        ],
+        "r": [
+          true,
+          ""
+        ],
+        "c": [
+          true,
+          ""
+        ],
+        "n": [
+          false,
+          "no control is outstanding"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             m    authorize merge      checks incomplete · 3 of 4 passed",
+          "             i    integrate task       ",
+          "             r    request repair       ",
+          "             c    cancel batch         ",
+          "             n    reconcile            no control is outstanding"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             m    authorize merge      checks incomplete · 3 of 4 passed",
+          "             i    integrate task       ",
+          "             r    request repair       ",
+          "             c    cancel batch         ",
+          "             n    reconcile            no control is outstanding"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             m    authorize merge      checks incomplete · 3 of 4 passed",
+          "             i    integrate task       ",
+          "             r    request repair       ",
+          "             c    cancel batch         ",
+          "             n    reconcile            no control is outstanding"
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "attention",
+      "availability": {
+        "a": [
+          true,
+          ""
+        ],
+        "x": [
+          true,
+          ""
+        ],
+        "z": [
+          true,
+          ""
+        ],
+        "s": [
+          false,
+          "you are the only principal"
+        ],
+        "v": [
+          true,
+          ""
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    answer               ",
+          "             x    deny                 ",
+          "             z    snooze               ",
+          "             s    assign               you are the only principal",
+          "             v    resolve              "
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    answer               ",
+          "             x    deny                 ",
+          "             z    snooze               ",
+          "             s    assign               you are the only principal",
+          "             v    resolve              "
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    answer               ",
+          "             x    deny                 ",
+          "             z    snooze               ",
+          "             s    assign               you are the only principal",
+          "             v    resolve              "
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "track",
+      "availability": {
+        "n": [
+          true,
+          ""
+        ],
+        "b": [
+          false,
+          "WIP is 3 of 3 batches"
+        ],
+        "p": [
+          true,
+          ""
+        ],
+        "r": [
+          false,
+          "the track has 2 batches in flight"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             n    new milestone        ",
+          "             b    open batch           WIP is 3 of 3 batches",
+          "             p    pause dispatch       ",
+          "             r    retire track         the track has 2 batches in flight"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             n    new milestone        ",
+          "             b    open batch           WIP is 3 of 3 batches",
+          "             p    pause dispatch       ",
+          "             r    retire track         the track has 2 batches in flight"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             n    new milestone        ",
+          "             b    open batch           WIP is 3 of 3 batches",
+          "             p    pause dispatch       ",
+          "             r    retire track         the track has 2 batches in flight"
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "task.detail",
+      "availability": {
+        "e": [
+          false,
+          "not planned · already ready"
+        ],
+        "i": [
+          true,
+          ""
+        ],
+        "t": [
+          false,
+          "the task has not failed"
+        ],
+        "y": [
+          true,
+          ""
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             e    dispatch             not planned · already ready",
+          "             i    integrate            ",
+          "             t    retry                the task has not failed",
+          "             y    copy task URN        "
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             e    dispatch             not planned · already ready",
+          "             i    integrate            ",
+          "             t    retry                the task has not failed",
+          "             y    copy task URN        "
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             e    dispatch             not planned · already ready",
+          "             i    integrate            ",
+          "             t    retry                the task has not failed",
+          "             y    copy task URN        "
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "release",
+      "availability": {
+        "a": [
+          false,
+          "1 member is not accepted"
+        ],
+        "p": [
+          false,
+          "approval is incomplete"
+        ],
+        "m": [
+          true,
+          ""
+        ],
+        "y": [
+          true,
+          ""
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    approve              1 member is not accepted",
+          "             p    publish              approval is incomplete",
+          "             m    edit membership      ",
+          "             y    copy release URN     "
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    approve              1 member is not accepted",
+          "             p    publish              approval is incomplete",
+          "             m    edit membership      ",
+          "             y    copy release URN     "
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    approve              1 member is not accepted",
+          "             p    publish              approval is incomplete",
+          "             m    edit membership      ",
+          "             y    copy release URN     "
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "timeline",
+      "availability": {
+        "d": [
+          true,
+          ""
+        ],
+        "t": [
+          true,
+          ""
+        ],
+        "m": [
+          false,
+          "MLS-0012 has no owner"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             d    explain dependency   ",
+          "             t    today                ",
+          "             m    propose date         MLS-0012 has no owner"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             d    explain dependency   ",
+          "             t    today                ",
+          "             m    propose date         MLS-0012 has no owner"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             d    explain dependency   ",
+          "             t    today                ",
+          "             m    propose date         MLS-0012 has no owner"
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "backlog",
+      "availability": {
+        "m": [
+          false,
+          "no criteria, owner or batch"
+        ],
+        "d": [
+          true,
+          ""
+        ],
+        "x": [
+          true,
+          ""
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             m    promote              no criteria, owner or batch",
+          "             d    defer                ",
+          "             x    drop                 "
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             m    promote              no criteria, owner or batch",
+          "             d    defer                ",
+          "             x    drop                 "
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             m    promote              no criteria, owner or batch",
+          "             d    defer                ",
+          "             x    drop                 "
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "campaign",
+      "availability": {
+        "p": [
+          true,
+          ""
+        ],
+        "e": [
+          false,
+          "checkpoint not reached"
+        ],
+        "x": [
+          true,
+          ""
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             p    promote finding      ",
+          "             e    extend bounds        checkpoint not reached",
+          "             x    drop campaign        "
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             p    promote finding      ",
+          "             e    extend bounds        checkpoint not reached",
+          "             x    drop campaign        "
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             p    promote finding      ",
+          "             e    extend bounds        checkpoint not reached",
+          "             x    drop campaign        "
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "history",
+      "availability": {
+        "d": [
+          true,
+          ""
+        ],
+        "y": [
+          true,
+          ""
+        ],
+        "Y": [
+          true,
+          ""
+        ],
+        "o": [
+          false,
+          "purged · nothing to open"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             d    open field diff      ",
+          "             y    copy value           ",
+          "             Y    copy URN             ",
+          "             o    open target          purged · nothing to open"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             d    open field diff      ",
+          "             y    copy value           ",
+          "             Y    copy URN             ",
+          "             o    open target          purged · nothing to open"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             d    open field diff      ",
+          "             y    copy value           ",
+          "             Y    copy URN             ",
+          "             o    open target          purged · nothing to open"
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "settings",
+      "availability": {
+        "e": [
+          true,
+          ""
+        ],
+        "r": [
+          true,
+          ""
+        ],
+        "x": [
+          true,
+          ""
+        ],
+        "c": [
+          false,
+          "needs a workspace owner"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             e    edit                 ",
+          "             r    reset to inherited   ",
+          "             x    unset                ",
+          "             c    request capability   needs a workspace owner"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             e    edit                 ",
+          "             r    reset to inherited   ",
+          "             x    unset                ",
+          "             c    request capability   needs a workspace owner"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             e    edit                 ",
+          "             r    reset to inherited   ",
+          "             x    unset                ",
+          "             c    request capability   needs a workspace owner"
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "unattended",
+      "availability": {
+        "a": [
+          true,
+          ""
+        ],
+        "d": [
+          true,
+          ""
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    request pause        ",
+          "             d    request drain        "
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    request pause        ",
+          "             d    request drain        "
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    request pause        ",
+          "             d    request drain        "
+        ]
+      }
+    },
+    {
+      "conn": "LIVE",
+      "route": "milestone",
+      "availability": {
+        "v": [
+          true,
+          ""
+        ],
+        "a": [
+          false,
+          "1 of 4 criteria unproven"
+        ],
+        "r": [
+          true,
+          ""
+        ],
+        "y": [
+          true,
+          ""
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             v    open trust record    ",
+          "             a    accept               1 of 4 criteria unproven",
+          "             r    request repair       ",
+          "             y    copy digest          "
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             v    open trust record    ",
+          "             a    accept               1 of 4 criteria unproven",
+          "             r    request repair       ",
+          "             y    copy digest          "
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             v    open trust record    ",
+          "             a    accept               1 of 4 criteria unproven",
+          "             r    request repair       ",
+          "             y    copy digest          "
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "scope.home",
+      "availability": {
+        "n": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "p": [
+          true,
+          ""
+        ],
+        "y": [
+          true,
+          ""
+        ],
+        "w": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "r": [
+          false,
+          "the track has 2 batches in flight"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             n    new draft            the daemon cannot be reached",
+          "             p    pin outcome          ",
+          "             y    copy scope URN       ",
+          "             w    switch workspace     the daemon cannot be reached",
+          "             r    retire track         the track has 2 batches in flight"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             n    new draft            the daemon cannot be reached",
+          "             p    pin outcome          ",
+          "             y    copy scope URN       ",
+          "             w    switch workspace     the daemon cannot be reached",
+          "             r    retire track         the track has 2 batches in flight"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             n    new draft            the daemon cannot be reached",
+          "             p    pin outcome          ",
+          "             y    copy scope URN       ",
+          "             w    switch workspace     the daemon cannot be reached",
+          "             r    retire track         the track has 2 batches in flight"
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "activity",
+      "availability": {
+        "f": [
+          true,
+          ""
+        ],
+        "p": [
+          true,
+          ""
+        ],
+        "s": [
+          true,
+          ""
+        ],
+        "*": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "n": [
+          false,
+          "no control outcome is unknown here"
+        ],
+        "c": [
+          false,
+          "nothing is selected"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             f    follow               ",
+          "             p    pause display        ",
+          "             s    sort                 ",
+          "             *    select all shown     the daemon cannot be reached",
+          "             n    reconcile selected   no control outcome is unknown here",
+          "             c    cancel selected      nothing is selected"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             f    follow               ",
+          "             p    pause display        ",
+          "             s    sort                 ",
+          "             *    select all shown     the daemon cannot be reached",
+          "             n    reconcile selected   no control outcome is unknown here",
+          "             c    cancel selected      nothing is selected"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             f    follow               ",
+          "             p    pause display        ",
+          "             s    sort                 ",
+          "             *    select all shown     the daemon cannot be reached",
+          "             n    reconcile selected   no control outcome is unknown here",
+          "             c    cancel selected      nothing is selected"
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "run.detail",
+      "availability": {
+        "l": [
+          true,
+          ""
+        ],
+        "b": [
+          true,
+          ""
+        ],
+        "m": [
+          true,
+          ""
+        ],
+        "s": [
+          true,
+          ""
+        ],
+        "n": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "c": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "t": [
+          false,
+          "the run has not ended"
+        ],
+        "f": [
+          false,
+          "requires a terminal run"
+        ],
+        "p": [
+          false,
+          "not certified for your class"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             l    open transcript      ",
+          "             b    open branch and PR   ",
+          "             m    open cost ceiling    ",
+          "             s    steer                ",
+          "             n    interrupt            the daemon cannot be reached",
+          "             c    cancel               the daemon cannot be reached",
+          "             t    retry                the run has not ended",
+          "             f    fork                 requires a terminal run",
+          "             p    purge events         not certified for your class"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             l    open transcript      ",
+          "             b    open branch and PR   ",
+          "             m    open cost ceiling    ",
+          "             s    steer                ",
+          "             n    interrupt            the daemon cannot be reached",
+          "             c    cancel               the daemon cannot be reached",
+          "             t    retry                the run has not ended",
+          "             f    fork                 requires a terminal run",
+          "             p    purge events         not certified for your class"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             l    open transcript      ",
+          "             b    open branch and PR   ",
+          "             m    open cost ceiling    ",
+          "             s    steer                ",
+          "             n    interrupt            the daemon cannot be reached",
+          "             c    cancel               the daemon cannot be reached",
+          "             t    retry                the run has not ended",
+          "             f    fork                 requires a terminal run",
+          "             p    purge events         not certified for your class"
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "batch.detail",
+      "availability": {
+        "m": [
+          false,
+          "checks incomplete · 3 of 4 passed"
+        ],
+        "i": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "r": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "c": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "n": [
+          false,
+          "no control is outstanding"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             m    authorize merge      checks incomplete · 3 of 4 passed",
+          "             i    integrate task       the daemon cannot be reached",
+          "             r    request repair       the daemon cannot be reached",
+          "             c    cancel batch         the daemon cannot be reached",
+          "             n    reconcile            no control is outstanding"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             m    authorize merge      checks incomplete · 3 of 4 passed",
+          "             i    integrate task       the daemon cannot be reached",
+          "             r    request repair       the daemon cannot be reached",
+          "             c    cancel batch         the daemon cannot be reached",
+          "             n    reconcile            no control is outstanding"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             m    authorize merge      checks incomplete · 3 of 4 passed",
+          "             i    integrate task       the daemon cannot be reached",
+          "             r    request repair       the daemon cannot be reached",
+          "             c    cancel batch         the daemon cannot be reached",
+          "             n    reconcile            no control is outstanding"
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "attention",
+      "availability": {
+        "a": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "x": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "z": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "s": [
+          false,
+          "you are the only principal"
+        ],
+        "v": [
+          false,
+          "the daemon cannot be reached"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    answer               the daemon cannot be reached",
+          "             x    deny                 the daemon cannot be reached",
+          "             z    snooze               the daemon cannot be reached",
+          "             s    assign               you are the only principal",
+          "             v    resolve              the daemon cannot be reached"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    answer               the daemon cannot be reached",
+          "             x    deny                 the daemon cannot be reached",
+          "             z    snooze               the daemon cannot be reached",
+          "             s    assign               you are the only principal",
+          "             v    resolve              the daemon cannot be reached"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    answer               the daemon cannot be reached",
+          "             x    deny                 the daemon cannot be reached",
+          "             z    snooze               the daemon cannot be reached",
+          "             s    assign               you are the only principal",
+          "             v    resolve              the daemon cannot be reached"
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "track",
+      "availability": {
+        "n": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "b": [
+          false,
+          "WIP is 3 of 3 batches"
+        ],
+        "p": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "r": [
+          false,
+          "the track has 2 batches in flight"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             n    new milestone        the daemon cannot be reached",
+          "             b    open batch           WIP is 3 of 3 batches",
+          "             p    pause dispatch       the daemon cannot be reached",
+          "             r    retire track         the track has 2 batches in flight"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             n    new milestone        the daemon cannot be reached",
+          "             b    open batch           WIP is 3 of 3 batches",
+          "             p    pause dispatch       the daemon cannot be reached",
+          "             r    retire track         the track has 2 batches in flight"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             n    new milestone        the daemon cannot be reached",
+          "             b    open batch           WIP is 3 of 3 batches",
+          "             p    pause dispatch       the daemon cannot be reached",
+          "             r    retire track         the track has 2 batches in flight"
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "task.detail",
+      "availability": {
+        "e": [
+          false,
+          "not planned · already ready"
+        ],
+        "i": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "t": [
+          false,
+          "the task has not failed"
+        ],
+        "y": [
+          true,
+          ""
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             e    dispatch             not planned · already ready",
+          "             i    integrate            the daemon cannot be reached",
+          "             t    retry                the task has not failed",
+          "             y    copy task URN        "
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             e    dispatch             not planned · already ready",
+          "             i    integrate            the daemon cannot be reached",
+          "             t    retry                the task has not failed",
+          "             y    copy task URN        "
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             e    dispatch             not planned · already ready",
+          "             i    integrate            the daemon cannot be reached",
+          "             t    retry                the task has not failed",
+          "             y    copy task URN        "
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "release",
+      "availability": {
+        "a": [
+          false,
+          "1 member is not accepted"
+        ],
+        "p": [
+          false,
+          "approval is incomplete"
+        ],
+        "m": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "y": [
+          true,
+          ""
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    approve              1 member is not accepted",
+          "             p    publish              approval is incomplete",
+          "             m    edit membership      the daemon cannot be reached",
+          "             y    copy release URN     "
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    approve              1 member is not accepted",
+          "             p    publish              approval is incomplete",
+          "             m    edit membership      the daemon cannot be reached",
+          "             y    copy release URN     "
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    approve              1 member is not accepted",
+          "             p    publish              approval is incomplete",
+          "             m    edit membership      the daemon cannot be reached",
+          "             y    copy release URN     "
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "timeline",
+      "availability": {
+        "d": [
+          true,
+          ""
+        ],
+        "t": [
+          true,
+          ""
+        ],
+        "m": [
+          false,
+          "MLS-0012 has no owner"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             d    explain dependency   ",
+          "             t    today                ",
+          "             m    propose date         MLS-0012 has no owner"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             d    explain dependency   ",
+          "             t    today                ",
+          "             m    propose date         MLS-0012 has no owner"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             d    explain dependency   ",
+          "             t    today                ",
+          "             m    propose date         MLS-0012 has no owner"
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "backlog",
+      "availability": {
+        "m": [
+          false,
+          "no criteria, owner or batch"
+        ],
+        "d": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "x": [
+          false,
+          "the daemon cannot be reached"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             m    promote              no criteria, owner or batch",
+          "             d    defer                the daemon cannot be reached",
+          "             x    drop                 the daemon cannot be reached"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             m    promote              no criteria, owner or batch",
+          "             d    defer                the daemon cannot be reached",
+          "             x    drop                 the daemon cannot be reached"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             m    promote              no criteria, owner or batch",
+          "             d    defer                the daemon cannot be reached",
+          "             x    drop                 the daemon cannot be reached"
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "campaign",
+      "availability": {
+        "p": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "e": [
+          false,
+          "checkpoint not reached"
+        ],
+        "x": [
+          false,
+          "the daemon cannot be reached"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             p    promote finding      the daemon cannot be reached",
+          "             e    extend bounds        checkpoint not reached",
+          "             x    drop campaign        the daemon cannot be reached"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             p    promote finding      the daemon cannot be reached",
+          "             e    extend bounds        checkpoint not reached",
+          "             x    drop campaign        the daemon cannot be reached"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             p    promote finding      the daemon cannot be reached",
+          "             e    extend bounds        checkpoint not reached",
+          "             x    drop campaign        the daemon cannot be reached"
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "history",
+      "availability": {
+        "d": [
+          true,
+          ""
+        ],
+        "y": [
+          true,
+          ""
+        ],
+        "Y": [
+          true,
+          ""
+        ],
+        "o": [
+          false,
+          "purged · nothing to open"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             d    open field diff      ",
+          "             y    copy value           ",
+          "             Y    copy URN             ",
+          "             o    open target          purged · nothing to open"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             d    open field diff      ",
+          "             y    copy value           ",
+          "             Y    copy URN             ",
+          "             o    open target          purged · nothing to open"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             d    open field diff      ",
+          "             y    copy value           ",
+          "             Y    copy URN             ",
+          "             o    open target          purged · nothing to open"
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "settings",
+      "availability": {
+        "e": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "r": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "x": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "c": [
+          false,
+          "needs a workspace owner"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             e    edit                 the daemon cannot be reached",
+          "             r    reset to inherited   the daemon cannot be reached",
+          "             x    unset                the daemon cannot be reached",
+          "             c    request capability   needs a workspace owner"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             e    edit                 the daemon cannot be reached",
+          "             r    reset to inherited   the daemon cannot be reached",
+          "             x    unset                the daemon cannot be reached",
+          "             c    request capability   needs a workspace owner"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             e    edit                 the daemon cannot be reached",
+          "             r    reset to inherited   the daemon cannot be reached",
+          "             x    unset                the daemon cannot be reached",
+          "             c    request capability   needs a workspace owner"
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "unattended",
+      "availability": {
+        "a": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "d": [
+          false,
+          "the daemon cannot be reached"
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    request pause        the daemon cannot be reached",
+          "             d    request drain        the daemon cannot be reached"
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    request pause        the daemon cannot be reached",
+          "             d    request drain        the daemon cannot be reached"
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             a    request pause        the daemon cannot be reached",
+          "             d    request drain        the daemon cannot be reached"
+        ]
+      }
+    },
+    {
+      "conn": "OFFLINE SNAPSHOT",
+      "route": "milestone",
+      "availability": {
+        "v": [
+          true,
+          ""
+        ],
+        "a": [
+          false,
+          "1 of 4 criteria unproven"
+        ],
+        "r": [
+          false,
+          "the daemon cannot be reached"
+        ],
+        "y": [
+          true,
+          ""
+        ]
+      },
+      "rows": {
+        "80": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             v    open trust record    ",
+          "             a    accept               1 of 4 criteria unproven",
+          "             r    request repair       the daemon cannot be reached",
+          "             y    copy digest          "
+        ],
+        "120": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             v    open trust record    ",
+          "             a    accept               1 of 4 criteria unproven",
+          "             r    request repair       the daemon cannot be reached",
+          "             y    copy digest          "
+        ],
+        "160": [
+          "   ACTIONS   KEY  VERB                 REASON",
+          "             v    open trust record    ",
+          "             a    accept               1 of 4 criteria unproven",
+          "             r    request repair       the daemon cannot be reached",
+          "             y    copy digest          "
+        ]
+      }
+    }
+  ]
+}

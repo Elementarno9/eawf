@@ -5,7 +5,7 @@ Two distinct fall-throughs share this module:
 
 * **V8 fall-through.** Adapter session-handle *resolution* fails
   mid-dispatch (a ``--continue`` resume cannot find/replay the session
-  log). The daemon falls through to a *fresh* ``open_session`` on the
+  log). The daemon falls through to a *fresh* session on the
   same runtime, annotating the new attempt with
   :attr:`DispatchNote.CONTINUE_FAILED_FELL_BACK_TO_FRESH`. No runtime
   switch happens — the session policy degrades from continue to fresh.

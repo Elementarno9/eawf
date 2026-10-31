@@ -47,10 +47,8 @@ from eawf.kernel.spec.release import (
     ReleaseStatus,
     ReleaseTargetStatus,
 )
-from eawf.kernel.state.io import write_state_unlocked
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release_disposition import adopt
-from eawf.workflow.evidence._io import load_state
 from eawf.workflow.release.adoption import adopt_publication, unconfigured_targets
 from eawf.workflow.release.records import read_release_record, record_envelope_id
 from tests._release_helpers import (
@@ -84,7 +82,7 @@ def state_path(tmp_path: Path) -> Path:
     """Return a throwaway state root the adoption may record into."""
     path = tmp_path / ".ea" / "state.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    write_state_unlocked(path, load_state(_EMPTY_STATE).model_dump(mode="json"))
+    path.write_bytes(_EMPTY_STATE.read_bytes())
     return path
 
 

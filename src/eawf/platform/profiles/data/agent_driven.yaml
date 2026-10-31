@@ -41,24 +41,24 @@ render_blocks:
       Read the Milestone's acceptance commit: it advances ``src/eawf/_version.py`` while ``pyproject.toml`` remains dynamically versioned, and the release tag matching the new version points at the merge. ``git tag --points-at <merge-sha>`` lists the release tag; a Milestone accepted without a version bump is reworked before the PR merges.
   - id: agent-driven-large-milestone-pr
     target: AGENTS.md
-    version: "1.6"
+    version: "1.7"
     placement: reference
-    summary: "Ship one PR per Milestone however large it grows, keep each Batch commit individually bisectable, and merge so each Batch commit survives."
+    summary: "Ship one PR per Milestone however large it grows, keep each Batch commit individually bisectable, and fast-forward main so each Batch commit survives."
     rationale: |
       The small-CL / trunk-based default exists to bound human-reviewer attention per change. Agent-driven throughput dwarfs that concern: the bottleneck is operator review of *coherent deliveries*, not line count, and a Milestone reviewed as one unit reads as one story. The granularity the small-CL rule buys is already present *inside* the PR — per-Batch bisectable commits give per-change history without fragmenting the review surface into dozens of context-free PRs.
     mechanism: |
-      Ship one PR per Milestone. A Milestone PR carrying roughly +10k lines across many files is expected and acceptable, not a smell to split. Do not break a Milestone into many small PRs to chase a line-count target. The compensating controls are real per-Batch review and a behavioural smoke gate in CI; keep each Batch commit individually buildable (one commit per Batch, or a few for a large Batch) so ``git bisect`` stays sharp inside the large PR. Merge so each Batch commit survives on the trunk; main and tags are never rewritten.
+      Ship one PR per Milestone. A Milestone PR carrying roughly +10k lines across many files is expected and acceptable, not a smell to split. Do not break a Milestone into many small PRs to chase a line-count target. The compensating controls are real per-Batch review and a behavioural smoke gate in CI; keep each Batch commit individually buildable (one commit per Batch, or a few for a large Batch) so ``git bisect`` stays sharp inside the large PR. Fast-forward ``main`` to the reviewed head so each Batch commit survives on the trunk with its reviewed SHA; main and tags are never rewritten.
     verification: |
-      Confirm the Milestone produced exactly one PR and that its commits are per-Batch, each carrying one ``Batch:`` trailer and a ``Task:`` trailer per Task, and individually buildable. A reviewer who proposes splitting the Milestone into multiple PRs is overruled by this rule; a reviewer who finds two Batches folded into one commit without the squash naming why flags it for rework. The target branch shows each Batch commit of the merged PR.
+      Confirm the Milestone produced exactly one PR and that its commits are per-Batch, each carrying one ``Batch:`` trailer and a ``Task:`` trailer per Task, and individually buildable. A reviewer who proposes splitting the Milestone into multiple PRs is overruled by this rule; a reviewer who finds two Batches folded into one commit without the squash naming why flags it for rework. ``main`` carries each reviewed commit of the merged PR with the same SHA.
   - id: agent-driven-cadence-adr-pointer
     target: AGENTS.md
-    version: "1.5"
+    version: "1.6"
     placement: reference
     summary: "The one-PR-per-Milestone cadence and the commit-history regime are ratified by a typed decision; cite its id in review and reverse the cadence only by superseding it."
     rationale: |
       The large-PR cadence contradicts the industry small-CL / trunk-based consensus on purpose, so a reader who hits the large-PR rule needs the evidence chain that ratified it — otherwise the rule reads as an oversight and gets "fixed" back to small-CL. Naming the decision keeps the divergence auditable and reversible from the decision ledger alone.
     mechanism: |
-      The one-PR-per-Milestone cadence and the commit-history regime are ratified by Decision D87, which superseded D85, itself the replacement for D-GIT-HISTORY (D76) and the earlier one-PR-per-delivery and rebase-merge decisions: each Batch closes and binds the Milestone branch head when it lands, each push is squashed to one commit per Batch (a few for a large Batch) carrying its ``Batch:`` and ``Task:`` trailers plus one trailing ``state:`` commit, the bindings the squash replaced are rebound by appended superseding rows, and main and tags are never rewritten. The canonical workflow reference is ``docs/architecture/workflow.md`` (VCS, commit, PR, and merge policy). Cite the Decision id, not this rule's prose, when a review or planning discussion questions the cadence; reverse it only by superseding D87 with a new Decision row.
+      The one-PR-per-Milestone cadence and the commit-history regime are set by Decision D92, which superseded D87; D87 itself replaced D85, D-GIT-HISTORY (D76) and the earlier one-PR-per-delivery and rebase-merge decisions: each Batch closes and binds the Milestone branch head when it lands, the branch is squashed to one commit per Batch (a few for a large Batch) carrying its ``Batch:`` and ``Task:`` trailers plus one trailing ``state:`` commit only before review opens, the bindings the squash replaced are rebound by appended superseding rows, review findings are fixed by appended Batches, the Milestone is accepted last, ``main`` fast-forwards to the reviewed commit, and main and tags are never rewritten. The canonical workflow reference is ``docs/architecture/workflow.md`` (VCS, commit, PR, and merge policy). Cite the Decision id, not this rule's prose, when a review or planning discussion questions the cadence; reverse it only by superseding D92 with a new Decision row.
     verification: |
       The decision exists in the decision ledger and surfaces in ``eawf status`` recent decisions. ``docs/architecture/workflow.md`` resolves as a repo-relative path. A claim that small-CL should replace this rule is checked against the decision's status — only a superseding Decision discharges the divergence.
   - id: lean-task-verification
@@ -77,8 +77,7 @@ render_blocks:
 # gate instead of an advisory one (see :mod:`eawf.workflow.verify.readiness`).
 # ``cross_vendor_jury`` stays ``false`` so a high-risk verdict needs a single
 # fresh-context auditor, not the three-vendor jury; the jury is a deferred
-# calibration opt-in. No ``uiux_bands`` here -- this is a whole-fleet enforce
-# profile, not a UI/UX-token band.
+# calibration opt-in.
 verify:
   enforce: true
   cross_vendor_jury: false

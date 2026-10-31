@@ -221,7 +221,7 @@ def _admit(context: Epoch2RootContext, args: WaiveCriterionParams) -> None:
             "principal (OP- followed by digits, such as OP-0001).",
         )
     anchor = context.identity.tree_root.parent
-    block = load_active_verify_block(str(urn), None, repo_root=anchor)
+    block = load_active_verify_block(repo_root=anchor)
     mode = "B" if block is None else block.waiver_mode
     if mode == "disabled":
         raise _refused(

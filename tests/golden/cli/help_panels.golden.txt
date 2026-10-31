@@ -1,9 +1,8 @@
 Commands: claim, record, repository, why
-audit: backup, doc, doctor, local, migrate, schema, snapshot, validate, vfl
+audit: backup, doc, doctor, local, schema, snapshot, validate, vfl
 estimation: bench, metrics, reflect, telemetry
-planning: action, batch, campaign, decision, memory, milestone, plan, question, run, session, task, track
-runtime: cc, config, daemon, follow, hook, mcp, plugin, profile, rules, runtime, skill
+planning: action, batch, campaign, decision, memory, milestone, plan, question, research, run, task, track
+runtime: cc, config, daemon, follow, hook, mcp, plugin, profile, rules, runtime, session, skill
 ship: release, sync
 ui: completion, help, render-output, status, ui, verbs, version
 vcs: clone-repo, coauthor, init, publish, repo, store, wal, workspace
-worktrees: worktree

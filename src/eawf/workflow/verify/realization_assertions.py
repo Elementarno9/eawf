@@ -10,18 +10,17 @@ in :mod:`eawf.workflow.verify.release_probes`, because they read the
 chokepoint's inputs; the rest are decided here from the working copy and
 the running package.
 
-One assertion cannot be decided from a checkout at all: the packet run,
-which drives the perfect-realization packet across two runtime profiles
-and two repository origins. It has no producer before the stable
-checkpoint, which is the one that runs it, so it is reported
-``unavailable`` by name. A release candidate does not require it -- the
-candidate's milestone excludes that run -- so it greens the row only
-there, and the stable checkpoint stays ``unavailable`` until the run has
-a producer.
+One assertion is decided from filed run receipts: the packet run, which
+drives the perfect-realization packet on two runtimes and two repository
+origins and files one receipt per run, in this machine's local store and
+beside the release's committed canary evidence export
+(:mod:`eawf.workflow.release.packet_run`). Only the stable checkpoint
+requires it; a release candidate's row greens without it.
 """
 
 from __future__ import annotations
 
+import functools
 import logging
 import subprocess
 import sys
@@ -31,9 +30,20 @@ from pathlib import Path
 from typing import Final
 
 from eawf.kernel.release.signals import ReleaseSignalOutcome, ReleaseSignalStatus
+from eawf.kernel.runtime.certification import CertifiedVersionRange
 from eawf.kernel.spec.release import ReleaseChannel
 from eawf.platform.rules.render import plan_rule_projections, projection_drift, rule_source_present
 from eawf.platform.subprocess_detach import no_window_kwargs
+from eawf.workflow.evidence.provider_certification import (
+    canary_evidence_path,
+    load_canary_evidence,
+)
+from eawf.workflow.release.packet_run import (
+    PACKET_OS_CLASS,
+    PacketReceiptError,
+    packet_coverage,
+    read_packet_receipts,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -228,20 +238,88 @@ def cli_closure_outcome() -> ReleaseSignalOutcome:
     return _held(f"{name}:{len(catalog.entries)}-verbs")
 
 
-def packet_run_outcome() -> ReleaseSignalOutcome:
-    """Report the packet run, which no checkout can decide.
+def _is_ancestor(repo_root: Path, release_commit: str, commit: str) -> bool:
+    """Report whether *commit* is *release_commit* or one of its ancestors in *repo_root*.
+
+    A commit *repo_root* does not carry makes git exit non-zero, which reads
+    as not an ancestor.
+    """
+    checked = subprocess.run(
+        ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", commit, release_commit],
+        capture_output=True,
+        text=True,
+        check=False,
+        **no_window_kwargs(),
+    )
+    return checked.returncode == 0
+
+
+def packet_run_outcome(
+    repo_root: Path, *, version: str, release_key: str, release_commit: str
+) -> ReleaseSignalOutcome:
+    """Decide whether every runtime and origin passed the packet for *version* on Linux.
+
+    Args:
+        repo_root: Working copy whose local store and committed receipt
+            file hold the receipts and whose committed canary evidence
+            export records each runtime's certified version range.
+        version: The version being tagged; a receipt of any other version
+            does not count.
+        release_key: The checkpoint whose canary evidence export is read.
+        release_commit: The commit being released; a receipt counts only
+            when its clean source commit is this commit or an ancestor.
 
     Returns:
-        An unavailable outcome naming the missing producer.
+        Holding with one evidence ref per passed run; broken naming each
+        failed run and its step, each run on an uncertified runtime version
+        (and any missing run beside them), a malformed receipt or an
+        unreadable export; otherwise unavailable naming each missing run and
+        each receipt set aside.
     """
-    return ReleaseSignalOutcome(
-        status=ReleaseSignalStatus.UNAVAILABLE,
-        remediation=(
-            f"{RealizationAssertion.PACKET_RUN.value}: the perfect-realization packet run across "
-            f"two runtime profiles and two repository origins has no producer before the stable "
-            f"checkpoint runs it"
-        ),
+    name = RealizationAssertion.PACKET_RUN.value
+    try:
+        receipts = read_packet_receipts(repo_root, release_key)
+    except PacketReceiptError as exc:
+        return _broken(f"{name}: {exc}", f"{name}:malformed-receipt")
+    try:
+        evidence = load_canary_evidence(repo_root, release_key)
+    except ValueError as exc:
+        return _broken(f"{name}: {exc}", f"{name}:canary-evidence")
+    ranges: dict[str, tuple[CertifiedVersionRange, ...]] = {}
+    for record in () if evidence is None else evidence.certifications:
+        if record.version_range is not None and record.certification.os_class == PACKET_OS_CLASS:
+            ranges[record.runtime_id] = (*ranges.get(record.runtime_id, ()), record.version_range)
+    coverage = packet_coverage(
+        receipts,
+        version=version,
+        released=functools.cache(functools.partial(_is_ancestor, repo_root, release_commit)),
+        ranges=ranges,
     )
+    rerun = (
+        f"run `eawf release packet-run --runtime <runtime> --origin <origin> --scratch <dir>` "
+        f"on Linux at {version} from a clean checkout of {release_commit} or an ancestor"
+    )
+    missing = f"no run for {', '.join(coverage.missing)}" if coverage.missing else ""
+    if coverage.failed or coverage.refused:
+        broken = [f"{pair} failed at {step.value}" for pair, step in coverage.failed]
+        export = (
+            canary_evidence_path(repo_root, release_key).relative_to(repo_root).as_posix()
+            if evidence is not None
+            else f"no committed {release_key} canary evidence export"
+        )
+        broken.extend(f"{pair} refused: {reason} ({export})" for pair, reason in coverage.refused)
+        return _broken(
+            f"{name}: {'; '.join(filter(None, (*broken, missing)))}; {rerun}",
+            *(f"{name}:{pair}:failed:{step.value}" for pair, step in coverage.failed),
+            *(f"{name}:{pair}:refused:runtime-version" for pair, _ in coverage.refused),
+        )
+    if coverage.missing:
+        ignored = f"; set aside: {'; '.join(coverage.ignored)}" if coverage.ignored else ""
+        return ReleaseSignalOutcome(
+            status=ReleaseSignalStatus.UNAVAILABLE,
+            remediation=f"{name}: {missing}{ignored}; {rerun}",
+        )
+    return _held(*(f"{name}:{pair}:passed" for pair in coverage.passed))
 
 
 def realization_outcome(

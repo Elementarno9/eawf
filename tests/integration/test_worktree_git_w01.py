@@ -177,35 +177,6 @@ def test_worktree_remove_real_missing_path_raises(dirty_repo: Path) -> None:
 # --- worktree_list -------------------------------------------------------
 
 
-def test_worktree_list_failure_maps_to_integrity_violation(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=1, stderr="boom")
-    with pytest.raises(cli_errors.StateConflict, match="worktree list failed"):
-        git.worktree_list(tmp_path)
-
-
-def test_worktree_list_parses_multiple_entries(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Two entries, the last with no trailing blank line, both parse."""
-    stdout = (
-        "worktree /repo\nHEAD abc123\nbranch refs/heads/main\nbare\n\n"
-        "worktree /repo/wt\nHEAD def456\nbranch refs/heads/feature\n"
-    )
-    _patch_run(monkeypatch, returncode=0, stdout=stdout)
-    entries = git.worktree_list(tmp_path)
-    assert len(entries) == 2
-    assert entries[0]["worktree"] == "/repo"
-    assert entries[0]["bare"] == ""
-    assert entries[1]["branch"] == "refs/heads/feature"
-
-
-def test_worktree_list_real_repo_has_main_entry(dirty_repo: Path) -> None:
-    entries = git.worktree_list(dirty_repo)
-    assert any(Path(e.get("worktree", "")) == dirty_repo for e in entries)
-
-
 # --- status_porcelain ----------------------------------------------------
 
 
@@ -226,163 +197,13 @@ def test_status_porcelain_real_dirty_repo_reports_entries(dirty_repo: Path) -> N
 # --- rev_list ------------------------------------------------------------
 
 
-def test_rev_list_bad_revision_maps_to_invalid_input(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=128, stderr="fatal: bad revision 'x..y'")
-    with pytest.raises(cli_errors.UserError, match="rev-list"):
-        git.rev_list(tmp_path, range_spec="x..y")
-
-
-def test_rev_list_unknown_failure_maps_to_integrity_violation(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=1, stderr="boom")
-    with pytest.raises(cli_errors.StateConflict, match="rev-list failed"):
-        git.rev_list(tmp_path, range_spec="a..b")
-
-
-def test_rev_list_success_returns_shas(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    _patch_run(monkeypatch, returncode=0, stdout="aaa\nbbb\n")
-    assert git.rev_list(tmp_path, range_spec="a..b") == ["aaa", "bbb"]
-
-
 # --- cherry_pick ---------------------------------------------------------
-
-
-def test_cherry_pick_clean_returns_true(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    _patch_run(monkeypatch, returncode=0)
-    assert git.cherry_pick(tmp_path, sha="abc") == (True, "")
-
-
-def test_cherry_pick_conflict_returns_false(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=1, stderr="error: could not apply abc... msg")
-    clean, detail = git.cherry_pick(tmp_path, sha="abc")
-    assert clean is False
-    assert "could not apply" in detail
-
-
-def test_cherry_pick_bad_revision_maps_to_invalid_input(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=128, stderr="fatal: bad revision 'zzz'")
-    with pytest.raises(cli_errors.UserError, match="cherry-pick"):
-        git.cherry_pick(tmp_path, sha="zzz")
-
-
-def test_cherry_pick_unknown_failure_maps_to_integrity_violation(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=1, stderr="some weird failure")
-    with pytest.raises(cli_errors.StateConflict, match="cherry-pick failed"):
-        git.cherry_pick(tmp_path, sha="abc")
-
-
-def test_cherry_pick_now_empty_auto_skips(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """A 'now empty' pick triggers a ``--skip`` and reports clean."""
-    _patch_git_present(monkeypatch)
-    calls: list[list[str]] = []
-
-    def _fake_run(args: list[str], *_a: Any, **_k: Any) -> subprocess.CompletedProcess[str]:
-        calls.append(args)
-        if "--skip" in args:
-            return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
-        return subprocess.CompletedProcess(
-            args=args, returncode=1, stdout="", stderr="The previous cherry-pick is now empty"
-        )
-
-    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", _fake_run)
-    assert git.cherry_pick(tmp_path, sha="abc") == (True, "")
-    assert any("--skip" in c for c in calls)
-
-
-def test_cherry_pick_now_empty_skip_fails_raises(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """When the auto ``--skip`` itself fails, the pick raises IntegrityViolation."""
-    _patch_git_present(monkeypatch)
-
-    def _fake_run(args: list[str], *_a: Any, **_k: Any) -> subprocess.CompletedProcess[str]:
-        if "--skip" in args:
-            return subprocess.CompletedProcess(
-                args=args, returncode=1, stdout="", stderr="skip boom"
-            )
-        return subprocess.CompletedProcess(
-            args=args, returncode=1, stdout="", stderr="previous cherry-pick is now empty"
-        )
-
-    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", _fake_run)
-    with pytest.raises(cli_errors.StateConflict):
-        git.cherry_pick(tmp_path, sha="abc")
 
 
 # --- cherry_pick_continue ------------------------------------------------
 
 
-def test_cherry_pick_continue_clean_returns_true(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=0)
-    assert git.cherry_pick_continue(tmp_path) == (True, "")
-
-
-def test_cherry_pick_continue_conflict_returns_false(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=1, stderr="still conflicted")
-    clean, detail = git.cherry_pick_continue(tmp_path)
-    assert clean is False
-    assert "conflicted" in detail
-
-
-def test_cherry_pick_continue_now_empty_skips(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_git_present(monkeypatch)
-
-    def _fake_run(args: list[str], *_a: Any, **_k: Any) -> subprocess.CompletedProcess[str]:
-        if "--skip" in args:
-            return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
-        return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="now empty")
-
-    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", _fake_run)
-    assert git.cherry_pick_continue(tmp_path) == (True, "")
-
-
-def test_cherry_pick_continue_now_empty_skip_fails_returns_false(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_git_present(monkeypatch)
-
-    def _fake_run(args: list[str], *_a: Any, **_k: Any) -> subprocess.CompletedProcess[str]:
-        if "--skip" in args:
-            return subprocess.CompletedProcess(
-                args=args, returncode=1, stdout="", stderr="skip failed"
-            )
-        return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="now empty")
-
-    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", _fake_run)
-    clean, detail = git.cherry_pick_continue(tmp_path)
-    assert clean is False
-    assert "skip failed" in detail
-
-
 # --- cherry_pick_abort ---------------------------------------------------
-
-
-def test_cherry_pick_abort_failure_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    _patch_run(monkeypatch, returncode=1, stderr="nothing to abort")
-    with pytest.raises(cli_errors.StateConflict, match="cherry-pick --abort failed"):
-        git.cherry_pick_abort(tmp_path)
-
-
-def test_cherry_pick_abort_success_returns_none(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=0)
-    assert git.cherry_pick_abort(tmp_path) is None
 
 
 # --- rebase --------------------------------------------------------------
@@ -419,66 +240,7 @@ def test_rebase_unknown_failure_maps_to_integrity_violation(
 # --- rebase_continue / rebase_abort -------------------------------------
 
 
-def test_rebase_continue_clean_returns_true(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=0)
-    assert git.rebase_continue(tmp_path) == (True, "")
-
-
-def test_rebase_continue_failure_returns_false(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=1, stderr="still rebasing")
-    clean, detail = git.rebase_continue(tmp_path)
-    assert clean is False
-    assert "rebasing" in detail
-
-
-def test_rebase_abort_failure_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    _patch_run(monkeypatch, returncode=1, stderr="nothing to abort")
-    with pytest.raises(cli_errors.StateConflict, match="rebase --abort failed"):
-        git.rebase_abort(tmp_path)
-
-
-def test_rebase_abort_success_returns_none(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    _patch_run(monkeypatch, returncode=0)
-    assert git.rebase_abort(tmp_path) is None
-
-
 # --- merge_ff_only -------------------------------------------------------
-
-
-def test_merge_ff_only_non_fast_forward_raises(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=128, stderr="fatal: Not possible to fast-forward, aborting.")
-    with pytest.raises(cli_errors.StateConflict, match="non-fast-forward"):
-        git.merge_ff_only(tmp_path, source="feature")
-
-
-def test_merge_ff_only_unknown_failure_raises(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_run(monkeypatch, returncode=1, stderr="weird merge boom")
-    with pytest.raises(cli_errors.StateConflict, match="merge --ff-only failed"):
-        git.merge_ff_only(tmp_path, source="feature")
-
-
-def test_merge_ff_only_success_returns_head(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _patch_git_present(monkeypatch)
-
-    def _fake_run(args: list[str], *_a: Any, **_k: Any) -> subprocess.CompletedProcess[str]:
-        if "rev-parse" in args:
-            return subprocess.CompletedProcess(
-                args=args, returncode=0, stdout="cafef00d\n", stderr=""
-            )
-        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
-
-    monkeypatch.setattr("eawf.runtime.worktree.git.subprocess.run", _fake_run)
-    assert git.merge_ff_only(tmp_path, source="feature") == "cafef00d"
 
 
 # --- head_sha ------------------------------------------------------------
@@ -514,59 +276,3 @@ def test_branch_delete_success_returns_true(
 
 
 # --- cherry_pick_in_progress / rebase_in_progress -----------------------
-
-
-def test_cherry_pick_in_progress_true_when_marker_present(tmp_path: Path) -> None:
-    git_dir = tmp_path / ".git"
-    git_dir.mkdir()
-    (git_dir / "CHERRY_PICK_HEAD").write_text("abc\n", encoding="utf-8")
-    assert git.cherry_pick_in_progress(tmp_path) is True
-
-
-def test_cherry_pick_in_progress_false_when_absent(tmp_path: Path) -> None:
-    (tmp_path / ".git").mkdir()
-    assert git.cherry_pick_in_progress(tmp_path) is False
-
-
-def test_rebase_in_progress_plain_git_dir_true(tmp_path: Path) -> None:
-    git_dir = tmp_path / ".git"
-    (git_dir / "rebase-merge").mkdir(parents=True)
-    assert git.rebase_in_progress(tmp_path) is True
-
-
-def test_rebase_in_progress_plain_git_dir_false(tmp_path: Path) -> None:
-    (tmp_path / ".git").mkdir()
-    assert git.rebase_in_progress(tmp_path) is False
-
-
-def test_rebase_in_progress_gitfile_pointer_resolves(tmp_path: Path) -> None:
-    """A ``.git`` *file* pointing at the real gitdir is followed for the marker."""
-    real_gitdir = tmp_path / "realgit"
-    (real_gitdir / "rebase-apply").mkdir(parents=True)
-    worktree = tmp_path / "wt"
-    worktree.mkdir()
-    (worktree / ".git").write_text(f"gitdir: {real_gitdir}\n", encoding="utf-8")
-    assert git.rebase_in_progress(worktree) is True
-
-
-def test_rebase_in_progress_gitfile_relative_pointer(tmp_path: Path) -> None:
-    worktree = tmp_path / "wt"
-    worktree.mkdir()
-    (worktree / "nested").mkdir()
-    (worktree / "nested" / "rebase-merge").mkdir()
-    (worktree / ".git").write_text("gitdir: nested\n", encoding="utf-8")
-    assert git.rebase_in_progress(worktree) is True
-
-
-def test_rebase_in_progress_gitfile_unreadable_returns_false(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    worktree = tmp_path / "wt"
-    worktree.mkdir()
-    (worktree / ".git").write_text("gitdir: /somewhere\n", encoding="utf-8")
-
-    def _boom(*_a: Any, **_k: Any) -> str:
-        raise OSError("unreadable")
-
-    monkeypatch.setattr(Path, "read_text", _boom)
-    assert git.rebase_in_progress(worktree) is False

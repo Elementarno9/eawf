@@ -10,7 +10,6 @@ packaged Claude plugin, the ``eawf help`` topics and the skill registry.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Final
 
 import pytest
 
@@ -19,10 +18,7 @@ from eawf.surfaces.cli.commands.help import _topics_dir
 from eawf.surfaces.render.skills.registry import SKILL_REGISTRY
 from eawf.surfaces.render.skills.render import SkillSpec
 from eawf.workflow.skills.catalog import SKILL_CATALOG
-from eawf.workflow.skills.census import bundle_census, epoch1_nouns
-
-#: Topics that exist to explain the epoch-1 model to an upgrading operator.
-_MIGRATION_TOPICS: Final[frozenset[str]] = frozenset({"migration.md", "upgrade-from-0.6.md"})
+from eawf.workflow.skills.census import bundle_census, retired_nouns
 
 
 @pytest.mark.parametrize(
@@ -40,7 +36,7 @@ _MIGRATION_TOPICS: Final[frozenset[str]] = frozenset({"migration.md", "upgrade-f
     ],
 )
 def test_census_catches_joined_and_retired_names(text: str, expected: tuple[str, ...]) -> None:
-    assert epoch1_nouns(text) == expected
+    assert retired_nouns(text) == expected
 
 
 @pytest.mark.parametrize(
@@ -59,7 +55,7 @@ def test_census_catches_joined_and_retired_names(text: str, expected: tuple[str,
     ],
 )
 def test_census_ignores_native_nouns_paths_and_live_skills(text: str) -> None:
-    assert epoch1_nouns(text) == ()
+    assert retired_nouns(text) == ()
 
 
 @pytest.mark.parametrize(
@@ -74,12 +70,12 @@ def test_census_ignores_native_nouns_paths_and_live_skills(text: str) -> None:
 def test_the_page_census_reports_what_the_src_census_calls_a_homonym(
     text: str, expected: tuple[str, ...]
 ) -> None:
-    assert epoch1_nouns(text) == expected
+    assert retired_nouns(text) == expected
 
 
 def test_census_names_every_retired_skill_invocation() -> None:
     for row in SKILL_CATALOG.retired:
-        assert epoch1_nouns(f"use /{row.skill_id}.") == (f"/{row.skill_id}",)
+        assert retired_nouns(f"use /{row.skill_id}.") == (f"/{row.skill_id}",)
 
 
 def test_census_reports_joined_identifier_with_its_line(tmp_path: Path) -> None:
@@ -104,16 +100,16 @@ def test_packaged_plugin_has_no_epoch1_noun(tmp_path: Path) -> None:
 def test_help_topics_name_no_epoch1_model() -> None:
     topics_dir = _topics_dir()
     assert topics_dir is not None
-    topics = sorted(p for p in topics_dir.glob("*.md") if p.name not in _MIGRATION_TOPICS)
+    topics = sorted(topics_dir.glob("*.md"))
     assert topics
     hits = {
         topic.name: nouns
         for topic in topics
-        if (nouns := epoch1_nouns(topic.read_text(encoding="utf-8")))
+        if (nouns := retired_nouns(topic.read_text(encoding="utf-8")))
     }
     assert hits == {}
 
 
 @pytest.mark.parametrize("spec", SKILL_REGISTRY, ids=lambda spec: spec.skill_name)
 def test_skill_registry_bodies_name_no_epoch1_model(spec: SkillSpec) -> None:
-    assert epoch1_nouns("\n".join((spec.description, spec.argument_hint, spec.body))) == ()
+    assert retired_nouns("\n".join((spec.description, spec.argument_hint, spec.body))) == ()

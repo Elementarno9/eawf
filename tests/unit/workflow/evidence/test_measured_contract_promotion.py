@@ -1,7 +1,7 @@
 """PLAN-024/025: a verified SpikeReport is the sole vector onto the evidence path.
 
 Two mechanisms are covered here and nothing else needs a daemon to check
-them, because both are pure functions of a :class:`State` object.
+them, because both are pure functions of a :class:`ContractView` object.
 
 :func:`submit_evidence` generalises :func:`promote_measured_contract` past
 the four hard-coded preflight contracts: any verified
@@ -28,7 +28,6 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.runtime.semantic import SemanticToolId
 from eawf.kernel.spec.measured_contract import (
     MeasuredContract,
@@ -39,13 +38,14 @@ from eawf.kernel.spec.measured_contract import (
 )
 from eawf.runtime.daemon.semantic_handlers import SEMANTIC_HANDLERS
 from eawf.surfaces.cli.errors import UserError
-from eawf.workflow.evidence._io import load_state
+from eawf.workflow.evidence._io import ContractView
 from eawf.workflow.evidence.measured_contract import (
     PREFLIGHT_CONTRACTS,
     promote_measured_contract,
     resolve_contract_citation,
     submit_evidence,
 )
+from tests._contract_view import contract_view
 
 pytestmark = pytest.mark.unit
 
@@ -99,15 +99,17 @@ def make_report(
 
 
 @pytest.fixture
-def state() -> State:
-    """A fresh, unmutated :class:`State` loaded from the fixture."""
-    return load_state(FIXTURE)
+def state() -> ContractView:
+    """A fresh, unmutated :class:`ContractView` loaded from the fixture."""
+    return contract_view(FIXTURE)
 
 
 # ---- submit_evidence: the general promotion path ---------------------------
 
 
-def test_submit_evidence_promotes_each_contract_as_one_artifact_revision(state: State) -> None:
+def test_submit_evidence_promotes_each_contract_as_one_artifact_revision(
+    state: ContractView,
+) -> None:
     report = make_report(make_contract("MCT-99990001"), make_contract("MCT-99990002"))
 
     promotions = submit_evidence(state, report=report, scope_id=SCOPE)
@@ -120,15 +122,17 @@ def test_submit_evidence_promotes_each_contract_as_one_artifact_revision(state: 
         assert row.sha256 == promotion.content_digest.removeprefix("sha256:")
 
 
-def test_submit_evidence_returns_empty_for_a_report_that_measured_nothing(state: State) -> None:
+def test_submit_evidence_returns_empty_for_a_report_that_measured_nothing(
+    state: ContractView,
+) -> None:
     """Boundary: a spike that discriminated between designs without probing anything."""
     report = make_report(report_id="RPT-EMPTY")
 
     assert submit_evidence(state, report=report, scope_id=SCOPE) == ()
-    assert state.artifacts == load_state(FIXTURE).artifacts
+    assert state.artifacts == contract_view(FIXTURE).artifacts
 
 
-def test_submit_evidence_mints_one_evidence_row_per_contract(state: State) -> None:
+def test_submit_evidence_mints_one_evidence_row_per_contract(state: ContractView) -> None:
     report = make_report(make_contract("MCT-99990003"))
 
     (promotion,) = submit_evidence(state, report=report, scope_id=SCOPE)
@@ -137,7 +141,7 @@ def test_submit_evidence_mints_one_evidence_row_per_contract(state: State) -> No
     assert promotion.evidence.metrics["contract_id"] == "MCT-99990003"
 
 
-def test_submit_evidence_records_the_digest_add_artifact_stored(state: State) -> None:
+def test_submit_evidence_records_the_digest_add_artifact_stored(state: ContractView) -> None:
     """CR-02: the promoted row is addressed by its recorded content digest."""
     report = make_report(make_contract("MCT-99990004"))
 
@@ -153,7 +157,7 @@ def test_submit_evidence_records_the_digest_add_artifact_stored(state: State) ->
 # ---- CR-01, gate-fire proof 1: an unverified report is refused -------------
 
 
-def test_submit_evidence_refuses_an_unverified_report(state: State) -> None:
+def test_submit_evidence_refuses_an_unverified_report(state: ContractView) -> None:
     report = make_report(make_contract("MCT-99990005"), verified=False)
 
     with pytest.raises(UserError) as excinfo:
@@ -179,7 +183,9 @@ def test_measured_contract_refuses_a_whitespace_only_boundary() -> None:
 # ---- CR-01: an incompatible environment is refused, at submission ---------
 
 
-def test_submit_evidence_refuses_a_contract_measured_in_another_repository(state: State) -> None:
+def test_submit_evidence_refuses_a_contract_measured_in_another_repository(
+    state: ContractView,
+) -> None:
     foreign = make_contract(
         "MCT-99990007",
         environment=MeasurementEnvironment.model_validate({**_ENVIRONMENT, "repository": "OTHER"}),
@@ -194,7 +200,7 @@ def test_submit_evidence_refuses_a_contract_measured_in_another_repository(state
 
 
 def test_submit_evidence_admits_a_contract_measured_in_the_submitting_repository(
-    state: State,
+    state: ContractView,
 ) -> None:
     local = make_contract(
         "MCT-99990008",
@@ -208,7 +214,7 @@ def test_submit_evidence_admits_a_contract_measured_in_the_submitting_repository
 
 
 def test_submit_evidence_refuses_the_whole_report_before_writing_any_contract(
-    state: State,
+    state: ContractView,
 ) -> None:
     """A later contract's refusal leaves an earlier one in the same report unwritten."""
     ok = make_contract("MCT-99990009")
@@ -230,7 +236,7 @@ def test_submit_evidence_refuses_the_whole_report_before_writing_any_contract(
 
 
 def test_resolve_contract_citation_refuses_a_citation_from_another_repository(
-    state: State,
+    state: ContractView,
 ) -> None:
     foreign = make_contract(
         "MCT-99990011",
@@ -247,7 +253,7 @@ def test_resolve_contract_citation_refuses_a_citation_from_another_repository(
 
 
 def test_resolve_contract_citation_admits_a_citation_with_no_repository_restriction(
-    state: State,
+    state: ContractView,
 ) -> None:
     """Regression: the four preflight contracts carry no repository, so are unaffected."""
     contract = PREFLIGHT_CONTRACTS["MCT-26081303"]
@@ -259,7 +265,7 @@ def test_resolve_contract_citation_admits_a_citation_with_no_repository_restrict
     assert resolved.id == "MCT-26081303"
 
 
-def test_resolve_contract_citation_admits_a_matching_repository(state: State) -> None:
+def test_resolve_contract_citation_admits_a_matching_repository(state: ContractView) -> None:
     local = make_contract(
         "MCT-99990012",
         environment=MeasurementEnvironment.model_validate({**_ENVIRONMENT, "repository": SCOPE}),
@@ -299,7 +305,7 @@ def test_spike_report_is_frozen() -> None:
 # ---- error paths ------------------------------------------------------------
 
 
-def test_submit_evidence_propagates_a_duplicate_promotion_refusal(state: State) -> None:
+def test_submit_evidence_propagates_a_duplicate_promotion_refusal(state: ContractView) -> None:
     report = make_report(make_contract("MCT-99990013"))
     submit_evidence(state, report=report, scope_id=SCOPE)
 
@@ -320,7 +326,7 @@ def test_submit_evidence_is_registered_in_semantic_handlers() -> None:
     """W06 gate-fire proof: ``SUBMIT_EVIDENCE`` stays wired into the daemon.
 
     Every other test in this module drives :func:`submit_evidence` as a
-    pure function of a :class:`State`, so none of them would notice
+    pure function of a :class:`ContractView`, so none of them would notice
     ``SemanticToolId.SUBMIT_EVIDENCE`` being dropped from
     :data:`SEMANTIC_HANDLERS` -- the daemon's only route to it. Removing
     that entry reds this test without touching anything else here.

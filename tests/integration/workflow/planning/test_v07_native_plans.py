@@ -44,6 +44,10 @@ from tests.integration.workflow.planning._v07_plans import (
 
 pytestmark = pytest.mark.integration
 
+#: Plans whose re-plan deferred atoms out of the release; every other plan
+#: still maps each of its atoms.
+DROPPING_PLANS = frozenset({"stable"})
+
 
 @pytest.fixture(autouse=True)
 def canary_runtime_under_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -101,7 +105,7 @@ def test_the_roadmap_holds_exactly_the_three_release_milestones() -> None:
     assert titles == [
         "Cut 0.7.0rc1 with the epoch-1 TUI retired",
         "Cut 0.7.0rc2 on correctness and foundations",
-        "Publish 0.7.0 against the complete acceptance gate",
+        "Publish 0.7.0 against the narrowed honest acceptance gate",
     ]
     assert all(len(title) <= 72 and not title.endswith(".") for title in titles)
 
@@ -127,9 +131,14 @@ def test_every_source_atom_maps_to_a_criterion_of_its_plan(name: str) -> None:
     body = PlanRevisionProposal.model_validate(load_proposal(name)).body
     criteria = {criterion.id for task in body.tasks for criterion in task.criteria}
 
+    dropped = {atom.atom_ref for atom in body.dropped_atoms}
+
     assert body.source_atoms
-    assert body.dropped_atoms == ()
+    assert not dropped or name in DROPPING_PLANS, name
     for atom in body.source_atoms:
+        if atom.atom_id in dropped:
+            assert not atom.mapped_criterion_ids, atom.atom_id
+            continue
         assert atom.mapped_criterion_ids, atom.atom_id
         assert set(atom.mapped_criterion_ids) <= criteria, atom.atom_id
     assert run_plan_lenses(grade_plan_grounding(body)) == ()

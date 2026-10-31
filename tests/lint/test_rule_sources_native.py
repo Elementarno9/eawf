@@ -20,7 +20,7 @@ from eawf.platform.rules import load_rule_source
 from eawf.platform.rules.render import CARD_TARGET, plan_rule_projections
 from eawf.surfaces.render.agents_md import render_agents_md
 from eawf.surfaces.render.manifest import Manifest
-from eawf.workflow.skills.census import epoch1_nouns
+from eawf.workflow.skills.census import retired_nouns
 
 pytestmark = pytest.mark.usefixtures("isolated_host_homes")
 
@@ -50,7 +50,7 @@ def epoch1_mentions(path: Path, *, root: Path = _REPO_ROOT) -> list[str]:
     """
     hits: list[str] = []
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-        found = [*epoch1_nouns(line), *(text for text in _RETIRED_PLANNING if text in line)]
+        found = [*retired_nouns(line), *(text for text in _RETIRED_PLANNING if text in line)]
         hits.extend(f"{path.relative_to(root).as_posix()}:{number}: {text}" for text in found)
     return hits
 

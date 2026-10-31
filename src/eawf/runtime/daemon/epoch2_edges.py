@@ -16,11 +16,16 @@ from typing import Any
 
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
 from eawf.kernel.state.epoch2.lifecycle import LifecycleRecord
+from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
 from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.kernel.state.epoch2.transitions import LifecycleStatus, TransitionGuard
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.runtime.daemon.methods.domain_guards import batch_activation_admitted, task_run_open
+from eawf.runtime.daemon.methods.domain_guards import (
+    batch_activation_admitted,
+    milestone_activation_refusal,
+    task_run_open,
+)
 
 
 def locked_unmet(
@@ -35,9 +40,10 @@ def locked_unmet(
     The per-verb preflight answers every computable guard from a read it
     releases before the commit. The guards that read sibling rows rather
     than the record being moved are judged again here: two activations
-    over different Batches would each pass a preflight taken before the
-    other committed, and a Run queued against a Task after the preflight
-    of its release would otherwise lose its Task underneath it.
+    over different Batches, or over different Milestones of one Track,
+    would each pass a preflight taken before the other committed, and a
+    Run queued against a Task after the preflight of its release would
+    otherwise lose its Task underneath it.
 
     Args:
         document: The locked document.
@@ -54,6 +60,12 @@ def locked_unmet(
         and not batch_activation_admitted(document, document_path, record)
     ):
         return frozenset({TransitionGuard.BATCH_WIP_ADMITS})
+    if (
+        isinstance(record, Milestone)
+        and target is MilestoneStatus.ACTIVE
+        and milestone_activation_refusal(document, record) is not None
+    ):
+        return frozenset({TransitionGuard.MILESTONE_WIP_ADMITS})
     if (
         isinstance(record, Task)
         and record.status is TaskStatus.CLAIMED

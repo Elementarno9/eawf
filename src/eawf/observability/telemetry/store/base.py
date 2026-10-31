@@ -443,7 +443,7 @@ def open_store(
         return SqliteMetricsStore(path)
     if db_kind == "duckdb":
         try:
-            import duckdb  # type: ignore[import-not-found]  # noqa: F401
+            import duckdb  # noqa: F401
         except ImportError:
             logger.warning(
                 f"open_store db_kind='duckdb' fallback='sqlite' "

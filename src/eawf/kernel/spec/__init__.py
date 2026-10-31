@@ -1,4 +1,4 @@
-"""Typed spec models for phases, iters, waves, and audits.
+"""Typed spec models for phases, iters, and audits.
 
 This package owns the durable intent documents for the eawf scope
 hierarchy. Each spec is a Pydantic v2 :class:`pydantic.BaseModel` with
@@ -9,7 +9,6 @@ Public surface:
 
 - :class:`~eawf.kernel.spec.phase.PhaseSpec` — phase charter
 - :class:`~eawf.kernel.spec.iter.IterSpec` — iter intent
-- :class:`~eawf.kernel.spec.wave.WaveSpec` — wave deliverable
 - :class:`~eawf.kernel.spec.intent.IntentBrief` — typed intent doc
   carried by lifecycle entities
 - :class:`~eawf.kernel.spec.research.ResearchDepth` — canonical
@@ -120,7 +119,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "PhaseKPI": ("phase", "PhaseKPI"),
     "PhaseShipCriterion": ("phase", "PhaseShipCriterion"),
     "PhaseSpec": ("phase", "PhaseSpec"),
-    "QualityDimension": ("wave", "QualityDimension"),
+    "QualityDimension": ("common", "QualityDimension"),
     "ResearchDepth": ("research", "ResearchDepth"),
     "ResearchDomainConfig": ("research_campaign", "ResearchDomainConfig"),
     "ResearchProfileBlock": ("research_campaign", "ResearchProfileBlock"),
@@ -143,14 +142,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "VerdictIdStr": ("common", "VerdictIdStr"),
     "VisualContract": ("visual", "VisualContract"),
     "VisualSurface": ("visual", "VisualSurface"),
-    "WaveBehavior": ("wave", "WaveBehavior"),
-    "WaveMockup": ("wave", "WaveMockup"),
-    "WaveSpec": ("wave", "WaveSpec"),
+    "WaveBehavior": ("visual", "WaveBehavior"),
     "coerce_research_depth": ("research", "coerce_research_depth"),
     "drive_campaign": ("campaign_driver", "drive_campaign"),
     "is_ui_scope": ("heuristics", "is_ui_scope"),
-    "missing_test_paths": ("heuristics", "missing_test_paths"),
-    "requires_mockup_reference": ("heuristics", "requires_mockup_reference"),
     "run_live_rounds": ("live_rounds", "run_live_rounds"),
     "run_round_loop": ("round_loop", "run_round_loop"),
     "stage_campaign": ("research_campaign", "stage_campaign"),
@@ -158,12 +153,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "validate_argv_gates": ("promotion", "validate_argv_gates"),
     "validate_phase_spec_at_load": ("validators", "validate_phase_spec_at_load"),
     "validate_phase_spec_has_kpis": ("validators", "validate_phase_spec_has_kpis"),
-    "validate_wave_spec_at_load": ("validators", "validate_wave_spec_at_load"),
-    "validate_wave_spec_brief_paths_exist": (
-        "validators",
-        "validate_wave_spec_brief_paths_exist",
-    ),
-    "validate_wave_spec_tests_exist": ("validators", "validate_wave_spec_tests_exist"),
 }
 
 

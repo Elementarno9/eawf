@@ -274,7 +274,6 @@ def test_surf_052_a_call_outside_the_patterns_is_allowed(
 @pytest.mark.parametrize(
     ("tool", "tool_input"),
     [
-        ("Bash", {"command": 'echo "unterminated'}),
         ("Bash", {"command": "cat <"}),
         ("Bash", {}),
         ("Bash", "echo hi"),
@@ -290,6 +289,84 @@ def test_surf_051_a_judged_call_that_cannot_be_read_is_denied(
     assert denial is not None
     assert denial.pattern is None
     assert denial.rule == UNJUDGED_RULE
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo \"it's fine",
+        "grep -n \"don't",
+        "echo it\\'s",
+        "ls \\",
+        "'",
+        'git log --format="%s',
+    ],
+)
+def test_a_harmless_command_with_an_unbalanced_quote_is_allowed(tree: _Tree, command: str) -> None:
+    assert _bash(tree, command) == "allowed"
+
+
+@pytest.mark.parametrize(
+    ("lexable", "unbalanced", "pattern"),
+    [
+        ("rm -rf .ea", "rm -rf .ea; echo \"it's", CANONICAL),
+        ("rm -rf '.ea'", "rm -rf '.ea' && echo \"don't", CANONICAL),
+        ("rm -rf .ea", 'rm -rf \\.ea "x', CANONICAL),
+        (
+            "git checkout HEAD -- .ea/state.json",
+            'git checkout HEAD -- .ea/state.json "x',
+            CANONICAL,
+        ),
+        ("git restore .ea/store", 'git restore .ea/store "x', CANONICAL),
+        ("git reset --hard", "git reset --hard; echo \"it's", CANONICAL),
+        ("rm -rf .ea/worktrees/w1", 'rm -rf .ea/worktrees/w1 "x', FOREIGN),
+        ("git worktree add ../elsewhere", 'git worktree add ../elsewhere "x', OUT_OF_ROOT),
+        ("echo x > .ea/state.json", "echo x > .ea/state.json \\", CANONICAL),
+    ],
+)
+def test_a_destructive_command_with_an_unbalanced_quote_keeps_its_pattern(
+    tree: _Tree, lexable: str, unbalanced: str, pattern: DataLossPattern
+) -> None:
+    assert _bash(tree, lexable) is pattern
+    assert _bash(tree, unbalanced) is pattern
+
+
+_QUOTED_SCRIPT_BYPASSES = [
+    ("bash -c 'rm -rf .ea'", "bash -c 'rm -rf .ea'; echo it's"),
+    ("bash -lc 'rm -rf .ea'", "bash -lc 'rm -rf .ea' it's"),
+    ('sh -c "git reset --hard"', 'sh -c "git reset --hard" ; echo don\'t'),
+    ("env X='a b' rm -rf .ea", "env X='a b' rm -rf .ea; echo it's"),
+]
+
+
+@pytest.mark.parametrize(("lexable", "unbalanced"), _QUOTED_SCRIPT_BYPASSES)
+def test_an_unbalanced_quote_keeps_a_quoted_script_whole(
+    tree: _Tree, lexable: str, unbalanced: str
+) -> None:
+    assert _bash(tree, lexable) is CANONICAL
+    assert _bash(tree, unbalanced) is CANONICAL
+
+
+@pytest.mark.parametrize("wrap", ["echo $({})", "echo `{}`"])
+@pytest.mark.parametrize(("lexable", "unbalanced"), _QUOTED_SCRIPT_BYPASSES)
+def test_an_unbalanced_quote_keeps_a_substituted_script_whole(
+    tree: _Tree, lexable: str, unbalanced: str, wrap: str
+) -> None:
+    assert _bash(tree, wrap.format(lexable)) is CANONICAL
+    assert _bash(tree, wrap.format(unbalanced)) is CANONICAL
+
+
+def test_an_unbalanced_quote_keeps_the_directory_a_cd_moved_to(tree: _Tree) -> None:
+    assert _bash(tree, 'bash -c "cd .ea; echo its"; rm -rf store') is CANONICAL
+    assert _bash(tree, 'bash -c "cd .ea; echo it\'s"; rm -rf store') is CANONICAL
+
+
+def test_a_destructive_command_inside_an_unclosed_quote_is_text(tree: _Tree) -> None:
+    assert _bash(tree, "echo \"it's; rm -rf .ea") == "allowed"
+
+
+def test_an_empty_command_is_allowed(tree: _Tree) -> None:
+    assert _bash(tree, "") == "allowed"
 
 
 def test_surf_051_a_command_given_as_argv_is_judged(tree: _Tree) -> None:
@@ -459,3 +536,20 @@ def test_surf_050_the_isolated_subagent_denial_says_where_to_create_the_worktree
     )
     assert denial is not None
     assert "git worktree add .ea/worktrees/<name>" in denial.reason
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rm -rf .ea/worktrees/w1",
+        "git worktree remove .ea/worktrees/w1",
+        "git worktree move .ea/worktrees/w1 ../w2",
+    ],
+    ids=["rm", "git-remove", "git-move"],
+)
+def test_a_worktree_removal_denial_names_who_removes_it(tree: _Tree, command: str) -> None:
+    denial = judge_tool_call("Bash", {"command": command}, cwd=tree.main, anchor=tree.main)
+    assert denial is not None and denial.pattern is FOREIGN
+    assert "removes a Run's clean worktree when the Run ends" in denial.reason
+    assert "from their own shell once its work has landed" in denial.reason
+    assert "eawf worktree" not in denial.reason

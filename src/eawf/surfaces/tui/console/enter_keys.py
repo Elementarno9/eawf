@@ -239,12 +239,12 @@ def _enter_entry(ctx: Ctx) -> None:
     notes = {
         "ambiguous": f"attach to {first_cell} · remembered for this session only",
         "failed": "copied: eawf repo register . --yes",
-        "schema": "copied: eawf migrate epoch2 --export",
+        "schema": "copied: eawf backup create",
         "offline": f"drill → {first_cell} · read-only, controls are gone",
     }
     if state.paths:
-        command = state.paths[s.path_sel][0].replace(" ", "-")
-        ctx.log("Enter", f"eawf migrate --{command} · shown, never auto-applied")
+        name, purpose = state.paths[s.path_sel]
+        ctx.log("Enter", f"{name} · {purpose} · shown, never auto-applied")
     else:
         ctx.log("Enter", notes.get(state.id, "nothing to run while attaching"))
 

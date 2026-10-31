@@ -25,10 +25,12 @@ from eawf.kernel.spec.common import (
     ResponseClause,
 )
 from eawf.kernel.spec.intent import IntentBrief
-from eawf.kernel.state.models import CriteriaFloorWaiver
 from eawf.platform.lint.flake_quarantine import LaneReport, load_quarantine, partition
 from eawf.platform.lint.kind_taxonomy import kind_for_test_path, marker_conflict
 from eawf.runtime.daemon.churn import SUITE_SESSION_ENV, RuntimeDirSnapshot, snapshot_runtime_dir
+
+# Every test's fsync checks its descriptor and flushes nothing; see the module.
+pytest_plugins = ["tests._fsync_stub"]
 
 # --- Hypothesis CI example-budget profile --------------------
 #
@@ -363,6 +365,24 @@ def host_session_isolation() -> Iterator[None]:
     monkeypatch = pytest.MonkeyPatch()
     for variable in HOST_SESSION_VARIABLES:
         monkeypatch.delenv(variable, raising=False)
+    try:
+        yield
+    finally:
+        monkeypatch.undo()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def marketplace_plugin_isolation() -> Iterator[None]:
+    """Keep the operator's installed eawf Claude plugin out of every project install.
+
+    The Claude installer renders no agent file while the marketplace plugin
+    is installed for the user, so a test would pass or fail by what the
+    machine has installed. A test that patches the seam itself still wins.
+    """
+    from eawf.runtime.runtimes.claude import plugin_install
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(plugin_install, "detect_marketplace_install", lambda: None)
     try:
         yield
     finally:
@@ -747,19 +767,3 @@ def tmp_repo(tmp_path: Path) -> Path:
     eawf.platform.install. For now it returns a bare temp directory.
     """
     return tmp_path
-
-
-def make_floor_waiver() -> CriteriaFloorWaiver:
-    """Build a typed criteria-floor waiver for legacy-criterion fixtures.
-
-    The plan-time typed-criteria floor rejects a wave
-    authored with grandfathered legacy rows; fixtures that deliberately
-    model migration-era legacy waves attach this waiver so the modelled
-    state stays constructible while the floor stays on for real authoring.
-    """
-    from datetime import UTC, datetime
-
-    return CriteriaFloorWaiver(
-        reason="test fixture models a migration-era legacy wave",
-        waived_at=datetime(2026, 7, 2, tzinfo=UTC),
-    )

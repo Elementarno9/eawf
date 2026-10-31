@@ -46,15 +46,29 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
-from eawf.kernel.state.models import Wave
 from eawf.observability.telemetry.cost_class import CostClass, classify_cost_class
 from eawf.observability.telemetry.models import PriceSourceKind, RuntimeName
 
 __all__ = [
     "CompletedUnitRun",
     "TurnCostRecord",
+    "WorkUnit",
     "build_turn_cost_record",
 ]
+
+
+class WorkUnit(BaseModel):
+    """One unit of work that runs are attributed to.
+
+    Attributes:
+        id: Stable id of the unit; a run names it in ``wave_id``.
+        status: Lifecycle status. Only a ``CLOSED`` unit is completed.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: str = Field(min_length=1)
+    status: WaveStatus
 
 
 class CompletedUnitRun(BaseModel):
@@ -178,7 +192,7 @@ class _CostFold:
 
 def build_turn_cost_record(
     *,
-    waves: Sequence[Wave],
+    waves: Sequence[WorkUnit],
     runs: Sequence[CompletedUnitRun],
     fixture_id: str,
     harness_revision: str,
@@ -235,7 +249,7 @@ def build_turn_cost_record(
 
 def _join_completed_units(
     *,
-    waves: Sequence[Wave],
+    waves: Sequence[WorkUnit],
     runs: Sequence[CompletedUnitRun],
 ) -> list[list[CompletedUnitRun]]:
     """Group *runs* into one bucket per closed wave, ordered by wave id.

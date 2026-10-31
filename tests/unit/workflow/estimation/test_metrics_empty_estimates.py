@@ -96,6 +96,10 @@ def test_a_single_subject_reports_its_variance() -> None:
     assert metrics.variance.mapping_revisions == ["3"]
 
 
+# MEAS-018: an estimate meets its actual only through the subject key, and the
+# aggregate labels every mapping revision it spans instead of hiding the mix.
+
+
 def test_two_subjects_aggregate_and_label_an_unrecorded_revision() -> None:
     metrics = compute_ledger_metrics(
         [_estimate("T1", 1.0), _estimate("T2", 3.0, revision=2)],
@@ -115,6 +119,64 @@ def test_an_actual_without_an_estimate_or_an_excluded_actual_does_not_contribute
     assert (metrics.estimate_count, metrics.actual_count) == (1, 2)
     assert metrics.variance.sample_count == 0
     assert metrics.variance.variance_pct is None
+
+
+# MEAS-024: effort units, tokens and cost are distinct measures, so the EU variance
+# reads elapsed EU alone and a token or cost figure never stands in for it.
+
+
+@pytest.mark.parametrize(
+    ("tokens", "cost_usd"), [(None, None), (0, 0.0), (1, 0.01), (5_000_000, 900.0)]
+)
+def test_tokens_and_cost_never_enter_the_eu_variance(
+    tokens: int | None, cost_usd: float | None
+) -> None:
+    priced = ActualSummary(
+        id="ACT-T1",
+        scope_id="T1",
+        elapsed_eu=3.0,
+        actual_tokens=tokens,
+        actual_cost_usd=cost_usd,
+        status=ActualStatus.DONE,
+        current_store_record_id="ACT-T1-1",
+        updated_at=_T0,
+    )
+    line = _line(Epoch2Collection.ACTUAL, "T1", {"payload": priced.model_dump(mode="json")})
+    metrics = compute_ledger_metrics([_estimate("T1", 2.0)], [line])
+    assert metrics.variance.actual_eu == pytest.approx(3.0)
+    assert metrics.variance.variance_pct == pytest.approx(50.0)
+
+
+# MEAS-024: wall-clock minutes are the fourth distinct measure. An estimate carries
+# minutes beside its EU, and the planned side of the variance reads expected EU
+# alone, whatever the minutes say, so minutes never stand in for effort units.
+
+
+@pytest.mark.parametrize(
+    ("expected_minutes", "pessimistic_minutes"),
+    [(0.0, 0.0), (1.0, 1.0), (59.0, 61.0), (10_000.0, 20_000.0)],
+)
+def test_meas_024_wall_clock_minutes_never_enter_the_eu_variance(
+    expected_minutes: float, pessimistic_minutes: float
+) -> None:
+    timed = EstimateSummary(
+        id="EST-T1",
+        scope_id="T1",
+        expected_eu=2.0,
+        pessimistic_eu=4.0,
+        expected_minutes=expected_minutes,
+        pessimistic_minutes=pessimistic_minutes,
+        display="2.0 EU",
+        current_store_record_id="EST-T1-1",
+        confidence=Confidence.MEDIUM,
+        reference_class="bucket:M",
+        updated_at=_T0,
+    )
+    line = _line(Epoch2Collection.ESTIMATE, "T1", {"payload": timed.model_dump(mode="json")})
+    metrics = compute_ledger_metrics([line], [_actual("T1", 3.0)])
+    assert metrics.variance.planned_eu == pytest.approx(2.0)
+    assert metrics.variance.actual_eu == pytest.approx(3.0)
+    assert metrics.variance.variance_pct == pytest.approx(50.0)
 
 
 def test_a_native_line_reads_without_an_import_envelope() -> None:

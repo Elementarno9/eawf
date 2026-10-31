@@ -59,6 +59,7 @@ from eawf.runtime.daemon.methods.state_subscribe import (
     PROJECTION_SUBSCRIBE_METHOD,
     SUBSCRIBE_METHODS,
 )
+from eawf.runtime.daemon.operator_identity import admit_operator_identity
 
 logger = logging.getLogger(__name__)
 
@@ -90,21 +91,6 @@ DAEMON_SHUTTING_DOWN = -32009
 #: to its own typed code (with the verdict + reasons in ``error.data``) rather
 #: than the generic -32603 internal error a raised exception would otherwise get.
 DISPATCH_CLOSE_BLOCKED = -32011
-
-#: Methods dispatched on a worker thread instead of on the event loop.
-#:
-#: A handler that does blocking IO plus Pydantic validation without ever
-#: awaiting holds the loop for its whole duration, and while it holds the loop
-#: NO other connection's frame is read, parsed or answered -- head-of-line
-#: blocking across the whole daemon. ``state.read`` was measured at ~85 ms of
-#: loop occupancy per call, so a handful of concurrent readers push a
-#: ``daemon.ping`` past ``limits.READINESS_BUDGET_SECONDS`` and the caller
-#: concludes the daemon is absent when it is merely busy.
-#:
-#: Membership is deliberately narrow: a handler is only safe to run off the
-#: loop when it touches no loop-bound object. ``state.read`` qualifies -- it
-#: takes no lock, mutates no ``ctx`` field and publishes nothing.
-OFFLOADED_METHODS: frozenset[str] = frozenset({"state.read"})
 
 #: Methods whose response is a liveness signal rather than an outcome.
 #:
@@ -275,45 +261,6 @@ def _parse_frame(line: bytes) -> tuple[dict[str, Any] | None, dict[str, Any] | N
     return payload, None
 
 
-def _run_handler_off_loop(
-    method: str, ctx: MethodContext, params: dict[str, Any]
-) -> dict[str, Any]:
-    """Drive one handler to completion on the calling worker thread.
-
-    The handler is a coroutine, so the thread needs a loop of its own to run
-    it on; a coroutine object is not bound to a loop until it is awaited, so
-    building it here and running it under a private loop is safe. Only
-    :data:`OFFLOADED_METHODS` reach this path, and membership there is
-    conditioned on touching nothing the daemon's own loop owns.
-    """
-    return asyncio.run(dispatch(method, ctx, params))
-
-
-async def _dispatch_method(
-    method: str,
-    ctx: MethodContext,
-    params: dict[str, Any],
-) -> dict[str, Any]:
-    """Dispatch *method*, keeping known loop-hogging handlers off the loop.
-
-    Args:
-        method: JSON-RPC method name.
-        ctx: Server context shared across handlers.
-        params: Decoded ``params`` object.
-
-    Returns:
-        The handler's result dict.
-
-    Raises:
-        MethodNotFoundError: When *method* is not registered. Every other
-            handler exception propagates unchanged, from the worker thread as
-            well as from the loop.
-    """
-    if method not in OFFLOADED_METHODS:
-        return await dispatch(method, ctx, params)
-    return await asyncio.to_thread(_run_handler_off_loop, method, ctx, params)
-
-
 async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     """Decode + dispatch a single JSON-RPC frame.
 
@@ -343,7 +290,8 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     if method not in SUBSCRIBE_METHODS:
         ctx.touch_activity()
     try:
-        result = await _dispatch_method(method, ctx, params)
+        params = admit_operator_identity(method, params)
+        result = await dispatch(method, ctx, params)
     except MethodNotFoundError:
         return _error(req_id, METHOD_NOT_FOUND, f"method not found: {method!r}")
     except LifecycleGuardError as exc:

@@ -403,8 +403,11 @@ def test_dev2_profile_binding_table_is_not_accepted_under_dev1() -> None:
     assert excinfo.value.code is GateBindingRejection.UNBOUND_GATE_OUTSIDE_PROFILE
 
 
-def test_dev2_profile_rendering_refuses_a_rung_whose_profile_is_unauthored() -> None:
+def test_dev2_profile_rendering_refuses_a_rung_whose_profile_is_unauthored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A rung whose profile has no gate set cannot be configured yet."""
+    monkeypatch.delitem(PROFILE_GATES, ReleaseGateProfile.STABLE)
     unauthored = V07_TRAIN.checkpoint_for_version("0.7.0")
 
     with pytest.raises(GateBindingError) as excinfo:
@@ -413,7 +416,10 @@ def test_dev2_profile_rendering_refuses_a_rung_whose_profile_is_unauthored() -> 
     assert excinfo.value.code is GateBindingRejection.UNDECLARED_PROFILE
 
 
-def test_dev2_profile_gates_lookup_refuses_an_unauthored_profile() -> None:
+def test_dev2_profile_gates_lookup_refuses_an_unauthored_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """profile_gates is the fail-fast boundary for an unauthored profile."""
+    monkeypatch.delitem(PROFILE_GATES, ReleaseGateProfile.STABLE)
     with pytest.raises(GateBindingError, match="no gate set is declared"):
         profile_gates(ReleaseGateProfile.STABLE)

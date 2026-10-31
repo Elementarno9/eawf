@@ -31,7 +31,9 @@ from eawf.surfaces.tui.console.tokens import Severity
 
 TESTS_ROOT = Path(__file__).resolve().parents[4]
 SEQUENCES = TESTS_ROOT / "fixtures" / "console" / "golden" / "sequences"
-CHASSIS_SESSION = "tests.snapshots.tui.console.console_chassis.chassis.session"
+SHIPPED_RESETS = (
+    Path(__file__).resolve().parents[4] / "fixtures" / "console" / "session-reset-shipped.json"
+)
 SECTION_ORDER = ("general", "planning", "runtime")
 
 # A non-default value for every declared field; a new field must be added here, which is
@@ -104,6 +106,7 @@ DIRTY: dict[str, Any] = {
     "tr_held_from": 3,
     "tr_page": 7,
     "tr_fold": {1: True},
+    "tr_raw": True,
     "tr_t0": 99.0,
     "rec_at": 98.0,
     "rec_seen": {"RUN-1": 1},
@@ -372,22 +375,22 @@ def test_session_disarm_quit_forgets_a_pending_escape() -> None:
     assert session.last_esc == pytest.approx(0.0)
 
 
-def test_session_reset_matches_the_test_only_chassis() -> None:
-    # parity holds only while both copies exist; the skip marks the chassis' removal
-    theirs = pytest.importorskip(CHASSIS_SESSION, exc_type=ModuleNotFoundError)
-    outside = {"verbose", "rack_hold", "simulator"}
-    chassis_fields = set(theirs.Session.__dataclass_fields__)
-    assert set(Session.model_fields) == chassis_fields - outside
-    # the chassis reset spares its counters and leaves the rack clock to the app
+def _shipped_resets() -> list[dict[str, object]]:
+    """Return the session state a dirty session holds after each golden setup's reset."""
+    # the counters and the rack clock are the app's, so a reset spares them
     spared = {"keys", "prefix_cancels", "auto_opens", "renders", "rack_last"}
+    states: list[dict[str, object]] = []
     for raw in [{}, *_golden_setups()]:
         ours = _dirty_session()
         ours.reset(SessionSetup.model_validate(raw), settings_section_order=SECTION_ORDER)
-        chassis = theirs.Session()
-        chassis.reset(raw, SECTION_ORDER)
-        for name in sorted(set(Session.model_fields) - spared):
-            mine, other = getattr(ours, name), getattr(chassis, name)
-            if name in {"back", "toasts", "log"}:
-                assert (len(mine), len(other)) == (0, 0), name
-            else:
-                assert mine == other, (name, raw)
+        states.append({k: v for k, v in ours.model_dump(mode="json").items() if k not in spared})
+    return states
+
+
+def test_session_reset_matches_its_shipped_states() -> None:
+    # the chassis this was once compared with is gone, so the fixture freezes shipped behaviour
+    # each golden setup stores only the fields its reset leaves off the bare reset's
+    stored = json.loads(SHIPPED_RESETS.read_text(encoding="utf-8"))
+    shipped = [stored["bare"], *({**stored["bare"], **delta} for delta in stored["setups"])]
+    assert _shipped_resets() == shipped
+    assert len(shipped) == 1 + len(list(_golden_setups()))

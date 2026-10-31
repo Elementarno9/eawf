@@ -112,7 +112,7 @@ def test_completion_runtime_does_not_crash(shell: str) -> None:
 @_requires_console_script
 @pytest.mark.parametrize("shell", ["bash", "zsh"])
 def test_completion_runtime_emits_candidate_for_prefix(shell: str) -> None:
-    """A known prefix (``eawf wo``) offers the ``worktree`` subcommand.
+    """A known prefix (``eawf wo``) offers the ``workspace`` subcommand.
 
     Asserts the handshake produces real candidates, not just a clean exit — a
     silently-empty completion would also exit 0 but still be broken.
@@ -120,23 +120,22 @@ def test_completion_runtime_emits_candidate_for_prefix(shell: str) -> None:
     result = _run_completion(shell, comp_words="eawf wo", comp_cword=1)
     assert result.returncode == 0
     assert result.stdout.strip(), f"empty completion output for {shell}: {result.stderr!r}"
-    # bash emits ``plain,worktree``; zsh emits a ``plain\nworktree\n<help>``
-    # triple. Both carry the bare ``worktree`` token for the ``wo`` prefix.
-    assert "worktree" in result.stdout
+    # bash emits ``plain,workspace``; zsh emits a ``plain\nworkspace\n<help>``
+    # triple. Both carry the bare ``workspace`` token for the ``wo`` prefix.
+    assert "workspace" in result.stdout
 
 
 @_requires_console_script
 def test_completion_runtime_zsh_advances_to_subcommands() -> None:
-    """``eawf worktree <TAB>`` (zsh) advances past the group to its subcommands.
+    """``eawf workspace <TAB>`` (zsh) advances past the group to its subcommands.
 
     Exercises a non-zero ``COMP_CWORD`` so the args-slicing path (``args =
     cwords[1:cword]``) is covered, not just the first-token case.
     """
-    result = _run_completion("zsh", comp_words="eawf worktree ", comp_cword=2)
+    result = _run_completion("zsh", comp_words="eawf workspace ", comp_cword=2)
     assert result.returncode == 0
     assert "KeyError" not in result.stderr
-    # The ``worktree`` group exposes its migration-support verbs.
-    assert "cleanup" in result.stdout
+    assert "add" in result.stdout
 
 
 @_requires_console_script
@@ -148,7 +147,7 @@ def test_completion_runtime_bash_unaffected_by_zsh_patch() -> None:
     """
     result = _run_completion("bash", comp_words="eawf wo", comp_cword=1)
     assert result.returncode == 0
-    assert "worktree" in result.stdout
+    assert "workspace" in result.stdout
 
 
 # --- generated-script content: the fix, asserted in-process -----------------

@@ -43,8 +43,34 @@ def runtime_certify_cmd(
         str | None,
         typer.Option("--actor", help="Principal key the canary Run is recorded against."),
     ] = None,
+    min_version: Annotated[
+        str | None,
+        typer.Option(
+            "--min-version",
+            help="Lowest version the canary walk's certification covers, inclusive.",
+        ),
+    ] = None,
+    max_version: Annotated[
+        str | None,
+        typer.Option(
+            "--max-version",
+            help="Highest version the canary walk's certification covers, inclusive.",
+        ),
+    ] = None,
 ) -> None:
-    """Probe the installed runtime and record its certification or quarantine."""
+    """Probe the installed runtime and record its certification or quarantine.
+
+    With ``--min-version`` and ``--max-version`` a canary walk's
+    certification also stands for the other versions in that range, each
+    admitted by a release's canary export only after it passes a re-probe.
+    """
+    if (min_version is None) != (max_version is None):
+        errors.emit_error(
+            errors.UserError(
+                "--min-version and --max-version name a range together", kind="InvalidInput"
+            ),
+            flags=ctx.obj,
+        )
     if task is not None and actor is None:
         # The canary Run is recorded against a principal; refusing here keeps
         # the daemon from being reached for a walk it could not attribute.
@@ -61,6 +87,8 @@ def runtime_certify_cmd(
         params["task"] = task
     if actor is not None:
         params["actor"] = actor
+    if min_version is not None:
+        params["version_range"] = {"min_version": min_version, "max_version": max_version}
     answer = _send(
         ctx,
         RUNTIME_CERTIFY,

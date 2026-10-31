@@ -44,7 +44,11 @@ from eawf.kernel.store.ledger import LedgerRecord, effective_records, read_ledge
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
-from eawf.runtime.daemon.methods.delivery import read_generation_ledger, stored_tasks
+from eawf.runtime.daemon.methods.delivery import (
+    latest_sealed_bundles,
+    read_generation_ledger,
+    stored_tasks,
+)
 from eawf.runtime.daemon.native_dispatch import run_ledger
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.verification.receipts import ProofRuntimeFacts
@@ -251,14 +255,7 @@ def sealed_bundle_of(
         ValidationError: A line claims to be a bundle and does not
             validate as one, which means the ledger is corrupt.
     """
-    wanted = str(task_ref)
-    sealed = [
-        bundle
-        for item in records
-        if item.payload.get("payload_kind") == "candidate_bundle"
-        and str((bundle := CandidateBundle.model_validate(item.payload)).task_ref) == wanted
-    ]
-    return sealed[-1] if sealed else None
+    return latest_sealed_bundles(records).get(str(task_ref))
 
 
 def compiled_contracts(task: Task, gates: Sequence[GateSpec]) -> ExecutionContractSet:

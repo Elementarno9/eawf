@@ -109,7 +109,7 @@ def _decision(result: Any) -> dict[str, Any]:
         ("Bash", {"command": "git worktree add ../elsewhere"}, "out_of_root_worktree"),
         ("Edit", {"file_path": ".ea/state.json"}, "canonical_store_edit"),
         ("EnterWorktree", {"name": "x"}, "out_of_root_worktree"),
-        ("Bash", {"command": 'echo "open'}, "unjudged"),
+        ("Bash", {"command": "cat <"}, "unjudged"),
     ],
 )
 def test_surf_051_surf_103_the_live_hook_denies_with_the_daemon_down(

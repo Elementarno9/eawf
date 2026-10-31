@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from eawf.kernel.runtime.certification import (
     CapabilityCertification,
     CertificationFailureCode,
+    CertifiedVersionRange,
     ConformanceStageRecord,
     DriverCertification,
 )
@@ -56,6 +57,10 @@ class MachineCertification(BaseModel):
             kept whole so a release's canary export copies the record rather
             than reconstructing it; ``None`` for every other walk, and for a
             row recorded before the record was kept.
+        version_range: The versions the kept certification stands for once
+            each passes a re-probe on this machine; ``None`` for a row that
+            certifies its own version alone, as every row recorded before
+            ranges were kept does.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -75,6 +80,7 @@ class MachineCertification(BaseModel):
     verified_at: UtcDatetime
     expires_at: UtcDatetime | None = None
     certification: DriverCertification | None = None
+    version_range: CertifiedVersionRange | None = None
 
     @model_validator(mode="after")
     def _stages_follow_the_probe(self) -> Self:
@@ -100,6 +106,12 @@ class MachineCertification(BaseModel):
             or self.certification.stage_history[-1] != self.stages[-1]
         ):
             raise ValueError("a driver certification is the record of this row's certify stage")
+        if self.version_range is not None and (
+            self.certification is None or not self.version_range.covers(self.harness_version)
+        ):
+            raise ValueError(
+                "a version range rides on a kept driver certification and covers its own version"
+            )
         return self
 
     @model_validator(mode="after")
@@ -130,6 +142,24 @@ class MachineCertification(BaseModel):
         if self.capabilities or self.expires_at is not None:
             raise ValueError("a quarantined version carries no capabilities or expiry")
         return self
+
+    def covers(self, version: str) -> bool:
+        """Report whether this row's certification stands for *version*.
+
+        Args:
+            version: The installed version being claimed.
+
+        Returns:
+            ``True`` for the row's own version, and for any version inside
+            its range when it keeps one.
+        """
+        if self.version_range is None:
+            return version == self.harness_version
+        return self.version_range.covers(version)
+
+    def certified_range(self) -> str:
+        """Return the versions this row stands for, as a refusal names them."""
+        return self.harness_version if self.version_range is None else str(self.version_range)
 
 
 __all__ = ["MachineCertification"]

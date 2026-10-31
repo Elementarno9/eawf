@@ -103,3 +103,50 @@ def test_lint_010_every_commit_of_this_repository_stays_lintable(history: Any) -
     code, report = history.check_history("HEAD", repo_root=_REPO)
 
     assert code == 0, report
+
+
+_DETACHED = "feat: land it\n\nTask: EAWF-0002\n\nCo-authored-by: lint <lint@example.invalid>"
+
+
+def test_check_history_rejects_a_task_trailer_detached_from_the_trailer_block(
+    history: Any, switched_repo: tuple[Path, str]
+) -> None:
+    root, _ = switched_repo
+    bad = _commit(root, _DETACHED, "c.txt")
+
+    code, report = history.check_history("HEAD", repo_root=root)
+
+    assert code == 1
+    assert report == (
+        f"rejected: {bad[:12]} 'Task: EAWF-0002' is not in the final trailer block git parses; "
+        "a blank line separates it from the trailers after it, so git and the integration "
+        "never read it. Join the Batch, Task and co-author trailers into one last paragraph"
+    )
+
+
+def test_check_history_accepts_one_trailer_block(
+    history: Any, switched_repo: tuple[Path, str]
+) -> None:
+    root, _ = switched_repo
+    _commit(root, _DETACHED.replace("\n\nCo-authored-by", "\nCo-authored-by"), "c.txt")
+
+    assert history.check_history("HEAD", repo_root=root) == (0, "")
+
+
+def test_check_history_reads_a_detached_trailer_written_before_the_rule(
+    history: Any, switched_repo: tuple[Path, str]
+) -> None:
+    root, _ = switched_repo
+    _commit(root, _DETACHED, "c.txt")
+    rule = root / history.TRAILER_RULE_PATH
+    rule.parent.mkdir(parents=True)
+    rule.write_text(f"def {history.TRAILER_RULE_SYMBOL}(): ...\n", encoding="utf-8")
+    _git(root, "add", history.TRAILER_RULE_PATH)
+    _git(root, "-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "feat: add the rule")
+    after = _commit(root, _DETACHED, "d.txt")
+
+    code, report = history.check_history("HEAD", repo_root=root)
+
+    assert code == 1
+    assert report.startswith(f"rejected: {after[:12]} ")
+    assert report.count("rejected:") == 1

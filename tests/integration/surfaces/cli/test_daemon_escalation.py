@@ -26,16 +26,14 @@ End-to-end against a live socket is covered by
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import orjson
 import pytest
 import typer
 from typer.testing import CliRunner
 
-from eawf.surfaces.cli import _dispatch, _mutation, exit_codes
+from eawf.surfaces.cli import _dispatch, exit_codes
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 
@@ -45,72 +43,6 @@ runner = CliRunner()
 
 
 # ---- shared fixtures -------------------------------------------------------
-
-
-def _build_state(path: Path) -> None:
-    """Write a minimal valid state.json with one phase / iter / wave."""
-    payload: dict[str, Any] = {
-        "schema_version": "1.0",
-        "scope_kind": "repo",
-        "urn": "urn:eawf:v1:state:ABC",
-        "updated_at": "2026-05-20T00:00:00+00:00",
-        "project": {
-            "code": "ABC",
-            "slug": "abc",
-            "title": "ABC",
-            "description": None,
-            "domains": ["x"],
-            "default_branch": "main",
-            "status": "active",
-            "repo_urn": "urn:eawf:v1:repo:ABC",
-        },
-        "current": {"project_code": "ABC"},
-        "workspace": None,
-        "phases": {
-            "P26": {
-                "id": "P26",
-                "scope_id": "ABC",
-                "track_id": None,
-                "title": "P26",
-                "status": "active",
-                "iter_ids": ["P26-I01"],
-                "outcome_ids": [],
-                "opened_at": "2026-05-20T00:00:00+00:00",
-                "closed_at": None,
-                "audit_id": None,
-            }
-        },
-        "iters": {
-            "P26-I01": {
-                "id": "P26-I01",
-                "phase_id": "P26",
-                "title": "I01",
-                "status": "active",
-                "wave_ids": ["P26-I01-W05"],
-                "estimate_id": None,
-                "audit_id": None,
-                "opened_at": "2026-05-20T00:00:00+00:00",
-                "closed_at": None,
-            }
-        },
-        "waves": {
-            "P26-I01-W05": {
-                "id": "P26-I01-W05",
-                "iter_id": "P26-I01",
-                "title": "test",
-                "status": "claimed",
-                "claim_session_id": "session-x",
-                "opened_at": "2026-05-20T00:00:00+00:00",
-                "sessions": {},
-            }
-        },
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {},
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(orjson.dumps(payload, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS))
 
 
 # ---- predicate helpers (daemonless_requested / dev_mode_enabled) ----------
@@ -235,81 +167,6 @@ def test_escalate_mutation_rejects_daemonless_env(
     )
     with pytest.raises(cli_errors.UserError):
         _dispatch.escalate_mutation("iter close", flags=GlobalFlags())
-
-
-# ---- (c') chokepoint: state_transaction rejects mutating --daemonless ------
-# W25 wires the §5.5 rejection into the shared state_transaction chokepoint
-# so every mutating verb (roadmap / memory / worktree / session / evidence
-# / ...) inherits it, not just `state rpc`. The flag is recorded
-# process-wide by the root callback; reads opt out with read_only=True.
-
-
-@pytest.fixture(autouse=True)
-def _reset_daemonless_flag() -> Iterator[None]:
-    """Clear the process-wide --daemonless flag around every test.
-
-    The root callback sets it per invocation, but unit tests that poke
-    ``state_transaction`` directly bypass the callback, so reset here to
-    keep the module global from leaking across tests.
-    """
-    _mutation.set_daemonless_flag(False)
-    yield
-    _mutation.set_daemonless_flag(False)
-
-
-def test_state_transaction_rejects_when_daemonless_flag_set(
-    tmp_path: Path,
-) -> None:
-    """A mutating state_transaction refuses once the --daemonless flag is set."""
-    state_path = tmp_path / ".ea" / "state.json"
-    _build_state(state_path)
-    _mutation.set_daemonless_flag(True)
-    with (
-        pytest.raises(cli_errors.UserError) as excinfo,
-        _mutation.state_transaction(state_path),
-    ):
-        pytest.fail("mutating transaction must reject before yielding")
-    assert excinfo.value.exit_code == exit_codes.USER_ERROR
-    assert "--daemonless rejected" in str(excinfo.value)
-
-
-def test_state_transaction_read_only_bypasses_daemonless_rejection(
-    tmp_path: Path,
-) -> None:
-    """read_only=True keeps the daemon-bypass carve-out open for snapshot reads."""
-    state_path = tmp_path / ".ea" / "state.json"
-    _build_state(state_path)
-    _mutation.set_daemonless_flag(True)
-    with _mutation.state_transaction(state_path, read_only=True) as state:
-        assert state.project is not None
-        assert state.project.code == "ABC"
-
-
-def test_state_transaction_no_flag_allows_mutation(
-    tmp_path: Path,
-) -> None:
-    """Without the --daemonless flag the mutating transaction proceeds normally."""
-    state_path = tmp_path / ".ea" / "state.json"
-    _build_state(state_path)
-    _mutation.set_daemonless_flag(False)
-    from datetime import UTC, datetime
-
-    with _mutation.state_transaction(state_path) as state:
-        state.updated_at = datetime.now(UTC)  # touch; commits on exit
-    assert state_path.exists()
-
-
-def test_state_transaction_rejects_before_touching_missing_file(
-    tmp_path: Path,
-) -> None:
-    """The §5.5 gate fires before the file-exists check (InvalidInput, not NotFound)."""
-    missing = tmp_path / ".ea" / "state.json"  # never created
-    _mutation.set_daemonless_flag(True)
-    with (
-        pytest.raises(cli_errors.UserError),
-        _mutation.state_transaction(missing),
-    ):
-        pytest.fail("must reject on the flag before the file-exists check")
 
 
 # ---- dev-mode gate on the raw RPC passthrough verb -------------------------

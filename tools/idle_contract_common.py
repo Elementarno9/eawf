@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
@@ -12,28 +11,14 @@ from pathlib import Path
 #: this root so the gate works from any cwd.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
-#: Probe file scope that IS UI surface (per
-#: :func:`eawf.kernel.spec.heuristics.is_ui_scope`). A band profile MUST resolve
-#: to ``enforce=True`` for a wave touching this scope.
-_UI_SCOPE = "src/eawf/surfaces/tui/console/app.py"
-
-#: Probe file scope that is NOT UI surface. A band-scoped (not global) profile
-#: MUST resolve to ``enforce=False`` for a wave touching this scope.
-_NON_UI_SCOPE = "src/eawf/kernel/state/models.py"
-
-_PROBE_OPENED_AT = datetime(2026, 1, 1, tzinfo=UTC)
-
 
 class GateFailure(StrEnum):
     """The mutually exclusive ways the idle-contract gate can fail.
 
-    The order encodes precedence: an absent producer wiring (idle) is reported
-    before a band/global resolution defect, so a single run names the more
-    fundamental problem first.
+    The order encodes precedence, so a single run names the more fundamental
+    problem first.
     """
 
-    PRODUCER_IDLE = "producer_idle"
-    BAND_ENFORCES_GLOBALLY = "band_enforces_globally"
     BODY_VALIDATION_IDLE = "body_validation_idle"
     MOCKUP_GOLDEN_DIFF_IDLE = "mockup_golden_diff_idle"
     RUNTIME_GATE_IDLE = "runtime_gate_idle"
@@ -45,8 +30,9 @@ class GateFailure(StrEnum):
     EAWF024_TEST_TIER_IDLE = "eawf024_test_tier_idle"
     EAWF025_TEST_PLACEMENT_IDLE = "eawf025_test_placement_idle"
     COVERAGE_GATE_IDLE = "coverage_gate_idle"
-    CAMPAIGN_PRODUCER_STUB_IDLE = "campaign_producer_stub_idle"
     CONSOLE_APP_CONSTRUCTION_IDLE = "console_app_construction_idle"
+    IDLE_SURFACE_CEILING_EXCEEDED = "idle_surface_ceiling_exceeded"
+    IDLE_SURFACE_CEILING_INVALID = "idle_surface_ceiling_invalid"
 
 
 @dataclass(frozen=True, slots=True)

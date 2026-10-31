@@ -31,6 +31,7 @@ from __future__ import annotations
 import logging
 import secrets
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -50,7 +51,8 @@ from pydantic import (
 
 import eawf.runtime.worktree.git as git
 from eawf.kernel.config.layered import get_dotted, merge_config
-from eawf.kernel.identity import parse_qualified_urn
+from eawf.kernel.identity import QualifiedUrn, parse_qualified_urn
+from eawf.kernel.runtime.control import TERMINAL_RUN_STATUSES
 from eawf.kernel.runtime.lease import (
     INITIAL_LEASE_STATUS,
     LEASE_SCHEMA_VERSION,
@@ -73,8 +75,11 @@ from eawf.kernel.state.epoch2.task import Task
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.state.writer import atomic_write_json
 from eawf.kernel.store.compaction import document_rows
+from eawf.kernel.store.ledger import read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, canonical_entity_urn
+from eawf.runtime.control.reducer import reduce_run_control
+from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession, canonical_entity_urn
+from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.surfaces.cli import errors as cli_errors
 
@@ -678,7 +683,9 @@ def revoke_lease(
     return revoked
 
 
-def reconcile_root(context: Epoch2RootContext, *, now: datetime) -> ReconcileReport:
+def reconcile_root(
+    context: Epoch2RootContext, *, now: datetime, busy: Callable[[str], bool]
+) -> ReconcileReport:
     """Walk one root's leases, cleaning what is worthless and keeping the rest.
 
     Only this root's store is read, so leases of every other root are
@@ -686,10 +693,18 @@ def reconcile_root(context: Epoch2RootContext, *, now: datetime) -> ReconcileRep
     a production root's epoch-1 worktree ledger is untouched by
     construction rather than by care.
 
+    An active lease is judged once its deadline passes or its Run has
+    stopped, whichever comes first. A stopped Run whose worker a supervisor
+    still awaits keeps its lease: the supervisor withdraws it once the
+    worker is gone, so a pass cannot pull the workspace from under a worker
+    that is still exiting.
+
     Args:
         context: The native context of the root.
         now: The instant every deadline is judged against. Supplied by
             the caller so a pass is a function of its argument.
+        busy: Whether a supervisor still launches or awaits the worker of
+            the Run a URN names.
 
     Returns:
         What the pass found and did.
@@ -701,7 +716,7 @@ def reconcile_root(context: Epoch2RootContext, *, now: datetime) -> ReconcileRep
     expired = released = quarantined = 0
     untouched: list[str] = []
     for lease in held:
-        with context.session([lease.run_ref]):
+        with context.session([lease.run_ref]) as session:
             # The listing above took no lock, so the record is re-read
             # here: another session may have moved it in between.
             current = read_lease(context, lease_id=lease.lease_id)
@@ -711,6 +726,15 @@ def reconcile_root(context: Epoch2RootContext, *, now: datetime) -> ReconcileRep
                 current = apply_lease_transition(current, to=LeaseStatus.EXPIRED, at=now)
                 write_lease(context, current)
                 expired += 1
+            elif (
+                current.status is LeaseStatus.ACTIVE
+                and not busy(str(current.run_ref))
+                and _run_has_stopped(session, run_ref=current.run_ref)
+            ):
+                # A Run stopped by a path that did not withdraw its lease would
+                # otherwise hold the workspace until the deadline.
+                current = apply_lease_transition(current, to=LeaseStatus.REVOKED, at=now)
+                write_lease(context, current)
             outcome = _reconcile_one(context, lease=current, now=now)
             if outcome is ReconcileOutcome.RELEASED:
                 released += 1
@@ -732,6 +756,24 @@ def reconcile_root(context: Epoch2RootContext, *, now: datetime) -> ReconcileRep
         f"released={report.released} quarantined={report.quarantined}"
     )
     return report
+
+
+def _run_has_stopped(session: RootSession, *, run_ref: QualifiedUrn) -> bool:
+    """Return whether the Run a lease was issued to has reached a terminal status.
+
+    A lease may be issued for a Run the tree holds no record of; such a lease is
+    judged by its deadline alone.
+    """
+    # Imported here: native_dispatch imports this module.
+    from eawf.runtime.daemon.native_dispatch import control_facts_of, run_ledger, stored_run
+
+    records = read_ledger_records(run_ledger(session))
+    try:
+        run = stored_run(session, records, run_ref)
+    except DaemonValidationError:
+        return False
+    facts = control_facts_of(records, run_ref)
+    return reduce_run_control(status=run.status, facts=facts).status in TERMINAL_RUN_STATUSES
 
 
 def _reconcile_one(

@@ -22,6 +22,7 @@ import pytest
 
 from eawf.kernel.store.commit_policy import CommitPolicy, UndeclaredPathError, classify_path
 from eawf.kernel.store.compaction import (
+    LEGACY_ORIGIN_KIND,
     LegacySealPlan,
     plan_legacy_seal,
     recover_store_tree,
@@ -45,6 +46,7 @@ from eawf.kernel.store.ledger import (
     seal_ledger_prefix,
     snapshot_digest_mismatch,
     snapshot_name,
+    split_ledger_lines,
 )
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection, StorageTier
@@ -402,6 +404,12 @@ def test_seal_legacy_import_seals_and_recovery_keeps_it(tmp_path: Path) -> None:
 # --- this repository's Task ledger -------------------------------------------------
 
 
+def _origin_kind(payload: object) -> object:
+    """Return ``origin.kind`` of a ledger payload, or ``None`` when it names none."""
+    origin = payload.get("origin") if isinstance(payload, dict) else None
+    return origin.get("kind") if isinstance(origin, dict) else None
+
+
 def _repo_task_ledgers() -> list[Path]:
     return sorted((REPO_ROOT / ".ea" / "generations").glob("gen-*/ledger/task.jsonl"))
 
@@ -420,7 +428,13 @@ def test_this_repositorys_task_ledger_seals_without_changing_a_row(
     snapshot = ledger_snapshot(ledger)
     assert snapshot is not None
     assert snapshot_digest_mismatch(snapshot.name, snapshot.read_bytes()) is None
-    assert LEGACY_MARK not in ledger.read_bytes()
+    lines = split_ledger_lines(ledger.read_bytes())
+    live = [LedgerRecord.model_validate_json(line) for line in lines]
+    assert not [r.record_key for r in live if _origin_kind(r.payload) == LEGACY_ORIGIN_KIND]
+    # A retired import is filed after the seal as a DROPPED row wrapping the imported
+    # record, so its legacy origin sits one level down and the row reads as plain data.
+    retired = [r for r in live if _origin_kind(r.payload.get("payload")) == LEGACY_ORIGIN_KIND]
+    assert [r.record_key for r in retired if r.status != "DROPPED"] == []
     sealed = snapshot.read_bytes()
 
     append_ledger_record(ledger, _record("EAWF-9999"))

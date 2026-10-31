@@ -126,7 +126,11 @@ def test_rollback_section_names_each_step() -> None:
 
 def test_rollback_section_follows_the_cutover_steps() -> None:
     markdown = _GUIDE.read_text(encoding="utf-8")
-    assert markdown.index("## 3. Apply, refresh and commit") < markdown.index(_ROLLBACK_HEADING)
+    steps = re.findall(r"^## \d+\. .+$", markdown, flags=re.MULTILINE)
+    assert "## 4. Apply, refresh and commit" in steps
+    assert steps[-1] == "## 5. Upgrade to 0.7.0"
+    rollback = markdown.index(_ROLLBACK_HEADING)
+    assert all(markdown.index(step) < rollback for step in steps)
 
 
 def test_rollback_section_lookup_rejects_a_missing_heading() -> None:

@@ -208,8 +208,11 @@ def register_runtime_capture_hooks(
     from eawf.runtime.hooks.host_lane import register_host_lane_hooks
     from eawf.runtime.hooks.lifecycle_capture import (
         HOST_SUBAGENT_METHODS,
+        SESSION_END_HOOK,
+        SESSION_INDEX_HOOK,
         adopt_host_subagent,
-        stamp_session_end_on_exit,
+        answer_session_end,
+        index_host_session,
     )
 
     def _host_subagent_hook(event: HookEvent) -> HookResult:
@@ -229,11 +232,17 @@ def register_runtime_capture_hooks(
         HookEventType.PERMISSION_REQUEST, _host_permission_hook, name="runtime.host_permission"
     )
 
-    def _end_stamp_hook(event: HookEvent) -> HookResult:
-        return stamp_session_end_on_exit(event, repo_root=repo_root)
+    def _session_index_hook(event: HookEvent) -> HookResult:
+        return index_host_session(event, repo_root=repo_root)
 
+    def _session_end_hook(event: HookEvent) -> HookResult:
+        return answer_session_end(event, repo_root=repo_root)
+
+    # Both ends index the session's transcript, so a session that never exits
+    # cleanly is still found; the index keeps one row for the two reports.
+    runner.register(HookEventType.SESSION_START, _session_index_hook, name=SESSION_INDEX_HOOK)
     for exit_event_type in (HookEventType.SESSION_END, HookEventType.AGENT_END):
-        runner.register(exit_event_type, _end_stamp_hook, name="session.end_stamp")
+        runner.register(exit_event_type, _session_end_hook, name=SESSION_END_HOOK)
     register_host_tool_hooks(
         runner, daemon_client_factory=daemon_client_factory, repo_root=repo_root
     )

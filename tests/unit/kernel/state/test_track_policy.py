@@ -5,9 +5,9 @@ state a domain profile invents is refused at the loader rather than
 persisted and then found by a transition guard that has no edge for it.
 Its derived Milestone and Campaign indexes name each record at most once,
 so a Track view never counts one child twice.
-The hard batch limit refuses an activation while the advisory milestone
-limit only signals, and the two are separate predicates so a caller
-cannot accidentally treat one as the other. The strict nested policy
+The batch and milestone limits each refuse an activation past them, and
+the two are separate predicates so a caller cannot accidentally treat
+one as the other. The strict nested policy
 document loads exactly as written, unknown nested keys included.
 """
 
@@ -171,22 +171,26 @@ def test_track_policy_refuses_batch_activation_above_the_hard_limit() -> None:
     assert policy.admits_batch_activation(proving_batches_in_repo=3) is False
 
 
-def test_track_policy_exceeds_milestone_advisory_above_the_bound() -> None:
+def test_track_policy_admits_milestone_activation_below_the_limit() -> None:
     policy = TrackPolicy.model_validate(_policy_document())
-    assert policy.exceeds_milestone_advisory(active_milestones=2) is True
+    assert policy.admits_milestone_activation(active_milestones=0) is True
 
 
-def test_track_policy_exceeds_milestone_advisory_is_false_at_the_bound() -> None:
+def test_track_policy_refuses_milestone_activation_at_the_limit() -> None:
     policy = TrackPolicy.model_validate(_policy_document())
-    assert policy.exceeds_milestone_advisory(active_milestones=1) is False
+    assert policy.admits_milestone_activation(active_milestones=1) is False
 
 
-def test_track_policy_accepts_a_zero_milestone_advisory_bound() -> None:
+def test_track_policy_refuses_milestone_activation_above_the_limit() -> None:
+    policy = TrackPolicy.model_validate(_policy_document())
+    assert policy.admits_milestone_activation(active_milestones=2) is False
+
+
+def test_track_policy_refuses_every_milestone_activation_at_a_zero_limit() -> None:
     document = _policy_document()
     document["wip"]["active_milestones"] = 0
     policy = TrackPolicy.model_validate(document)
-    assert policy.exceeds_milestone_advisory(active_milestones=0) is False
-    assert policy.exceeds_milestone_advisory(active_milestones=1) is True
+    assert policy.admits_milestone_activation(active_milestones=0) is False
 
 
 def test_track_policy_rejects_a_negative_milestone_advisory_bound() -> None:

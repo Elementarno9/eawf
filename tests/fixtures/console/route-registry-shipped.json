@@ -1,0 +1,992 @@
+{
+ "routes": [
+  [
+   "entry",
+   "entry",
+   "entry",
+   false,
+   true,
+   null,
+   null,
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   "path",
+   null
+  ],
+  [
+   "scope.home",
+   "scope.home",
+   "spine",
+   false,
+   true,
+   "h",
+   "",
+   null,
+   null,
+   null
+  ],
+  [
+   "track",
+   "track",
+   "spine",
+   true,
+   false,
+   null,
+   "Runtime",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   null,
+   null
+  ],
+  [
+   "batch.detail",
+   "batch.detail",
+   "spine",
+   true,
+   false,
+   null,
+   null,
+   {
+    "route": "milestone",
+    "subject": null,
+    "via": "MILESTONE"
+   },
+   null,
+   null
+  ],
+  [
+   "task.detail",
+   "task.detail",
+   "spine",
+   true,
+   false,
+   null,
+   null,
+   {
+    "route": "batch.detail",
+    "subject": null,
+    "via": "BATCH"
+   },
+   null,
+   null
+  ],
+  [
+   "git.pr",
+   "git.pr",
+   "spine",
+   false,
+   false,
+   null,
+   "Git",
+   {
+    "route": "run.detail",
+    "subject": "RUN-538453eb",
+    "via": null
+   },
+   null,
+   null
+  ],
+  [
+   "activity",
+   "activity",
+   "live",
+   false,
+   true,
+   "a",
+   "Activity",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   "buckets",
+   "Activity"
+  ],
+  [
+   "run.detail",
+   "run.detail",
+   "live",
+   true,
+   false,
+   null,
+   null,
+   {
+    "route": "task.detail",
+    "subject": null,
+    "via": "SCOPE"
+   },
+   null,
+   null
+  ],
+  [
+   "attention",
+   "attention",
+   "live",
+   false,
+   true,
+   "n",
+   "Needs you",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   null,
+   "Needs you"
+  ],
+  [
+   "transcript",
+   "transcript",
+   "live",
+   false,
+   false,
+   null,
+   "Transcript",
+   {
+    "route": "run.detail",
+    "subject": "RUN-538453eb",
+    "via": null
+   },
+   null,
+   null
+  ],
+  [
+   "cost.ceiling",
+   "cost.ceiling",
+   "live",
+   false,
+   false,
+   null,
+   "Cost ceiling",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   null,
+   "Cost ceiling"
+  ],
+  [
+   "crash.recovery",
+   "crash.recovery",
+   "live",
+   false,
+   true,
+   null,
+   "Recovery",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   null,
+   null
+  ],
+  [
+   "milestone",
+   "milestone",
+   "acceptance",
+   true,
+   false,
+   null,
+   null,
+   {
+    "route": "track",
+    "subject": null,
+    "via": "TRACK"
+   },
+   "section",
+   null
+  ],
+  [
+   "release",
+   "release",
+   "acceptance",
+   false,
+   false,
+   "r",
+   "REL-0001",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   "section",
+   null
+  ],
+  [
+   "timeline",
+   "roadmap",
+   "planning",
+   false,
+   true,
+   "t",
+   "Timeline",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   null,
+   "Timeline"
+  ],
+  [
+   "backlog",
+   "backlog",
+   "planning",
+   false,
+   true,
+   "b",
+   "Backlog",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   "groups",
+   null
+  ],
+  [
+   "campaign",
+   "campaign",
+   "planning",
+   true,
+   false,
+   null,
+   "CAM-0001",
+   {
+    "route": "track",
+    "subject": null,
+    "via": "TRACK"
+   },
+   "sections",
+   null
+  ],
+  [
+   "history",
+   "history",
+   "diagnostics",
+   false,
+   true,
+   "y",
+   "History",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   null,
+   "History"
+  ],
+  [
+   "settings",
+   "settings",
+   "diagnostics",
+   false,
+   true,
+   "s",
+   "Settings",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   "rail",
+   null
+  ],
+  [
+   "search",
+   "search",
+   "diagnostics",
+   false,
+   false,
+   null,
+   "Search",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   null,
+   "Search"
+  ],
+  [
+   "history.diff",
+   "history.diff",
+   "diagnostics",
+   false,
+   false,
+   null,
+   "Diff",
+   {
+    "route": "history",
+    "subject": null,
+    "via": null
+   },
+   null,
+   null
+  ],
+  [
+   "trust",
+   "trust",
+   "verification",
+   false,
+   false,
+   null,
+   "Trust",
+   {
+    "route": "milestone",
+    "subject": "MLS-0007",
+    "via": null
+   },
+   null,
+   null
+  ],
+  [
+   "evidence",
+   "evidence",
+   "verification",
+   true,
+   false,
+   null,
+   "CLM-0004",
+   {
+    "route": "campaign",
+    "subject": "CAM-0001",
+    "via": null
+   },
+   null,
+   null
+  ],
+  [
+   "health",
+   "health",
+   "verification",
+   false,
+   true,
+   "d",
+   "Health",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   null,
+   "Health"
+  ],
+  [
+   "sandbox.log",
+   "sandbox.log",
+   "operations",
+   false,
+   true,
+   "l",
+   "Sandbox log",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   null,
+   "Sandbox log"
+  ],
+  [
+   "unattended",
+   "unattended",
+   "operations",
+   false,
+   true,
+   "u",
+   "Unattended",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   null,
+   "Unattended"
+  ],
+  [
+   "evidence.digest",
+   "evidence.digest",
+   "verification",
+   false,
+   false,
+   null,
+   "Rung",
+   {
+    "route": "evidence",
+    "subject": null,
+    "via": null
+   },
+   null,
+   null
+  ],
+  [
+   "settings.stack",
+   "settings.stack",
+   "diagnostics",
+   false,
+   false,
+   null,
+   "Stack",
+   {
+    "route": "settings",
+    "subject": null,
+    "via": null
+   },
+   null,
+   null
+  ],
+  [
+   "notifications",
+   "notifications",
+   "diagnostics",
+   false,
+   true,
+   "i",
+   "Notifications",
+   {
+    "route": "scope.home",
+    "subject": null,
+    "via": null
+   },
+   null,
+   "Notifications"
+  ],
+  [
+   "merge.conflict",
+   "merge.conflict",
+   "spine",
+   false,
+   false,
+   null,
+   "Conflict",
+   {
+    "route": "git.pr",
+    "subject": null,
+    "via": null
+   },
+   null,
+   null
+  ],
+  [
+   "export",
+   "export",
+   "live",
+   false,
+   false,
+   null,
+   "Export",
+   {
+    "route": "run.detail",
+    "subject": "RUN-538453eb",
+    "via": null
+   },
+   null,
+   null
+  ],
+  [
+   "receipt",
+   "receipt",
+   "spine",
+   true,
+   false,
+   null,
+   null,
+   {
+    "route": "task.detail",
+    "subject": null,
+    "via": "KEPT"
+   },
+   null,
+   null
+  ],
+  [
+   "campaign.step",
+   "campaign.step",
+   "planning",
+   false,
+   false,
+   null,
+   "Step",
+   {
+    "route": "campaign",
+    "subject": null,
+    "via": null
+   },
+   null,
+   null
+  ],
+  [
+   "campaign.artifact",
+   "campaign.artifact",
+   "planning",
+   false,
+   false,
+   null,
+   "Artifact",
+   {
+    "route": "campaign",
+    "subject": null,
+    "via": null
+   },
+   null,
+   null
+  ]
+ ],
+ "go_map": {
+  "h": "scope.home",
+  "a": "activity",
+  "n": "attention",
+  "r": "release",
+  "t": "timeline",
+  "b": "backlog",
+  "y": "history",
+  "s": "settings",
+  "d": "health",
+  "l": "sandbox.log",
+  "u": "unattended",
+  "i": "notifications"
+ },
+ "route_list": [
+  "activity",
+  "attention",
+  "backlog",
+  "crash.recovery",
+  "entry",
+  "health",
+  "history",
+  "notifications",
+  "sandbox.log",
+  "scope.home",
+  "settings",
+  "timeline",
+  "unattended"
+ ],
+ "step_leaves": {
+  "scope.home": "",
+  "track": "Runtime",
+  "git.pr": "Git",
+  "activity": "Activity",
+  "attention": "Needs you",
+  "transcript": "Transcript",
+  "cost.ceiling": "Cost ceiling",
+  "crash.recovery": "Recovery",
+  "release": "REL-0001",
+  "timeline": "Timeline",
+  "backlog": "Backlog",
+  "campaign": "CAM-0001",
+  "history": "History",
+  "settings": "Settings",
+  "search": "Search",
+  "history.diff": "Diff",
+  "trust": "Trust",
+  "evidence": "CLM-0004",
+  "health": "Health",
+  "sandbox.log": "Sandbox log",
+  "unattended": "Unattended",
+  "evidence.digest": "Rung",
+  "settings.stack": "Stack",
+  "notifications": "Notifications",
+  "merge.conflict": "Conflict",
+  "export": "Export",
+  "campaign.step": "Step",
+  "campaign.artifact": "Artifact"
+ },
+ "via_leaves": {
+  "activity": "Activity",
+  "attention": "Needs you",
+  "cost.ceiling": "Cost ceiling",
+  "timeline": "Timeline",
+  "history": "History",
+  "search": "Search",
+  "health": "Health",
+  "sandbox.log": "Sandbox log",
+  "unattended": "Unattended",
+  "notifications": "Notifications"
+ },
+ "escapes": {
+  "entry": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "track": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "batch.detail": {
+   "route": "milestone",
+   "subject": null,
+   "via": "MILESTONE"
+  },
+  "task.detail": {
+   "route": "batch.detail",
+   "subject": null,
+   "via": "BATCH"
+  },
+  "git.pr": {
+   "route": "run.detail",
+   "subject": "RUN-538453eb",
+   "via": null
+  },
+  "activity": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "run.detail": {
+   "route": "task.detail",
+   "subject": null,
+   "via": "SCOPE"
+  },
+  "attention": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "transcript": {
+   "route": "run.detail",
+   "subject": "RUN-538453eb",
+   "via": null
+  },
+  "cost.ceiling": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "crash.recovery": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "milestone": {
+   "route": "track",
+   "subject": null,
+   "via": "TRACK"
+  },
+  "release": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "timeline": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "backlog": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "campaign": {
+   "route": "track",
+   "subject": null,
+   "via": "TRACK"
+  },
+  "history": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "settings": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "search": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "history.diff": {
+   "route": "history",
+   "subject": null,
+   "via": null
+  },
+  "trust": {
+   "route": "milestone",
+   "subject": "MLS-0007",
+   "via": null
+  },
+  "evidence": {
+   "route": "campaign",
+   "subject": "CAM-0001",
+   "via": null
+  },
+  "health": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "sandbox.log": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "unattended": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "evidence.digest": {
+   "route": "evidence",
+   "subject": null,
+   "via": null
+  },
+  "settings.stack": {
+   "route": "settings",
+   "subject": null,
+   "via": null
+  },
+  "notifications": {
+   "route": "scope.home",
+   "subject": null,
+   "via": null
+  },
+  "merge.conflict": {
+   "route": "git.pr",
+   "subject": null,
+   "via": null
+  },
+  "export": {
+   "route": "run.detail",
+   "subject": "RUN-538453eb",
+   "via": null
+  },
+  "receipt": {
+   "route": "task.detail",
+   "subject": null,
+   "via": "KEPT"
+  },
+  "campaign.step": {
+   "route": "campaign",
+   "subject": null,
+   "via": null
+  },
+  "campaign.artifact": {
+   "route": "campaign",
+   "subject": null,
+   "via": null
+  }
+ },
+ "tab_owners": {
+  "entry": "path",
+  "activity": "buckets",
+  "milestone": "section",
+  "release": "section",
+  "backlog": "groups",
+  "campaign": "sections",
+  "settings": "rail"
+ },
+ "overlay_routes": [
+  "campaign.artifact",
+  "campaign.step",
+  "evidence.digest",
+  "export",
+  "merge.conflict",
+  "notifications",
+  "settings.stack"
+ ],
+ "route_word": {
+  "entry": "attach workspace",
+  "scope.home": "home",
+  "track": "track",
+  "batch.detail": "batch.detail",
+  "task.detail": "task",
+  "git.pr": "git.pr",
+  "activity": "activity",
+  "run.detail": "run",
+  "attention": "attention",
+  "transcript": "transcript",
+  "cost.ceiling": "cost.ceiling",
+  "crash.recovery": "recovery",
+  "milestone": "milestone",
+  "release": "release",
+  "timeline": "timeline",
+  "backlog": "backlog",
+  "campaign": "campaign",
+  "history": "history",
+  "settings": "settings",
+  "search": "search",
+  "history.diff": "history.diff",
+  "trust": "trust",
+  "evidence": "evidence",
+  "health": "health",
+  "sandbox.log": "sandbox log",
+  "unattended": "unattended",
+  "evidence.digest": "evidence.digest",
+  "settings.stack": "settings.stack",
+  "notifications": "notifications",
+  "merge.conflict": "merge.conflict",
+  "export": "export",
+  "receipt": "receipt",
+  "campaign.step": "campaign.step",
+  "campaign.artifact": "campaign.artifact"
+ },
+ "subj_now": {
+  "entry": null,
+  "scope.home": null,
+  "track": null,
+  "batch.detail": null,
+  "task.detail": null,
+  "git.pr": null,
+  "activity": null,
+  "run.detail": null,
+  "attention": null,
+  "transcript": null,
+  "cost.ceiling": null,
+  "crash.recovery": null,
+  "milestone": null,
+  "release": null,
+  "timeline": null,
+  "backlog": null,
+  "campaign": null,
+  "history": null,
+  "settings": null,
+  "search": null,
+  "history.diff": null,
+  "trust": "MLS-0007",
+  "evidence": "CLM-0004",
+  "health": null,
+  "sandbox.log": null,
+  "unattended": null,
+  "evidence.digest": null,
+  "settings.stack": null,
+  "notifications": null,
+  "merge.conflict": null,
+  "export": null,
+  "receipt": null,
+  "campaign.step": null,
+  "campaign.artifact": null
+ },
+ "route_of": {
+  "RUN-": "run.detail",
+  "EAWF": "task.detail",
+  "BAT-": "batch.detail",
+  "MLS-": "milestone",
+  "REL-": "release",
+  "CAM-": "campaign",
+  "CLM-": "evidence",
+  "TRK-": "track",
+  "QST-": "attention",
+  "EVT-": "run.detail"
+ },
+ "kind": {
+  "RUN": "run",
+  "EAWF": "task",
+  "BAT": "batch",
+  "MLS": "milestone",
+  "CAM": "campaign",
+  "CLM": "claim",
+  "REL": "release",
+  "ACT": "action",
+  "EVT": "event",
+  "TRK": "track",
+  "EVD": "evidence"
+ },
+ "sections": [
+  "glance",
+  "try",
+  "changes",
+  "evidence",
+  "risks",
+  "raw"
+ ],
+ "overlays": [
+  "help",
+  "palette",
+  "consequence",
+  "question",
+  "pause",
+  "evidence",
+  "acceptance",
+  "readiness",
+  "resolution",
+  "draft",
+  "marker"
+ ],
+ "overlay_arrows": [
+  "acceptance",
+  "draft",
+  "evidence",
+  "readiness"
+ ],
+ "drawers": [
+  "go",
+  "actions",
+  "inspect",
+  "raw"
+ ],
+ "routed": {
+  "RUN-1": [
+   "run.detail",
+   "run.detail",
+   "run"
+  ],
+  "BAT-1": [
+   "batch.detail",
+   "batch.detail",
+   "batch"
+  ],
+  "MLS-1": [
+   "milestone",
+   "milestone",
+   "milestone"
+  ],
+  "REL-1": [
+   "release",
+   "release",
+   "release"
+  ],
+  "CAM-1": [
+   "campaign",
+   "campaign",
+   "campaign"
+  ],
+  "EAWF-1": [
+   "task.detail",
+   "task.detail",
+   "task"
+  ],
+  "EVT-1": [
+   "receipt",
+   "run.detail",
+   "event"
+  ],
+  "CLM-1": [
+   "evidence",
+   "evidence",
+   "claim"
+  ],
+  "EVD-1": [
+   "evidence",
+   null,
+   "evidence"
+  ],
+  "TRK-1": [
+   null,
+   "track",
+   "track"
+  ],
+  "QST-1": [
+   null,
+   "attention",
+   "entity"
+  ],
+  "X": [
+   null,
+   null,
+   "entity"
+  ]
+ }
+}

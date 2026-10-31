@@ -6,9 +6,8 @@ which Milestone kinds are admitted, how outcomes are measured, how the
 Track presents -- is a policy field here, so adding a variant never adds
 an edge to a transition table and never invalidates a proof bound to one.
 
-The two work-in-progress limits differ in kind, not just in value, and
-the difference is the reason they are separate fields with separate
-predicates.
+The two work-in-progress limits count different things for different
+reasons, which is why they are separate fields with separate predicates.
 
 ``active_batches_per_repo`` is mechanical. Canonical integration is
 serialised per repository and every Batch binds an exact head, so a
@@ -18,10 +17,12 @@ has pinned its head. A Batch still collecting Tasks holds no such proof
 and is not counted. :meth:`TrackPolicy.admits_batch_activation`
 therefore answers admit-or-refuse.
 
-``active_milestones`` is advisory. Nothing breaks when a Track carries
-more active Milestones; the limit bounds split attention and keeps a
-roadmap readable. :meth:`TrackPolicy.exceeds_milestone_advisory` therefore
-answers a watchlist question and never refuses anything.
+``active_milestones`` bounds attention rather than a proof: a Track that
+opens a second Milestone for follow-up work splits a release in two, so
+follow-up scope is appended to the open Milestone instead. A Milestone in
+acceptance review is still open work, since reopening its review sends it
+back to ACTIVE. :meth:`TrackPolicy.admits_milestone_activation` refuses
+any move to ACTIVE at the limit.
 """
 
 from __future__ import annotations
@@ -179,20 +180,18 @@ class TrackPolicy(Epoch2Model):
         """
         return proving_batches_in_repo < self.wip.active_batches_per_repo
 
-    def exceeds_milestone_advisory(self, *, active_milestones: int) -> bool:
-        """Whether the Track carries more active Milestones than advised.
-
-        This is the advisory limit: a caller that gets ``True`` raises a
-        watchlist signal and proceeds. Nothing refuses on this answer.
+    def admits_milestone_activation(self, *, active_milestones: int) -> bool:
+        """Whether one more Milestone of this Track may become ACTIVE.
 
         Args:
-            active_milestones: How many Milestones of this Track are
-                currently ACTIVE.
+            active_milestones: How many other Milestones of this Track
+                are ACTIVE or in acceptance review.
 
         Returns:
-            ``True`` when the advisory bound is exceeded.
+            ``True`` when the Track holds fewer open Milestones than its
+            limit; a limit of zero admits none.
         """
-        return active_milestones > self.wip.active_milestones
+        return active_milestones < self.wip.active_milestones
 
 
 __all__ = [

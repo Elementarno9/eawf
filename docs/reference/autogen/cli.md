@@ -9,13 +9,13 @@ Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and sub
 | `clone-repo` | Clone *url* and run ``eawf init --no-input`` against the result. |
 | `follow` | Stream an operation's states until it succeeds, fails or is lost. |
 | `init` | Initialise a new Eä Workflow workspace. |
-| `metrics` | Show rolling workflow metrics — EU variance, audit pass rate, wave elapsed, and planned vs reactive split. |
+| `metrics` | Show workflow metrics — the estimation roll-up, plus telemetry, variance, jury-validation and conduct sub-verbs. |
 | `publish` | Check the commits past origin name one Batch each, then bind the staged adoptions. |
 | `render-output` | Convert between JSON and markdown forms of the output envelope (reads JSON or markdown from stdin). At a TTY with no piped data the command exits 2 with a hint instead of hanging. |
 | `status` | Show active pointers, blockers, and git head. |
 | `sync` | Re-render managed assets and report drift. |
 | `ui` | Open the Eä console (or its plain frame off-TTY). |
-| `validate` | Validate a state or envelope document. |
+| `validate` | Validate a generation document or an output envelope. |
 | `verbs` | List every verb with its entity, parameters, typed errors and effect class. |
 | `version` | Show the eawf version (text or JSON envelope). |
 | `why` | Explain why an EAWF entity has its current trust tier. |
@@ -179,7 +179,7 @@ _No verbs registered._
 
 ### `eawf help`
 
-Show prose help topics (exit-codes, daemon, profiles, urns, migration, upgrade-from-0.6, streaming).
+Show prose help topics (exit-codes, daemon, profiles, urns, migration, upgrade-from-0.6, streaming, limitations).
 
 _No verbs registered._
 
@@ -250,7 +250,6 @@ Manage curated durable memory entries.
 | Verb | Summary |
 |---|---|
 | `add` | File a new memory note on the generation's memory ledger. |
-| `compact` | Compact ``memory.jsonl`` (dedup by content; idempotent). |
 | `digest` | Emit a standup of the selected generation's recent decisions. |
 | `gc` | Archive matched memory notes by moving them to the ARCHIVAL tier. |
 | `list` | List the memory notes the tree stands at. |
@@ -260,15 +259,6 @@ Manage curated durable memory entries.
 | `stale` | List memory entries that exceed ``--age`` days and are below high confidence. |
 | `tier` | Set the tier on a single memory note. |
 | `view` | Show a single memory note: its summary and its body. |
-
-### `eawf migrate`
-
-Migrate state.json across schema versions (v1.0 -> v1.1 chain).
-
-| Verb | Summary |
-|---|---|
-| `status` | Show the current ``schema_version`` and available migration edges. |
-| `urn-rekey` | Re-key the tree's three-slot URNs onto one project key. |
 
 ### `eawf milestone`
 
@@ -374,6 +364,7 @@ Tag releases and drive the release train's checkpoint records.
 | `discharge-debt` | Discharge a verification debt once its deferred gate has passed. |
 | `notes` | Render a scrubbed release-notes draft from the unreleased changelog. |
 | `observe` | Read one publication target back and settle it against the manifest. |
+| `packet-run` | Run the packet on a live runtime in a scratch repository and record the receipt. |
 | `pipeline` | Take a merged checkpoint from tag to BAKED and the train advance. |
 | `preflight` | Sweep every readiness signal for one checkpoint over this checkout. |
 | `publish` | Open the publication episode and return its reference at once. |
@@ -404,6 +395,14 @@ Repository rows a plan binds its head to (create).
 |---|---|
 | `create` | Admit a repository row at the head its git history holds now. |
 
+### `eawf research`
+
+Check the local briefs the research skill writes.
+
+| Verb | Summary |
+|---|---|
+| `check` | Check that a research brief holds every section, in order, with sound References. |
+
 ### `eawf rules`
 
 Read, migrate and roll back the projections rendered from .ea/rules.yaml.
@@ -432,6 +431,7 @@ Run lifecycle (create, start, finish, fail).
 | `report` | Write the plain-text report of one Run; no record moves. |
 | `resume-dispatch` | Ask the scheduler to admit queued Runs again after a pause or a drain. |
 | `start` | Start a QUEUED Run; the payload's updates carry started_at. |
+| `transcript` | Print a Run's or a Task's transcripts in full; no record moves. |
 
 ### `eawf runtime`
 
@@ -451,12 +451,11 @@ Dump JSON Schema + reference pages for the canonical models.
 
 ### `eawf session`
 
-Manage AI/human work sessions.
+Host sessions: bind one to the Task it serves.
 
 | Verb | Summary |
 |---|---|
-| `close` | Close a session; required to reach the ``closed/stale/failed`` set. |
-| `recover` | Mark every active/checkpointed session whose heartbeat is older than ``--age`` as stale. |
+| `bind` | Bind a host session to a Task, superseding its earlier binding. |
 
 ### `eawf skill`
 
@@ -529,7 +528,7 @@ Track lifecycle (create, retire).
 | `create` | Admit a new Track's create document into the addressed tree. |
 | `rename` | Give an ACTIVE Track a new title; its status does not move. |
 | `retire` | Retire an ACTIVE Track once no Milestone under it is open. |
-| `set-policy` | Set how many ACTIVE Milestones an ACTIVE Track advises at most. |
+| `set-policy` | Set how many ACTIVE Milestones an ACTIVE Track admits at most. |
 
 ### `eawf vfl`
 
@@ -563,13 +562,3 @@ Workspace-scoped state and repo linkage.
 | `remove` | Remove a workspace that has exactly one member. |
 | `select` | Select a workspace for the current session only. |
 | `show` | Show one workspace record, resolving it when no key is given. |
-
-### `eawf worktree`
-
-Manage per-wave git worktrees (merge-back / cleanup / reconcile).
-
-| Verb | Summary |
-|---|---|
-| `cleanup` | Tear down the worktree directory + per-wave branch. |
-| `merge-back` | Replay worktree commits onto the parent branch. |
-| `reconcile` | Retire active worktree and session rows whose holder is gone. |

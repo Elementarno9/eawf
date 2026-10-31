@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping, Sequence
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -51,22 +51,34 @@ from eawf.kernel.release.waiver import ReleaseWaiver
 from eawf.kernel.spec.release import Release, ReleaseGateProfile, ReleaseStatus
 from eawf.kernel.spec.release_config import ReleaseConfig, ReleaseGateName, load_release_config
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods import release_receipts as receipt_methods
+from eawf.runtime.daemon.methods.release_context import resolve_config
 from eawf.runtime.daemon.methods.release_receipts import produce_receipts
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
+from eawf.workflow.release.advance import CheckpointGateReceipt
 from eawf.workflow.release.checkpoint_receipts import (
     PROOF_BUDGET_MARGIN_SECONDS,
+    GateRefusal,
+    IssuedReceipt,
     ProofOutcome,
+    ReceiptProduction,
     ReceiptProductionError,
     pinned_worktree,
     produce_checkpoint_receipts,
     proof_budget_seconds,
 )
 from eawf.workflow.release.records import record_release
-from eawf.workflow.release.train import DEV2_RELEASE_CONFIG_YAML, V07_TRAIN, gate_bindings_for
+from eawf.workflow.release.train import (
+    CHECKPOINT_CONFIGS,
+    DEV2_RELEASE_CONFIG_YAML,
+    V07_TRAIN,
+    gate_bindings_for,
+)
 from eawf.workflow.release.train_store import (
     checkpoint_receipts_path,
     read_checkpoint_receipts,
+    record_checkpoint_receipt,
 )
 from eawf.workflow.verify.release_readiness import (
     ReleaseReadiness,
@@ -299,24 +311,180 @@ def test_produce_receipts_refuses_a_proof_that_outlives_its_budget(
     assert "timed out after 1s" in result["refused"][0]["detail"]
 
 
-def test_produce_receipts_stores_a_rerun_beside_the_first_run(
+def test_produce_receipts_reuses_fresh_receipts_without_appending(
     pinned: tuple[Path, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A rerun adds rows rather than overwriting, and the newest speak for each gate."""
+    """An unchanged retry preserves the original receipt rows and timestamps."""
     repo, pinned_sha = pinned
     use_bindings(monkeypatch, dev1_bindings())
     store_record(repo, pinned_sha)
     state_path = repo / ".ea" / "state.json"
 
-    produce(context_for(repo))
+    first = produce(context_for(repo))
     second = produce(context_for(repo))
 
     lines = checkpoint_receipts_path(state_path).read_text(encoding="utf-8").splitlines()
-    assert len(lines) == 2 * len(dev1_config().gates.required)
+    assert len(lines) == len(dev1_config().gates.required)
+    assert second["receipts"] == first["receipts"]
     newest = read_checkpoint_receipts(state_path, RELEASE_KEY)
     assert [receipt.receipt_ref for receipt in newest] == [
         row["receipt_ref"] for row in second["receipts"]
     ]
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "missing",
+        "all_fresh",
+        "expired",
+        "just_inside",
+        "wrong_source",
+        "wrong_manifest",
+        "all_missing",
+        "refused",
+        "expires_during",
+    ],
+)
+def test_produce_receipts_retries_only_unproven_rc4_gates(
+    ctx: MethodContext, monkeypatch: pytest.MonkeyPatch, case: str
+) -> None:
+    """A retry reuses each fresh receipt bound to this tree and proves only the rest.
+
+    The telemetry gate carries no stored receipt outside ``all_fresh``, which is
+    what a failed earlier run leaves behind. The handler clock is pinned to
+    ``now`` so ``expired`` sits exactly on the window edge, where the receipt is
+    already stale, and ``just_inside`` one microsecond before it.
+    """
+    now = datetime.now(UTC)
+    clock_offset = [timedelta(0)]
+
+    class PinnedClock:
+        """Stand in for the handler's clock, pinned to ``now`` plus an offset."""
+
+        @staticmethod
+        def now(tz: Any) -> datetime:
+            return now + clock_offset[0]
+
+    monkeypatch.setattr(receipt_methods, "datetime", PinnedClock)
+    release = release_record(
+        key="REL-0.7.0rc4",
+        version="0.7.0rc4",
+        channel="rc",
+        authority_epoch=2,
+        membership_refs=("eawf://WSP-ABC/PRJ-ABC/REP-ABC/milestone/MLS-0001#MAB-0001-MLS-0001",),
+    )
+    config = resolve_config(release.version, membership_refs=release.membership_refs)
+    required = tuple(config.gates.required)
+    assert len(required) == 24
+    failed = ReleaseGateName.TELEMETRY_PRODUCER
+    stale = required[0]
+    state = Path(str(ctx.state_path))
+    record_release(state, release, recorded_at=now, summary="seed candidate")
+    stale_updates: dict[str, dict[str, Any]] = {
+        "expired": {"expires_at": now},
+        "just_inside": {"expires_at": now + timedelta(microseconds=1)},
+        "wrong_source": {"source_sha": "f" * 40},
+        "wrong_manifest": {"manifest_digest": f"sha256:{'f' * 64}"},
+        "expires_during": {"expires_at": now + timedelta(seconds=1)},
+    }
+    originals: dict[ReleaseGateName, CheckpointGateReceipt] = {}
+    for gate in required:
+        if case == "all_missing" or (gate == failed and case != "all_fresh"):
+            continue
+        receipt = CheckpointGateReceipt(
+            **{
+                "gate": gate,
+                "release_key": release.key,
+                "source_sha": release.source_sha,
+                "manifest_digest": release.manifest_digest,
+                "issued_at": now - timedelta(minutes=5),
+                "expires_at": now + timedelta(hours=1),
+                "receipt_ref": f"receipt://original/{gate.value}",
+                **(stale_updates.get(case, {}) if gate == stale else {}),
+            }
+        )
+        originals[gate] = receipt
+        record_checkpoint_receipt(
+            state, receipt, recorded_at=now, summary="seed real stored receipt"
+        )
+    selected: list[ReleaseGateName] = []
+
+    def run_missing(
+        state_path: Path,
+        candidate: Release,
+        active_config: ReleaseConfig,
+        bindings: Mapping[ReleaseGateName, GateBinding],
+        args: Any,
+        *,
+        required: Sequence[ReleaseGateName] | None = None,
+    ) -> Any:
+        assert candidate.source_sha is not None
+        assert candidate.manifest_digest is not None
+        gates = active_config.gates.required if required is None else required
+        selected.extend(gates)
+        issued = []
+        failures = []
+        for gate in gates:
+            if case == "refused" and gate == failed:
+                failures.append(GateRefusal(gate, "proof://actual-failure", "command exited1"))
+                continue
+            receipt = CheckpointGateReceipt(
+                gate=gate,
+                release_key=candidate.key,
+                source_sha=candidate.source_sha,
+                manifest_digest=candidate.manifest_digest,
+                issued_at=now,
+                expires_at=now + timedelta(hours=1),
+                receipt_ref=f"receipt://new/{gate.value}",
+            )
+            issued.append(IssuedReceipt(receipt, "actual selected producer result"))
+        if case == "expires_during":
+            clock_offset[0] = timedelta(seconds=2)
+        return ReceiptProduction(tuple(issued), tuple(failures))
+
+    monkeypatch.setattr(receipt_methods, "_produce", run_missing)
+    result = produce(ctx, version=release.version)
+    expected = (
+        []
+        if case == "all_fresh"
+        else [
+            gate
+            for gate in required
+            if case == "all_missing"
+            or gate == failed
+            or (gate == stale and case in {"expired", "wrong_source", "wrong_manifest"})
+        ]
+    )
+    assert selected == expected
+    assert len(result["receipts"]) == (23 if case in {"refused", "expires_during"} else 24)
+    expected_refusals = {"refused": [failed.value], "expires_during": [stale.value]}
+    assert [row["gate"] for row in result["refused"]] == expected_refusals.get(case, [])
+    for row in result["receipts"]:
+        gate = ReleaseGateName(row["gate"])
+        if gate not in expected:
+            assert row == originals[gate].model_dump(mode="json")
+    lines = checkpoint_receipts_path(state).read_text().splitlines()
+    assert len(lines) == len(originals) + len(expected) - (1 if case == "refused" else 0)
+
+
+def test_rc4_and_later_telemetry_proof_names_the_live_fixture() -> None:
+    """Receipt reuse leaves the telemetry gate on its live corpus from rc4 onward."""
+    rungs = list(V07_TRAIN.checkpoints)
+    start = rungs.index(V07_TRAIN.checkpoint_for_version("0.7.0rc4"))
+    configured = [rung for rung in rungs[start:] if rung.version in CHECKPOINT_CONFIGS]
+    assert [rung.version for rung in configured][:1] == ["0.7.0rc4"]
+    for rung in configured:
+        config = resolve_config(
+            rung.version,
+            membership_refs=(
+                "eawf://WSP-ABC/PRJ-ABC/REP-ABC/milestone/MLS-0001#MAB-0001-MLS-0001",
+            ),
+        )
+        assert ReleaseGateName.TELEMETRY_PRODUCER in config.gates.required
+        proof = receipt_methods._bindings(rung)[ReleaseGateName.TELEMETRY_PRODUCER].proof
+        assert proof is not None
+        assert proof.argv == ("uv", "run", "eawf", "bench", "turn-cost", "--fixture", "live")
 
 
 def test_produce_receipts_refuses_a_source_git_cannot_check_out(
@@ -383,8 +551,11 @@ def test_produce_receipts_refuses_a_version_off_the_train(ctx: MethodContext) ->
     assert "declares no checkpoint for '9.9.9'" in refused(ctx, version="9.9.9")
 
 
-def test_produce_receipts_refuses_a_rung_with_no_configuration(ctx: MethodContext) -> None:
-    """Stable has no authored configuration yet, so it has no gates to prove."""
+def test_produce_receipts_refuses_a_rung_with_no_configuration(
+    ctx: MethodContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A rung with no authored configuration has no gates to prove."""
+    monkeypatch.delitem(CHECKPOINT_CONFIGS, "0.7.0")
     assert "no release configuration" in refused(ctx, version="0.7.0")
 
 

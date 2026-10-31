@@ -317,6 +317,10 @@ class CanaryRequest(RuntimeRecord):
             jail; these alone can cover an attempt.
         reported: What the canary's worker reported, which can only worsen
             the grade (see :func:`graded_outcomes`).
+        turn_failure: Why the worker's turn failed, as a record may hold
+            it; ``None`` when the turn did not fail. A worker that never ran
+            its turn shows nothing of the runtime under the served spec, so
+            the stage fails however its containment graded.
     """
 
     runtime_tuple: RuntimeTuple
@@ -324,6 +328,7 @@ class CanaryRequest(RuntimeRecord):
     canary_spec: CompiledRunSpec
     outcomes: tuple[ContainmentCallOutcome, ...] = ()
     reported: tuple[ContainmentCallOutcome, ...] = ()
+    turn_failure: str | None = None
     evidence_ref: ArtifactUrn
 
     @model_validator(mode="after")
@@ -419,6 +424,7 @@ class CanaryStageResult(RuntimeRecord):
     record: ConformanceStageRecord
     parity_mismatches: tuple[ParityAxis, ...] = ()
     containment: ContainmentProbeResult | None = None
+    turn_failure: str | None = None
     quarantine_trigger: QuarantineTrigger | None = None
 
     @property
@@ -731,18 +737,26 @@ class ConformanceRunner:
                 evidence_ref=request.evidence_ref,
                 observed_at=started_at,
             )
+        # An escape outranks a failed turn: it is the graver finding.
+        trigger, reason = None, containment.failure_code
+        if not containment.passed:
+            trigger = QuarantineTrigger.CANARY_FAILURE
+        elif request.turn_failure is not None:
+            trigger = QuarantineTrigger.TERMINAL_OUTCOME_ANOMALY
+            reason = failure_code_of(trigger)
         record = self._append(
             tuple_digest=request.runtime_tuple.tuple_digest,
             stage="canary",
-            outcome="passed" if containment.passed else "failed",
-            reason_code=containment.failure_code,
+            outcome="passed" if trigger is None else "failed",
+            reason_code=reason,
             evidence_ref=request.evidence_ref,
             started_at=started_at,
         )
         return CanaryStageResult(
             record=record,
             containment=containment,
-            quarantine_trigger=None if containment.passed else QuarantineTrigger.CANARY_FAILURE,
+            turn_failure=request.turn_failure,
+            quarantine_trigger=trigger,
         )
 
     def certify(self, request: CertificationRequest) -> CertifyStageResult:

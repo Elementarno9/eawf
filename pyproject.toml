@@ -118,8 +118,9 @@ pywin32 = [
 
 [tool.deptry.per_rule_ignores]
 # DEP001 (missing): ``duckdb`` is an optional, import-guarded telemetry
-# backend (graceful fallback to sqlite when absent) — installed separately,
-# never a hard dep.
+# backend (graceful fallback to sqlite when absent); the dev group installs
+# it for its round-trip test, but it is never a runtime dependency. The
+# release pipeline reads this list as the source's optional imports.
 DEP001 = ["duckdb"]
 # DEP002 (declared-but-unused): mkdocs + mkdocs-material are the ``[docs]``
 # extra's CLI doc-build tools — invoked as commands, never imported in src/.
@@ -131,7 +132,8 @@ DEP002 = ["mkdocs", "mkdocs-material"]
 # The post-merge release pipeline lazy-imports ``detect_secrets`` only in its
 # final evidence step, which runs in this repo's own development checkout; a
 # runtime install without it refuses that step by name instead of failing.
-DEP004 = ["hypothesis", "detect_secrets"]
+# ``duckdb`` is listed here because the dev group installs it (see DEP001).
+DEP004 = ["hypothesis", "detect_secrets", "duckdb"]
 # DEP003 (transitive): ``pydantic_core`` is pydantic's own compiled core,
 # pulled in transitively with pydantic; the direct ``ErrorDetails`` import
 # rides that coupling.
@@ -152,6 +154,7 @@ dev = [
     "deptry>=0.20",
     "types-PyYAML>=6.0.12.20240917",
     "pytest-split>=0.11.0",
+    "duckdb>=2.0",
 ]
 
 [tool.pytest.ini_options]

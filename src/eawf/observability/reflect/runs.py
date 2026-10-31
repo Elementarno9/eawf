@@ -23,8 +23,10 @@ from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.runtime.events import RunEventRecord
 from eawf.kernel.runtime.sandbox_decision import SandboxDecision, sandbox_decisions
 from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.state.epoch2.base import RunKey
 from eawf.kernel.state.epoch2.run import BatchScope, MilestoneScope, Run, TaskScope
-from eawf.kernel.state.epoch2.urns import BatchUrn, MilestoneUrn, TrackUrn
+from eawf.kernel.state.epoch2.urns import BatchUrn, MilestoneUrn, TaskUrn, TrackUrn
+from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.ledger import (
     LedgerRecord,
@@ -208,6 +210,31 @@ class _TreeRuns:
         )
 
 
+def _document_path(tree_root: Path) -> Path | None:
+    """Return the selected generation's document, or ``None`` at epoch 1."""
+    authority = resolve_authority(tree_root)
+    if authority.target is None or authority.generation_id is None:
+        logger.debug(f"read_tree_runs root={tree_root.name} epoch={authority.epoch} runs=0")
+        return None
+    return authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+
+
+def _run_payloads(
+    rows: dict[str, Any], records: tuple[LedgerRecord, ...]
+) -> dict[str, dict[str, Any]]:
+    """Return each Run's stored payload, the document's live row over its ledger line."""
+    # A terminal Run is compacted out of the document into the run ledger, and the
+    # last standing line of its key is its record; most finished Runs, and the
+    # delegated children a subtree folds, live only there.
+    return {
+        item.record_key: item.payload
+        for item in effective_records(records)
+        if "payload_kind" not in item.payload
+        and item.payload.get("key") == item.record_key
+        and item.record_key not in rows
+    } | rows
+
+
 def _tree_runs(tree_root: Path) -> _TreeRuns | None:
     """Return the Runs the tree's selected generation holds, or ``None`` at epoch 1.
 
@@ -216,24 +243,13 @@ def _tree_runs(tree_root: Path) -> _TreeRuns | None:
             not validate.
         LedgerTornTailError: The run ledger ends mid-line.
     """
-    authority = resolve_authority(tree_root)
-    if authority.target is None or authority.generation_id is None:
-        logger.debug(f"read_tree_runs root={tree_root.name} epoch={authority.epoch} runs=0")
+    document_path = _document_path(tree_root)
+    if document_path is None:
         return None
-    document_path = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
     document = read_document(document_path)
     rows = document_rows(document, Epoch2Collection.RUN)
     records = read_ledger_records(ledger_path(document_path, Epoch2Collection.RUN))
-    # A terminal Run is compacted out of the document into the run ledger, and the
-    # last standing line of its key is its record; most finished Runs, and the
-    # delegated children a subtree folds, live only there.
-    payloads = {
-        item.record_key: item.payload
-        for item in effective_records(records)
-        if "payload_kind" not in item.payload
-        and item.payload.get("key") == item.record_key
-        and item.record_key not in rows
-    } | rows
+    payloads = _run_payloads(rows, records)
     return _TreeRuns(
         runs=tuple(Run.model_validate(payloads[key]) for key in sorted(payloads)),
         records=records,
@@ -295,4 +311,102 @@ def read_tree_run(tree_root: Path, ref: str) -> RunReading:
     raise LookupError(f"the tree holds no Run keyed {key!r}")
 
 
-__all__ = ["CANONICAL_SEQUENCE_KEY", "RunReading", "read_tree_run", "read_tree_runs"]
+def read_tree_run_records(tree_root: Path) -> tuple[Run, ...]:
+    """Return every Run record the tree's selected generation holds, in key order.
+
+    Each record is validated whole, but no event line is joined and no
+    subtree is folded, so the cost grows with the Run count where
+    :func:`read_tree_runs` grows with its square.
+
+    Args:
+        tree_root: The tree's ``.ea`` directory.
+
+    Returns:
+        One record per Run key, live or compacted; empty for a tree at epoch 1.
+
+    Raises:
+        pydantic.ValidationError: A Run row does not validate.
+        LedgerTornTailError: The run ledger ends mid-line.
+    """
+    document_path = _document_path(tree_root)
+    if document_path is None:
+        return ()
+    payloads = _run_payloads(
+        document_rows(read_document(document_path), Epoch2Collection.RUN),
+        read_ledger_records(ledger_path(document_path, Epoch2Collection.RUN)),
+    )
+    runs = tuple(Run.model_validate(payloads[key]) for key in sorted(payloads))
+    logger.debug(f"read_tree_run_records root={tree_root.name} runs={len(runs)}")
+    return runs
+
+
+class _BriefScope(BaseModel):
+    # A projection of the stored scope: only the Task a Task scope names.
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    task_ref: TaskUrn | None = None
+
+
+class RunBrief(BaseModel):
+    """A Run's key, the Task its scope names and its end stamp, and nothing else.
+
+    A projection of the stored Run, which its writer validated in full, so a
+    reader that only selects Runs need not validate or fold each whole record.
+
+    Attributes:
+        key: The Run's key.
+        scope: The Run's scope, holding only the Task it names, if any.
+        ended_at: When the Run stopped; ``None`` while it has not.
+    """
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    key: RunKey
+    scope: _BriefScope
+    ended_at: UtcDatetime | None = None
+
+    @property
+    def task_key(self) -> str | None:
+        """Return the key of the Task the Run's scope names, or ``None``."""
+        return None if self.scope.task_ref is None else self.scope.task_ref.entity_key
+
+
+def read_run_briefs(tree_root: Path) -> tuple[RunBrief, ...]:
+    """Return a brief of every Run the tree's selected generation holds, in key order.
+
+    Each Run is read once from its stored row and nothing is folded across Runs,
+    so the cost grows with the Run count, where :func:`read_tree_runs` grows
+    with its square.
+
+    Args:
+        tree_root: The tree's ``.ea`` directory.
+
+    Returns:
+        One brief per Run key, live or compacted; empty for a tree at epoch 1.
+
+    Raises:
+        pydantic.ValidationError: A Run row's key, Task reference or end stamp
+            does not validate.
+        LedgerTornTailError: The run ledger ends mid-line.
+    """
+    document_path = _document_path(tree_root)
+    if document_path is None:
+        return ()
+    payloads = _run_payloads(
+        document_rows(read_document(document_path), Epoch2Collection.RUN),
+        read_ledger_records(ledger_path(document_path, Epoch2Collection.RUN)),
+    )
+    briefs = tuple(RunBrief.model_validate(payloads[key]) for key in sorted(payloads))
+    logger.debug(f"read_run_briefs root={tree_root.name} runs={len(briefs)}")
+    return briefs
+
+
+__all__ = [
+    "CANONICAL_SEQUENCE_KEY",
+    "RunBrief",
+    "RunReading",
+    "read_run_briefs",
+    "read_tree_run",
+    "read_tree_run_records",
+    "read_tree_runs",
+]

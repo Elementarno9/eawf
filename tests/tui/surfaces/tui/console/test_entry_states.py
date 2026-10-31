@@ -529,7 +529,7 @@ def test_con_006_off_a_tty_a_terminal_state_prints_the_command_and_exits_4(
     rc, app = _launch(monkeypatch, tty=False)
     assert rc == 4 and app is None
     err = capsys.readouterr().err
-    assert f"eawf migrate epoch2 --rollback --target-root {world.ea}" in err
+    assert "eawf help upgrade-from-0.6" in err
 
 
 def test_con_006_enter_copies_the_command_under_the_cursor(
@@ -577,7 +577,7 @@ def test_con_007_migration_orders_its_paths_and_applies_nothing(
     assert "Every normal command is refused until this finishes." in text
 
 
-PATH_ORDER = ("dry run", "backup", "apply", "rollback")
+PATH_ORDER = ("guide", "backup")
 
 
 def test_con_007_a_rolled_back_journal_owes_the_migration_again(
@@ -652,20 +652,9 @@ def test_con_009_a_newer_marker_is_refused_with_the_export_offered(
     text = _text(_frame(app, 0))
     assert "workspace writes          marker schema v2" in text
     assert "written by                a console newer than eawf" in text
-    assert "--export" in text
+    assert "eawf backup create" in text
     assert "Upgrading the console is the only way to attach." in text
     assert _state(app).keys[0][1] == "copy the export command"
-
-
-def test_con_009_a_newer_state_schema_on_an_epoch1_tree_is_refused(
-    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    world.ea.mkdir()
-    (world.ea / "state.json").write_text(json.dumps({"schema_version": "99.0"}))
-    _rc, app = _launch(monkeypatch)
-    assert app is not None
-    assert _state(app).id == "schema"
-    assert "state schema v99.0" in _text(_frame(app, 0))
 
 
 @pytest.mark.parametrize("version", ["1.20", "1.0", "not-a-version", ""])

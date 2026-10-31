@@ -100,7 +100,7 @@ def test_probe_module_imports_and_exposes_its_state_models() -> None:
     module = importlib.import_module(_PROBE_MODULE)
 
     assert module.__name__ == _PROBE_MODULE
-    assert hasattr(module, "Wave")
+    assert hasattr(module, "Project")
 
 
 def test_configured_venv_root_is_a_real_virtualenv() -> None:

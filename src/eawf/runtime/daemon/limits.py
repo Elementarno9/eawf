@@ -46,9 +46,7 @@ CLI_WIRE_MARGIN_SECONDS: float = 30.0
 #: a connection before a caller is entitled to conclude it is gone?" -- and both
 #: sides of that question have to use the same number:
 #:
-#: * the dispatch path may not hold the event loop longer than this, so any
-#:   handler whose blocking IO / validation approaches it is offloaded to a
-#:   worker thread (``eawf.runtime.daemon.server.OFFLOADED_METHODS``) and the
+#: * the dispatch path may not hold the event loop longer than this, and the
 #:   loop-lag monitor warns when something still holds it
 #:   (``eawf.runtime.daemon.main.run_loop_lag_monitor``);
 #: * the readiness probe waits exactly this long for ``daemon.ping`` before

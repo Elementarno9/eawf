@@ -572,56 +572,6 @@ def test_gate_spec_rejects_missing_required_field() -> None:
 # Wave.success_criteria is the typed CriterionSpec list -----------------
 
 
-def test_wave_success_criteria_field_is_list_of_criterion_spec() -> None:
-    """The state-model Wave.success_criteria field is list[CriterionSpec].
-
-    The 1.6 -> 1.7 state migration re-typed the field from the legacy
-    ``list[str]`` shape into ``list[CriterionSpec]`` so the readiness
-    compute, compile-gate, and waiver flows operate on the typed row
-    directly. This test pins the new contract: the field annotation is
-    the typed list, a typed criterion element survives validation, and a
-    raw-string element is rejected at the ingestion boundary.
-    """
-    from eawf.kernel.state.models import Wave
-
-    annotation = Wave.model_fields["success_criteria"].annotation
-    assert annotation == list[CriterionSpec]
-
-    wave = Wave.model_validate(
-        {
-            "id": "P29-I11-W01",
-            "iter_id": "P29-I11",
-            "title": "typed-criterion wave",
-            "status": "pending",
-            "success_criteria": [
-                {
-                    "id": "CR-01",
-                    "text": "the readiness compute scores the typed criterion",
-                    "kind": "legacy",
-                    "acceptance_style": "binary",
-                    "evidence_kind": "attested",
-                    "quality_dimension": "functional_suitability",
-                    "measurable_signal": "readiness compute returns a typed score row",
-                }
-            ],
-            "opened_at": "2026-06-06T00:00:00Z",
-        }
-    )
-    assert isinstance(wave.success_criteria[0], CriterionSpec)
-
-    with pytest.raises(ValidationError):
-        Wave.model_validate(
-            {
-                "id": "P29-I11-W02",
-                "iter_id": "P29-I11",
-                "title": "raw-string wave",
-                "status": "pending",
-                "success_criteria": ["a raw legacy criterion string"],
-                "opened_at": "2026-06-06T00:00:00Z",
-            }
-        )
-
-
 # W09 — GateSpec model-validator catches argv at construction time -------
 
 

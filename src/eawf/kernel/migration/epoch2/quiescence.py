@@ -85,7 +85,7 @@ class QuiescenceHolderKind(StrEnum):
 #: the schema and clears nothing.
 REMEDIATIONS: Final[dict[QuiescenceHolderKind, str]] = {
     QuiescenceHolderKind.ACTIVE_SESSION: (
-        "close each live session with `eawf session close <session id>`, then commit the "
+        "close each live session with the 0.7.0rc4 session close verb, then commit the "
         "state it writes and stage the corpus again"
     ),
     QuiescenceHolderKind.HELD_LEASE: "let the process holding each lease finish, or stop it",
@@ -93,8 +93,8 @@ REMEDIATIONS: Final[dict[QuiescenceHolderKind, str]] = {
         "let the daemon drain its write-ahead log, then stop it"
     ),
     QuiescenceHolderKind.MANAGED_WORKTREE: (
-        "retire worktree rows whose checkout is gone with `eawf worktree reconcile`, "
-        "and finish or remove the rest"
+        "retire worktree rows whose checkout is gone with the 0.7.0rc4 worktree "
+        "reconcile verb, and finish or remove the rest"
     ),
 }
 

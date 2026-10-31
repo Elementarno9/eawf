@@ -64,11 +64,14 @@ class Runner:
         seconds: float = 0.0,
         real: Callable[..., CheckResult] | None = None,
         barrier: threading.Barrier | None = None,
+        release: threading.Event | None = None,
     ) -> None:
         self.seconds = seconds
         self.real = real
         self.barrier = barrier
+        self.release = release
         self.calls = 0
+        self.finished = 0
         self.cwds: list[Path] = []
         self._lock = threading.Lock()
 
@@ -86,6 +89,11 @@ class Runner:
             # criteria one after another breaks the barrier instead of passing.
             self.barrier.wait()
         time.sleep(self.seconds)
+        if self.release is not None:
+            # Held until the test lets go, so "still running" is a fact, not a race.
+            self.release.wait(timeout=BARRIER_TIMEOUT_SECONDS)
+        with self._lock:
+            self.finished += 1
         return CheckResult(
             name=leg.contract.gate_id,
             kind="command_exit_zero",
@@ -198,7 +206,8 @@ def close_landed(tmp_path: Path, repo_root: Path, *, rerun_failed: bool = False)
 def test_a_request_during_a_proof_answers_promptly(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    runner = Runner(seconds=5.0)
+    release = threading.Event()
+    runner = Runner(release=release)
     monkeypatch.setattr(batch_proof, "run_leg", runner)
     canary, repo = make_tree(
         tmp_path,
@@ -207,17 +216,21 @@ def test_a_request_during_a_proof_answers_promptly(
     )
     head = git(repo, "rev-parse", "HEAD")
 
-    timings: list[float] = []
-    answers: list[dict[str, Any]] = []
-    for _ in range(2):
-        started = time.monotonic()
-        answers.append(close_landed(tmp_path, canary.root))
-        timings.append(time.monotonic() - started)
+    try:
+        answers = [close_landed(tmp_path, canary.root) for _ in range(2)]
+        # Both answers came back while the one criterion was still held.
+        finished_while_answering = runner.finished
+        deadline = time.monotonic() + BARRIER_TIMEOUT_SECONDS
+        while runner.calls == 0 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        calls_while_held = runner.calls
+    finally:
+        release.set()
 
     reasons = [answer["closures"][0]["reason"] for answer in answers]
     assert reasons == [f"proving 1 criteria at {head[:12]}"] * 2
-    assert max(timings) < 2.0, timings
-    assert runner.calls == 1
+    assert finished_while_answering == 0
+    assert calls_while_held == 1
 
 
 def crash(leg: VerificationLeg, *, cwd: Path, gate_context: GateExecutionContext) -> CheckResult:

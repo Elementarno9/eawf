@@ -562,8 +562,8 @@ def _refuse_every_citation(_ref: str) -> bool:
     return False
 
 
-def _standing_decision_keys(decision_ledger: Path) -> frozenset[str]:
-    """Return the keys of every Decision that still stands in *decision_ledger*.
+def _standing_decision_scopes(decision_ledger: Path) -> dict[str, str | None]:
+    """Return each standing Decision's key and scope in *decision_ledger*.
 
     The ledger holds both the decisions the cutover imported, whose record
     is the v1 row, and the decisions taken natively since; both carry
@@ -581,13 +581,13 @@ def _standing_decision_keys(decision_ledger: Path) -> frozenset[str]:
         line.record_key: line.payload.get("payload")
         for line in effective_records(read_ledger_records(decision_ledger))
     }
-    return frozenset(
-        key
+    return {
+        key: decision.get("scope_ref")
         for key, decision in latest.items()
         if isinstance(decision, dict)
         and str(decision.get("status", "")).lower() == DecisionStatus.ACTIVE.value
         and decision.get("superseded_by") is None
-    )
+    }
 
 
 def _build_citation_resolvers(
@@ -618,7 +618,7 @@ def _build_citation_resolvers(
             artifact_ledger=session.ledger_path(Epoch2Collection.ARTIFACT),
             evidence_ledger=session.ledger_path(Epoch2Collection.EVIDENCE),
         )
-        standing = _standing_decision_keys(session.ledger_path(Epoch2Collection.DECISION))
+        standing = _standing_decision_scopes(session.ledger_path(Epoch2Collection.DECISION))
     except LedgerError, ValueError, KeyError, OSError:
         return _CitationResolvers(
             contract_is_resolvable=_refuse_every_citation,
@@ -632,8 +632,26 @@ def _build_citation_resolvers(
             return False
         return True
 
+    def decision_resolves(ref: str) -> bool:
+        if ref in standing:
+            return standing[ref] is None
+        address, separator, key = ref.rpartition("/decision/")
+        scope_ref = standing.get(key) if separator else None
+        if scope_ref is None:
+            return False
+        try:
+            scope = parse_qualified_urn(scope_ref)
+        except ValueError:
+            return False
+        if address == f"eawf://{scope.workspace_key}/{scope.project_key}/{scope.repository_slot}":
+            return True
+        return (
+            scope.workspace_key == scope.project_key == scope.repository_key
+            and address == f"eawf://{scope.project_key}"
+        )
+
     return _CitationResolvers(
-        contract_is_resolvable=contract_resolves, decision_is_resolvable=standing.__contains__
+        contract_is_resolvable=contract_resolves, decision_is_resolvable=decision_resolves
     )
 
 

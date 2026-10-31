@@ -36,11 +36,7 @@ class ErrorCode(StrEnum):
 
     # --- Schema / state --------------------------------------------------
     STATE_VALIDATION_FAILED = "STATE_VALIDATION_FAILED"
-    STATE_VERSION_MISMATCH = "STATE_VERSION_MISMATCH"
     BACKUP_WRITE_FAILED = "BACKUP_WRITE_FAILED"
-    MIGRATION_STEP_FAILED = "MIGRATION_STEP_FAILED"
-    MIGRATION_POSTCONDITION_FAILED = "MIGRATION_POSTCONDITION_FAILED"
-    MIGRATION_TARGET_UNKNOWN = "MIGRATION_TARGET_UNKNOWN"
     MIGRATION_REQUIRED = "MIGRATION_REQUIRED"
 
     # --- Daemon / IPC ----------------------------------------------------
@@ -105,7 +101,6 @@ class ErrorCode(StrEnum):
 # values serialise as their own names.
 _EXIT_CODE_FOR: dict[ErrorCode, int] = {
     # USER_ERROR (1) — operator-fixable input / environment / declined gate.
-    ErrorCode.MIGRATION_TARGET_UNKNOWN: exit_codes.USER_ERROR,
     ErrorCode.SCOPE_CONFLICT: exit_codes.USER_ERROR,
     ErrorCode.WORKTREE_DIRTY: exit_codes.USER_ERROR,
     ErrorCode.WORKTREE_BRANCH_STALE: exit_codes.USER_ERROR,
@@ -117,10 +112,8 @@ _EXIT_CODE_FOR: dict[ErrorCode, int] = {
     ErrorCode.MISSING_REQUIRED_ANSWER: exit_codes.USER_ERROR,
     # VALIDATION_ERROR (2) — strict schema / invariant rejection.
     ErrorCode.STATE_VALIDATION_FAILED: exit_codes.VALIDATION_ERROR,
-    ErrorCode.MIGRATION_POSTCONDITION_FAILED: exit_codes.VALIDATION_ERROR,
     ErrorCode.PLUGIN_MANIFEST_INVALID: exit_codes.VALIDATION_ERROR,
     # STATE_CONFLICT (3) — lock / integrity / drift / cherry-pick collision.
-    ErrorCode.STATE_VERSION_MISMATCH: exit_codes.STATE_CONFLICT,
     ErrorCode.DAEMON_LOCK_HELD: exit_codes.STATE_CONFLICT,
     ErrorCode.CHERRY_PICK_CONFLICT: exit_codes.STATE_CONFLICT,
     ErrorCode.PLUGIN_DRIFT_DETECTED: exit_codes.STATE_CONFLICT,
@@ -131,9 +124,8 @@ _EXIT_CODE_FOR: dict[ErrorCode, int] = {
     ErrorCode.DAEMON_SOCKET_UNREACHABLE: exit_codes.DAEMON_UNREACHABLE,
     # A tree in the migration-required state is an attach failure.
     ErrorCode.MIGRATION_REQUIRED: exit_codes.ATTACH_FAILURE,
-    # INTERNAL_ERROR (5) — backup write / migration step / runtime / external.
+    # INTERNAL_ERROR (5) — backup write / runtime / external.
     ErrorCode.BACKUP_WRITE_FAILED: exit_codes.INTERNAL_ERROR,
-    ErrorCode.MIGRATION_STEP_FAILED: exit_codes.INTERNAL_ERROR,
     ErrorCode.RUNTIME_RATE_LIMIT: exit_codes.INTERNAL_ERROR,
     ErrorCode.RUNTIME_SERVER_ERROR: exit_codes.INTERNAL_ERROR,
     ErrorCode.DISPATCH_BUDGET_EXCEEDED: exit_codes.INTERNAL_ERROR,

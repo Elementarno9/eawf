@@ -50,6 +50,7 @@ from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.methods.domain_envelope import DomainEnvelope
+from eawf.workflow.release.ci_runs import CI_WORKFLOW, CiRun
 from eawf.workflow.release.pipeline import PUBLISH_WORKFLOWS, PipelineHostError
 from eawf.workflow.release.pipeline_receipts import RECEIPT_FILENAMES
 from eawf.workflow.verify.release_probes import release_tree_status
@@ -75,6 +76,11 @@ COMMAND_TIMEOUT_SECONDS: Final[float] = 120.0
 #: Wall budget of the gate proofs: the stabilization proof runs the full
 #: suite, about an hour.
 PROOF_TIMEOUT_SECONDS: Final[float] = 3.0 * 3600
+
+#: The ``gh run list --json`` fields a :class:`CiRun` reads, by alias.
+_CI_RUN_FIELDS: Final[tuple[str, ...]] = tuple(
+    field.alias or name for name, field in CiRun.model_fields.items()
+)
 
 #: One ``Batch:`` trailer line, the form ``eawf publish`` writes.
 _BATCH_TRAILER_RE: Final[re.Pattern[str]] = re.compile(r"^Batch:\s+(\S+)\s*$", re.MULTILINE)
@@ -222,6 +228,23 @@ class GitHubReleaseHost:
         row = readiness.row(red)
         code = row.failure_code.value if row.failure_code is not None else row.status.value
         return f"{red.value} ({code}): {row.remediation}"
+
+    def ci_runs(self, sha: str) -> tuple[CiRun, ...]:
+        """Return the runs of the CI workflow the forge holds for commit *sha*.
+
+        Raises:
+            PipelineHostError: ``gh`` fails, or a run does not validate.
+        """
+        runs = self._gh_json(
+            [
+                *("run", "list", "--workflow", CI_WORKFLOW, "--commit", sha, "--limit", "50"),
+                *("--json", ",".join(_CI_RUN_FIELDS)),
+            ]
+        )
+        try:
+            return tuple(CiRun.model_validate(run) for run in runs or ())
+        except ValidationError as exc:
+            raise PipelineHostError(f"gh run list of {CI_WORKFLOW} at {sha}: {exc}") from exc
 
     def remote_tag(self, tag: str) -> str | None:
         """Return the commit *tag* points at on the remote, or ``None``."""

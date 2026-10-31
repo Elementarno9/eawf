@@ -7,6 +7,8 @@ with the pack's ``timeline`` keyed ``roadmap`` and ``notifications`` a global ro
 
 from __future__ import annotations
 
+import dataclasses
+import enum
 import hashlib
 import json
 import re
@@ -33,7 +35,7 @@ from eawf.surfaces.tui.console.registry import (
 CONSOLE_DIR = Path(registry.__file__).resolve().parent
 TESTS_ROOT = Path(__file__).resolve().parents[4]
 NORMALISATION_MAP = TESTS_ROOT / "fixtures" / "console" / "golden" / "normalisation-map.json"
-CHASSIS_REGISTRY = "tests.snapshots.tui.console.console_chassis.chassis.registry"
+SHIPPED_REGISTRY = TESTS_ROOT / "fixtures" / "console" / "route-registry-shipped.json"
 
 HOME = Escape(route="scope.home")
 
@@ -339,44 +341,56 @@ def test_kind_of_names_the_entity_kind(entity_id: str | None, expected: str) -> 
     assert kind_of(entity_id) == expected
 
 
-def test_route_registry_matches_the_test_only_chassis() -> None:
-    # parity holds only while both copies exist; the skip marks the chassis' removal
-    theirs = pytest.importorskip(CHASSIS_REGISTRY, exc_type=ModuleNotFoundError)
+#: The entity ids the shipped registry is asked to route.
+_ROUTED_IDS = ("RUN-1", "BAT-1", "MLS-1", "REL-1", "CAM-1", "EAWF-1", "EVT-1", "CLM-1")
+_ROUTED_IDS += ("EVD-1", "TRK-1", "QST-1", "X")
+
+
+def _plain(value: object) -> object:
+    """Return ``value`` as the JSON the fixture stores it as."""
+    if isinstance(value, enum.Enum):
+        return _plain(value.value)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return {f.name: _plain(getattr(value, f.name)) for f in dataclasses.fields(value)}
+    if isinstance(value, dict):
+        return {str(k): _plain(v) for k, v in value.items()}
+    if isinstance(value, (set, frozenset)):
+        return sorted(_plain(v) for v in value)  # type: ignore[type-var]
+    if isinstance(value, (list, tuple)):
+        return [_plain(v) for v in value]
+    return value
+
+
+def _shipped_registry() -> object:
     columns = ("id", "key", "group", "subject_required", "palette_visible", "go_letter")
     columns += ("step_leaf", "escape", "tab_owner", "via_leaf")
-    assert [tuple(getattr(s, c) for c in columns) for s in ROUTES] == [
-        tuple(getattr(s, c) for c in columns) for s in theirs.ROUTES
-    ]
-    assert dict(REGISTRY.go_map) == theirs.GO_MAP
-    assert REGISTRY.route_list == theirs.ROUTE_LIST
-    assert dict(REGISTRY.step_leaves) == theirs.STEP_LEAF
-    assert dict(REGISTRY.via_leaves) == theirs.VIA_LEAF
-    assert dict(REGISTRY.escapes) == theirs.PARENT_ROUTE
-    assert dict(REGISTRY.tab_owners) == theirs.TAB_OWNER
-    assert REGISTRY.overlay_routes == set(theirs.OVERLAY_ROUTES)
-    for route in REGISTRY.ids:
-        assert REGISTRY.route_word(route) == theirs.route_word(route)
-        assert REGISTRY.subj_now(route, None) == theirs.subj_now(route, None)
-    assert dict(registry.ROUTE_OF) == theirs.ROUTE_OF
-    assert dict(registry.KIND) == theirs.KIND
-    assert registry.SECTIONS == theirs.SECTIONS
-    assert registry.OVERLAYS == theirs.OVERLAYS
-    assert registry.OVERLAY_ARROWS == theirs.OVERLAY_ARROWS
-    assert registry.DRAWERS == theirs.DRAWERS
-    for entity_id in (
-        "RUN-1",
-        "BAT-1",
-        "MLS-1",
-        "REL-1",
-        "CAM-1",
-        "EAWF-1",
-        "EVT-1",
-        "CLM-1",
-        "EVD-1",
-        "TRK-1",
-        "QST-1",
-        "X",
-    ):
-        assert route_for_id(entity_id) == theirs.route_for_id(entity_id)
-        assert route_of(entity_id) == theirs.route_of(entity_id)
-        assert kind_of(entity_id) == theirs.kind_of(entity_id)
+    return _plain(
+        {
+            "routes": [[getattr(spec, c) for c in columns] for spec in ROUTES],
+            "go_map": dict(REGISTRY.go_map),
+            "route_list": REGISTRY.route_list,
+            "step_leaves": dict(REGISTRY.step_leaves),
+            "via_leaves": dict(REGISTRY.via_leaves),
+            "escapes": dict(REGISTRY.escapes),
+            "tab_owners": dict(REGISTRY.tab_owners),
+            "overlay_routes": REGISTRY.overlay_routes,
+            "route_word": {route: REGISTRY.route_word(route) for route in REGISTRY.ids},
+            "subj_now": {route: REGISTRY.subj_now(route, None) for route in REGISTRY.ids},
+            "route_of": dict(registry.ROUTE_OF),
+            "kind": dict(registry.KIND),
+            "sections": registry.SECTIONS,
+            "overlays": registry.OVERLAYS,
+            "overlay_arrows": registry.OVERLAY_ARROWS,
+            "drawers": registry.DRAWERS,
+            "routed": {
+                entity_id: [route_for_id(entity_id), route_of(entity_id), kind_of(entity_id)]
+                for entity_id in _ROUTED_IDS
+            },
+        }
+    )
+
+
+def test_route_registry_matches_its_shipped_fixture() -> None:
+    # the chassis this was once compared with is gone, so the fixture freezes shipped behaviour
+    shipped = json.loads(SHIPPED_REGISTRY.read_text(encoding="utf-8"))
+    assert _shipped_registry() == shipped

@@ -207,16 +207,13 @@ def test_model_for_runtime_codex_routes_bare_openai_ids() -> None:
     """A codex spawn resolves its OWN vendor model (bare OpenAI id) per tier.
 
     The default codex ladder is the set a ChatGPT-account codex serves:
-    ``gpt-5.3-codex-spark`` for the cheap tier and the ``gpt-5.5`` flagship for
+    ``gpt-6-luna`` for the cheap tier and the ``gpt-6.1-sol`` workhorse for
     the mid + top tiers (the API-key-only ``gpt-5*`` ids that account rejects
     are no longer the default).
     """
-    assert (
-        model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.XS, "codex")
-        == "gpt-5.3-codex-spark"
-    )
-    assert model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.M, "codex") == "gpt-5.5"
-    assert model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.XL, "codex") == "gpt-5.5"
+    assert model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.XS, "codex") == "gpt-6-luna"
+    assert model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.M, "codex") == "gpt-6.1-sol"
+    assert model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.XL, "codex") == "gpt-6.1-sol"
 
 
 def test_model_for_runtime_opencode_routes_provider_model_form() -> None:
@@ -235,11 +232,11 @@ def test_model_for_runtime_preserves_tier_across_vendors() -> None:
     """Each runtime resolves its own model at the SAME capability tier.
 
     Boundary: a reasoning-heavy role at M effort bumps to the top tier; that
-    bump must carry across every vendor (opus / gpt-5.5 / anthropic-opus).
+    bump must carry across every vendor (opus / gpt-6.1-sol / anthropic-opus).
     """
     role, effort = AgentSessionRole.REVIEWER, EffortBucket.M
     assert model_for_runtime(role, effort, "claude") == "claude-opus-4-8"
-    assert model_for_runtime(role, effort, "codex") == "gpt-5.5"
+    assert model_for_runtime(role, effort, "codex") == "gpt-6.1-sol"
     assert model_for_runtime(role, effort, "opencode") == "anthropic/claude-opus-4-8"
 
 
@@ -276,7 +273,7 @@ def test_model_for_runtime_forwards_override_table_tier() -> None:
     }
     assert (
         model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.XS, "codex", table=override)
-        == "gpt-5.5"
+        == "gpt-6.1-sol"
     )
     assert (
         model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.XS, "opencode", table=override)
@@ -297,7 +294,7 @@ def test_model_for_runtime_off_tier_override_falls_back_to_mid_tier() -> None:
         )
     }
     model = model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.S, "codex", table=override)
-    assert model == "gpt-5.5"
+    assert model == "gpt-6.1-sol"
     assert lookup_pricing(model) is not None
 
 

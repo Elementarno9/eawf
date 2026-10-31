@@ -15,8 +15,17 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from textual import _wait
 
 _TIER_DIR = Path(__file__).parent
+
+# A pilot pause waits until the process idles, sampling in sleeps of
+# ``SLEEP_GRANULARITY`` (20 ms by default) and calling the process idle once
+# one sleep burns under ``SLEEP_IDLE`` of CPU. Every settle pauses at least
+# twice, so the 20 ms sample floor was most of each key's cost. Sampling every
+# 5 ms keeps the same 5 % CPU ratio as the idle test and the same 1 s cap.
+_wait.SLEEP_GRANULARITY = 1 / 200
+_wait.SLEEP_IDLE = _wait.SLEEP_GRANULARITY / 20.0
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:

@@ -254,12 +254,14 @@ class CanaryLauncher:
         jail: dict[str, str] | None = None,
         wrapped: bool = True,
         seatbelt: bool = False,
+        failure: str | None = None,
     ) -> None:
         """Answer *answer* (every attempt denied by default) and file a report when *report*.
 
         The launch records the Claude wrapper around a stand-in jail treating
         each attempt per *jail* (refusing all by default), around the real
         seatbelt jail when *seatbelt*, or no wrapper at all unless *wrapped*.
+        A *failure* ends the turn failed with that error text, unreported.
         """
         self.provider_kind = provider_kind
         self.capsule: AuthorityCapsule | None = None
@@ -271,6 +273,7 @@ class CanaryLauncher:
         self._jail = write_jail(canary.root.parent / "jail", jail)
         self._wrapped = wrapped
         self._seatbelt = seatbelt
+        self._failure = failure
 
     async def launch(self, request: NativeLaunchRequest) -> NativeLaunchOutcome:
         """Record the wrapper, announce the worker and run its turn in the background."""
@@ -300,6 +303,8 @@ class CanaryLauncher:
         )
 
     async def _turn(self, request: NativeLaunchRequest) -> TurnOutcome:
+        if self._failure is not None:
+            return TurnOutcome(exit_kind="failed", error_text=self._failure)
         if self._report:
             await asyncio.to_thread(self._file_report, request)
         return TurnOutcome(exit_kind="completed", answer_text=self._answer)
@@ -402,6 +407,73 @@ def test_the_walk_keeps_the_driver_certification_its_certify_stage_wrote(
     assert certification.stage_history == tuple(journaled)
 
 
+def test_the_walk_keeps_the_version_range_it_was_asked_to_certify(tmp_path: Path) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+    version_range = {"min_version": CLAUDE_VERSION, "max_version": "2.1.399"}
+
+    answer = certify(
+        ctx,
+        canary,
+        CanaryLauncher(ctx, canary),
+        task=TASK_KEY,
+        actor=ACTOR,
+        version_range=version_range,
+    )
+
+    row = MachineCertification.model_validate(answer)
+    assert row.certification is not None
+    assert row.version_range is not None
+    assert row.version_range.model_dump() == version_range
+    assert row.covers("2.1.399") and not row.covers("2.1.400")
+
+
+def test_a_range_excluding_the_installed_version_walks_no_canary(tmp_path: Path) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+    launcher = CanaryLauncher(ctx, canary)
+
+    with pytest.raises(DaemonValidationError, match="runtime_range_excludes_installed"):
+        certify(
+            ctx,
+            canary,
+            launcher,
+            task=TASK_KEY,
+            actor=ACTOR,
+            version_range={"min_version": "2.1.300", "max_version": "2.1.399"},
+        )
+
+    rows = read_machine_certifications(canary.root / ".ea" / "state.json")
+    assert [(row.outcome, row.stages) for row in rows] == [("certified", ())]
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        pytest.param(
+            {"version_range": {"min_version": CLAUDE_VERSION, "max_version": "2.1.399"}},
+            id="range-without-task",
+        ),
+        pytest.param(
+            {
+                "task": TASK_KEY,
+                "actor": ACTOR,
+                "version_range": {"min_version": "2.1.399", "max_version": CLAUDE_VERSION},
+            },
+            id="empty-range",
+        ),
+    ],
+)
+def test_the_verb_refuses_a_range_it_cannot_certify(tmp_path: Path, params: dict[str, Any]) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+
+    with pytest.raises(DaemonValidationError, match="schema_validation_failed"):
+        certify(ctx, canary, CanaryLauncher(ctx, canary), **params)
+
+    assert read_machine_certifications(canary.root / ".ea" / "state.json") == ()
+
+
 def test_the_canary_is_a_dispatched_run_under_the_task_left_planned(tmp_path: Path) -> None:
     canary = make_tree(tmp_path)
     ctx = method_ctx(tmp_path / "runtime")
@@ -480,6 +552,37 @@ def test_a_canary_that_files_no_report_attests_no_semantic_tools(tmp_path: Path)
 
     assert row.outcome == "certified"
     assert "semantic_tools" not in {item.capability_id for item in row.capabilities}
+
+
+#: What a ChatGPT-account codex answers a turn on a model it no longer serves.
+RETIRED_MODEL_ERROR: Final = (
+    "The 'gpt-5.5' model is not supported when using Codex with a ChatGPT account."
+)
+
+
+def test_a_canary_whose_turn_fails_fails_the_canary_naming_the_cause(tmp_path: Path) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+
+    row = walk(ctx, canary, CanaryLauncher(ctx, canary, failure=RETIRED_MODEL_ERROR))
+
+    assert row.outcome == "quarantined"
+    assert row.reason_code == "capability_not_observed"
+    assert row.findings == (f"worker_turn: failed: {RETIRED_MODEL_ERROR}",)
+    assert RETIRED_MODEL_ERROR in row.reason
+    assert journal(canary, row)[-1] == ("canary", "failed")
+
+
+def test_a_failed_turn_naming_a_path_is_withheld_from_the_row(tmp_path: Path) -> None:
+    canary = make_tree(tmp_path)
+    ctx = method_ctx(tmp_path / "runtime")
+    leaked = f"cannot open {tmp_path / 'secret.toml'}"
+
+    row = walk(ctx, canary, CanaryLauncher(ctx, canary, failure=leaked))
+
+    assert row.outcome == "quarantined"
+    assert str(tmp_path) not in row.reason
+    assert all(str(tmp_path) not in line for line in row.findings)
 
 
 def dispatch_task(ctx: MethodContext, canary: CanaryProvision) -> ParkedLauncher:

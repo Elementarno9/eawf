@@ -52,7 +52,6 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.publication import PublicationOperation, PublicationOperationStatus
 from eawf.kernel.spec.release import (
     Release,
@@ -68,7 +67,7 @@ from eawf.platform.artifacts.validation import (
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import burn, show
 from eawf.surfaces.cli.app import app
-from eawf.workflow.evidence._io import load_state
+from eawf.workflow.evidence._io import ContractView
 from eawf.workflow.evidence.measured_contract import (
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -110,6 +109,7 @@ from eawf.workflow.release.settlement import observe_target
 from eawf.workflow.release.target_machine import advance_target_attempt
 from eawf.workflow.release.train import V07_TRAIN
 from eawf.workflow.verify.release_readiness import ReleaseReadiness, compute_readiness
+from tests._contract_view import contract_view
 from tests._epoch2_helpers import lay_contract_tree, lay_epoch2_tree
 from tests._release_helpers import (
     MANIFEST_DIGEST,
@@ -794,9 +794,9 @@ def at_status(release: Release, status: ReleaseStatus) -> Release:
     )
 
 
-def state_with_dev2_contracts() -> State:
+def state_with_dev2_contracts() -> ContractView:
     """Return the fixture state with all three dev2 contracts promoted."""
-    state = load_state(_EMPTY_STATE)
+    state = contract_view(_EMPTY_STATE)
     for contract_id in required_contract_ids(DEV2_VERSION):
         promote_measured_contract(
             state,

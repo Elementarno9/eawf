@@ -54,7 +54,7 @@ DEV3_VERSION = "0.7.0.dev3"
 DEV3_RELEASE_KEY = "REL-0.7.0.dev3"
 
 #: A rung whose configuration is not authored (error-path fixture).
-STABLE_VERSION = "0.7.0"
+UNAUTHORED_VERSION = "0.8.0"
 
 #: The real, committed W37CANARY acceptance bundle. Resolves against
 #: ``.ea/artifacts/evidence/2026-09-18-dev3-conformance/native-canary-evidence.json``.
@@ -106,7 +106,7 @@ def test_checkpoint_config_still_resolves_dev2_with_no_matching_export() -> None
 def test_checkpoint_config_refuses_an_unauthored_version(tmp_path: Path) -> None:
     """Error path: an unauthored version reports NotFound, not cardinality."""
     with pytest.raises(cli_errors.UserError) as excinfo:
-        release_tag._checkpoint_config(STABLE_VERSION, repo_root=tmp_path)
+        release_tag._checkpoint_config(UNAUTHORED_VERSION, repo_root=tmp_path)
     assert excinfo.value.kind == "NotFound"
 
 
@@ -143,9 +143,9 @@ def _stub_sweep_side_effects(monkeypatch: pytest.MonkeyPatch) -> None:
     """Replace the sweep and the git side effects ``tag``/``preflight`` run.
 
     Only ``_checkpoint_config`` -- the piece under test -- runs for
-    real; every other signal and every subprocess call is stubbed, so a
-    green result below is attributable to config resolution alone, not
-    to this checkout's git or CI-receipt state.
+    real; every other signal, the CI-run lookup and every subprocess call
+    is stubbed, so a green result below is attributable to config
+    resolution alone, not to this checkout's git, CI or receipt state.
     """
 
     def fake_sweep_for_tag(config: Any, **_kwargs: Any) -> Any:
@@ -154,6 +154,7 @@ def _stub_sweep_side_effects(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("eawf.runtime.release.sweep_for_tag", fake_sweep_for_tag)
     monkeypatch.setattr(release_tag, "_dirty_paths", lambda repo_root: ())
     monkeypatch.setattr(release_tag, "_head_revision", lambda repo_root: "a" * 40)
+    monkeypatch.setattr(release_tag, "_ci_refusal", lambda repo_root, **_kwargs: None)
 
 
 def _run_preflight(version: str) -> int:
@@ -179,7 +180,6 @@ def _run_tag(version: str, *, push: bool, dry_run: bool) -> int:
             version=version,
             push=push,
             remote="origin",
-            force=False,
             waive_dirty_tree=None,
             dry_run=dry_run,
         )

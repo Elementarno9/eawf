@@ -31,7 +31,7 @@ from typing import Final, Literal
 import orjson
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from eawf.workflow.skills.census import epoch1_nouns
+from eawf.workflow.skills.census import retired_nouns
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +41,8 @@ BUNDLE_TARGET_EPOCH: Final = 2
 #: Where the publication sits, relative to the bundle root.
 PUBLICATION_FILENAME: Final = "eawf-publication.json"
 
-#: The command that moves a repository to the epoch a bundle targets.
-MIGRATION_COMMAND: Final = "eawf migrate status"
+#: The command that explains how a repository reaches the epoch a bundle targets.
+MIGRATION_COMMAND: Final = "eawf help upgrade-from-0.6"
 
 #: The file kinds the epoch-1 noun census covers.
 _CENSUSED_KINDS: Final = frozenset({"skill", "manifest", "hook"})
@@ -128,7 +128,7 @@ class BundleEpochMismatchError(RuntimeError):
         if repository_epoch < bundle_epoch:
             guidance = (
                 f"migrate the repository to epoch {bundle_epoch} first; `{MIGRATION_COMMAND}`"
-                " shows where the migration stands"
+                " gives the steps"
             )
         else:
             guidance = (
@@ -305,7 +305,7 @@ def publication_findings(root: Path) -> tuple[str, ...]:
     )
     for rendered in current.files:
         if rendered.kind in _CENSUSED_KINDS:
-            nouns = epoch1_nouns((root / rendered.path).read_text(encoding="utf-8"))
+            nouns = retired_nouns((root / rendered.path).read_text(encoding="utf-8"))
             findings.extend(f"{rendered.path} names epoch-1 noun {noun!r}" for noun in nouns)
     return tuple(findings)
 

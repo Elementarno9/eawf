@@ -1,3 +1,4 @@
+# noqa: EAWF010 every step is a method of one journaled run; split seam: the pre-tag gates
 """One resumable pipeline from a merged Milestone to a baked, advanced checkpoint.
 
 A checkpoint cannot be pinned before its tag is pushed from ``main``:
@@ -6,9 +7,10 @@ tag's publish jobs write. Walking the rest by hand after every merge
 made each rung's approval and bake a separate piece of work. This
 module runs the whole post-merge walk as one verb instead:
 
-pin the source, fetch the build receipts, tag and push (only with the
-operator's publish flag), wait for the publish runs, open the record,
-pin the candidate, prove the gates, sweep readiness, approve, publish,
+pin the source, wait for a successful push-event CI run on exactly that
+commit, open the record, fetch the build receipts, sweep preflight, tag
+and push (only with the operator's publish flag), wait for the publish
+runs, pin the candidate, prove the gates, sweep readiness, approve, publish,
 reconcile, observe to BAKED, advance the train, check by trailer that
 main carries the commits each Batch of the released Milestone pinned,
 and land the evidence locally, recording each file's sha256 in the
@@ -62,6 +64,12 @@ from eawf.kernel.state.types import UtcDatetime
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.lock import portalock
 from eawf.workflow.release.advance import TrainAdvanceRecord
+from eawf.workflow.release.ci_runs import (
+    CI_WORKFLOW,
+    CiRun,
+    failed_push_runs,
+    green_push_run,
+)
 from eawf.workflow.release.pipeline_files import flatten_artifacts
 from eawf.workflow.release.pipeline_receipts import RECEIPT_FILENAMES, read_build_receipt
 from eawf.workflow.release.publication_receipt import (
@@ -77,10 +85,12 @@ class PipelineStep(StrEnum):
     """The post-merge steps, in the order they run."""
 
     PIN_SOURCE = "pin_source"
+    CI_GREEN = "ci_green"
+    CREATE = "create"
     BUILD_RECEIPTS = "build_receipts"
+    PREFLIGHT = "preflight"
     TAG = "tag"
     PUBLISH_WAIT = "publish_wait"
-    CREATE = "create"
     CANDIDATE = "candidate"
     RECEIPTS = "receipts"
     READINESS = "readiness"
@@ -94,7 +104,10 @@ class PipelineStep(StrEnum):
 
 
 #: Declaration order is run order; the journal's resume point is the
-#: first step of this tuple it has no row for.
+#: first step of this tuple it has no row for. The tag push publishes, so
+#: it follows green push CI on the pinned commit, an open record and a
+#: green preflight: a tag pushed first leaves a publication no record or
+#: CI run stands behind.
 PIPELINE_STEPS: Final[tuple[PipelineStep, ...]] = tuple(PipelineStep)
 
 
@@ -104,6 +117,8 @@ class PipelineRefusalCode(StrEnum):
     DIRTY_RELEASE_TREE = "dirty_release_tree"
     SOURCE_NOT_ON_MAIN = "source_not_on_main"
     SOURCE_MOVED = "source_moved"
+    CI_NOT_GREEN = "ci_not_green"
+    CI_RUN_FAILED = "ci_run_failed"
     PROOF_TOOLCHAIN_MISSING = "proof_toolchain_missing"
     BUILD_RECEIPTS_UNAVAILABLE = "build_receipts_unavailable"
     RELEASE_NOT_READY = "release_not_ready"
@@ -277,6 +292,10 @@ class PipelineHost(Protocol):
         """Sweep readiness at *source*; ``None`` when ready, else the first red row."""
         ...
 
+    def ci_runs(self, sha: str) -> tuple[CiRun, ...]:
+        """Return the runs of :data:`CI_WORKFLOW` the forge holds for commit *sha*."""
+        ...
+
     def remote_tag(self, tag: str) -> str | None:
         """Return the commit *tag* points at on the remote, or ``None``."""
         ...
@@ -329,6 +348,11 @@ EVIDENCE_DIGEST_FACT_PREFIX: Final[str] = "sha256:"
 #: The publish workflows the tag push starts; together they write one
 #: publication receipt per target.
 PUBLISH_WORKFLOWS: Final[tuple[str, ...]] = ("release.yaml", "plugin-release.yaml")
+
+#: Lookups the CI wait makes, and the wait between them: a push run of
+#: the full matrix takes the better part of an hour.
+CI_GREEN_ATTEMPTS: Final[int] = 90
+CI_GREEN_BACKOFF_SECONDS: Final[float] = 60.0
 
 #: The programs the pipeline shells out to. The gate proofs run ``just``,
 #: ``uv`` and ``uvx`` inside a runtime whose PATH hides other agent CLIs.
@@ -672,10 +696,12 @@ class _PipelineRun:
         """Run every step the journal does not hold, in order."""
         handlers: dict[PipelineStep, Callable[[PipelineStep], dict[str, str]]] = {
             PipelineStep.PIN_SOURCE: self._pin_source,
+            PipelineStep.CI_GREEN: self._ci_green,
+            PipelineStep.CREATE: self._create,
             PipelineStep.BUILD_RECEIPTS: self._build_receipts,
+            PipelineStep.PREFLIGHT: self._preflight,
             PipelineStep.TAG: self._tag,
             PipelineStep.PUBLISH_WAIT: self._publish_wait,
-            PipelineStep.CREATE: self._create,
             PipelineStep.CANDIDATE: self._candidate,
             PipelineStep.RECEIPTS: self._receipts,
             PipelineStep.READINESS: self._readiness,
@@ -827,6 +853,64 @@ class _PipelineRun:
             "evidence_dir": f"{EVIDENCE_DIRNAME}/{run_date}-{self.label}-publication",
         }
 
+    def _ci_runs(self, step: PipelineStep) -> tuple[CiRun, ...]:
+        try:
+            return self.host.ci_runs(self.source)
+        except PipelineHostError as exc:
+            raise PipelineRefusal(
+                step,
+                PipelineRefusalCode.CI_NOT_GREEN,
+                detail=f"the {CI_WORKFLOW} runs of {self.source} could not be read: {exc}",
+                remedy="fix the forge access (gh auth status), then rerun",
+            ) from exc
+
+    def _ci_green(self, step: PipelineStep) -> dict[str, str]:
+        for attempt in range(1, CI_GREEN_ATTEMPTS + 1):
+            runs = self._ci_runs(step)
+            green = green_push_run(runs, self.source)
+            if green is not None:
+                return {"ci_run": str(green.database_id)}
+            failed = ", ".join(
+                f"{run.database_id} {run.conclusion}" for run in failed_push_runs(runs, self.source)
+            )
+            if failed:
+                raise PipelineRefusal(
+                    step,
+                    PipelineRefusalCode.CI_RUN_FAILED,
+                    detail=f"every {CI_WORKFLOW} push run of {self.source} failed ({failed})",
+                    remedy="fix main and release the merge that turns it green, or rerun the "
+                    "failed run on the forge, then rerun",
+                )
+            if attempt < CI_GREEN_ATTEMPTS:
+                self.host.sleep(CI_GREEN_BACKOFF_SECONDS)
+        raise PipelineRefusal(
+            step,
+            PipelineRefusalCode.CI_NOT_GREEN,
+            detail=f"no successful {CI_WORKFLOW} push run of {self.source} after "
+            f"{CI_GREEN_ATTEMPTS} lookups",
+            remedy="check the push run of the merge on the forge, then rerun",
+        )
+
+    def _preflight(self, step: PipelineStep) -> dict[str, str]:
+        green = green_push_run(self._ci_runs(step), self.source)
+        if green is None:
+            raise PipelineRefusal(
+                step,
+                PipelineRefusalCode.CI_NOT_GREEN,
+                detail=f"commit {self.source} has no successful {CI_WORKFLOW} push run",
+                remedy="rerun with --redo ci_green once the push run of the merge is green",
+            )
+        self._require_clean_tree(step)
+        blocker = self.host.preflight(self.version, source=self.source)
+        if blocker is not None:
+            raise PipelineRefusal(
+                step,
+                PipelineRefusalCode.RELEASE_NOT_READY,
+                detail=blocker,
+                remedy=f"run `eawf release preflight {self.version}` for the full sweep",
+            )
+        return {"ci_run": str(green.database_id), "ready": "true"}
+
     def _build_receipts_current(self) -> bool:
         try:
             build = read_build_receipt(self.layout.repo_root)
@@ -874,14 +958,6 @@ class _PipelineRun:
                 )
             return {"tag": tag, "pushed": "earlier"}
         self._require_clean_tree(step)
-        blocker = self.host.preflight(self.version, source=self.source)
-        if blocker is not None:
-            raise PipelineRefusal(
-                step,
-                PipelineRefusalCode.RELEASE_NOT_READY,
-                detail=blocker,
-                remedy=f"run `eawf release preflight {self.version}` for the full sweep",
-            )
         if not self.options.publish:
             raise PipelineRefusal(
                 step,
@@ -1342,6 +1418,8 @@ def run_post_merge_pipeline(
 
 
 __all__ = [
+    "CI_GREEN_ATTEMPTS",
+    "CI_GREEN_BACKOFF_SECONDS",
     "EVIDENCE_DIGEST_FACT_PREFIX",
     "EVIDENCE_DIRNAME",
     "PIPELINE_DIRNAME",

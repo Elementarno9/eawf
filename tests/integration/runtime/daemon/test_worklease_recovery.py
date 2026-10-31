@@ -33,6 +33,7 @@ from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.workspace_lease import RECONCILE_METHOD
 from eawf.runtime.daemon.native_guard import NativeAuthorityRefusedError
+from eawf.runtime.daemon.run_supervisor import supervisor_of
 from eawf.runtime.workspace.lease import (
     MCP_ARTIFACT_DIRNAME,
     QUARANTINE_LOCATOR,
@@ -129,7 +130,7 @@ def test_reconcile_releases_an_expired_lease_over_a_clean_worktree(
     target = workspace_path(context, handle=read_lease(context, lease_id=lease_id).workspace_handle)
     assert target.is_dir()
 
-    report = reconcile_root(context, now=JUDGED)
+    report = reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     assert (report.examined, report.expired, report.released, report.quarantined) == (1, 1, 1, 0)
     assert read_lease(context, lease_id=lease_id).status is LeaseStatus.RELEASED
@@ -154,7 +155,7 @@ def test_reconcile_releases_a_revoked_lease_over_a_clean_worktree(
     ).lease_id
     revoke_lease(context, lease_id=lease_id, now=JUDGED)
 
-    report = reconcile_root(context, now=JUDGED)
+    report = reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     assert (report.expired, report.released, report.quarantined) == (0, 1, 0)
     assert read_lease(context, lease_id=lease_id).status is LeaseStatus.RELEASED
@@ -178,7 +179,7 @@ def test_a_withdrawing_lease_releases_once_its_residue_is_proven(
     revoke_lease(context, lease_id=lease_id, now=JUDGED, hard=False)
     assert read_lease(context, lease_id=lease_id).status is LeaseStatus.REVOKING
 
-    report = reconcile_root(context, now=JUDGED)
+    report = reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     assert (report.released, report.quarantined) == (1, 0)
     assert read_lease(context, lease_id=lease_id).status is LeaseStatus.RELEASED
@@ -203,7 +204,7 @@ def test_a_withdrawing_lease_waits_while_its_residue_is_unproven(
     (target / "unsaved.txt").write_text("still here", encoding="utf-8")
     revoke_lease(context, lease_id=lease.lease_id, now=JUDGED, hard=False)
 
-    report = reconcile_root(context, now=JUDGED)
+    report = reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     assert report.untouched == (lease.lease_id,)
     assert (report.released, report.quarantined) == (0, 0)
@@ -225,7 +226,7 @@ def test_reconcile_quarantines_an_uncommitted_worktree_and_keeps_its_bytes(
     unsaved = target / "src" / "module.py"
     unsaved.write_text("x = 2  # the work nobody has seen\n", encoding="utf-8")
 
-    report = reconcile_root(context, now=JUDGED)
+    report = reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     assert (report.released, report.quarantined) == (0, 1)
     lease = read_lease(context, lease_id=lease_id)
@@ -253,7 +254,7 @@ def test_reconcile_releases_a_worktree_holding_only_the_isolation_dir(
     isolation = isolation_dir_of(context, lease_id)
     target = isolation.parent
 
-    report = reconcile_root(context, now=JUDGED)
+    report = reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     assert (report.released, report.quarantined) == (1, 0)
     assert read_lease(context, lease_id=lease_id).status is LeaseStatus.RELEASED
@@ -270,7 +271,7 @@ def test_the_isolation_dir_does_not_hide_a_worker_edit_beside_it(
     isolation = isolation_dir_of(context, lease_id)
     (isolation.parent / "hello.txt").write_text("canary\n", encoding="utf-8")
 
-    reconcile_root(context, now=JUDGED)
+    reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     lease = read_lease(context, lease_id=lease_id)
     assert lease.status is LeaseStatus.QUARANTINED
@@ -293,7 +294,7 @@ def test_a_staged_file_under_the_isolation_dir_is_still_residue(
         check=True,
     )
 
-    reconcile_root(context, now=JUDGED)
+    reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     lease = read_lease(context, lease_id=lease_id)
     assert lease.status is LeaseStatus.QUARANTINED
@@ -309,7 +310,7 @@ def test_quarantine_record_is_readable_under_the_recovery_handle(
     handle = read_lease(context, lease_id=lease_id).workspace_handle
     (workspace_path(context, handle=handle) / "stray.txt").write_text("keep", encoding="utf-8")
 
-    reconcile_root(context, now=JUDGED)
+    reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     lease = read_lease(context, lease_id=lease_id)
     record = QuarantineRecord.model_validate(
@@ -331,7 +332,7 @@ def test_quarantine_record_states_no_host_path(
     handle = read_lease(context, lease_id=lease_id).workspace_handle
     (workspace_path(context, handle=handle) / "stray.txt").write_text("keep", encoding="utf-8")
 
-    reconcile_root(context, now=JUDGED)
+    reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     [record] = quarantine_records(context)
     rendered = json.dumps(record.model_dump(mode="json"))
@@ -350,7 +351,7 @@ def test_reconcile_quarantines_a_worktree_that_committed_unintegrated_work(
     subprocess.run(["git", "add", "."], cwd=target, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "worker output"], cwd=target, check=True)
 
-    reconcile_root(context, now=JUDGED)
+    reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     lease = read_lease(context, lease_id=lease_id)
     assert lease.status is LeaseStatus.QUARANTINED
@@ -367,7 +368,7 @@ def test_reconcile_quarantines_a_workspace_that_is_gone(
     target = workspace_path(context, handle=read_lease(context, lease_id=lease_id).workspace_handle)
     shutil.rmtree(target)
 
-    reconcile_root(context, now=JUDGED)
+    reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     lease = read_lease(context, lease_id=lease_id)
     assert lease.status is LeaseStatus.QUARANTINED
@@ -394,7 +395,7 @@ def test_reconcile_leaves_an_unexpired_active_lease_alone(
         ttl=timedelta(hours=6),
     ).lease_id
 
-    report = reconcile_root(context, now=JUDGED)
+    report = reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     assert report.untouched == (lease_id,)
     assert (report.released, report.quarantined) == (0, 0)
@@ -410,10 +411,12 @@ def test_a_second_pass_neither_re_releases_nor_re_quarantines(
     """Terminal leases are left as they are, so the pass is idempotent."""
     _, context = canary
     clean = lease_the_repo(context)
-    reconcile_root(context, now=JUDGED)
+    reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
     first = lease_path(context, lease_id=clean).read_bytes()
 
-    second = reconcile_root(context, now=JUDGED + timedelta(hours=1))
+    second = reconcile_root(
+        context, now=JUDGED + timedelta(hours=1), busy=supervisor_of(context).busy
+    )
 
     assert second.untouched == (clean,)
     assert (second.released, second.quarantined) == (0, 0)
@@ -428,9 +431,9 @@ def test_a_second_pass_files_no_second_quarantine_record(
     lease_id = lease_the_repo(context)
     handle = read_lease(context, lease_id=lease_id).workspace_handle
     (workspace_path(context, handle=handle) / "stray.txt").write_text("keep", encoding="utf-8")
-    reconcile_root(context, now=JUDGED)
+    reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
-    reconcile_root(context, now=JUDGED + timedelta(hours=1))
+    reconcile_root(context, now=JUDGED + timedelta(hours=1), busy=supervisor_of(context).busy)
 
     assert len(quarantine_records(context)) == 1
 
@@ -451,7 +454,7 @@ def test_reconcile_of_one_root_leaves_another_roots_leases_untouched(
         second, handle=read_lease(second, lease_id=other_id).workspace_handle
     )
 
-    report = reconcile_root(first, now=JUDGED)
+    report = reconcile_root(first, now=JUDGED, busy=supervisor_of(first).busy)
 
     assert report.root_id == first.identity.root_id
     assert report.examined == 1
@@ -482,7 +485,7 @@ def test_reconcile_never_touches_a_production_roots_worktree_ledger(
     (ledger_root / "worktrees" / "p33-w61" / "README.md").write_text("held", encoding="utf-8")
     before = tree_digest(ledger_root)
 
-    reconcile_root(context, now=JUDGED)
+    reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     assert tree_digest(ledger_root) == before
 
@@ -510,6 +513,6 @@ def test_reconcile_over_a_root_with_no_leases_reports_nothing(
 ) -> None:
     """The empty boundary: a root that has issued none sweeps cleanly."""
     _, context = canary
-    report = reconcile_root(context, now=JUDGED)
+    report = reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
     assert (report.examined, report.released, report.quarantined) == (0, 0, 0)
     assert report.untouched == ()

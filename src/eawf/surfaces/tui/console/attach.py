@@ -357,56 +357,27 @@ def failed_state(
     )
 
 
-def migration_state(chrome: ConsoleChrome, target_root: Path) -> EntryState:
-    """Return the migration-required frame: the four paths in their safety order.
+def migration_state(chrome: ConsoleChrome) -> EntryState:
+    """Return the migration-required frame: the upgrade guide, then the backup.
 
-    The order is the safety property: the dry run reports only, the backup precedes the
-    apply, the apply needs the dry run's digest, and rollback exists once applied. None
-    of them runs here.
+    The cutover that carries a 0.6 tree to a generation shipped last in 0.7.0rc4,
+    so the frame points at the guide that installs it rather than at a verb this
+    release lacks. None of them runs here.
 
     Args:
         chrome: The packaged chrome.
-        target_root: The declared tree, the one ``--target-root`` names.
 
     Returns:
         The migration-required state.
     """
-    target = str(target_root)
-    plan = ("migrate", "epoch2", "--plan", "--snapshot-root", "<SNAPSHOT>")
-    plan_keys = (
-        "--allowlist",
-        "<ALLOWLIST>",
-        "--workspace-key",
-        "<KEY>",
-        "--project-key",
-        "<KEY>",
-        "--repository-key",
-        "<KEY>",
-    )
     commands = (
-        EntryCommand(argv=(*plan, *plan_keys), purpose="report only · changes nothing"),
+        EntryCommand(
+            argv=("help", "upgrade-from-0.6"),
+            purpose="install 0.7.0rc4 and run its cutover · this release has none",
+        ),
         EntryCommand(argv=("backup", "create"), purpose="written before anything is applied"),
-        EntryCommand(
-            argv=(
-                "migrate",
-                "epoch2",
-                "--apply",
-                "--plan-digest",
-                "<DIGEST>",
-                "--target-root",
-                target,
-                "--snapshot-root",
-                "<SNAPSHOT>",
-                *plan_keys,
-            ),
-            purpose="requires the dry run to have passed",
-        ),
-        EntryCommand(
-            argv=("migrate", "epoch2", "--rollback", "--target-root", target),
-            purpose="restores the backup · available after apply",
-        ),
     )
-    names = ("dry run", "backup", "apply", "rollback")
+    names = ("guide", "backup")
     return _base(chrome, "migration").model_copy(
         update={
             "panes": (
@@ -428,7 +399,6 @@ def _clock(row: CutoverJournalRow) -> str:
 
 def interrupted_state(
     chrome: ConsoleChrome,
-    target_root: Path,
     journal: Sequence[CutoverJournalRow],
     *,
     why: str,
@@ -438,18 +408,17 @@ def interrupted_state(
     Before a generation is selected the previous one still rules, and the exits are to
     resume from the journal or discard the partial generation. After selection the
     marker is still unwritten, so readers still read the previous generation, and the
-    exit is to reconcile the selected one from the same journal.
+    exit is to reconcile the selected one from the same journal. Every exit runs under
+    0.7.0rc4, the last release with the cutover, so the frame names its guide.
 
     Args:
         chrome: The packaged chrome.
-        target_root: The declared tree.
         journal: The cutover journal's rows; empty when none could be read.
         why: Why the apply is judged stopped, in words.
 
     Returns:
         The interrupted state.
     """
-    target = str(target_root)
     selected = any(row.stage is CutoverStage.GENERATION_SELECTED for row in journal)
     applied = [row for row in journal if row.stage in _APPLY_STAGES]
     if applied:
@@ -460,12 +429,7 @@ def interrupted_state(
     else:
         stopped = f"{_UNAVAILABLE} no journal row could be read"
         reached = _UNAVAILABLE
-    recover = EntryCommand(
-        argv=("migrate", "epoch2", "--recover", "--target-root", target), purpose=""
-    )
-    rollback = EntryCommand(
-        argv=("migrate", "epoch2", "--rollback", "--target-root", target), purpose=""
-    )
+    guide = EntryCommand(argv=("help", "upgrade-from-0.6"), purpose="")
     if selected:
         authoritative = "generation 1 · the selected generation is not read yet"
         paths = (
@@ -489,30 +453,27 @@ def interrupted_state(
                 ("", _fact("authoritative now", authoritative)),
             ),
             "paths": paths,
-            "commands": (recover.line, rollback.line),
+            "commands": (guide.line,),
             "tail": ("Both generations are never written at once.", rule),
         }
     )
 
 
-def schema_state(
-    chrome: ConsoleChrome, *, written: str, reads: str, target_root: Path
-) -> EntryState:
+def schema_state(chrome: ConsoleChrome, *, written: str, reads: str) -> EntryState:
     """Return the schema-unsupported frame: the refusal, and the read-only export.
 
     Args:
         chrome: The packaged chrome.
         written: The schema the workspace was written at, as that console named it.
         reads: The newest schema this console reads.
-        target_root: The declared tree.
 
     Returns:
         The schema-unsupported state; the export is offered for inspection elsewhere,
         never as a way to attach.
     """
     export = EntryCommand(
-        argv=("migrate", "epoch2", "--export", "--snapshot-root", str(target_root)),
-        purpose="write a read-only export of the last known state",
+        argv=("backup", "create"),
+        purpose="write a backup of the last known state",
     )
     return _base(chrome, "schema").model_copy(
         update={
@@ -634,36 +595,6 @@ def _newer_marker_schema(authority: RootAuthority) -> str | None:
     return None
 
 
-def _version_key(version: str) -> tuple[int, ...] | None:
-    """Return a dotted numeric version as a sortable tuple, or ``None`` when it is not one."""
-    try:
-        return tuple(int(part) for part in version.split("."))
-    except ValueError:
-        return None
-
-
-def _newer_state_schema(state_path: Path) -> tuple[str, str] | None:
-    """Return the state schema written and the newest read, when a newer console wrote it.
-
-    Only the document's ``schema_version`` is read; a missing or unparseable document is
-    not this state's to report.
-    """
-    from eawf.kernel.migrations import model_supported_max_version
-
-    try:
-        payload = json.loads(state_path.read_text("utf-8"))
-    except OSError, ValueError:
-        return None
-    written = payload.get("schema_version") if isinstance(payload, dict) else None
-    if not isinstance(written, str):
-        return None
-    supported = model_supported_max_version()
-    have, want = _version_key(written), _version_key(supported)
-    if have is None or want is None or have <= want:
-        return None
-    return (f"state schema v{written}", f"state schema v{supported}")
-
-
 def _journal(authority: RootAuthority) -> tuple[tuple[CutoverJournalRow, ...], bool]:
     """Return the tree's cutover journal and whether it could be read."""
     try:
@@ -681,23 +612,16 @@ def _migration(chrome: ConsoleChrome, authority: RootAuthority) -> EntryState | 
                 chrome,
                 written=newer,
                 reads=f"marker schema v{_MARKER_SCHEMA}",
-                target_root=authority.root,
             )
         journal, _ok = _journal(authority)
-        return interrupted_state(
-            chrome, authority.root, journal, why="the epoch marker does not parse"
-        )
+        return interrupted_state(chrome, journal, why="the epoch marker does not parse")
     if authority.gap is AuthorityGap.MARKER_ABSENT:
         journal, readable = _journal(authority)
         if not readable:
-            return interrupted_state(
-                chrome, authority.root, (), why="the cutover journal does not parse"
-            )
+            return interrupted_state(chrome, (), why="the cutover journal does not parse")
         if journal and journal[-1].stage not in _ROLLED_BACK:
-            return interrupted_state(
-                chrome, authority.root, journal, why="the process ended before the marker"
-            )
-        return migration_state(chrome, authority.root)
+            return interrupted_state(chrome, journal, why="the process ended before the marker")
+        return migration_state(chrome)
     return None
 
 
@@ -781,7 +705,7 @@ def _resolve_workspace(
 def _epoch1(chrome: ConsoleChrome, request: AttachRequest) -> EntryState:
     """Return the state an undeclared tree lands in: migration owed, or no tree at all."""
     if request.state_path.is_file():
-        return migration_state(chrome, request.authority.root)
+        return migration_state(chrome)
     reason = (
         "No eawf tree is here: this folder holds no state file,",
         "so there is nothing to attach to or migrate.",
@@ -798,7 +722,7 @@ def resolve_attach(chrome: ConsoleChrome, request: AttachRequest) -> AttachResul
     migration-required state (or the schema state, for a state schema newer than this
     console), and a folder holding no state at all lands in the failed state naming
     ``eawf init``. A declared tree resolves its workspace (unless a flag named the tree
-    outright), then its migration evidence, then its state schema.
+    outright), then its migration evidence.
 
     Args:
         chrome: The packaged chrome the states are filled from.
@@ -824,13 +748,6 @@ def resolve_attach(chrome: ConsoleChrome, request: AttachRequest) -> AttachResul
         migration = _migration(chrome, request.authority)
         if migration is not None:
             return AttachResult(entry=migration, trace=steps)
-    newer = _newer_state_schema(request.state_path)
-    if newer is not None:
-        written, reads = newer
-        state = schema_state(
-            chrome, written=written, reads=reads, target_root=request.state_path.parent
-        )
-        return AttachResult(entry=state, trace=steps)
     if not declared:
         return AttachResult(entry=_epoch1(chrome, request), trace=steps)
     # the daemon is not asked here: the console states its progress live once it runs

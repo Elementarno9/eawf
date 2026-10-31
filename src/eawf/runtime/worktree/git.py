@@ -179,37 +179,6 @@ def worktree_remove(repo: Path, *, path: Path, force: bool = False) -> None:
         )
 
 
-def worktree_list(repo: Path) -> list[dict[str, str]]:
-    """Return ``git worktree list --porcelain`` parsed into one dict per entry.
-
-    Each dict carries the keys git emits for that entry — at minimum
-    ``worktree`` (path) and usually ``HEAD`` and ``branch``.
-    """
-    res = _run(["git", "-C", str(repo), "worktree", "list", "--porcelain"])
-    if res.returncode != 0:
-        stderr = (res.stderr or "").strip()
-        raise cli_errors.StateConflict(
-            f"git worktree list failed (rc={res.returncode}): {stderr or 'unknown'}",
-            kind="IntegrityViolation",
-        )
-    entries: list[dict[str, str]] = []
-    current: dict[str, str] = {}
-    for line in (res.stdout or "").splitlines():
-        if not line.strip():
-            if current:
-                entries.append(current)
-                current = {}
-            continue
-        # Each non-empty line is "<key> <value>" or just a flag like "bare".
-        parts = line.split(None, 1)
-        key = parts[0]
-        value = parts[1] if len(parts) > 1 else ""
-        current[key] = value
-    if current:
-        entries.append(current)
-    return entries
-
-
 def status_porcelain(path: Path) -> list[str]:
     """Return ``git status --porcelain`` lines (one per dirty entry).
 
@@ -226,115 +195,6 @@ def status_porcelain(path: Path) -> list[str]:
     return [line for line in (res.stdout or "").splitlines() if line.strip()]
 
 
-def rev_list(repo: Path, *, range_spec: str) -> list[str]:
-    """Return commits in *range_spec*, oldest first, as short SHAs.
-
-    Used to enumerate commits to cherry-pick: ``range_spec`` is
-    ``"<target>..<wt_branch>"`` (i.e., commits in wt_branch not in target).
-    """
-    res = _run(
-        ["git", "-C", str(repo), "rev-list", "--reverse", range_spec],
-        timeout=_SLOW_TIMEOUT,
-    )
-    if res.returncode != 0:
-        stderr = (res.stderr or "").strip()
-        if "unknown revision" in stderr.lower() or "bad revision" in stderr.lower():
-            raise cli_errors.UserError(f"git rev-list: {stderr or range_spec}", kind="InvalidInput")
-        raise cli_errors.StateConflict(
-            f"git rev-list failed (rc={res.returncode}): {stderr or 'unknown'}",
-            kind="IntegrityViolation",
-        )
-    return [line.strip() for line in (res.stdout or "").splitlines() if line.strip()]
-
-
-def cherry_pick(repo: Path, *, sha: str) -> tuple[bool, str]:
-    """Run ``git cherry-pick <sha>``.
-
-    Returns a tuple ``(clean, detail)``. ``clean`` is ``True`` on
-    rc=0; ``False`` indicates a conflict was reported and stopped
-    the picker. ``detail`` is the stderr (or stdout if stderr is
-    empty) for caller-facing diagnostics.
-
-    Special case: when the picked commit is "now empty" (e.g., target
-    already has the same content as the source), git rc=1's with a
-    "now empty" message. We auto-skip via ``cherry-pick --skip`` and
-    return ``(True, "")`` because the loop's job is done — the parent
-    has the equivalent content.
-
-    Hard failures unrelated to a conflict (invalid sha, etc.) raise
-    :class:`UserError` (``kind="InvalidInput"``) / :class:`StateConflict`
-    (``kind="IntegrityViolation"``) per the same pattern as
-    :func:`worktree_add`.
-    """
-    res = _run(["git", "-C", str(repo), "cherry-pick", sha], timeout=_SLOW_TIMEOUT)
-    if res.returncode == 0:
-        return True, ""
-    stderr = (res.stderr or "").strip()
-    stdout = (res.stdout or "").strip()
-    detail = stderr or stdout
-    lower = detail.lower()
-    if "now empty" in lower or "previous cherry-pick is now empty" in lower:
-        skip = _run(
-            ["git", "-C", str(repo), "cherry-pick", "--skip"],
-            timeout=_SLOW_TIMEOUT,
-        )
-        if skip.returncode == 0:
-            return True, ""
-        # If the skip itself failed, fall through to the StateConflict
-        # (kind="IntegrityViolation") path below — we cannot leave the repo
-        # mid-pick.
-        detail = ((skip.stderr or "") + (skip.stdout or "")).strip() or detail
-    if "after resolving the conflicts" in lower or "could not apply" in lower:
-        return False, detail
-    if "bad revision" in lower or "unknown revision" in lower:
-        raise cli_errors.UserError(
-            f"git cherry-pick: {detail or 'invalid sha'}", kind="InvalidInput"
-        )
-    raise cli_errors.StateConflict(
-        f"git cherry-pick failed (rc={res.returncode}): {detail or 'unknown'}",
-        kind="IntegrityViolation",
-    )
-
-
-def cherry_pick_continue(repo: Path) -> tuple[bool, str]:
-    """Run ``git cherry-pick --continue``. Same return shape as :func:`cherry_pick`.
-
-    Special case: when the resolution makes the picked commit empty
-    (operator's resolution converged on a content git already has), git
-    rc=1's with a "now empty" message. We treat that as a successful
-    continue by issuing ``--skip`` to advance past the empty commit.
-    """
-    res = _run(
-        ["git", "-C", str(repo), "cherry-pick", "--continue"],
-        timeout=_SLOW_TIMEOUT,
-    )
-    if res.returncode == 0:
-        return True, ""
-    detail = ((res.stderr or "") + (res.stdout or "")).strip()
-    lower = detail.lower()
-    if "now empty" in lower or "previous cherry-pick is now empty" in lower:
-        # Skip the empty commit; the resolution was idempotent w.r.t. parent.
-        skip = _run(
-            ["git", "-C", str(repo), "cherry-pick", "--skip"],
-            timeout=_SLOW_TIMEOUT,
-        )
-        if skip.returncode == 0:
-            return True, ""
-        return False, ((skip.stderr or "") + (skip.stdout or "")).strip()
-    return False, detail
-
-
-def cherry_pick_abort(repo: Path) -> None:
-    """Run ``git cherry-pick --abort`` to reset the in-progress state."""
-    res = _run(["git", "-C", str(repo), "cherry-pick", "--abort"])
-    if res.returncode != 0:
-        stderr = (res.stderr or "").strip()
-        raise cli_errors.StateConflict(
-            f"git cherry-pick --abort failed (rc={res.returncode}): {stderr or 'unknown'}",
-            kind="IntegrityViolation",
-        )
-
-
 def rebase(repo: Path, *, target: str) -> tuple[bool, str]:
     """Run ``git rebase <target>`` from *repo* (a worktree path)."""
     res = _run(["git", "-C", str(repo), "rebase", target], timeout=_SLOW_TIMEOUT)
@@ -349,47 +209,6 @@ def rebase(repo: Path, *, target: str) -> tuple[bool, str]:
     raise cli_errors.StateConflict(
         f"git rebase failed (rc={res.returncode}): {detail or 'unknown'}", kind="IntegrityViolation"
     )
-
-
-def rebase_continue(repo: Path) -> tuple[bool, str]:
-    """Run ``git rebase --continue``. Same return shape as :func:`rebase`."""
-    res = _run(["git", "-C", str(repo), "rebase", "--continue"], timeout=_SLOW_TIMEOUT)
-    if res.returncode == 0:
-        return True, ""
-    detail = ((res.stderr or "") + (res.stdout or "")).strip()
-    return False, detail
-
-
-def rebase_abort(repo: Path) -> None:
-    """Run ``git rebase --abort``."""
-    res = _run(["git", "-C", str(repo), "rebase", "--abort"])
-    if res.returncode != 0:
-        stderr = (res.stderr or "").strip()
-        raise cli_errors.StateConflict(
-            f"git rebase --abort failed (rc={res.returncode}): {stderr or 'unknown'}",
-            kind="IntegrityViolation",
-        )
-
-
-def merge_ff_only(repo: Path, *, source: str) -> str:
-    """Run ``git merge --ff-only <source>``. Returns the new HEAD sha."""
-    res = _run(
-        ["git", "-C", str(repo), "merge", "--ff-only", source],
-        timeout=_SLOW_TIMEOUT,
-    )
-    if res.returncode != 0:
-        detail = ((res.stderr or "") + (res.stdout or "")).strip()
-        if "non-fast-forward" in detail.lower() or "not possible" in detail.lower():
-            raise cli_errors.StateConflict(
-                f"git merge --ff-only refused (non-fast-forward): {detail or source}",
-                kind="IntegrityViolation",
-            )
-        raise cli_errors.StateConflict(
-            f"git merge --ff-only failed (rc={res.returncode}): {detail or 'unknown'}",
-            kind="IntegrityViolation",
-        )
-    head = head_sha(repo)
-    return head
 
 
 def head_sha(repo: Path) -> str:
@@ -511,61 +330,15 @@ def branch_delete(repo: Path, *, name: str) -> bool:
     return True
 
 
-def cherry_pick_in_progress(repo: Path) -> bool:
-    """Return ``True`` iff ``<repo>/.git/CHERRY_PICK_HEAD`` exists.
-
-    git records the in-progress cherry-pick by creating that file. We
-    use the presence as a resume-mode signal in :func:`merge_back.continue_`.
-    """
-    return (repo / ".git" / "CHERRY_PICK_HEAD").exists()
-
-
-def rebase_in_progress(worktree: Path) -> bool:
-    """Return ``True`` iff a rebase is in progress in *worktree*.
-
-    git records an in-progress rebase under ``.git/rebase-merge/`` or
-    ``.git/rebase-apply/`` (depending on strategy). Either signals
-    "resume needed".
-    """
-    git_dir = worktree / ".git"
-    if git_dir.is_file():
-        # git worktree creates a file containing "gitdir: <path>" for sub-worktrees.
-        try:
-            content = git_dir.read_text(encoding="utf-8").strip()
-        except OSError:
-            return False
-        if content.startswith("gitdir:"):
-            if ":" not in content:
-                # Defensive: ``startswith("gitdir:")`` already implies a
-                # colon, but a malformed file (no second segment) would
-                # crash on the unconditional split below.
-                return False
-            actual = Path(content.split(":", 1)[1].strip())
-            if not actual.is_absolute():
-                actual = (worktree / actual).resolve()
-            return (actual / "rebase-merge").exists() or (actual / "rebase-apply").exists()
-    return (git_dir / "rebase-merge").exists() or (git_dir / "rebase-apply").exists()
-
-
 __all__ = [
     "branch_delete",
-    "cherry_pick",
-    "cherry_pick_abort",
-    "cherry_pick_continue",
-    "cherry_pick_in_progress",
     "head_sha",
     "invoke",
     "is_ancestor",
-    "merge_ff_only",
     "rebase",
-    "rebase_abort",
-    "rebase_continue",
-    "rebase_in_progress",
     "repo_root",
-    "rev_list",
     "status_porcelain",
     "update_ref",
     "worktree_add",
-    "worktree_list",
     "worktree_remove",
 ]

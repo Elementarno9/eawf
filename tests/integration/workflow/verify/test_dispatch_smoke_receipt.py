@@ -381,7 +381,80 @@ def checks(passed: dict[str, bool]) -> dict[str, tuple[bool, str]]:
 
 def test_smoke_budget_and_receipt_writer_budget_is_600000() -> None:
     assert smoke_module.PROVIDER_ARGS == ("--provider", "claude-code", "--budget", "600000")
-    assert smoke_module.SMOKE_RUNTIME_ID == "claude-code"
+    assert smoke_module.SMOKE_RUNTIME.runtime_id == "claude-code"
+
+
+@pytest.mark.parametrize(
+    ("provider", "runtime_id", "profile_id", "model", "prefix"),
+    [
+        ("stub", "claude-code", "claude-default", "claude-haiku-4-5", "dispatch-check-"),
+        ("claude", "claude-code", "claude-default", "claude-haiku-4-5", "dispatch-check-"),
+        ("codex", "codex", "codex-default", "gpt-6.1-sol", "dispatch-check-codex-"),
+    ],
+)
+def test_smoke_runtime_maps_each_provider(
+    provider: str, runtime_id: str, profile_id: str, model: str, prefix: str
+) -> None:
+    row = smoke_module.smoke_runtime(provider)
+
+    assert (row.runtime_id, row.profile_id, row.model, row.check_prefix) == (
+        runtime_id,
+        profile_id,
+        model,
+        prefix,
+    )
+
+
+def test_smoke_runtime_models_are_ones_the_profile_lists() -> None:
+    """A narrowed profile may only keep a model the built-in profile already allows."""
+    from eawf.kernel.config.defaults import built_in_defaults
+
+    listed = {
+        profile["profile_id"]: profile["model_policy"]["allowed"]
+        for profile in built_in_defaults()["runtime"]["profiles"]
+    }
+    for row in smoke_module.SMOKE_RUNTIMES.values():
+        assert row.model in listed[row.profile_id], row
+
+
+def test_smoke_runtime_names_each_signal_provider() -> None:
+    """Every runtime the provider row tells an operator to smoke has a smoke runtime."""
+    from eawf.workflow.release.signal_probes import _SMOKE_PROVIDERS
+
+    for runtime_id, provider in _SMOKE_PROVIDERS.items():
+        assert smoke_module.smoke_runtime(provider).runtime_id == runtime_id
+
+
+@pytest.mark.parametrize("provider", ["", "Claude", "codex ", "claude-code", "opencode"])
+def test_smoke_runtime_refuses_an_unknown_provider(provider: str) -> None:
+    with pytest.raises(ValueError, match="names no smoke runtime; name one of claude, codex, stub"):
+        smoke_module.smoke_runtime(provider)
+
+
+def test_smoke_budget_and_receipt_writer_files_codex_beside_claude(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Both runtimes' scratch trees key Runs alike, so neither's documents overwrite the other's."""
+    smoke_module._file_smoke_receipt(
+        tmp_path, checks({"RUN-00000002": True}), os_class="linux", release_key=DEV4_KEY
+    )
+    monkeypatch.setattr(smoke_module, "SMOKE_RUNTIME", smoke_module.smoke_runtime("codex"))
+
+    written = smoke_module._file_smoke_receipt(
+        tmp_path, checks({"RUN-00000002": True}), os_class="linux", release_key=DEV4_KEY
+    )
+
+    assert [(r.runtime_id, r.evidence_refs) for r in written.receipts] == [
+        ("claude-code", ("dispatch-check-RUN-00000002.json",)),
+        ("codex", ("dispatch-check-codex-RUN-00000002.json",)),
+    ]
+    assert sorted(path.name for path in tmp_path.glob("dispatch-check-*.json")) == [
+        "dispatch-check-RUN-00000002.json",
+        "dispatch-check-codex-RUN-00000002.json",
+    ]
+    documents = read_dispatch_checks(tmp_path, written)
+    claims = (("claude-code", "linux"), ("codex", "linux"))
+    assert dispatch_smoke_gaps(written, claims, documents) == ()
 
 
 def test_smoke_budget_and_receipt_writer_maps_each_host_platform() -> None:
@@ -700,9 +773,11 @@ def test_the_remediation_names_the_evidence_dir_and_provider(tmp_path: Path) -> 
     )
     assert outcome.remediation.count("EAWF_SMOKE_EVIDENCE_DIR=") == 1
     codex = smoke_remediation((("codex", "linux"), ("claude-code", "macos")), DEV4_KEY)
-    assert "no live smoke dispatches to codex" in codex
+    assert f"EAWF_SMOKE_PROVIDER=codex EAWF_SMOKE_EVIDENCE_DIR={directory} " in codex
     assert f"EAWF_SMOKE_PROVIDER=claude EAWF_SMOKE_EVIDENCE_DIR={directory} " in codex
-    assert "EAWF_SMOKE_PROVIDER=codex" not in codex
+    unsmoked = smoke_remediation((("opencode", "linux"),), DEV4_KEY)
+    assert "no live smoke dispatches to opencode" in unsmoked
+    assert "EAWF_SMOKE_PROVIDER=" not in unsmoked
 
 
 @pytest.mark.parametrize("version", ("0.7.0rc3", "0.7.0rc4"))
@@ -724,6 +799,29 @@ def test_the_committed_candidate_receipts_verify(version: str) -> None:
     assert sorted(documents) == [f"dispatch-check-RUN-0000000{n}.json" for n in range(2, 8)]
     assert all(not document.check.breaches for document in documents.values())
     assert dispatch_smoke_gaps(receipts, (("claude-code", "linux"),), documents) == ()
+    assert outcome.status is ReleaseSignalStatus.PASS, outcome.remediation
+
+
+def test_the_committed_stable_receipts_verify() -> None:
+    """The stable receipt set backs both Linux claims, claude-code and codex."""
+    key = "REL-0.7.0"
+    directory = REPO_ROOT.joinpath(*CANARY_EVIDENCE_DIRS[key])
+    receipts = load_dispatch_smoke_receipts(REPO_ROOT, key)
+    assert receipts is not None
+    documents = read_dispatch_checks(directory, receipts)
+    config = checkpoint_release_config("0.7.0", repo_root=REPO_ROOT)
+
+    outcome = provider_probe(
+        ReleaseSignalContext(config, ReleaseSignalName.PROVIDER, None), repo_root=REPO_ROOT
+    )
+
+    assert sorted((r.os_class, r.runtime_id, r.scorecard) for r in receipts.receipts) == [
+        ("linux", "claude-code", "pass"),
+        ("linux", "codex", "pass"),
+    ]
+    assert len(documents) == 2 * smoke_module.BATCHES * smoke_module.TASKS_PER_BATCH
+    claims = (("claude-code", "linux"), ("codex", "linux"))
+    assert dispatch_smoke_gaps(receipts, claims, documents) == ()
     assert outcome.status is ReleaseSignalStatus.PASS, outcome.remediation
 
 

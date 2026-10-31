@@ -48,7 +48,7 @@ import threading
 from collections.abc import Awaitable, Callable
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Final, Literal, Protocol, runtime_checkable
+from typing import Annotated, Final, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
@@ -60,15 +60,12 @@ from eawf.kernel.runtime.lease import WorkspaceHandle
 from eawf.kernel.runtime.provider import SemVer
 from eawf.kernel.state.enums import MeasurementQuality, MeasurementStatus
 from eawf.kernel.state.epoch2.run import RunRuntimeTuple
-from eawf.kernel.state.models import SessionAttempt, Wave
+from eawf.kernel.state.models import SessionAttempt
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.kinds.event import Event, EventKind, EventPayload
 from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.runtimes.stream_json import vendor_error_signal
 from eawf.runtime.sandbox.policy import TOOL_UNIVERSE
-
-if TYPE_CHECKING:
-    from eawf.workflow.agents.specs.models import RoleContract
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +119,7 @@ class SessionResumeFailedError(Exception):
     """Raised when :meth:`RuntimeAdapter.continue_session` cannot resume.
 
     The daemon's dispatch router catches this exception and falls back
-    to a fresh ``open_session`` call, annotating the resulting
+    to a fresh spawn, annotating the resulting
     :class:`~eawf.kernel.state.models.DispatchAnnotation` with
     ``DispatchNote.CONTINUE_FAILED_FELL_BACK_TO_FRESH`` (per the V8
     fall-through).
@@ -453,7 +450,7 @@ class RuntimeAdapter(Protocol):
 
     Every concrete adapter implementation declares the five
     class-level attributes + the session methods
-    (:meth:`open_session`, :meth:`continue_session`, :meth:`session_log_handle`) +
+    (:meth:`continue_session`, :meth:`session_log_handle`) +
     :meth:`parse_error` + :meth:`supports_continue`. The Protocol is decorated
     ``@runtime_checkable`` so the daemon can validate third-party
     adapters with ``isinstance(adapter, RuntimeAdapter)`` at load
@@ -481,37 +478,6 @@ class RuntimeAdapter(Protocol):
     supports_cache_control: bool
     error_classes_emitted: tuple[ErrorClass, ...]
 
-    async def open_session(
-        self,
-        wave: Wave,
-        prompt: str,
-        *,
-        cache_prefix: str | None = None,
-        model_hint: str | None = None,
-        role_contract: RoleContract | None = None,
-    ) -> SessionAttempt:
-        """Spawn a fresh subprocess for ``wave`` with ``prompt``.
-
-        Returns the typed :class:`SessionAttempt` row the daemon
-        appends to ``wave.sessions``. Implementations stamp
-        ``attempt``, ``runtime``, ``session_id``,
-        ``session_log_handle``, and ``started_at`` at minimum; the
-        token / exit fields stay ``None`` until the subprocess
-        completes.
-
-        The optional *role_contract* keyword carries the typed projection
-        of the dispatched wave's role
-        (:class:`~eawf.workflow.agents.specs.models.RoleContract`); it
-        feeds the spawn seam's role-driven knobs (``system_prompt``,
-        ``allowed_tools``, ``denied_tools``, ``model``, ``memory``) so
-        the freshly-spawned runtime receives the role registry's body
-        rather than a hardcoded executor preamble. ``None`` (default)
-        keeps the spawn byte-equivalent to the pre-W13 surface for
-        callers that have not yet plumbed the contract through; the
-        live subprocess spawn that consumes the contract lands in
-        P26-SURFACES.
-        """
-
     async def continue_session(
         self,
         session_id: str,
@@ -522,7 +488,7 @@ class RuntimeAdapter(Protocol):
         Raises:
             SessionResumeFailedError: The runtime cannot resume (deleted
                 log, expired session, corrupted state). Daemon
-                catches and falls back to :meth:`open_session`.
+                catches and falls back to a fresh spawn.
         """
 
     def session_log_handle(
@@ -694,6 +660,9 @@ class NativeLaunchOutcome(BaseModel):
         runtime_tuple: The runtime as the provider reported itself by the
             announcement, which is what the Run's start records; ``None``
             when the launcher observed nothing of it.
+        transcript_path: The file the provider writes the session's
+            transcript to, a path on this machine and so never dumped;
+            ``None`` when the provider did not name one.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
@@ -703,6 +672,7 @@ class NativeLaunchOutcome(BaseModel):
     hello: WorkerHello
     turn: asyncio.Task[TurnOutcome] | None = Field(default=None, exclude=True)
     runtime_tuple: RunRuntimeTuple | None = None
+    transcript_path: str | None = Field(default=None, exclude=True)
 
 
 @runtime_checkable

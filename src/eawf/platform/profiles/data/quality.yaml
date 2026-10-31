@@ -64,26 +64,10 @@ render_blocks:
     verification: |
       Read each call site of a function with arity of three or more: arguments are passed by keyword. A function whose name implies a value but returns ``None`` on the happy path is reworked. mypy (``uv run mypy src/``) backs the explicit-return contract via full type hints.
 
-# Band-scoped verify enforcement. ``enforce`` + ``cross_vendor_jury`` declare
-# the QC intent at the fleet level, but the wave-aware resolver
-# (``resolve_wave_verify_block``) narrows them to the banded set: a wave whose
-# file_scopes touch ``surfaces/tui/`` or ``surfaces/render/`` (or whose id /
-# title matches a ``uiux_bands`` token) closes through the spec-jury gate,
-# while a non-band mechanical wave closes on its decisive deterministic gates
-# alone, with no auditor and no jury. This is a per-wave gate, NOT a
-# fleet-wide flip.
+# Verify enforcement. ``enforce`` + ``cross_vendor_jury`` declare the QC
+# intent at the fleet level.
 #
-# The band is broadened beyond the two UI-surface tokens (``tui`` / ``render``)
-# to the judgment-heavy subsystems whose intent resists a deterministic
-# falsifier: ``verify`` / ``eval`` / ``jury`` / ``spec`` waves carry the same
-# lossy-intent risk the 2026-06-02 TUI incident diagnosed, so a wave named for
-# the trust / verification / jury / spec machinery also closes through the
-# cross-vendor jury rather than on its deterministic gates alone. The
-# ``jury_calibrated`` close gate then refuses that jury blocking authority
-# unless its I09 calibration metrics clear, so a banded wave is never blocked
-# by an un-validated jury.
-#
-# ``jury_vendors`` records the disjoint cross-vendor panel for the band spec
+# ``jury_vendors`` records the disjoint cross-vendor panel for the spec
 # jury (all three spawn runtimes are live). The LIVE multi-vendor invocation
 # stays IDLE in v0.5: the daemon's per-item ballot fn returns None so no juror
 # is spawned from this list -- wiring the live panel is a deferred calibration
@@ -91,13 +75,6 @@ render_blocks:
 verify:
   enforce: true
   cross_vendor_jury: true
-  uiux_bands:
-    - tui
-    - render
-    - verify
-    - eval
-    - jury
-    - spec
   jury_vendors:
     - claude
     - codex

@@ -104,7 +104,6 @@ COMMAND_PANELS: dict[str, str] = {
     "doc": "audit",
     "doctor": "audit",
     "local": "audit",
-    "migrate": "audit",
     "schema": "audit",
     "snapshot": "audit",
     "validate": "audit",
@@ -123,8 +122,8 @@ COMMAND_PANELS: dict[str, str] = {
     "milestone": "planning",
     "plan": "planning",
     "question": "planning",
+    "research": "planning",
     "run": "planning",
-    "session": "planning",
     "task": "planning",
     "track": "planning",
     # runtime: harness adapters, hooks, plugins, skills, MCP, profiles,
@@ -139,6 +138,7 @@ COMMAND_PANELS: dict[str, str] = {
     "profile": "runtime",
     "rules": "runtime",
     "runtime": "runtime",
+    "session": "runtime",
     "skill": "runtime",
     # ship: release artifacts and the sync renderer.
     "release": "ship",
@@ -161,9 +161,6 @@ COMMAND_PANELS: dict[str, str] = {
     "store": "vcs",
     "wal": "vcs",
     "workspace": "vcs",
-    # worktrees: per-wave worktree dispatch and the flow skill that drives
-    # the parallel-wave loop, plus the headless dispatch pause/resume toggle.
-    "worktree": "worktrees",
 }
 
 

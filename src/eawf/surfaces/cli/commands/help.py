@@ -11,6 +11,7 @@ Six hand-authored topics ship with v0.3, each ≤80 lines, sourced from
 * ``migration`` — per-cluster migration steps.
 * ``upgrade-from-0.6`` — the 0.6.8 to 0.7 upgrade, step by step.
 * ``streaming`` — ``--stream`` flag, NDJSON shape, EOF semantics.
+* ``limitations`` — deferrals, certified runtimes and operating systems.
 
 ``eawf help`` (no topic) lists the registered topics. ``eawf help <topic>``
 renders the topic markdown: paged through ``less -R`` when stdout is a TTY,
@@ -55,6 +56,7 @@ TOPICS: tuple[str, ...] = (
     "migration",
     "upgrade-from-0.6",
     "streaming",
+    "limitations",
 )
 
 
@@ -121,7 +123,8 @@ help_app = typer.Typer(
     name="help",
     help=(
         "Show prose help topics "
-        "(exit-codes, daemon, profiles, urns, migration, upgrade-from-0.6, streaming)."
+        "(exit-codes, daemon, profiles, urns, migration, upgrade-from-0.6, streaming, "
+        "limitations)."
     ),
     no_args_is_help=False,
     add_completion=False,

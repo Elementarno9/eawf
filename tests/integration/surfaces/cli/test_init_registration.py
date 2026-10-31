@@ -347,28 +347,6 @@ def epoch1_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return ea
 
 
-@pytest.mark.parametrize("sealed_by", ["", "x" * 65])
-def test_opt_in_no_orphan_backup_for_an_invalid_principal(
-    epoch1_tree: Path, backup_home: Path, sealed_by: str
-) -> None:
-    code, envelope = _invoke(
-        "migrate", "epoch2", "--opt-in", "--target-root", str(epoch1_tree), "--sealed-by", sealed_by
-    )
-    assert code != exit_codes.OK, envelope
-    assert "invalid opt-in declaration" in str(envelope["message"])
-    assert _snapshots(backup_home) == []
-
-
-def test_opt_in_no_orphan_check_admits_the_longest_principal(
-    epoch1_tree: Path, backup_home: Path
-) -> None:
-    code, envelope = _invoke(
-        "migrate", "epoch2", "--opt-in", "--target-root", str(epoch1_tree), "--sealed-by", "x" * 64
-    )
-    assert code == exit_codes.OK, envelope
-    assert len(_snapshots(backup_home)) == 2  # the per-repository dir and its one snapshot
-
-
 def test_opt_in_no_orphan_backup_for_an_empty_purpose(epoch1_tree: Path, backup_home: Path) -> None:
     from datetime import UTC, datetime
 

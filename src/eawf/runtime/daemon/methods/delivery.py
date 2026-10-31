@@ -5,8 +5,8 @@ Judging a Task on the result lives in
 
 ``runtime.delivery.integrate``: one Batch's sealed work, one delivery.
 
-The verb reads the Batch's sealed candidates off the run ledger, puts
-them in the one order their content decides, and turns them into the
+The verb reads each of the Batch's Tasks' last seal off the run ledger,
+puts them in the one order their content decides, and turns them into the
 delivery the repository's configured commit unit asks for -- a single
 squashed commit under ``batch``, one per Task under ``task``. It then
 runs the integration: the tree is materialized, the candidates are
@@ -55,6 +55,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from datetime import UTC, datetime
 from functools import partial
+from itertools import pairwise
 from pathlib import Path
 from typing import Annotated, Any, Final
 
@@ -408,6 +409,36 @@ def _batch_of_task(session: RootSession) -> Mapping[str, str]:
     }
 
 
+def latest_sealed_bundles(records: Sequence[LedgerRecord]) -> dict[str, CandidateBundle]:
+    """Return each Task's last seal, keyed by its fully qualified Task URN.
+
+    A Task that seals again after a repair, from another tree or another
+    base, stands on the newer seal; the older one stays recorded as
+    history and is never edited. Only bundle lines select, so a later
+    submission or report binding never supersedes a seal.
+
+    Args:
+        records: Every line the run ledger holds, in ledger order.
+
+    Returns:
+        The selected seals, ordered by where each selected line sits in
+        the ledger.
+
+    Raises:
+        ValidationError: A line claims to be a bundle and does not
+            validate as one, which means the ledger is corrupt.
+    """
+    latest: dict[str, CandidateBundle] = {}
+    for item in records:
+        if item.payload.get("payload_kind") != "candidate_bundle":
+            continue
+        bundle = CandidateBundle.model_validate(item.payload)
+        key = str(bundle.task_ref)
+        latest.pop(key, None)
+        latest[key] = bundle
+    return latest
+
+
 def sealed_bundles(
     records: Sequence[LedgerRecord], *, batch_ref: BatchUrn, placement: Mapping[str, str]
 ) -> tuple[CandidateBundle, ...]:
@@ -517,6 +548,58 @@ def read_generation_ledger(path: Path, batch_ref: BatchUrn) -> IntegrationGenera
         payload["selected"] = index == len(payloads) - 1
     return IntegrationGenerationLedger.model_validate(
         {"batch_ref": wanted, "generations": payloads}
+    )
+
+
+def undelivered_bundles(
+    bundles: Sequence[CandidateBundle],
+    *,
+    ledger: IntegrationGenerationLedger,
+    base: RevisionBinding,
+) -> tuple[CandidateBundle, ...]:
+    """Keep seals unless a singleton delivery proves their exact tree on *base*.
+
+    Args:
+        bundles: Seals considered for the next delivery.
+        ledger: The selected Batch's durable generation chain.
+        base: The observed current Batch head the request names.
+
+    Returns:
+        Seals whose Task, source commit and tree are not already carried
+        by a singleton generation on the chain ending at that exact head.
+        A stale base or discontinuous commit chain excludes nothing.
+    """
+    head = ledger.head
+    if head is None or (
+        base.batch_ref != ledger.batch_ref
+        or base.repository_ref != head.integrated_revision.repository_ref
+        or base.head_sha != head.integrated_revision.head_sha
+        or base.tree_sha != head.integrated_revision.tree_sha
+        or base.integration_generation != head.generation
+    ):
+        return tuple(bundles)
+    if any(
+        generation.integrated_revision.parent_sha != generation.target_base.head_sha
+        for generation in ledger.generations
+    ):
+        return tuple(bundles)
+    for previous, current in pairwise(ledger.generations):
+        if (
+            current.target_base.head_sha != previous.integrated_revision.head_sha
+            or current.target_base.tree_sha != previous.integrated_revision.tree_sha
+        ):
+            return tuple(bundles)
+    return tuple(
+        bundle
+        for bundle in bundles
+        if not any(
+            generation.affected_task_refs == (bundle.task_ref,)
+            and generation.source_base.head_sha == bundle.base_commit
+            and generation.tree_digest == bundle.resulting_tree_digest
+            and generation.tree_digest
+            == canonical_digest({"git_tree": generation.integrated_revision.tree_sha})
+            for generation in ledger.generations
+        )
     )
 
 
@@ -716,9 +799,20 @@ def integrate_delivery(
     with context.session([str(args.urn)]) as session:
         placement = _batch_of_task(session)
         records = read_ledger_records(run_ledger(session))
+        ledger = read_generation_ledger(session.ledger_path(Epoch2Collection.BATCH), args.urn)
+    wanted = str(args.urn)
+    selected = tuple(
+        bundle
+        for bundle in latest_sealed_bundles(records).values()
+        if placement.get(bundle.task_ref.entity_key) == wanted
+    )
     try:
         ordered = integration_order(
-            sealed_bundles(records, batch_ref=args.urn, placement=placement)
+            undelivered_bundles(
+                selected,
+                ledger=ledger,
+                base=args.base,
+            )
         )
     except IntegrationRefusedError as error:
         raise _refused(error.code, str(error)) from error
@@ -1192,6 +1286,7 @@ __all__ = [
     "integrate_delivery",
     "keyed_answer",
     "keyed_call",
+    "latest_sealed_bundles",
     "read_conflict_frames",
     "sealed_bundles",
     "verify_batch",

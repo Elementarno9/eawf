@@ -154,12 +154,18 @@ def projects_root() -> Path:
     return root / "projects"
 
 
-def _project_slug(cwd: Path) -> str:
+def project_slug(cwd: Path) -> str:
     """Return the Claude projects directory name for *cwd*.
 
     Claude Code names each project directory after the working directory with
     every non-alphanumeric character replaced by ``-`` (so ``/workspace/repo``
     becomes ``-workspace-repo``).
+
+    Args:
+        cwd: The session's working directory.
+
+    Returns:
+        The directory name under a projects root.
     """
     return re.sub(r"[^A-Za-z0-9]", "-", str(cwd))
 
@@ -677,6 +683,7 @@ __all__ = [
     "MEASURE_VERSION",
     "TranscriptReading",
     "TranscriptScan",
+    "project_slug",
     "projects_root",
     "read_transcript",
 ]

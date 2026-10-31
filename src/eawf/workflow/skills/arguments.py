@@ -47,9 +47,13 @@ _OPTION_TOKEN: Final[re.Pattern[str]] = re.compile(
     r"(--[a-z][a-z0-9-]*)((?:\s+\[?<[^>]+>(?:=<[^>]+>)?\]?)?)(\.\.\.)?"
 )
 
+#: A placeholder that closes an option's value set: ``<a|b|c>`` or ``<1..5>``.
+_CHOICES: Final[re.Pattern[str]] = re.compile(r"<([a-z0-9][a-z0-9-]*(?:\|[a-z0-9][a-z0-9-]*)+)>")
+_RANGE: Final[re.Pattern[str]] = re.compile(r"<([0-9]+)\.\.([0-9]+)>")
+
 RefusalCode = Literal[
-    "unparseable_arguments",
     "unknown_argument",
+    "invalid_value",
     "action_undeclared",
     "action_incompatible",
     "lane_refused",
@@ -67,6 +71,8 @@ class ArgumentOption(BaseModel):
         repeatable: Whether it may be given more than once.
         actions: The actions that accept it; every action when the skill
             has none of its own.
+        choices: The closed value set a ``<a|b>`` placeholder declares.
+        bounds: The inclusive integer range a ``<1..5>`` placeholder declares.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -76,6 +82,29 @@ class ArgumentOption(BaseModel):
     takes_value: bool
     repeatable: bool
     actions: tuple[str, ...] = ()
+    choices: tuple[str, ...] = ()
+    bounds: tuple[int, int] | None = None
+
+    def admits(self, value: object) -> bool:
+        """Return whether *value* is in the set or range the placeholder declares.
+
+        Args:
+            value: One supplied value: host text, or a JSON scalar from the
+                headless lane.
+
+        Returns:
+            ``True`` when the placeholder declares no closed set or range, or
+            the value falls inside it.
+        """
+        if self.choices:
+            return str(value) in self.choices
+        if self.bounds is not None:
+            if isinstance(value, bool) or not isinstance(value, int | str):
+                return False
+            if isinstance(value, str) and not value.strip().isdigit():
+                return False
+            return self.bounds[0] <= int(value) <= self.bounds[1]
+        return True
 
 
 class ArgumentSchema(BaseModel):
@@ -172,12 +201,17 @@ def argument_schema(entry: SkillCatalogEntry) -> ArgumentSchema:
         if flag in parsed:
             continue
         actions = tuple(a for a in grammar.actions if flag in grammar.options_for(a))
+        placeholder = match.group(2)
+        choices = _CHOICES.search(placeholder)
+        bounds = _RANGE.search(placeholder)
         parsed[flag] = ArgumentOption(
             flag=flag,
             field=_field(flag),
-            takes_value=bool(match.group(2)),
+            takes_value=bool(placeholder),
             repeatable=match.group(3) is not None,
             actions=actions,
+            choices=tuple(choices.group(1).split("|")) if choices else (),
+            bounds=(int(bounds.group(1)), int(bounds.group(2))) if bounds else None,
         )
     return ArgumentSchema(
         skill_id=entry.skill_id,
@@ -207,19 +241,21 @@ def parse_host_arguments(entry: SkillCatalogEntry, text: str) -> dict[str, Any]:
         entry: The resolved catalog entry.
         text: What followed the slashed name.
 
+    Text that does not split as shell words, such as a topic with an apostrophe
+    or a trailing backslash, is split on whitespace instead and each word kept
+    as typed, so its flags are still read and judged.
+
     Returns:
         The argument mapping.
-
-    Raises:
-        InvocationRefusedError: The text does not split into words.
     """
     schema = argument_schema(entry)
     try:
         words = shlex.split(text)
     except ValueError as exc:
-        raise InvocationRefusedError(
-            code="unparseable_arguments", skill=entry.invocation_name, detail=str(exc)
-        ) from exc
+        logger.debug(
+            f"parse_host_arguments skill={entry.invocation_name} split=whitespace error={exc!r}"
+        )
+        words = text.split()
     by_flag = {option.flag: option for option in schema.options}
     args: dict[str, Any] = {}
     subject: list[str] = []
@@ -255,6 +291,23 @@ def _given(value: object) -> bool:
     return value is not None and value is not False and value != () and value != []
 
 
+def _check_values(option: ArgumentOption, value: object, *, skill: str) -> None:
+    """Refuse the first of *value*'s items *option*'s placeholder does not admit."""
+    for item in value if isinstance(value, list) else [value]:
+        if option.admits(item):
+            continue
+        declared = (
+            f"{option.bounds[0]}..{option.bounds[1]}"
+            if option.bounds is not None
+            else "|".join(option.choices)
+        )
+        raise InvocationRefusedError(
+            code="invalid_value",
+            skill=skill,
+            detail=f"{option.flag} {item!r} is not one of {declared}",
+        )
+
+
 def check_invocation(entry: SkillCatalogEntry, args: Mapping[str, Any], *, lane: Lane) -> None:
     """Refuse an invocation the skill's schema or lanes do not admit.
 
@@ -266,7 +319,8 @@ def check_invocation(entry: SkillCatalogEntry, args: Mapping[str, Any], *, lane:
     Raises:
         InvocationRefusedError: The lane may not invoke the skill or the
             selected action, the action is not declared, an argument is
-            unknown, or an argument is not one the selected action takes.
+            unknown, an argument is not one the selected action takes, or a
+            value falls outside the set or range its placeholder declares.
     """
     skill = entry.invocation_name
     if lane not in skill_lanes(entry):
@@ -304,6 +358,8 @@ def check_invocation(entry: SkillCatalogEntry, args: Mapping[str, Any], *, lane:
                 skill=skill,
                 detail=f"{option.flag} is not an argument of action {action!r}",
             )
+        if option.takes_value and _given(value):
+            _check_values(option, value, skill=skill)
     logger.debug(f"check_invocation skill={skill} lane={lane} action={action!r}")
 
 

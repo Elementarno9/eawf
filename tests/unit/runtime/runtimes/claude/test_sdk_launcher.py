@@ -13,7 +13,6 @@ import json
 import os
 import stat
 import sys
-import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,12 +24,13 @@ from pydantic import ValidationError
 
 from eawf.kernel.runtime.compiled import CompiledRunSpec
 from eawf.kernel.state.epoch2.run import RunRuntimeTuple
-from eawf.runtime.budget.service import DEFAULT_GRACE_SECONDS
+from eawf.runtime.budget.service import TerminationResult
 from eawf.runtime.daemon.native_dispatch import CapsuleRequest, seal_capsule
 from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME, RUN_TMP_DIRNAME, RUN_TMP_ENV_KEYS
 from eawf.runtime.mcp.semantic_stdio import SERVER_NAME, ambient_tool_denial
 from eawf.runtime.runtimes import adapter as runtimes_adapter
+from eawf.runtime.runtimes import cancel
 from eawf.runtime.runtimes.adapter import (
     ConcurrentSpawnCapError,
     NativeLaunchOutcome,
@@ -58,6 +58,7 @@ from eawf.runtime.runtimes.claude.sdk_launcher import (
     _lane_options,
     _UsageFold,
 )
+from eawf.runtime.runtimes.claude.transcript_counters import project_slug
 from eawf.runtime.runtimes.host_transcript import SUMMARY_LIMIT, WITHHELD_TEXT
 from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.sandbox.env_scrub import build_child_env, resolve_binary_dir
@@ -220,9 +221,18 @@ def test_launch_announces_the_session_and_the_turn_resolves_completed(workspace:
     assert outcome.provider_session_ref == "sess-fake-claude"
     assert outcome.hello.provider_session_ref == "sess-fake-claude"
     assert outcome.subprocess_pid == pgid
+    assert outcome.transcript_path == str(
+        workspace
+        / MCP_ARTIFACT_DIRNAME
+        / MANAGED_CONFIG_DIRNAME
+        / "projects"
+        / project_slug(workspace.resolve())
+        / "sess-fake-claude.jsonl"
+    )
     assert turn == TurnOutcome(exit_kind="completed", answer_text="done", runtime_tuple=_OBSERVED)
     assert said == ["done"]
     assert "turn" not in outcome.model_dump()
+    assert "transcript_path" not in outcome.model_dump()
 
 
 def test_launch_returns_before_the_turn_ends(workspace: Path) -> None:
@@ -512,7 +522,9 @@ def test_an_empty_tool_list_is_within_any_grant(workspace: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_budget_crossing_reaps_the_group_and_resolves_budget_terminated(workspace: Path) -> None:
+def test_budget_crossing_reaps_the_group_and_resolves_budget_terminated(
+    workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     usage = {"input_tokens": 80, "output_tokens": 40}
     script = {
         "lines": [{"type": "assistant", "message": {"id": "m1", "usage": usage}}],
@@ -525,15 +537,23 @@ def test_budget_crossing_reaps_the_group_and_resolves_budget_terminated(workspac
         seen.append((total, pgid))
         return total >= _CAP_TOKENS
 
-    started = time.monotonic()
+    ladders: list[TerminationResult] = []
+    ladder = cancel.cancel_with_grace
+
+    def recording(pgid: int, *args: Any, **kwargs: Any) -> TerminationResult:
+        result = ladder(pgid, *args, **kwargs)
+        ladders.append(result)
+        return result
+
+    monkeypatch.setattr(cancel, "cancel_with_grace", recording)
     outcome, turn = _run(workspace, script, usage_sink=sink)
-    elapsed = time.monotonic() - started
 
     pgid = int((workspace / "fake.pgid").read_text(encoding="utf-8"))
     assert turn == TurnOutcome(exit_kind="budget_terminated", runtime_tuple=_OBSERVED)
     assert seen == [(120, pgid)]
     assert outcome.subprocess_pid == pgid
-    assert elapsed < DEFAULT_GRACE_SECONDS
+    # the hung group left on the soft signal, so the ladder never waited out its grace
+    assert [(r.sigkill_sent, r.exited_on_term) for r in ladders] == [(False, True)]
     with pytest.raises(ProcessLookupError):
         os.killpg(pgid, 0)
 

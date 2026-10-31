@@ -36,7 +36,6 @@ from eawf.kernel.spec.common import (
     ProofLocus,
     backfill_legacy_criteria,
     convert_legacy_criterion,
-    grandfather_criterion,
     legacy_criterion_pattern,
     validate_criterion_gate_refs,
 )
@@ -106,11 +105,8 @@ def test_convert_oracle_tier_resolves_from_attached_gate_kind() -> None:
 
 
 def test_backfill_drops_legacy_count_to_zero_on_sample() -> None:
-    # The binary success criterion: a representative sample of grandfathered
+    # The binary success criterion: a representative sample of legacy
     # strings converts to typed + gated rows and the legacy count is ZERO.
-    grandfathered = [grandfather_criterion(text, index=i) for i, text in enumerate(_SAMPLE, 1)]
-    assert legacy_criterion_count(grandfathered) == len(_SAMPLE)
-
     criteria, gates = backfill_legacy_criteria(_SAMPLE, file_scopes=_SCOPES)
 
     assert legacy_criterion_count(criteria) == 0

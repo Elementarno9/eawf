@@ -138,7 +138,7 @@ def test_tui_epoch1_tree_opens_the_console_on_migration_required(
     assert rc == launch.TERMINAL_ENTRY_EXIT_CODE
     (app,) = apps
     assert app.session.entry_sel == launch._entry_sel(load_chrome(), "migration")
-    assert "eawf migrate epoch2 --plan" in capsys.readouterr().err
+    assert "eawf help upgrade-from-0.6" in capsys.readouterr().err
 
 
 # --------------------------------------------------------------------------
@@ -147,10 +147,10 @@ def test_tui_epoch1_tree_opens_the_console_on_migration_required(
 
 
 @pytest.mark.parametrize(
-    ("break_marker", "expected_gap", "expected_command"),
+    ("break_marker", "expected_gap"),
     [
-        (False, AuthorityGap.MARKER_ABSENT, "--rollback"),
-        (True, AuthorityGap.MARKER_UNREADABLE, "--recover"),
+        (False, AuthorityGap.MARKER_ABSENT),
+        (True, AuthorityGap.MARKER_UNREADABLE),
     ],
     ids=["marker-absent", "marker-unreadable"],
 )
@@ -161,7 +161,6 @@ def test_tui_migration_required_exits_4_off_tty(
     *,
     break_marker: bool,
     expected_gap: AuthorityGap,
-    expected_command: str,
 ) -> None:
     _declare_canary(tmp_path / ".ea")
     if break_marker:
@@ -181,7 +180,7 @@ def test_tui_migration_required_exits_4_off_tty(
     assert rc == 4
     assert called["n"] == 0
     err = capsys.readouterr().err
-    assert f"eawf migrate epoch2 {expected_command} --target-root {tmp_path / '.ea'}" in err
+    assert "eawf help upgrade-from-0.6" in err
 
 
 def test_tui_migration_required_builds_entry_session_on_a_held_tty(
@@ -212,7 +211,7 @@ def test_tui_migration_required_builds_entry_session_on_a_held_tty(
     assert app.session.route == "entry"
     assert app.session.entry_sel == launch._entry_sel(load_chrome(), "migration")
     commands = app.fixture.proto.entry[app.session.entry_sel].commands
-    assert f"eawf migrate epoch2 --rollback --target-root {tmp_path / '.ea'}" in commands
+    assert "eawf help upgrade-from-0.6" in commands
 
 
 # --------------------------------------------------------------------------

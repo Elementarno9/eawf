@@ -24,13 +24,12 @@ from uuid import UUID
 
 import pytest
 
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.spec.release import Release, ReleaseChannel, ReleaseStatus
 from eawf.kernel.spec.release_config import load_release_config
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import create, show
 from eawf.runtime.daemon.methods.release_receipts import advance
-from eawf.workflow.evidence._io import load_state
+from eawf.workflow.evidence._io import ContractView
 from eawf.workflow.evidence.measured_contract import (
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -52,6 +51,7 @@ from eawf.workflow.verify.checkpoint_succession import (
     SuccessionDenialCode,
     assert_predecessor_terminal,
 )
+from tests._contract_view import contract_view
 from tests._epoch2_helpers import lay_contract_tree
 from tests._release_helpers import (
     accepted_canary_export,
@@ -81,9 +81,9 @@ MANIFEST_DIGEST = f"sha256:{'c' * 64}"
 DEV3_CREATE = {"version": DEV3, "membership_refs": ["milestone://epoch2/native-canary"]}
 
 
-def state_with(versions: Sequence[str]) -> State:
+def state_with(versions: Sequence[str]) -> ContractView:
     """Return the fixture state with every contract *versions* require promoted."""
-    state = load_state(_EMPTY_STATE)
+    state = contract_view(_EMPTY_STATE)
     for version in versions:
         for contract_id in required_contract_ids(version):
             promote_measured_contract(
@@ -123,7 +123,7 @@ def dev2_at(status: ReleaseStatus) -> Release:
 def context(
     tmp_path: Path,
     *,
-    state: State,
+    state: ContractView,
     records: Sequence[Release],
 ) -> MethodContext:
     """Write *state* and *records* under *tmp_path* and bind a context to them.

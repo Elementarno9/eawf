@@ -78,6 +78,12 @@ def render_run_server_config(
         f"{SERVER_CONFIG_KEY}.args={json.dumps(list(server_command[1:]))}",
         "-c",
         f"{SERVER_CONFIG_KEY}.enabled=true",
+        # A headless Run runs under approval_policy "never", where codex
+        # rejects any MCP call it would otherwise prompt for. The server
+        # already publishes only the granted tools and the daemon refuses
+        # the rest, so its tools are approved up front.
+        "-c",
+        f'{SERVER_CONFIG_KEY}.default_tools_approval_mode="approve"',
     ]
     overrides.extend(codex_tool_denials(ambient_tool_denial()))
     logger.info(f"render_run_server_config runtime={RUNTIME_ID} tools={len(exposed)}")

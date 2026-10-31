@@ -184,7 +184,8 @@ def test_the_windows_claim_names_a_job_the_ci_workflow_declares() -> None:
     sorted(
         version
         for version in CHECKPOINT_CONFIGS
-        if V07_TRAIN.checkpoint_for_version(version).gate_profile is not PROFILE
+        if V07_TRAIN.checkpoints.index(V07_TRAIN.checkpoint_for_version(version))
+        < V07_TRAIN.checkpoints.index(V07_TRAIN.checkpoint_for_version(RC2_VERSION))
     ),
 )
 def test_no_earlier_rung_gains_the_windows_claim(version: str) -> None:

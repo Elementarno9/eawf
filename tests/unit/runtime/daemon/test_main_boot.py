@@ -1,11 +1,12 @@
 """Boot-path tests for :mod:`eawf.runtime.daemon.main`.
 
-``daemon.main.run()`` invokes :func:`eawf.runtime.daemon.recovery.replay_wal`
-after the WAL directory is created and before the asyncio server accepts
-connections, so a record that crashed mid-append is replayed at startup.
+``daemon.main.run()`` creates the WAL directory and runs the native boot
+passes before the asyncio server accepts connections. A record an epoch-1
+daemon left at the top of the WAL directory is not replayed, so booting
+over a 0.6 tree writes nothing to it.
 
 The tests exercise the boot path without ever opening a socket: the
-asyncio body is monkeypatched into a no-op so the replay side effects can
+asyncio body is monkeypatched into a no-op so the boot side effects can
 be checked without standing up a real daemon. The daemon's logging sinks
 are checked for the secret scrubber alongside.
 """
@@ -72,8 +73,10 @@ def _read_event_ids(event_path: Path) -> list[str]:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason=_BOOT_SKIP_REASON)
-def test_run_replays_wal_before_serve(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """An ``.applied.json`` record missing from event.jsonl is replayed at boot."""
+def test_run_leaves_an_epoch1_wal_record_and_the_06_tree_untouched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A top-level ``.applied.json`` record from an epoch-1 daemon is not replayed."""
     # Stand up a synthetic project layout: state.json + an empty event log.
     ea_dir = tmp_path / "project" / ".ea"
     ea_dir.mkdir(parents=True)
@@ -97,9 +100,8 @@ def test_run_replays_wal_before_serve(tmp_path: Path, monkeypatch: pytest.Monkey
     monkeypatch.setattr(daemon_main, "log_path", lambda: log_file)
     monkeypatch.setattr(daemon_main, "socket_path", lambda: rt_dir / "eawfd.sock")
 
-    # Seed a WAL record that crashed between event.jsonl append and
-    # fsync rename — replay should append the envelope row + rename
-    # the WAL record to .fsynced.json.
+    # Seed a record an epoch-1 daemon left between event.jsonl append and
+    # fsync rename.
     rec = _record("rec-boot-001", "env-boot-001")
     write_pending(wal_dir, rec)
     mark_applied(wal_dir, rec.record_id)
@@ -107,7 +109,7 @@ def test_run_replays_wal_before_serve(tmp_path: Path, monkeypatch: pytest.Monkey
     assert not event_path.exists()
 
     # Short-circuit the asyncio body so the test never tries to bind a
-    # real socket. The replay runs in the synchronous prologue of run().
+    # real socket. The boot passes run in the synchronous prologue of run().
     def _close_coro(coro: object) -> None:
         # Close the coroutine the daemon would have run so the test
         # avoids a RuntimeWarning about a never-awaited coroutine.
@@ -119,11 +121,10 @@ def test_run_replays_wal_before_serve(tmp_path: Path, monkeypatch: pytest.Monkey
     exit_code = daemon_main.run(foreground=True)
     assert exit_code == 0
 
-    # The boot-time replay must have appended the missing event row and
-    # renamed the WAL record so subsequent boots are no-ops.
-    assert _read_event_ids(event_path) == ["env-boot-001"]
-    assert (wal_dir / "rec-boot-001.fsynced.json").exists()
-    assert not (wal_dir / "rec-boot-001.applied.json").exists()
+    # The 0.6 tree gains no event row and the record keeps its status.
+    assert _read_event_ids(event_path) == []
+    assert (wal_dir / "rec-boot-001.applied.json").exists()
+    assert not (wal_dir / "rec-boot-001.fsynced.json").exists()
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason=_BOOT_SKIP_REASON)
@@ -177,19 +178,8 @@ def test_run_acquires_singleton_before_pid_wal_and_socket(
         events.append("singleton")
         yield
 
-    class _ReplayReport:
-        pending_count = 0
-        applied_count = 0
-        fsynced_count = 0
-        poisoned_count = 0
-        replayed_event_count = 0
-
     def _fake_write_pid(_path: Path, _pid: int, _started_at: str) -> None:
         events.append("pid")
-
-    def _fake_replay_wal(*_args: object, **_kwargs: object) -> _ReplayReport:
-        events.append("wal")
-        return _ReplayReport()
 
     def _close_coro(coro: object) -> None:
         events.append("socket")
@@ -201,11 +191,10 @@ def test_run_acquires_singleton_before_pid_wal_and_socket(
     monkeypatch.setattr(daemon_main, "socket_path", lambda: rt_dir / "eawfd.sock")
     monkeypatch.setattr(daemon_main, "acquire_daemon_singleton", _fake_singleton)
     monkeypatch.setattr(daemon_main, "_write_pid_file", _fake_write_pid)
-    monkeypatch.setattr(daemon_main, "replay_wal", _fake_replay_wal)
     monkeypatch.setattr(daemon_main.asyncio, "run", _close_coro)
 
     assert daemon_main.run(foreground=True) == 0
-    assert events == ["singleton", "pid", "wal", "socket"]
+    assert events == ["singleton", "pid", "socket"]
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason=_BOOT_SKIP_REASON)
@@ -232,7 +221,6 @@ def test_run_duplicate_boot_exits_without_runtime_mutation(
     monkeypatch.setattr(daemon_main, "socket_path", lambda: sock_file)
     monkeypatch.setattr(daemon_main, "acquire_daemon_singleton", _locked)
     monkeypatch.setattr(daemon_main, "_write_pid_file", _unexpected)
-    monkeypatch.setattr(daemon_main, "replay_wal", _unexpected)
     monkeypatch.setattr(daemon_main.asyncio, "run", _unexpected)
 
     assert daemon_main.run(foreground=True) == 0

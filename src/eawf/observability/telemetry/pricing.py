@@ -338,15 +338,35 @@ PRICING: dict[str, ModelPricing] = {
         pricing_version=PRICING_VERSION,
         fetched_at=PRICING_FETCHED_AT,
     ),
-    # The ids a ChatGPT-account codex actually serves (the agent-driven default
-    # codex tier ladder). ``gpt-5.5`` is the flagship (mid/top tiers) and
-    # ``gpt-5.3-codex-spark`` the small cheap tier. PLACEHOLDER RATES, same
-    # provenance caveat as the rows above: ``gpt-5.5`` reuses the ``gpt-5``
-    # stand-in and ``gpt-5.3-codex-spark`` the cheaper ``gpt-5-mini`` stand-in;
-    # both need operator confirmation against published OpenAI rates before they
-    # are treated as authoritative. Listed as exact keys (not relying on the
-    # ``gpt-5`` longest-prefix fallback) so each tier prices to its own row and a
-    # spark spawn does not silently bill at the flagship rate.
+    # The ids the default codex tier ladder routes to, which a ChatGPT-account
+    # codex serves: ``gpt-6.1-sol`` the workhorse (mid/top tiers) and
+    # ``gpt-6-luna`` the fast cheap tier. PLACEHOLDER RATES, same provenance
+    # caveat as the rows above: ``gpt-6.1-sol`` reuses the ``gpt-5`` stand-in
+    # and ``gpt-6-luna`` the cheaper ``gpt-5-mini`` stand-in; both need operator
+    # confirmation against published OpenAI rates before they are treated as
+    # authoritative.
+    "gpt-6.1-sol": ModelPricing(
+        input_per_token=Decimal("3e-6"),
+        output_per_token=Decimal("15e-6"),
+        cache_read_per_token=Decimal("0.3e-6"),
+        cache_write_5m_per_token=Decimal("3.75e-6"),
+        cache_write_1h_per_token=Decimal("6e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    "gpt-6-luna": ModelPricing(
+        input_per_token=Decimal("1e-6"),
+        output_per_token=Decimal("5e-6"),
+        cache_read_per_token=Decimal("0.1e-6"),
+        cache_write_5m_per_token=Decimal("1.25e-6"),
+        cache_write_1h_per_token=Decimal("2e-6"),
+        pricing_version=PRICING_VERSION,
+        fetched_at=PRICING_FETCHED_AT,
+    ),
+    # Ids a ChatGPT-account codex served before it retired them. No ladder
+    # routes to them any more; the rows stay so a recorded session that ran on
+    # one still prices. PLACEHOLDER RATES, the same stand-ins as above, as
+    # exact keys so a spark session does not bill at the ``gpt-5`` prefix rate.
     "gpt-5.5": ModelPricing(
         input_per_token=Decimal("3e-6"),
         output_per_token=Decimal("15e-6"),

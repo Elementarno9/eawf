@@ -1,4 +1,4 @@
-"""Per-wave token-budget policy + service surface.
+"""Token-budget policy + service surface.
 
 Public API:
 
@@ -9,22 +9,12 @@ Public API:
 * :class:`policy.BudgetConfig` / :class:`policy.PromptBudgetCeiling` — the
   validated ``flow.budget`` table and the one ceiling it derives.
 * :func:`service.load_budget_config` — read that table from layered config.
-* :func:`service.set_budget` — assign a budget to a wave.
-* :func:`service.record_consumption` — accumulate tokens and classify.
-* :func:`service.check_budget` — read-only classify of the current wave state.
-* :func:`service.consume_against_ceiling` — accumulate tokens and decide them
-  against the wave's one ceiling.
 * :func:`service.emit_budget_notice` — upsert the scope's non-blocking
   threshold notice (:mod:`eawf.runtime.budget.notices`).
 * :func:`service.emit_termination_notice` — fold a Run's budget-termination
   receipt into that same notice ledger.
 * :func:`service.terminate_with_grace` — SIGTERM -> grace -> SIGKILL
   process-termination ladder used by ``hard`` budget enforcement.
-
-The library is I/O-free apart from the termination ladder's process
-signalling; the persistence path lives in the lifecycle CLI
-(the retired ``wave budget set`` verb), which wraps the state-mutating
-calls in the canonical state-locked mutation transaction.
 """
 
 from __future__ import annotations
@@ -47,16 +37,11 @@ from eawf.runtime.budget.policy import (
 )
 from eawf.runtime.budget.service import (
     DEFAULT_GRACE_SECONDS,
-    ConsumeOutcome,
     TerminableProcess,
     TerminationResult,
-    check_budget,
-    consume_against_ceiling,
     emit_budget_notice,
     emit_termination_notice,
     load_budget_config,
-    record_consumption,
-    set_budget,
     terminate_with_grace,
 )
 
@@ -69,22 +54,17 @@ __all__ = [
     "BudgetAction",
     "BudgetConfig",
     "BudgetDecision",
-    "ConsumeOutcome",
     "DuplicateCeilingError",
     "EnforceMode",
     "PromptBudgetCeiling",
     "TerminableProcess",
     "TerminationResult",
     "budget_config_from",
-    "check_budget",
     "classify",
     "classify_enforcement",
-    "consume_against_ceiling",
     "effective_cap",
     "emit_budget_notice",
     "emit_termination_notice",
     "load_budget_config",
-    "record_consumption",
-    "set_budget",
     "terminate_with_grace",
 ]

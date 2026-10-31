@@ -6,13 +6,9 @@ portalock and fsync) and never through a bus push: the callers hold an
 event-store path but no daemon context, and the Watch tail's store poll
 surfaces the rows either way.
 
-Two producers live here:
-
-* the live ``agent.output.chunk`` rows a spawn streams
-  (:func:`persist_agent_output_chunk`) or an external orchestrator forwards
-  for its native Run (:func:`persist_forwarded_output_chunk`);
-* the typed ``session_closed`` row the session store emits once a session
-  row turns terminal (:func:`emit_session_closed`).
+The producer that lives here writes the live ``agent.output.chunk`` rows a
+spawn streams (:func:`persist_agent_output_chunk`) or an external orchestrator
+forwards for its native Run (:func:`persist_forwarded_output_chunk`).
 
 A typed payload is validated through :data:`C09EventPayloadUnion` before
 it is folded into the generic :class:`eawf.kernel.store.envelope.Envelope`
@@ -27,39 +23,25 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast, get_args
-
-from pydantic import TypeAdapter
 
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.runtime.control import RunBinding
-from eawf.kernel.state.enums import AgentSessionStatus, StoreKind
+from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.epoch2.run import Run
-from eawf.kernel.state.ids import RE_WAVE
-from eawf.kernel.state.models import AgentSession
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.events import (
     AgentOutputChunkPayload,
-    C09EventPayloadUnion,
-    SessionClosedPayload,
 )
-from eawf.kernel.store.kinds.events.base import RuntimeTriple, runtime_triple_label
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.observability.telemetry.models import EndMarker
 from eawf.workflow.agent_report.store import ReportAuthor
 
 logger = logging.getLogger(__name__)
-
-#: Adapter used to validate a typed payload through the discriminated
-#: union before it is folded into the envelope ``payload`` dict. Building
-#: the adapter once at import keeps the per-emit cost to a dict round-trip.
-_PAYLOAD_ADAPTER: TypeAdapter[Any] = TypeAdapter(C09EventPayloadUnion)
 
 
 #: Stdout lines the live-chunk producer buffers before flushing one chunk event.
@@ -336,140 +318,3 @@ def persist_forwarded_output_chunk(
     return ForwardedOutputChunk(
         scope_id=author.scope_id, run_key=author.session_id, envelope_id=envelope_id
     )
-
-
-#: How a terminal :class:`AgentSessionStatus` reads as a telemetry
-#: :data:`~eawf.observability.telemetry.models.EndMarker`. A session that is not
-#: in this map is not terminal, so it has nothing to close-report; membership
-#: doubles as the terminality test in :func:`emit_session_closed`.
-_SESSION_END_MARKERS: dict[AgentSessionStatus, EndMarker] = {
-    AgentSessionStatus.CLOSED: "clean_stop",
-    AgentSessionStatus.STALE: "away",
-    AgentSessionStatus.FAILED: "other",
-}
-
-#: The closed runtime set the telemetry surface keys on. ``AgentSession.runtime``
-#: is an open ``str``, so a row naming a runtime outside this set has no
-#: projectable spelling and is reported rather than coerced.
-_RUNTIME_TRIPLES: frozenset[str] = frozenset(get_args(RuntimeTriple))
-
-
-def _session_log_handle(session: AgentSession) -> str:
-    """Return the opaque session-log handle stamped on a close event.
-
-    Mirrors the adapter URN shape (``urn:eawf:v1:session-log:<runtime>:<id>``)
-    so a handle minted here resolves through the same daemon-side map as one
-    an adapter minted. It is a handle rather than a path because the event
-    store is committed to version control (AGENTS rule 16).
-
-    Args:
-        session: The session row the handle identifies.
-
-    Returns:
-        The URN-shaped handle; falls back to the eawf session id when the
-        runtime never reported one of its own, since the payload field is
-        required and non-empty.
-    """
-    return f"urn:eawf:v1:session-log:{session.runtime}:{session.runtime_session_id or session.id}"
-
-
-def _session_wave_id(session: AgentSession) -> str | None:
-    """Return the wave a session served, or ``None`` for a non-wave session.
-
-    A claimed wave is authoritative; a session that never claimed one still
-    binds a wave when it was opened *under* a wave scope, which is how the
-    fleet lanes and the executor dispatch open their sessions. Anything else
-    (a project- or iter-scoped interactive session) has no wave.
-
-    Args:
-        session: The session row to resolve.
-
-    Returns:
-        The wave id, or ``None``.
-    """
-    if session.claimed_wave_ids:
-        return session.claimed_wave_ids[0]
-    return session.scope_id if RE_WAVE.match(session.scope_id) else None
-
-
-def emit_session_closed(events_path: Path, *, session: AgentSession) -> str | None:
-    """Emit the typed ``session_closed`` event for a terminalized session.
-
-    The producer behind the telemetry session projection: every terminal
-    session path funnels through the session store, which calls this once the
-    row is terminal, so a rebuild over the canonical event store reports the
-    sessions that actually ran instead of an empty table.
-
-    The event is self-contained -- it carries the open instant alongside the
-    close instant -- so an incremental tail scan that sees only this line still
-    projects a complete row with the right duration.
-
-    Token tallies stay at zero and ``model`` at ``None``: an
-    :class:`~eawf.kernel.state.models.AgentSession` row carries neither. The
-    session row contributes identity and duration.
-
-    Args:
-        events_path: Path to ``event.jsonl`` for the canonical append.
-        session: The terminalized session row, with ``ended_at`` stamped.
-
-    Returns:
-        The id of the appended envelope, or ``None`` when *session* has no
-        projectable close: it is not in a terminal status, carries no
-        ``ended_at``, names a runtime outside the closed telemetry set, or
-        ends before it opened (a reversed pair projects a negative duration
-        that every downstream percentile silently drops).
-
-    Raises:
-        eawf.kernel.state.errors.StateConflict: When the append lock on
-            *events_path* cannot be acquired.
-    """
-    marker = _SESSION_END_MARKERS.get(session.status)
-    if marker is None or session.ended_at is None:
-        logger.debug(
-            f"emit_session_closed skip reason=not-terminal session={session.id!r} "
-            f"status={session.status.value}"
-        )
-        return None
-    runtime = runtime_triple_label(session.runtime)
-    if runtime not in _RUNTIME_TRIPLES:
-        logger.warning(
-            f"emit_session_closed skip reason=unprojectable-runtime session={session.id!r} "
-            f"runtime={session.runtime!r}"
-        )
-        return None
-    if session.ended_at < session.started_at:
-        logger.warning(
-            f"emit_session_closed skip reason=ended-before-started session={session.id!r} "
-            f"started_at={session.started_at.isoformat()} ended_at={session.ended_at.isoformat()}"
-        )
-        return None
-    wave_id = _session_wave_id(session)
-    payload = SessionClosedPayload(
-        timestamp=session.ended_at,
-        opened_at=session.started_at,
-        session_id=session.id,
-        runtime=cast("RuntimeTriple", runtime),
-        session_log_handle=_session_log_handle(session),
-        wave_id=wave_id,
-        end_marker=marker,
-        trace_wave_id=wave_id,
-    )
-    summary = f"session_closed session={session.id} runtime={runtime} end_marker={marker}"
-    envelope = Envelope(
-        schema_version="1.0",
-        id=f"EV-{uuid.uuid4().hex[:12]}",
-        kind=StoreKind.EVENT,
-        scope_id=session.scope_id,
-        created_at=session.ended_at,
-        updated_at=None,
-        summary=summary,
-        payload=_PAYLOAD_ADAPTER.validate_python(payload).model_dump(mode="json"),
-        blob_refs=[],
-        artifact_ids=[],
-    )
-    append_envelope(events_path, envelope)
-    logger.info(
-        f"emit_session_closed session={session.id!r} runtime={runtime} "
-        f"end_marker={marker} envelope_id={envelope.id!r}"
-    )
-    return envelope.id

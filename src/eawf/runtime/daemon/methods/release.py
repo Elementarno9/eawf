@@ -110,7 +110,6 @@ from pydantic import (
     model_validator,
 )
 
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.release.waiver import ReleaseWaiver
 from eawf.kernel.spec.release import (
     Release,
@@ -145,7 +144,7 @@ from eawf.runtime.daemon.methods.release_keyed import (
 from eawf.runtime.mcp.book import generation_document
 from eawf.runtime.release.chokepoint import sweep_pinned_source
 from eawf.surfaces.cli.errors import UserError
-from eawf.workflow.evidence._io import generation_contract_view
+from eawf.workflow.evidence._io import ContractView, generation_contract_view
 from eawf.workflow.evidence.provider_certification import CanaryEvidence, load_canary_evidence
 from eawf.workflow.release.adapters import collect_observation
 from eawf.workflow.release.admission import (
@@ -1159,7 +1158,7 @@ class CreateParams(BaseModel):
     membership_refs: list[str] = Field(default_factory=list)
 
 
-def _promoted_contracts(state_path: Path) -> State:
+def _promoted_contracts(state_path: Path) -> ContractView:
     """Return the measured contracts the selected generation of *state_path*'s tree holds.
 
     Raises:

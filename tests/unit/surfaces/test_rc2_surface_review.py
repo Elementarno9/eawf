@@ -162,6 +162,44 @@ def test_certify_sends_every_accepted_combination(
     assert certify_sent == [{k: v for k, v in expected.items() if v is not None}]
 
 
+def test_certify_sends_a_version_range(certify_sent: list[dict[str, Any]]) -> None:
+    runtime.runtime_certify_cmd(
+        _ctx(),
+        "claude-code",
+        task="EAWF-0001",
+        actor="OP-0001",
+        min_version="2.1.310",
+        max_version="2.1.399",
+    )
+    assert certify_sent[0]["version_range"] == {
+        "min_version": "2.1.310",
+        "max_version": "2.1.399",
+    }
+
+
+@pytest.mark.parametrize(
+    ("low", "high"), [("2.1.310", None), (None, "2.1.399")], ids=["min-alone", "max-alone"]
+)
+def test_certify_refuses_one_range_bound_alone_before_the_daemon(
+    certify_sent: list[dict[str, Any]],
+    capsys: pytest.CaptureFixture[str],
+    low: str | None,
+    high: str | None,
+) -> None:
+    with pytest.raises(typer.Exit) as exited:
+        runtime.runtime_certify_cmd(
+            _ctx(),
+            "claude-code",
+            task="EAWF-0001",
+            actor="OP-0001",
+            min_version=low,
+            max_version=high,
+        )
+    assert exited.value.exit_code == exit_codes.USER_ERROR
+    assert "name a range together" in json.loads(capsys.readouterr().out)["message"]
+    assert certify_sent == []
+
+
 # ---------- eawf campaign new ----------
 
 _TRACK = "eawf://WSP-MAIN/PRJ-QR/REP-QR/track/TRK-0001"

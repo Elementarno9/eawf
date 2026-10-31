@@ -74,13 +74,13 @@ rules:
       method: review
   - rule_id: eawf.core.vcs.commit-granularity
     obligation_id: vcs.commit-granularity
-    revision: 6
+    revision: 7
     title: Land one commit per Batch and one state commit per push
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Before a push, squash the branch to one buildable commit per Batch, or a few for a large Batch, code with its tests; end each push with one `state:` commit; rebind every binding a squashed commit carried to its new commit with `eawf batch rebind`, never by editing a row.
+      Before review opens, squash the branch to one buildable commit per Batch, or a few for a large Batch, code with its tests; after review opens, only append fix Batches; end each push with one `state:` commit; rebind each binding a squash replaced with `eawf batch rebind`, never by editing a row.
     rationale: >-
       A deliverable split across commits cannot be reviewed or reverted as a unit and bisect lands on trees that never worked; a Batch binds the Milestone branch head when it lands, so the squash leaves that binding naming a commit no branch reaches until a superseding row rebinds it.
     verification:

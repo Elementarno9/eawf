@@ -63,7 +63,6 @@ from eawf.kernel.migration.epoch2.recovery import (
     require_single_authority,
 )
 from eawf.kernel.migration.epoch2.restore import read_restore_manifest
-from eawf.surfaces.cli.app import app
 from tests.integration.kernel.migration._cutover_harness import (
     RECOVERED_AT,
     SEEDED_SURFACES,
@@ -387,34 +386,3 @@ def test_recovery_envelope_reports_the_outcome_as_the_status(tmp_path: Path) -> 
     assert envelope["action"] == "recover"
     assert envelope["authority"]["epoch"] == 2
     assert envelope["boundary"] == "generation_selected"
-
-
-def test_recover_through_the_cli_completes_the_activation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The operator route drives the same reconciliation the library does."""
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    crashed = crashed_at(tmp_path, POST_SELECT_CRASH)
-    target = DisposableTarget.require(crashed.target_root)
-
-    result = runner.invoke(
-        app, ["--json", "migrate", "epoch2", "--recover", "--target-root", str(target.root)]
-    )
-
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)["result"]
-    assert payload["status"] == "activation_completed"
-    assert payload["authority"]["generation_id"] == crashed.generation_id
-    assert read_marker(target) is not None
-
-
-def test_recover_through_the_cli_refuses_two_recovery_modes_at_once(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Error path: a run is never both a repair forward and a repair back."""
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-
-    result = runner.invoke(app, ["migrate", "epoch2", "--recover", "--rollback"])
-
-    assert result.exit_code != 0
-    assert "got 2" in result.output

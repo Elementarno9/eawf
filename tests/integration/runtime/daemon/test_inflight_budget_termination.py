@@ -200,6 +200,11 @@ def child(tmp_path: Path, canary: CanaryProvision) -> Iterator[LiveChild]:
         text=True,
         start_new_session=True,
     )
+    # The parent reaps its child the moment it exits, as the runtime adapter
+    # does. Left unreaped, the leader lingers as a zombie that still owns its
+    # group on Linux, and the kill ladder waits out its whole grace window.
+    reaper = threading.Thread(target=process.wait, daemon=True)
+    reaper.start()
     live = LiveChild(process, result)
     try:
         yield live
@@ -207,6 +212,7 @@ def child(tmp_path: Path, canary: CanaryProvision) -> Iterator[LiveChild]:
         if process.poll() is None:
             process.kill()
         process.wait(timeout=30.0)
+        reaper.join(timeout=30.0)
         for stream in (process.stdin, process.stdout):
             if stream is not None:
                 stream.close()

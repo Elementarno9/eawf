@@ -4,27 +4,14 @@ These helpers live behind a leading-underscore module name because they are
 part of the implementation contract for ``evidence/<area>.py`` only — the CLI
 layer never imports them directly. They centralise:
 
-* Loading + parsing ``state.json`` into a :class:`State`.
 * Reading the promoted measured contracts out of an epoch-2 tree's
-  selected generation.
+  selected generation into a :class:`ContractView`.
 * Computing a stable args-hash for the event envelope.
 * Building event envelopes with consistent shape.
 
 The append helper and canonical store-path resolver live in
 ``eawf.kernel.store.append`` and ``eawf.kernel.store.paths`` respectively. This module
 re-exports them so existing callers keep working.
-
-The mutation pattern every CLI handler uses is::
-
-    with state_transaction(state_path) as state:
-        record, event = mutate(state, ...)  # in-place
-        append_jsonl(store_paths(state_path)[StoreKind.<kind>], record)
-        append_jsonl(store_paths(state_path)[StoreKind.EVENT], event)
-
-The :func:`eawf.surfaces.cli._mutation.state_transaction` context manager owns
-``portalock(state.json)`` for the entire load + mutate + validate + write
-cycle; the JSONL appenders acquire sibling locks for their own files.
-State and events are on different files so the locks never compete.
 """
 
 from __future__ import annotations
@@ -33,15 +20,13 @@ import hashlib
 import json
 import logging
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
-import orjson
-
-from eawf.kernel.migration.v1_state import State
 from eawf.kernel.state.enums import StoreKind
-from eawf.kernel.state.models import Artifact, Project
+from eawf.kernel.state.models import Artifact
 from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.store.append import append_envelope as append_jsonl
 from eawf.kernel.store.compaction import document_rows
@@ -49,8 +34,6 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import store_paths
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.kernel.validate.strict import validate_state as validate_payload
-from eawf.surfaces.cli.errors import UserError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -60,32 +43,30 @@ MEASURED_CONTRACT_STATUS: Final = "measured_contract"
 
 __all__ = [
     "MEASURED_CONTRACT_STATUS",
+    "ContractView",
     "append_jsonl",
     "artifact_urn",
     "event_envelope",
     "generation_contract_view",
     "kind_envelope",
-    "load_state",
     "store_paths",
 ]
 
 
-def load_state(state_path: Path) -> State:
-    """Read *state_path* and return a typed :class:`State`.
+@dataclass
+class ContractView:
+    """The measured contracts one repository has promoted, held in memory only.
 
-    Raises:
-        UserError: when ``state_path`` does not exist (``kind="NotFound"``).
-        ValidationError: when the on-disk payload is not a valid State.
+    Attributes:
+        project_code: The repository's project code, or ``None`` when the
+            document holds no project row.
+        artifacts: Promoted contracts keyed by contract id.
+        updated_at: When the view last changed.
     """
-    if not state_path.exists():
-        raise UserError(f"state file not found: {state_path}", kind="NotFound")
-    payload = orjson.loads(Path(state_path).read_bytes())
-    report = validate_payload(payload, strict_optional=False)
-    if report.state is None:
-        raise ValidationError(
-            "state.json failed schema validation: " + "; ".join(report.schema_errors[:3])
-        )
-    return report.state
+
+    project_code: str | None
+    artifacts: dict[str, Artifact]
+    updated_at: datetime
 
 
 def _promoted_contracts(*, artifact_ledger: Path, evidence_ledger: Path) -> dict[str, Artifact]:
@@ -120,15 +101,11 @@ def _promoted_contracts(*, artifact_ledger: Path, evidence_ledger: Path) -> dict
 
 def generation_contract_view(
     document: Mapping[str, Any], *, artifact_ledger: Path, evidence_ledger: Path
-) -> State:
-    """Return a generation's promoted contracts shaped as the v1 document.
+) -> ContractView:
+    """Return a generation's promoted contracts and its project code.
 
-    :mod:`eawf.workflow.evidence.measured_contract` promotes into and
-    resolves against a :class:`State`, but reads only the project's code
-    and the ``artifacts``; the generation holds no other v1 collection, so
-    the rest is left unset rather than invented. The code is the key of
-    the document's one project row, which a migrated and a native tree
-    spell alike.
+    The code is the key of the document's one project row, which a
+    migrated and a native tree spell alike.
 
     Args:
         document: The selected generation's document.
@@ -136,9 +113,9 @@ def generation_contract_view(
         evidence_ledger: The generation's ``ledger/evidence.jsonl``.
 
     Returns:
-        An unvalidated, in-memory view that is never written anywhere. Its
-        ``project`` is ``None`` when the document holds no project row; a
-        later promotion of a contract id wins over an earlier one.
+        An in-memory view that is never written anywhere. Its
+        ``project_code`` is ``None`` when the document holds no project row;
+        a later promotion of a contract id wins over an earlier one.
 
     Raises:
         ValueError: The document holds something other than an object under
@@ -149,8 +126,8 @@ def generation_contract_view(
         KeyError: A promotion line carries no ``contracts``.
     """
     code = min(document_rows(dict(document), Epoch2Collection.PROJECT), default=None)
-    return State.model_construct(
-        project=None if code is None else Project.model_construct(code=code),
+    return ContractView(
+        project_code=code,
         artifacts=_promoted_contracts(
             artifact_ledger=artifact_ledger, evidence_ledger=evidence_ledger
         ),

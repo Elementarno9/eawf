@@ -165,7 +165,6 @@ def test_surf_080_the_group_set_is_the_closed_amended_set() -> None:
         "daemon",
         "memory",
         "ui",
-        "migrate",
         "reflect",
     )
     together = verb_contract.ENTITY_GROUPS + verb_contract.CROSS_CUTTING_GROUPS
@@ -510,7 +509,6 @@ _READ_VERBS: tuple[tuple[str, ...], ...] = (
     ("memory", "digest"),
     ("memory", "list"),
     ("memory", "stale"),
-    ("migrate", "status"),
     ("workspace", "list"),
     ("release", "show", "0.7.0.dev1"),
 )

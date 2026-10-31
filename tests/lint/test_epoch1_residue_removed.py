@@ -141,8 +141,7 @@ def test_jury_label_verb_is_gone(tmp_path: Path) -> None:
     assert "No such command 'jury'" in group.output
     label = runner.invoke(app, ["--workspace", str(tmp_path), "jury", "label", "W-X", "--good"])
     assert label.exit_code == 2
-    assert "`eawf jury label` is retired" in label.output
-    assert "`eawf batch label`" in label.output
+    assert "No such command 'jury'" in label.output
     assert [row for row in COMMAND_REGISTRY if getattr(row, "name", None) == "jury"] == []
     assert "jury" not in _METHOD_MODULES
     assert [path for path in JURY_FILES if (REPO / path).exists()] == []
@@ -213,6 +212,9 @@ def test_residue_imports_raises_on_invalid_python(tmp_path: Path) -> None:
         ),
         ("tools/rasterize_svg_to_png\n", []),
     ],
+    # The default ids repeat the text, so the recorded duration baseline would
+    # name the deleted tools and fail the scan above.
+    ids=["empty", "one-tool", "two-tools", "longer-name"],
 )
 def test_tool_mentions_matches_each_tool_file_name(text: str, expected: list[str]) -> None:
     assert _tool_mentions(text) == expected

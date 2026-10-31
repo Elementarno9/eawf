@@ -25,8 +25,7 @@ from eawf.kernel.spec.common import (
     QualityDimension,
     ResponseClause,
 )
-from eawf.kernel.spec.visual import DeterminismRecipe, VisualContract
-from eawf.kernel.spec.wave import WaveBehavior
+from eawf.kernel.spec.visual import DeterminismRecipe, VisualContract, WaveBehavior
 
 
 def _populated_contract() -> VisualContract:

@@ -53,7 +53,7 @@ def _collect_worktree_internal_imports(module_path: Path) -> list[str]:
 
 @pytest.mark.parametrize(
     "module_name",
-    ["cleanup.py", "merge_back.py", "locks.py"],
+    ["tree_change.py"],
 )
 def test_sibling_modules_avoid_trampoline_import(module_name: str) -> None:
     """No sibling submodule imports ``git`` via the ``__init__`` trampoline.

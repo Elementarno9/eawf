@@ -53,6 +53,7 @@ from eawf.surfaces.cli.output import emit_json_or_text
 
 if TYPE_CHECKING:
     from eawf.kernel.spec.release_config import ReleaseConfig
+    from eawf.workflow.release.pipeline_host import GitHubReleaseHost
     from eawf.workflow.verify.release_readiness import ReleaseReadiness
 
 logger = logging.getLogger(__name__)
@@ -184,6 +185,52 @@ def _refuse_unready(readiness: ReleaseReadiness, *, tag: str) -> None:
     )
 
 
+def _release_host(repo_root: Path, *, workspace: Path | None, remote: str) -> GitHubReleaseHost:
+    """Return the forge adapter the CI-run lookup reads through.
+
+    Args:
+        repo_root: The checkout ``gh`` runs in.
+        workspace: The ``--workspace`` flag the state path resolves from.
+        remote: The remote the tag would be pushed to.
+
+    Returns:
+        The host the release pipeline itself reads CI runs through.
+    """
+    from eawf.kernel.state.resolve import resolve_with_reason
+    from eawf.workflow.release.pipeline_host import GitHubReleaseHost
+
+    state_path, _reason = resolve_with_reason(workspace)
+    return GitHubReleaseHost(repo_root, state_path=state_path, remote=remote)
+
+
+def _ci_refusal(
+    repo_root: Path, *, sha: str | None, workspace: Path | None, remote: str
+) -> str | None:
+    """Return why *sha*'s CI runs do not let it be tagged, or ``None`` when one proves it green.
+
+    Args:
+        repo_root: The checkout ``gh`` runs in.
+        sha: The commit the tag would name; ``None`` when the checkout
+            has no HEAD.
+        workspace: The ``--workspace`` flag the state path resolves from.
+        remote: The remote the tag would be pushed to.
+
+    Returns:
+        The refusal, including a forge that cannot be read, or ``None``.
+    """
+    from eawf.workflow.release.ci_runs import CI_WORKFLOW, ci_green_refusal
+    from eawf.workflow.release.pipeline import PipelineHostError
+
+    if sha is None:
+        return f"the checkout has no HEAD commit to read {CI_WORKFLOW} runs for"
+    host = _release_host(repo_root, workspace=workspace, remote=remote)
+    try:
+        runs = host.ci_runs(sha)
+    except PipelineHostError as exc:
+        return f"the {CI_WORKFLOW} runs of {sha} could not be read: {exc}"
+    return ci_green_refusal(runs, sha)
+
+
 def _dirty_paths(repo_root: Path) -> tuple[str, ...]:
     """Return the porcelain status lines of *repo_root*, minus the release stores.
 
@@ -225,10 +272,10 @@ def _waiver_for_dirty_tree(
 ) -> dict[str, str | int] | None:
     """Return the waiver record admitting *dirty*, or ``None`` when clean.
 
-    A dirty release tree is refused outright. ``--force`` used to admit
-    it silently, which made the tag a claim about a tree nobody has:
-    the only way past it now is an explicit waiver that states why, and
-    the waiver is carried into the sweep so it can never read as green.
+    A dirty release tree is refused outright: admitting it silently would
+    make the tag a claim about a tree nobody has. The only way past it is
+    an explicit waiver that states why, and the waiver is carried into
+    the sweep so it can never read as green.
 
     Args:
         dirty: Porcelain status lines of the release tree.
@@ -277,14 +324,13 @@ def _waiver_for_dirty_tree(
     return waiver
 
 
-def _create_and_push_tag(*, tag: str, remote: str, push: bool, force: bool) -> bool:
+def _create_and_push_tag(*, tag: str, remote: str, push: bool) -> bool:
     """Create the annotated *tag* and optionally push it to *remote*.
 
     Args:
         tag: Tag to create.
         remote: Remote to push to.
         push: Whether to push after tagging.
-        force: Whether to overwrite an existing tag / force the push.
 
     Returns:
         Whether the tag was pushed.
@@ -294,17 +340,12 @@ def _create_and_push_tag(*, tag: str, remote: str, push: bool, force: bool) -> b
     """
     import subprocess
 
-    tag_cmd = ["git", "tag", "-a", tag, "-m", f"Release {tag}"]
-    if force:
-        tag_cmd.insert(2, "-f")
-    subprocess.run(tag_cmd, check=True)
+    subprocess.run(
+        ["git", "tag", "-a", tag, "-m", f"Release {tag}"], check=True, **no_window_kwargs()
+    )
     if not push:
         return False
-    push_cmd = ["git", "push"]
-    if force:
-        push_cmd.append("--force")
-    push_cmd.extend([remote, tag])
-    subprocess.run(push_cmd, check=True)
+    subprocess.run(["git", "push", remote, tag], check=True, **no_window_kwargs())
     return True
 
 
@@ -323,10 +364,6 @@ def release_tag(
         str,
         typer.Option("--remote", help="Remote to push the tag to."),
     ] = "origin",
-    force: Annotated[
-        bool,
-        typer.Option("--force", help="Overwrite an existing tag (never admits a dirty tree)."),
-    ] = False,
     waive_dirty_tree: Annotated[
         str | None,
         typer.Option(
@@ -341,20 +378,22 @@ def release_tag(
 ) -> None:
     """Create the ``v<version>`` release tag and (with ``--push``) trigger the pipeline.
 
-    The release workflow (``.github/workflows/release.yaml``) fires on a
-    ``v0.*`` tag push and publishes to PyPI behind the tag-push
-    condition, so the push *is* the publication decision. ``--push``
+    The release workflows (``.github/workflows/release.yaml`` and
+    ``plugin-release.yaml``) fire on a ``v*`` tag push and publish behind
+    the tag-push condition, so the push *is* the publication decision. ``--push``
     therefore runs the full readiness sweep first -- version
     consistency, the changelog section, the migration outcome, ancestry
     against the remote and tree cleanliness -- and refuses to create or
-    push the tag while any required signal is red. The same sweep runs
+    push the tag while any required signal is red, or while HEAD has no
+    successful push-event CI run on the forge. The same sweep runs
     again in the workflow before the publish job, so a hand-pushed tag
     cannot walk past it either.
 
-    A dirty release tree is refused outright: ``--force`` overwrites an
-    existing tag and nothing else. The only way to tag over uncommitted
-    work is ``--waive-dirty-tree '<reason>'``, which records the reason
-    as a waiver and keeps the sweep from ever reading green.
+    An existing tag is refused: a published version is never re-tagged,
+    it is burned and the next version released. A dirty release tree is
+    refused outright; the only way to tag over uncommitted work is
+    ``--waive-dirty-tree '<reason>'``, which records the reason as a
+    waiver and keeps the sweep from ever reading green.
 
     From ``dev3`` on, the checkpoint requires acceptance bundles its
     rendered configuration cannot carry on its own; they are read off
@@ -375,14 +414,22 @@ def release_tag(
         waiver = _waiver_for_dirty_tree(dirty=_dirty_paths(repo_root), reason=waive_dirty_tree)
         readiness = None
         if push:
+            source = _head_revision(repo_root)
             readiness = _sweep_release(
                 version=resolved,
                 remote=remote,
                 repo_root=repo_root,
-                source=_head_revision(repo_root),
+                source=source,
                 waiver_count=1 if waiver is not None else 0,
             )
             _refuse_unready(readiness, tag=tag)
+            unproven = _ci_refusal(repo_root, sha=source, workspace=flags.workspace, remote=remote)
+            if unproven is not None:
+                raise cli_errors.StateConflict(
+                    f"release tag refuses {tag}: {unproven} -- tag once the push run of the "
+                    "merge is green",
+                    kind="CiNotGreen",
+                )
         listing = subprocess.run(
             ["git", "tag", "--list", tag],
             capture_output=True,
@@ -405,11 +452,13 @@ def release_tag(
             suffix = f" and push to {remote} (triggers pipeline)" if push else ""
             emit_json_or_text(plan, f"dry-run: would create tag {tag}{suffix}", flags=flags)
             return
-        if tag_exists and not force:
+        if tag_exists:
             raise cli_errors.UserError(
-                f"tag {tag!r} already exists; pass --force to overwrite", kind="InvalidInput"
+                f"tag {tag!r} already exists; a published version is never re-tagged, burn "
+                f"it and release the next version",
+                kind="InvalidInput",
             )
-        pushed = _create_and_push_tag(tag=tag, remote=remote, push=push, force=force)
+        pushed = _create_and_push_tag(tag=tag, remote=remote, push=push)
         plan["pushed"] = pushed
         waived = "" if waiver is None else f" over a waived dirty tree ({waiver['reason']})"
         text = (
@@ -444,6 +493,13 @@ def release_preflight(
         int,
         typer.Option("--waiver-count", help="Gate waivers recorded against the checkpoint."),
     ] = 0,
+    skip_ci_runs: Annotated[
+        bool,
+        typer.Option(
+            "--skip-ci-runs",
+            help="Leave the CI-run check to the tag workflow's require-green-ci job.",
+        ),
+    ] = False,
 ) -> None:
     """Sweep every readiness signal for one checkpoint over this checkout.
 
@@ -470,19 +526,36 @@ def release_preflight(
     ``invalid_membership_cardinality`` before a single signal runs. A
     reference the export does not accept still shows up as the
     ``membership`` row going red, alongside every other signal.
+
+    Once the sweep is ready, the ``ci_green`` row asks the forge for a
+    successful push-event CI run on the source commit, the proof
+    ``release tag --push`` refuses without; a sweep that is not ready
+    reports it ``not_checked``. The tag workflow passes
+    ``--skip-ci-runs``: its ``require-green-ci`` job proves the tagged
+    commit there, and its preflight job holds no forge token.
     """
     flags: GlobalFlags = ctx.obj
+    repo_root = Path.cwd()
     try:
         readiness = _sweep_release(
             version=version,
             remote=remote,
-            repo_root=Path.cwd(),
+            repo_root=repo_root,
             source=source,
             waiver_count=waiver_count,
         )
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
+    ci_detail = ""
+    if skip_ci_runs:
+        ci_status = "skipped"
+    elif not readiness.ready:
+        ci_status = "not_checked"
+    else:
+        sha = source or _head_revision(repo_root)
+        refusal = _ci_refusal(repo_root, sha=sha, workspace=flags.workspace, remote=remote)
+        ci_status, ci_detail = ("pass", "") if refusal is None else ("fail", refusal)
     required = set(readiness.required_signals)
     lines = [
         f"{readiness.release_key}  profile={readiness.gate_profile.value}  "
@@ -491,10 +564,17 @@ def release_preflight(
     for row in readiness.signals:
         flag = "REQ" if row.signal in required else "   "
         lines.append(f" {flag} {row.signal.value:<20} {row.status.value}")
+    lines.append(f" REQ {'ci_green':<20} {ci_status}")
     if readiness.first_red is not None:
         lines.append(f"first red: {readiness.first_red.value}")
-    emit_json_or_text(readiness.model_dump(mode="json"), "\n".join(lines), flags=flags)
-    if not readiness.ready:
+    if ci_detail:
+        lines.append(f"ci_green: {ci_detail}")
+    payload = {
+        **readiness.model_dump(mode="json"),
+        "ci_green": {"status": ci_status, "detail": ci_detail},
+    }
+    emit_json_or_text(payload, "\n".join(lines), flags=flags)
+    if not readiness.ready or ci_status == "fail":
         raise typer.Exit(exit_codes.STATE_CONFLICT)
 
 

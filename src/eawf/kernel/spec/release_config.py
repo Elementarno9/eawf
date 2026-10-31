@@ -31,6 +31,7 @@ from typing import Annotated, Any, Final
 import yaml
 from pydantic import ConfigDict, Field, ValidationError
 
+from eawf.kernel.runtime.provider import CapabilityId
 from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.spec.release import (
     NormalizedVersionStr,
@@ -165,7 +166,11 @@ class ReleaseGateName(StrEnum):
         DEPENDENCY_INVENTORY: The lock-derived dependency inventory.
         ARTIFACT_REPRODUCIBILITY: Digest equality across clean builds.
         SECURITY_REVIEW: The vulnerability report and its blocking flag.
-        EPOCH1_STABILIZATION: The epoch-1 stabilization proof command.
+        EPOCH1_STABILIZATION: The whole-suite proof command under the
+            name the dev1 to rc4 rungs settled it by. Kept so their
+            configurations and stored receipts still load; the stable
+            profile runs :attr:`FULL_SUITE` instead.
+        FULL_SUITE: The whole-suite proof command of the stable profile.
         TELEMETRY_PRODUCER: The telemetry-producer proof command.
         FRONT_DOOR_JOURNEY: The install-smoke journey proof command.
         MIGRATION: The four-leg cutover rehearsal over the whole corpus set.
@@ -197,6 +202,8 @@ class ReleaseGateName(StrEnum):
             a disposition.
         PLATFORM: Every advertised platform claim carries a receipt
             from a real host of that platform.
+        PACKET_RUN: The realization row, whose stable-only assertion is
+            the packet run on every runtime and repository origin.
     """
 
     VERSION_CONSISTENCY = "version_consistency"
@@ -205,6 +212,7 @@ class ReleaseGateName(StrEnum):
     ARTIFACT_REPRODUCIBILITY = "artifact_reproducibility"
     SECURITY_REVIEW = "security_review"
     EPOCH1_STABILIZATION = "epoch1_stabilization"
+    FULL_SUITE = "full_suite"
     TELEMETRY_PRODUCER = "telemetry_producer"
     FRONT_DOOR_JOURNEY = "front_door_journey"
     MIGRATION = "migration"
@@ -223,6 +231,7 @@ class ReleaseGateName(StrEnum):
     RELEASE_TAGGED_OBSERVED = "release_tagged_observed"
     EPOCH1_REFUSAL = "epoch1_refusal"
     PLATFORM = "platform"
+    PACKET_RUN = "packet_run"
 
 
 class ReleaseTargetConfig(_StrictModel):
@@ -297,6 +306,25 @@ class ReleasePlatformClaim(_StrictModel):
     real_host: bool = True
 
 
+class ReleaseRuntimeClaim(_StrictModel):
+    """One runtime a checkpoint claims, and the capabilities the claim needs.
+
+    The native-canary export advertises exactly the declared runtimes, so
+    a runtime is claimed because the release says so rather than because
+    an earlier rung's export happened to carry it.
+
+    Attributes:
+        runtime_id: The claimed runtime, e.g. ``codex``.
+        required_capabilities: The capability ids the claim needs, each of
+            which the runtime's certification must record ``verified``.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    runtime_id: Annotated[str, Field(min_length=1, max_length=64)]
+    required_capabilities: Annotated[tuple[CapabilityId, ...], Field(min_length=1)]
+
+
 class ReleaseGatesConfig(_StrictModel):
     """The gate profile and required gate names of a checkpoint.
 
@@ -336,6 +364,9 @@ class ReleaseConfig(_StrictModel):
             the receipt proving its journey. Empty means the checkpoint
             advertises no platform, which makes the ``platform``
             readiness row ``unavailable`` rather than passing vacuously.
+        runtime_claims: Runtimes the checkpoint claims. Empty means the
+            native-canary export carries forward the runtimes the
+            release's previous export advertised.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -351,6 +382,7 @@ class ReleaseConfig(_StrictModel):
     gates: ReleaseGatesConfig
     membership_refs: tuple[ReferenceStr, ...] = ()
     platform_claims: tuple[ReleasePlatformClaim, ...] = ()
+    runtime_claims: tuple[ReleaseRuntimeClaim, ...] = ()
 
     @property
     def release_key(self) -> str:
@@ -633,6 +665,7 @@ __all__ = [
     "ReleaseGateName",
     "ReleaseGatesConfig",
     "ReleasePlatformClaim",
+    "ReleaseRuntimeClaim",
     "ReleaseTargetConfig",
     "gate_names",
     "load_release_config",

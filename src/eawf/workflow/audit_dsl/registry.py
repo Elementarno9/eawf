@@ -61,6 +61,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import os
 import platform
 import re
 import shlex
@@ -90,8 +91,8 @@ from eawf.runtime.sandbox.env_scrub import (
     build_child_env,
     resolve_binary_dir,
 )
+from eawf.runtime.sandbox.test_fixtures import test_fixture_environment
 from eawf.runtime.vcs.diff_base import derive_diff_base
-from eawf.workflow.audit_dsl.kinds.backlog_resolution import BACKLOG_RESOLUTION_KIND
 from eawf.workflow.audit_dsl.kinds.criterion_in_diff import check_criterion_in_diff
 from eawf.workflow.audit_dsl.kinds.journal_chain import check_journal_chain
 from eawf.workflow.audit_dsl.kinds.jury_calibrated import JURY_CALIBRATED_KIND
@@ -100,7 +101,6 @@ from eawf.workflow.audit_dsl.kinds.schema_validate import check_schema_validate
 from eawf.workflow.audit_dsl.kinds.svg_pixel_diff import check_svg_pixel_diff
 from eawf.workflow.audit_dsl.kinds.svg_well_formed import check_svg_well_formed
 from eawf.workflow.audit_dsl.kinds.transition_coverage import check_transition_coverage
-from eawf.workflow.audit_dsl.kinds.verify_implements import check_verify_implements
 from eawf.workflow.audit_dsl.models import (
     OUTPUT_TAIL_MAX_CHARS,
     CheckResult,
@@ -723,11 +723,20 @@ def _run_in_group(
         try:
             stdout, stderr = process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
+
+            def leader_group(pgid: int) -> int:
+                # The leader is this thread's own child: nothing else reaps it, and
+                # on Linux its zombie still owns the group, so the ladder would wait
+                # out the whole grace window after the leader already exited.
+                if process.poll() is not None:
+                    raise ProcessLookupError(pgid)
+                return os.getpgid(pgid)
+
             # a group left holding only its unreaped leader refuses a signal with
             # EPERM on macOS, which means there is nothing left to stop
             if sys.platform != "win32":
                 with contextlib.suppress(PermissionError):
-                    cancel_with_grace(process.pid)
+                    cancel_with_grace(process.pid, getpgid=leader_group)
                     # the ladder reads a dead leader as a dead group; a member that
                     # ignored the soft signal is killed here
                     cancel_process_group(process.pid, hard=True)
@@ -803,6 +812,7 @@ def _check_command_exit_zero(
         GATE_RUNTIME_LANE,
         extra_path_dir=resolve_binary_dir(argv[0]),
     )
+    child_env.update(test_fixture_environment(args.fixture_inputs))
     child_env[_GATE_FILES_ENV] = _GATE_FILES_SEPARATOR.join(selected_files)
     selected_digest = _selected_file_digest(selected_files)
     supplied_freshness = spec.freshness
@@ -903,6 +913,10 @@ def _check_command_exit_zero(
         arg_name="residual_manifest_path",
     )
     manifest_errors = [error for error in (collected_error, residual_error) if error is not None]
+    if args.dotnet_counts is not None:
+        counts_error = args.dotnet_counts.summary_error(completed.stdout)
+        if counts_error is not None:
+            manifest_errors.append(counts_error)
     passed = completed.returncode == 0 and not manifest_errors
     _write_full_log(
         cwd=cwd,
@@ -1062,7 +1076,6 @@ CHECK_REGISTRY: dict[str, CheckFn] = {
     "regex_in_file": _check_regex_in_file,
     "state_field_equals": _check_state_field_equals,
     "command_exit_zero": _check_command_exit_zero,
-    "verify_implements": check_verify_implements,
     "criterion_in_diff": check_criterion_in_diff,
     "citation_resolves": _check_citation_resolves,
     "schema_validate": check_schema_validate,
@@ -1111,16 +1124,12 @@ def execute_check(
 #: -- the union of :data:`CHECK_REGISTRY` and this set -- so a close-gate
 #: kind cannot ship registered-but-idle either.
 #:
-#: ``backlog_resolution`` reads the wave-linked backlog items off state
-#: and is driven from the close-readiness compute when ``verify.enforce``
-#: is active (see :func:`eawf.workflow.verify.readiness.compute`).
-#:
 #: ``jury_calibrated`` reads the I09 jury-validation metrics
 #: (:class:`eawf.observability.eval.jury_validation.JuryValidationReport`)
 #: plus the scope's Oracle-Determinism-Ratio and gates the cross-vendor
 #: jury's blocking authority on them (see
 #: :func:`eawf.workflow.audit_dsl.kinds.jury_calibrated.check_jury_calibrated`).
-CLOSE_GATE_KINDS: frozenset[str] = frozenset({BACKLOG_RESOLUTION_KIND, JURY_CALIBRATED_KIND})
+CLOSE_GATE_KINDS: frozenset[str] = frozenset({JURY_CALIBRATED_KIND})
 
 
 def registered_audit_dsl_kinds() -> frozenset[str]:

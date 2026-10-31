@@ -5,8 +5,7 @@ open-question writers, the wave config overlay, the ``state.mutate`` payload
 union, ``eawf impact`` and the EAWF022 coverage lint all served the v1
 ``.ea/state.json`` workflow and had no caller left in ``eawf`` or ``eawfd``.
 These checks red when a deleted module, an import of one, a deleted RPC or
-the ``impact`` verb returns; a call to ``eawf impact`` now gets the
-retired-verb refusal.
+the ``impact`` verb returns; a call to ``eawf impact`` is an unknown command.
 """
 
 from __future__ import annotations
@@ -15,7 +14,6 @@ import ast
 from pathlib import Path
 from typing import Final
 
-import orjson
 import pytest
 import typer
 from typer.testing import CliRunner
@@ -23,7 +21,6 @@ from typer.testing import CliRunner
 from eawf.runtime.daemon.methods import registered_methods
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.exit_codes import VALIDATION_ERROR
-from tests.lint.test_v1_state_readers import V1_READERS
 
 pytestmark = pytest.mark.unit
 
@@ -52,7 +49,6 @@ DELETED_RPCS: Final = (
 
 #: Kept modules that imported a deleted library, with the one they imported.
 FORMER_IMPORTERS: Final = {
-    "src/eawf/runtime/daemon/methods/state_context.py": "eawf.kernel.state.mutations",
     "tests/platform/lint/test_eawf021_022.py": "eawf.platform.lint.eawf022_propose_coverage",
 }
 
@@ -90,7 +86,6 @@ def _deleted_imports(path: Path) -> list[str]:
 
 def test_epoch1_rpcs_are_unregistered() -> None:
     registered = set(registered_methods())
-    assert "state.worktree_reconcile" in registered
     assert sorted(registered & set(DELETED_RPCS)) == []
 
 
@@ -112,8 +107,7 @@ def test_impact_command_is_gone(tmp_path: Path) -> None:
     assert "impact" not in typer.main.get_command(app).commands  # type: ignore[attr-defined]
     result = CliRunner().invoke(app, ["--json", "-w", str(tmp_path), "impact"])
     assert result.exit_code == VALIDATION_ERROR, result.output
-    assert orjson.loads(result.stdout)["data"]["kind"] == "LegacyOperationRemoved"
-    assert "eawf/surfaces/cli/commands/impact.py" not in V1_READERS
+    assert "No such command 'impact'" in result.output
 
 
 def test_kept_modules_drop_the_deleted_imports() -> None:

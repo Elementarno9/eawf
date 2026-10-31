@@ -1,11 +1,12 @@
 """AUTH-019 and AUTH-021: the WIP ceilings and the backlog's draft head, over a real canary.
 
-AUTH-019 splits the two work-in-progress limits by whether a mechanism
-enforces them. ``wip.active_batches_per_repo`` refuses a Batch activation
-past the ceiling -- counted per Track per repository over the Batches
-holding or building an exact-head proof, and judged again under the
-document lock -- while ``wip.active_milestones`` never refuses
-and is surfaced as a watchlist line on the accepted answer.
+AUTH-019 bounds the two work-in-progress limits. ``wip.active_batches_per_repo``
+refuses a Batch activation past the ceiling -- counted per Track per
+repository over the Batches holding or building an exact-head proof, and
+judged again under the document lock -- and ``wip.active_milestones``
+refuses a move to ACTIVE, by activation or either reopen, once the Track
+holds that many other ACTIVE or in-review Milestones, naming them, so
+follow-up scope is appended to one of them.
 
 AUTH-021 makes the backlog the draft head of the Task lifecycle. Demotion
 back to ``DRAFT`` is legal only before the first claim, which the first
@@ -36,7 +37,6 @@ from eawf.runtime.daemon.epoch2_transaction import (
     run_transaction,
 )
 from eawf.runtime.daemon.methods.domain_envelope import DomainErrorCode
-from eawf.runtime.daemon.methods.domain_guards import WIP_WATCHLIST_SIGNAL
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     AT,
     BATCH_URN,
@@ -237,37 +237,180 @@ def test_auth_019_the_ceiling_is_judged_again_under_the_document_lock(tmp_path: 
     assert refused.value.guard == "batch_wip_admits"
 
 
-# ---- AUTH-019: the advisory Milestone ceiling --------------------------------
+# ---- the hard active-Milestone limit -----------------------------------------
+
+CORE_TRACK = f"{SLOT}/track/TRK-EAWF-CORE"
 
 
-def _milestone_world(*, advisory: int) -> dict[str, dict[str, Any]]:
-    return {
-        "track": {"TRK-RUNTIME": _track(milestones=advisory)},
-        "milestone": {
-            "MLS-0030": _milestone("PLANNED"),
-            "MLS-0031": _milestone("ACTIVE", key="MLS-0031"),
-        },
-    }
+def _milestone_world(
+    *,
+    limit: int = 1,
+    sibling: str | None = "ACTIVE",
+    sibling_track: str = CORE_TRACK,
+    status: str = "PLANNED",
+) -> dict[str, dict[str, Any]]:
+    """An MLS-0030 in *status* on TRK-EAWF-CORE, beside an MLS-0031 in *sibling* status."""
+    track = rekeyed(_track(milestones=limit), key="TRK-EAWF-CORE")
+    milestones = {"MLS-0030": _milestone(status, track=CORE_TRACK)}
+    if sibling is not None:
+        milestones["MLS-0031"] = _milestone(sibling, key="MLS-0031", track=sibling_track)
+    return {"track": {"TRK-EAWF-CORE": track}, "milestone": milestones}
 
 
-def test_auth_019_the_milestone_ceiling_never_refuses_and_is_surfaced(tmp_path: Path) -> None:
-    canary = _canary(tmp_path, _milestone_world(advisory=1))
+def test_milestone_activate_refuses_beside_an_active_milestone_and_names_it(
+    tmp_path: Path,
+) -> None:
+    canary = _canary(tmp_path, _milestone_world())
+    before = document_path(canary).read_bytes()
+
+    answer = _call(canary, tmp_path, "domain.milestone.activate", MILESTONE_URN, 1)
+
+    assert answer["status"] == "error"
+    row = answer["errors"][0]
+    assert row["code"] == DomainErrorCode.TRANSITION_GUARD_FAILED.value
+    assert row["guard"] == "milestone_wip_admits"
+    assert "TRK-EAWF-CORE" in row["message"]
+    assert "MLS-0031" in row["message"]
+    assert "Append" in row["remediation"]
+    assert document_path(canary).read_bytes() == before
+
+
+def test_milestone_activate_refuses_every_activation_at_a_zero_limit(tmp_path: Path) -> None:
+    canary = _canary(tmp_path, _milestone_world(limit=0, sibling=None))
+
+    answer = _call(canary, tmp_path, "domain.milestone.activate", MILESTONE_URN, 1)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["guard"] == "milestone_wip_admits"
+    assert "limit of 0" in answer["errors"][0]["message"]
+
+
+def test_milestone_activate_counts_a_sibling_in_acceptance_review(tmp_path: Path) -> None:
+    canary = _canary(tmp_path, _milestone_world(sibling="ACCEPTANCE_REVIEW"))
+
+    answer = _call(canary, tmp_path, "domain.milestone.activate", MILESTONE_URN, 1)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["guard"] == "milestone_wip_admits"
+    assert "MLS-0031" in answer["errors"][0]["message"]
+
+
+@pytest.mark.parametrize("sibling", [None, "PLANNED", "COMPLETED", "CANCELLED"])
+def test_milestone_activate_admits_when_no_sibling_is_open(
+    tmp_path: Path, sibling: str | None
+) -> None:
+    canary = _canary(tmp_path, _milestone_world(sibling=sibling))
 
     answer = _call(canary, tmp_path, "domain.milestone.activate", MILESTONE_URN, 1)
 
     assert answer["status"] == "ok", answer["errors"]
     assert _rows(canary, "milestone")["MLS-0030"]["status"] == "ACTIVE"
-    (line,) = [note for note in answer["warnings"] if note.startswith(WIP_WATCHLIST_SIGNAL)]
-    assert "2 active milestones, past its advisory 1" in line
 
 
-def test_auth_019_a_milestone_within_its_advisory_raises_no_signal(tmp_path: Path) -> None:
-    canary = _canary(tmp_path, _milestone_world(advisory=2))
+def test_milestone_activate_ignores_an_active_milestone_of_another_track(tmp_path: Path) -> None:
+    canary = _canary(tmp_path, _milestone_world(sibling_track=OTHER_TRACK))
 
     answer = _call(canary, tmp_path, "domain.milestone.activate", MILESTONE_URN, 1)
 
-    assert answer["status"] == "ok"
-    assert not any(note.startswith(WIP_WATCHLIST_SIGNAL) for note in answer["warnings"])
+    assert answer["status"] == "ok", answer["errors"]
+
+
+def test_milestone_activate_leaves_a_missing_track_to_the_track_guard(tmp_path: Path) -> None:
+    rows = _milestone_world()
+    del rows["track"]
+    canary = _canary(tmp_path, rows)
+
+    answer = _call(canary, tmp_path, "domain.milestone.activate", MILESTONE_URN, 1)
+
+    assert answer["errors"][0]["guard"] == "track_active"
+
+
+def test_milestone_activate_limit_is_judged_again_under_the_document_lock(
+    tmp_path: Path,
+) -> None:
+    """A caller that skips the preflight still meets the limit at commit."""
+    canary = _canary(tmp_path, _milestone_world())
+    request = TransitionRequest(
+        urn=MILESTONE_URN,
+        to_status="ACTIVE",
+        expected_revision=1,
+        idempotency_key="direct-milestone-activate",
+        actor=ACTOR,
+    )
+
+    with pytest.raises(TransactionRefusedError) as refused:
+        run_transaction(context=root_context(canary, tmp_path / "rt"), request=request, now=AT)
+
+    assert refused.value.guard == "milestone_wip_admits"
+
+
+def test_milestone_activate_admits_up_to_the_limit(tmp_path: Path) -> None:
+    canary = _canary(tmp_path, _milestone_world(limit=2))
+
+    answer = _call(canary, tmp_path, "domain.milestone.activate", MILESTONE_URN, 1)
+
+    assert answer["status"] == "ok", answer["errors"]
+
+
+# Both edges back to ACTIVE meet the same limit as activation; the Milestone
+# moving is not counted against itself.
+_REOPEN_EDGES = (
+    pytest.param(
+        "domain.milestone.reopen_review", "ACCEPTANCE_REVIEW", "batch-appended", id="review"
+    ),
+    pytest.param("domain.milestone.reopen", "COMPLETED", "fix-appended", id="acceptance"),
+)
+
+
+@pytest.mark.parametrize(("method", "status", "reason"), _REOPEN_EDGES)
+@pytest.mark.parametrize("sibling", ["ACTIVE", "ACCEPTANCE_REVIEW"])
+def test_milestone_reopen_refuses_beside_another_open_milestone(
+    tmp_path: Path, method: str, status: str, reason: str, sibling: str
+) -> None:
+    canary = _canary(tmp_path, _milestone_world(status=status, sibling=sibling))
+    before = document_path(canary).read_bytes()
+
+    answer = _call(canary, tmp_path, method, MILESTONE_URN, 1, reason_code=reason)
+
+    assert answer["status"] == "error"
+    row = answer["errors"][0]
+    assert row["guard"] == "milestone_wip_admits"
+    assert "MLS-0031" in row["message"]
+    assert "MLS-0030" not in row["message"]
+    assert document_path(canary).read_bytes() == before
+
+
+@pytest.mark.parametrize(("method", "status", "reason"), _REOPEN_EDGES)
+@pytest.mark.parametrize("sibling", [None, "PLANNED", "COMPLETED", "CANCELLED"])
+def test_milestone_reopen_admits_a_milestone_alone_at_the_limit(
+    tmp_path: Path, method: str, status: str, reason: str, sibling: str | None
+) -> None:
+    canary = _canary(tmp_path, _milestone_world(status=status, sibling=sibling))
+
+    answer = _call(canary, tmp_path, method, MILESTONE_URN, 1, reason_code=reason)
+
+    assert answer["status"] == "ok", answer["errors"]
+    assert _rows(canary, "milestone")["MLS-0030"]["status"] == "ACTIVE"
+
+
+@pytest.mark.parametrize("status", ["ACCEPTANCE_REVIEW", "COMPLETED"])
+def test_milestone_reopen_limit_is_judged_again_under_the_document_lock(
+    tmp_path: Path, status: str
+) -> None:
+    canary = _canary(tmp_path, _milestone_world(status=status))
+    request = TransitionRequest(
+        urn=MILESTONE_URN,
+        to_status="ACTIVE",
+        expected_revision=1,
+        idempotency_key=f"direct-milestone-reopen-{status}",
+        actor=ACTOR,
+        reason_code="fix-appended",
+    )
+
+    with pytest.raises(TransactionRefusedError) as refused:
+        run_transaction(context=root_context(canary, tmp_path / "rt"), request=request, now=AT)
+
+    assert refused.value.guard == "milestone_wip_admits"
 
 
 # ---- AUTH-021: demotion before the first claim only --------------------------

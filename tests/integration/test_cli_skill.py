@@ -350,10 +350,10 @@ def test_skill_run_passes_stdin_args_to_skill_context(cli_runner: CliRunner) -> 
         result = cli_runner.invoke(
             app,
             ["--json", "skill", "run", "/why"],
-            input=orjson.dumps({"depth": "quick"}).decode("utf-8"),
+            input=orjson.dumps({"depth": "chain"}).decode("utf-8"),
         )
         assert result.exit_code == 0, result.stdout
-        assert captured["args"] == {"depth": "quick"}
+        assert captured["args"] == {"depth": "chain"}
     finally:
         registry.unregister("/why")
         if previous is not None:

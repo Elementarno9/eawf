@@ -56,7 +56,7 @@ class DuckDbMetricsStore(AbstractMetricsStore):
     _conn: Any
 
     def _connect(self) -> None:
-        import duckdb  # type: ignore[import-not-found]
+        import duckdb
 
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = duckdb.connect(str(self.path))

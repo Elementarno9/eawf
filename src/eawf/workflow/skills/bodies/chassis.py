@@ -23,15 +23,18 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Iterable
-from typing import Final
+from collections.abc import Iterable, Iterator
+from typing import Final, Literal, get_args, get_origin
+
+from pydantic import BaseModel
 
 from eawf.kernel.runtime.semantic import SemanticToolId
 from eawf.platform.rules.records import RuleRecord
+from eawf.surfaces.cli.verb_effects import CLI_VERB_EFFECTS
 from eawf.workflow.skills.arguments import UNIVERSAL_OPTIONS
 from eawf.workflow.skills.bodies.prompts import SkillPrompt, skill_prompt
 from eawf.workflow.skills.catalog import SKILL_CATALOG, SkillCatalogEntry, skill_lanes
-from eawf.workflow.skills.census import epoch1_nouns
+from eawf.workflow.skills.census import retired_nouns
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +43,24 @@ DECISION_RPC: Final = "runtime.question.open_decision"
 
 #: The verb a reply to a decision's numbered prompt is sealed through.
 ANSWER_RPC: Final = "runtime.question.answer_numbered"
+
+
+def _route_commands() -> dict[str, str]:
+    # Where several verbs carry a route, the one carrying the fewest routes is
+    # the verb that exists to drive it; ties keep table order. A projection
+    # route is left out: it is a read a mutating verb makes first, so no verb
+    # carrying it performs that read.
+    commands: dict[str, str] = {}
+    for verb, effect in sorted(CLI_VERB_EFFECTS.items(), key=lambda item: len(item[1].routes)):
+        for route in effect.routes:
+            if not route.startswith("projection."):
+                commands.setdefault(route, verb)
+    return commands
+
+
+#: The CLI verb a host session runs to drive each daemon route: a host session
+#: acts through ``eawf`` commands and never calls a route by name.
+_ROUTE_COMMANDS: Final[dict[str, str]] = _route_commands()
 
 
 def asks_operator(entry: SkillCatalogEntry) -> bool:
@@ -82,6 +103,8 @@ _STOP_OUTCOMES: Final[tuple[str, ...]] = ("blocked", "needs_operator", "paused")
 _FORCE_ORDER: Final[dict[str, int]] = {"must": 0, "should": 1}
 _HEADING_RE: Final[re.Pattern[str]] = re.compile(r"^## (.+)$", re.MULTILINE)
 _OPTION_RE: Final[re.Pattern[str]] = re.compile(r"(?<![\w-])--[a-z][a-z0-9-]*")
+#: An inline ``eawf`` command; its options belong to that CLI command, not the skill grammar.
+_EAWF_COMMAND_RE: Final[re.Pattern[str]] = re.compile(r"`eawf [^`\n]*`")
 
 
 class SkillPageError(ValueError):
@@ -178,7 +201,7 @@ def chassis_findings(page: str, entry: SkillCatalogEntry) -> tuple[str, ...]:
         f"placeholder {match.group(0)!r} is on the page"
         for match in PLACEHOLDER_PATTERN.finditer(page)
     )
-    findings.extend(f"epoch-1 noun {noun!r} is on the page" for noun in epoch1_nouns(page))
+    findings.extend(f"epoch-1 noun {noun!r} is on the page" for noun in retired_nouns(page))
     prose = _without_rules_slot(page)
     for row in SKILL_CATALOG.retired:
         if re.search(rf"(?<![\w./-])/{re.escape(row.skill_id)}(?![\w-])", prose):
@@ -186,7 +209,7 @@ def chassis_findings(page: str, entry: SkillCatalogEntry) -> tuple[str, ...]:
     declared = frozenset(entry.grammar.options) | UNIVERSAL_OPTIONS
     findings.extend(
         f"option {option} is not in the {entry.invocation_name} grammar"
-        for option in dict.fromkeys(_OPTION_RE.findall(prose))
+        for option in dict.fromkeys(_OPTION_RE.findall(_EAWF_COMMAND_RE.sub("", prose)))
         if option not in declared
     )
     return tuple(findings)
@@ -269,15 +292,23 @@ def _authority(entry: SkillCatalogEntry) -> str:
         )
     lines.append(f"- Effects: {effects.summary}")
     if effects.rpcs:
-        rpcs = ", ".join(f"`{rpc}`" for rpc in effects.rpcs)
+        rpcs = ", ".join(
+            f"`eawf {_ROUTE_COMMANDS[rpc]}` (`{rpc}`)" if rpc in _ROUTE_COMMANDS else f"`{rpc}`"
+            for rpc in effects.rpcs
+        )
         lines.append(
             f"- Allowed RPCs: {rpcs}. Any other RPC is denied before it reaches a handler."
+            " A host session drives a route through the `eawf` command named beside it; a"
+            " route with no command beside it is driven by the daemon or a native Run."
         )
     else:
         lines.append("- Allowed RPCs: none. This skill calls no daemon RPC.")
     if effects.tools:
         tools = ", ".join(f"`{tool.value}`" for tool in effects.tools)
-        lines.append(f"- Run tools: {tools}.")
+        lines.append(
+            f"- Run tools: {tools}. These exist only inside a native Run eawf dispatches; a host"
+            " session has none of them and uses the `eawf` commands above instead."
+        )
     if effects.canonical_mutates:
         lines.append(
             "- Canonical state changes only through those RPCs, and every mutating call carries"
@@ -300,11 +331,15 @@ def _authority(entry: SkillCatalogEntry) -> str:
 
 def _operates_on(entry: SkillCatalogEntry) -> str:
     # The decision verbs are how a skill asks, named on their own line, not a route to its subject.
-    routes = [f"`{rpc}`" for rpc in entry.effects.rpcs if rpc not in (DECISION_RPC, ANSWER_RPC)]
+    routes = [
+        f"`eawf {_ROUTE_COMMANDS[rpc]}`" if rpc in _ROUTE_COMMANDS else f"`{rpc}`"
+        for rpc in entry.effects.rpcs
+        if rpc not in (DECISION_RPC, ANSWER_RPC)
+    ]
     routes += [f"`eawf {verb}`" for verb in entry.effects.verbs]
     if not routes:
         return f"{entry.subject}, through no lifecycle route; this is an explicit skill contract"
-    return f"{entry.subject}, through {', '.join(routes)}"
+    return f"{entry.subject}, through {', '.join(dict.fromkeys(routes))}"
 
 
 def _context(prompt: SkillPrompt) -> str:
@@ -371,19 +406,69 @@ def _constraints(entry: SkillCatalogEntry, prompt: SkillPrompt) -> str:
 
 def _output(entry: SkillCatalogEntry, prompt: SkillPrompt) -> str:
     outcomes = ", ".join(f"`{outcome}`" for outcome in entry.output.terminal_outcomes)
-    coverage = (
-        " It carries a `coverage` block listing what the pass covered and, with a reason each,"
-        " what it did not."
-        if entry.output.coverage
-        else ""
-    )
     return (
         f"{prompt.output}\n\n"
         f"The report validates against `{entry.output.schema_name}`, and its terminal outcome is"
-        f" exactly one of {outcomes}.{coverage} Prose in the report is explanation, never the"
-        f" result. Check it with `eawf skill check-report {entry.invocation_name}` before"
-        " returning it."
+        f" exactly one of {outcomes}. Prose in the report is explanation, never the result."
+        f" Check it with `eawf skill check-report {entry.invocation_name}` before returning it."
+        " It carries these fields and no other; a nested field is written under its parent.\n\n"
+        f"{report_fields_table(entry.output.model_for(entry.skill_id))}"
     )
+
+
+#: Python types a report field may carry, as the words a page shows for them.
+_SCALAR_TYPES: Final[dict[object, str]] = {str: "string", int: "integer", bool: "boolean"}
+
+
+def report_fields_table(model: type[BaseModel]) -> str:
+    """Render the fields a report *model* accepts as a markdown table.
+
+    The table is generated from the model the report validates against, so a
+    page lists exactly the fields the validator accepts. A field holding a
+    model, or a list of models, is followed by one row per nested field, its
+    path dotted under the parent (``[]`` marks a list item).
+
+    Args:
+        model: The strict report model, such as one
+            :meth:`~eawf.workflow.skills.catalog.OutputSchema.model_for` returns.
+
+    Returns:
+        A table with a ``Field``, ``Type``, ``Required`` and ``Description``
+        column and one row per field, in declaration order.
+
+    Raises:
+        TypeError: A field's type has no page rendering.
+    """
+    lines = ["| Field | Type | Required | Description |", "| --- | --- | --- | --- |"]
+    lines += [
+        f"| `{path}` | {kind} | {'yes' if required else 'no'} | {description} |"
+        for path, kind, required, description in _field_rows(model, "")
+    ]
+    return "\n".join(lines)
+
+
+def _field_rows(model: type[BaseModel], prefix: str) -> Iterator[tuple[str, str, bool, str]]:
+    for name, info in model.model_fields.items():
+        path = f"{prefix}{name}"
+        yield path, _type_text(info.annotation), info.is_required(), info.description or ""
+        origin = get_origin(info.annotation)
+        item = get_args(info.annotation)[0] if origin in (tuple, list) else info.annotation
+        if isinstance(item, type) and issubclass(item, BaseModel):
+            yield from _field_rows(item, f"{path}[]." if origin in (tuple, list) else f"{path}.")
+
+
+def _type_text(annotation: object) -> str:
+    origin = get_origin(annotation)
+    if origin is Literal:
+        values = ", ".join(f'`"{value}"`' for value in get_args(annotation))
+        return values if len(get_args(annotation)) == 1 else f"one of {values}"
+    if origin in (tuple, list):
+        return f"list of {_type_text(get_args(annotation)[0])}"
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return "object"
+    if annotation in _SCALAR_TYPES:
+        return _SCALAR_TYPES[annotation]
+    raise TypeError(f"report field type {annotation!r} has no page rendering")
 
 
 def _without_rules_slot(page: str) -> str:
@@ -404,5 +489,6 @@ __all__ = [
     "assemble_skill_page",
     "chassis_findings",
     "check_skill_page",
+    "report_fields_table",
     "shipped_skill_page",
 ]

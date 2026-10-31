@@ -18,12 +18,6 @@ The check kinds frozen for v0.3:
   TimeoutClass = "standard", timeout_s: int | None = None, scope:
   Scope = "changed", wave_id: str | None = None, wave_file_scopes:
   list[str] = []}``.
-* ``verify_implements`` — ``args = {phase_id: str, diff_base: str,
-  cadence: str, current_trigger: str}``. Walks closed WaveSpecs
-  under ``.ea/specs/<phase_id>/`` and greps the diff against
-  ``diff_base`` for verdict-id markers under each wave's
-  ``file_scopes``; short-circuits when ``cadence`` does not match
-  ``current_trigger``.
 * ``criterion_in_diff`` — ``args = {criterion: str, pattern: str,
   file_scopes: list[str]}``. Greps a single wave success-criterion's
   verification ``pattern`` across the current content of its
@@ -91,12 +85,14 @@ caller (tracked in backlog item B074).
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
 from eawf.platform.artifacts.references import Citation
+from eawf.runtime.sandbox.test_fixtures import TestFixtureInput
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +102,6 @@ CheckKind = Literal[
     "regex_in_file",
     "state_field_equals",
     "command_exit_zero",
-    "verify_implements",
     "criterion_in_diff",
     "citation_resolves",
     "schema_validate",
@@ -242,6 +237,8 @@ class CheckResult(BaseModel):
     full_log_ref: str | None = Field(default=None, min_length=1, max_length=500)
     freshness_key: str | None = Field(default=None, min_length=1)
     freshness: GateFreshnessInput | None = None
+    diagnostic_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    diagnostic_ref: str | None = Field(default=None, pattern=r"^GR-[0-9a-f]{32}$")
 
     @model_validator(mode="before")
     @classmethod
@@ -297,6 +294,42 @@ class CheckResult(BaseModel):
         return self
 
 
+class DotnetCounts(BaseModel):
+    """Exact counts required from one .NET test summary."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    passed: StrictInt = Field(gt=0)
+    failed: StrictInt = Field(ge=0, le=0)
+    skipped: StrictInt = Field(ge=0, le=0)
+    total: StrictInt = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _total_agrees(self) -> DotnetCounts:
+        """Refuse an expectation that cannot describe an actual run."""
+        if self.total != self.passed + self.failed + self.skipped:
+            raise ValueError(".NET total must equal passed + failed + skipped")
+        return self
+
+    def summary_error(self, stdout: str) -> str | None:
+        """Require one complete, unambiguous summary matching all four counts."""
+        summaries = re.findall(r"^(?:Passed!|Failed!)[^\r\n]*", stdout, re.MULTILINE)
+        if len(summaries) != 1:
+            return ".NET output must contain exactly one complete test summary"
+        match = re.fullmatch(
+            r"(?:Passed!|Failed!)[ \t]*-[ \t]*Failed:[ \t]*(\d+),[ \t]*"
+            r"Passed:[ \t]*(\d+),[ \t]*Skipped:[ \t]*(\d+),[ \t]*"
+            r"Total:[ \t]*(\d+),[^\r\n]*",
+            summaries[0],
+        )
+        if match is None:
+            return ".NET output must contain exactly one complete test summary"
+        failed, passed, skipped, total = map(int, match.groups())
+        if (passed, failed, skipped, total) != (self.passed, self.failed, self.skipped, self.total):
+            return ".NET test summary does not match the required counts"
+        return None
+
+
 class CommandExitZeroArgs(BaseModel):
     """Strict args schema for the ``command_exit_zero`` check kind.
 
@@ -309,6 +342,8 @@ class CommandExitZeroArgs(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     argv: list[str] = Field(min_length=1)
+    fixture_inputs: tuple[TestFixtureInput, ...] = ()
+    dotnet_counts: DotnetCounts | None = None
     timeout_class: TimeoutClass = "standard"
     #: Explicit per-gate timeout propagated from top-level
     #: :attr:`eawf.kernel.spec.common.GateSpec.timeout_s`. When present it
@@ -346,6 +381,17 @@ class CommandExitZeroArgs(BaseModel):
     #: spec's ``args``. The runner ignores it; this field exists only to
     #: satisfy ``extra="forbid"`` on the args schema.
     criterion: str | None = None
+
+    @model_validator(mode="after")
+    def _test_inputs_agree(self) -> CommandExitZeroArgs:
+        """Keep fixture identities unique and count expectations on .NET tests."""
+        if self.dotnet_counts is not None and self.argv[:2] != ["dotnet", "test"]:
+            raise ValueError("dotnet_counts requires the dotnet-test command family")
+        ids = [item.id for item in self.fixture_inputs]
+        variables = [item.environment_variable for item in self.fixture_inputs]
+        if len(set(ids)) != len(ids) or len(set(variables)) != len(variables):
+            raise ValueError("fixture ids and environment variables must be unique")
+        return self
 
     @field_validator("collected_nodeids_path", "residual_manifest_path")
     @classmethod

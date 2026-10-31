@@ -300,6 +300,9 @@ class Session(BaseModel):
     # the cursor that far, so a page is what the reader just saw
     tr_page: int = 1
     tr_fold: dict[int, bool] | None = None
+    # whether the transcript draws the runtime's own transcript files instead of its event
+    # blocks; while it does, tr_sel is the line the cursor is on
+    tr_raw: bool = False
     tr_t0: float | None = None
     rec_at: Any = None
     rec_seen: dict[str, int] | None = None

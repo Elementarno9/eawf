@@ -1,10 +1,7 @@
-"""``eawf validate`` — schema + invariant validation of state or envelope JSON.
+"""``eawf validate`` — validation of a generation document or a skill output envelope.
 
-Three modes, auto-detected from the file contents:
+Two modes, auto-detected from the file contents:
 
-- **State mode** (default): the file has a top-level ``project`` or
-  ``workspace`` key. The validator runs the full schema + invariant
-  pipeline from :mod:`eawf.kernel.validate.strict`.
 - **Envelope mode**: the file has a top-level ``header`` and ``body``.
   The validator runs the §15.1 strict-mode contracts (``needs_user`` →
   ``body.user_question``; ``blocked|failed`` → ``footer.repair_commands``).
@@ -16,24 +13,24 @@ Three modes, auto-detected from the file contents:
   read ``<collection>/<key>``. A reference a copied document cannot
   resolve for want of a ledger is printed as a warning.
 
+Any other object is refused: a 0.6 ``state.json`` is migrated under
+0.7.0rc4 before this release reads it.
+
 Output modes:
 
 - Human: ``"validate: ok"`` on success, otherwise one line per schema error
-  (``"schema: ..."``), one line per invariant violation
+  (``"schema: ..."``), one line per violation
   (``"<CODE> at <PATH>: <MESSAGE>"``), or one line per envelope contract
   error (``"contract: ..."``).
 - ``--json`` (the command's own flag or the global one): a single JSON
-  object with ``ok``, ``schema_errors``, and ``violations`` (state mode),
-  ``contract_errors`` (envelope mode), or ``mode`` and ``violations``
-  (epoch-2 mode).
+  object with ``ok``, ``schema_errors``, and ``contract_errors`` (envelope
+  mode) or ``mode`` and ``violations`` (epoch-2 mode).
 
 Exit codes:
 
 - ``0`` when the report is ok.
-- ``2`` (``VALIDATION_ERROR``) when there are schema errors, invariant violations, or contract
-  errors (regardless of ``--strict``). ``--strict`` only adds optional-key
-  violations to state-mode validation; envelope-mode contracts are
-  always strict, and epoch-2 mode has no optional keys to flag.
+- ``2`` (``VALIDATION_ERROR``) when there are schema errors, violations,
+  contract errors, or the document is neither mode.
 """
 
 from __future__ import annotations
@@ -52,17 +49,12 @@ from eawf.surfaces.cli.flags import GlobalFlags
 logger = logging.getLogger(__name__)
 
 
-def _detect_mode(payload: dict[str, Any]) -> str:
-    """Return ``"envelope"``, ``"epoch2"`` or ``"state"`` based on top-level keys.
+def _detect_mode(payload: dict[str, Any]) -> str | None:
+    """Return ``"envelope"`` or ``"epoch2"`` from the top-level keys, else ``None``.
 
     Envelope payloads have ``header`` AND ``body`` AND ``footer`` (the
     three OutputEnvelope keys). A generation document carries the epoch-2
-    ``schema_version``. State payloads have ``project`` or ``workspace``
-    (the alternation-required state roots).
-
-    Falls back to ``"state"`` for anything else so the existing CLI
-    contract is preserved on malformed input — schema validation will
-    surface the right error.
+    ``schema_version``.
     """
     from eawf.kernel.validate.epoch2 import is_generation_document
 
@@ -70,7 +62,7 @@ def _detect_mode(payload: dict[str, Any]) -> str:
         return "envelope"
     if is_generation_document(payload):
         return "epoch2"
-    return "state"
+    return None
 
 
 def validate(
@@ -78,33 +70,21 @@ def validate(
     target_path: Annotated[
         Path,
         typer.Argument(
-            help=(
-                "Path to .ea/state.json, a generation's state.json or a skill output envelope JSON."
-            ),
+            help="Path to a generation's state.json or a skill output envelope JSON.",
         ),
     ],
-    strict: Annotated[
-        bool,
-        typer.Option(
-            "--strict",
-            help=(
-                "State mode: treat absent optional keys as violations. "
-                "Envelope and epoch-2 modes: the flag is accepted for "
-                "surface symmetry but does not change behaviour."
-            ),
-        ),
-    ] = False,
     output_json: Annotated[
         bool,
         typer.Option("--json", help="Emit a machine-readable JSON report."),
     ] = False,
 ) -> None:
-    """Validate a state or envelope document.
+    """Validate a generation document or an output envelope.
 
     The mode is auto-detected from the top-level keys of *target_path*.
     """
     from eawf.kernel.validate.epoch2 import validate_generation
-    from eawf.kernel.validate.strict import validate_envelope, validate_path
+    from eawf.kernel.validate.strict import validate_envelope
+    from eawf.surfaces.cli.upgrade_refusal import UPGRADE_STEPS
 
     flags: GlobalFlags = ctx.obj
     output_json = output_json or flags.json_output
@@ -113,6 +93,12 @@ def validate(
         typer.echo("schema: top-level value must be a JSON object")
         raise typer.Exit(code=exit_codes.VALIDATION_ERROR)
     mode = _detect_mode(raw)
+    if mode is None:
+        typer.echo(
+            "schema: neither a generation document nor an output envelope; "
+            f"a 0.6 state.json is read only after migration: {UPGRADE_STEPS}"
+        )
+        raise typer.Exit(code=exit_codes.VALIDATION_ERROR)
 
     if mode == "envelope":
         env_report = validate_envelope(raw)
@@ -164,25 +150,3 @@ def validate(
                     typer.echo(f"{row.code} at {row.path}: {row.message}")
         if not gen_report.ok:
             raise typer.Exit(code=exit_codes.VALIDATION_ERROR)
-        return
-
-    report = validate_path(target_path, strict_optional=strict)
-    if output_json:
-        payload = {
-            "ok": report.ok,
-            "schema_errors": report.schema_errors,
-            "violations": [
-                {"code": v.code, "path": v.path, "message": v.message} for v in report.violations
-            ],
-        }
-        typer.echo(json.dumps(payload))
-    else:
-        if report.ok:
-            typer.echo("validate: ok")
-        else:
-            for err in report.schema_errors:
-                typer.echo(f"schema: {err}")
-            for v in report.violations:
-                typer.echo(f"{v.code} at {v.path}: {v.message}")
-    if not report.ok:
-        raise typer.Exit(code=exit_codes.VALIDATION_ERROR)

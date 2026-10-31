@@ -128,7 +128,6 @@ ROOT_ENTRY_EXCEPTIONS: Final[tuple[RootEntryException, ...]] = (
     _entry("daemon", "cross_cutting", "the daemon serves every entity's routes"),
     _entry("memory", "cross_cutting", "memory rows annotate the project, not one entity"),
     _entry("ui", "cross_cutting", "the console renders every entity"),
-    _entry("migrate", "cross_cutting", "the cutover moves every entity of a tree at once"),
     _entry("reflect", "cross_cutting", "reports over measurement collections, not an entity"),
     _entry("follow", "tooling", "streams any submitted operation from a cursor"),
     _entry("verbs", "tooling", "emits the introspectable verb catalog"),
@@ -143,8 +142,7 @@ ROOT_ENTRY_EXCEPTIONS: Final[tuple[RootEntryException, ...]] = (
     _entry("skill", "tooling", "rendered skill bodies call these paths"),
     _entry("mcp", "tooling", "host MCP configuration launches these paths"),
     _entry("completion", "tooling", "shell profiles source the completion script"),
-    _entry("session", "tooling", "a live epoch-1 session blocks the cutover"),
-    _entry("worktree", "tooling", "live epoch-1 worktrees block the cutover"),
+    _entry("session", "tooling", "binds a host session, which no entity records, to its Task"),
     _entry("wal", "tooling", "inspects the write-ahead log the cutover must drain"),
     _entry("store", "tooling", "compacts the epoch-1 JSONL stores"),
     _entry("init", "tooling", "creates a tree, before any entity exists"),
@@ -158,6 +156,7 @@ ROOT_ENTRY_EXCEPTIONS: Final[tuple[RootEntryException, ...]] = (
     _entry("schema", "tooling", "dumps the JSON Schemas of the canonical models"),
     _entry("sync", "tooling", "re-renders the managed instruction assets"),
     _entry("rules", "tooling", "reads and migrates the rendered rule set"),
+    _entry("research", "tooling", "checks the local briefs the research skill writes"),
     _entry("profile", "tooling", "scaffolds and validates rule profiles"),
     _entry("coauthor", "tooling", "resolves the commit trailer policy"),
     _entry("render-output", "tooling", "converts an output envelope between forms"),
@@ -257,23 +256,6 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
     _exempt(
         "record append", "epoch1_state", "files a record for imported work, which has no revision"
     ),
-    _exempt("session close", "epoch1_state", "writes the epoch-1 session row the cutover waits on"),
-    _exempt(
-        "session recover", "epoch1_state", "writes the epoch-1 session row the cutover waits on"
-    ),
-    _exempt(
-        "worktree merge-back",
-        "epoch1_state",
-        "writes the epoch-1 worktree row the cutover waits on",
-    ),
-    _exempt(
-        "worktree cleanup", "epoch1_state", "writes the epoch-1 worktree row the cutover waits on"
-    ),
-    _exempt(
-        "worktree reconcile",
-        "epoch1_state",
-        "writes the epoch-1 worktree rows the cutover waits on",
-    ),
     _exempt(
         "store compact",
         "epoch1_state",
@@ -295,9 +277,6 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
     _exempt("mcp grant", "create_keyed", "files a grant, which has no revision to anchor yet"),
     _exempt("memory add", "wire_pending", "the memory routes take no anchor yet"),
     _exempt("memory promote", "wire_pending", "the memory routes take no anchor yet"),
-    _exempt(
-        "memory compact", "unversioned_store", "compacts the memory file, which keeps no revision"
-    ),
     _exempt("memory prune", "wire_pending", "the memory routes take no anchor yet"),
     _exempt("memory gc", "wire_pending", "the memory routes take no anchor yet"),
     _exempt("memory tier", "wire_pending", "the memory routes take no anchor yet"),
@@ -373,14 +352,12 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
         "re-projects the derived telemetry database",
     ),
     _exempt("doctor", "local_setup", "--fix repairs the local install, below the record layer"),
-    _exempt("migrate", "epoch1_state", "rewrites an epoch-1 state.json across schema versions"),
-    _exempt("migrate epoch2", "epoch1_state", "cuts an epoch-1 tree over before any record exists"),
-    _exempt(
-        "migrate urn-rekey",
-        "wire_pending",
-        "re-plans under the document lock, so a repeated apply writes nothing; takes no anchor",
-    ),
     _exempt("cc statusline install", "local_setup", "writes the host statusline configuration"),
+    _exempt(
+        "session bind",
+        "unversioned_store",
+        "appends a machine-local binding row, which keeps no revision",
+    ),
     _exempt("schema dump", "local_setup", "rewrites the committed generated schema files"),
     _exempt("sync", "local_setup", "re-renders the managed instruction files"),
     _exempt("snapshot update", "local_setup", "rewrites committed golden fixtures"),

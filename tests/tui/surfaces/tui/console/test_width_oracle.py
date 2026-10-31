@@ -8,6 +8,7 @@ measure in cells, and no console module measures glyph-bearing text with ``len()
 from __future__ import annotations
 
 import ast
+import json
 from pathlib import Path
 
 import pytest
@@ -26,7 +27,7 @@ from eawf.surfaces.tui.console.width import (
 )
 
 CONSOLE_DIR = Path(width.__file__).resolve().parent
-CHASSIS = "tests.snapshots.tui.console.console_chassis.chassis"
+SHIPPED_WIDTH = Path(__file__).resolve().parents[4] / "fixtures" / "console" / "width-shipped.json"
 
 RATIFIED = sorted(tokens.all_glyphs())
 AMBIGUOUS = [ch for ch in RATIFIED if eaw_class(ch) == EastAsianWidth.AMBIGUOUS]
@@ -266,18 +267,21 @@ def test_console_modules_never_measure_frame_text_with_len() -> None:
     assert offenders == {}
 
 
-def test_width_oracle_matches_the_test_only_chassis_on_narrow_text() -> None:
-    # parity holds only while both copies exist; the skip marks the chassis' removal
-    chassis_width = pytest.importorskip(f"{CHASSIS}.width", exc_type=ModuleNotFoundError)
-    chassis_tokens = pytest.importorskip(f"{CHASSIS}.tokens", exc_type=ModuleNotFoundError)
+def _shipped_width() -> dict[str, object]:
+    """Return the clipped and padded samples and the glyph tables the console ships."""
     samples = ["", "ab", "short", "final report rejected by the jury", "● LIVE ▸ ≈12 ═══"]
-    for text in samples:
-        for n in (1, 2, 5, 10, 20, 40):
-            assert clip_words(text, n) == chassis_width.clip_words(text, n)
-            assert pad(text, n) == chassis_width.pad(text, n)
-    for name, table in TABLES.items():
-        theirs = getattr(chassis_tokens, name.upper())
-        assert {k: (g.unicode, g.ascii) for k, g in table.items()} == {
-            k: (g.unicode, g.ascii) for k, g in theirs.items()
-        }
-    assert tokens.all_glyphs() == chassis_tokens.all_glyphs()
+    return {
+        "clip_words": [[clip_words(t, n) for n in (1, 2, 5, 10, 20, 40)] for t in samples],
+        "pad": [[pad(t, n) for n in (1, 2, 5, 10, 20, 40)] for t in samples],
+        "tables": {
+            name: {k: [g.unicode, g.ascii] for k, g in table.items()}
+            for name, table in TABLES.items()
+        },
+        "all_glyphs": sorted(tokens.all_glyphs()),
+    }
+
+
+def test_width_oracle_matches_its_shipped_output_on_narrow_text() -> None:
+    # the chassis this was once compared with is gone, so the fixture freezes shipped behaviour
+    shipped = json.loads(SHIPPED_WIDTH.read_text(encoding="utf-8"))
+    assert _shipped_width() == shipped
