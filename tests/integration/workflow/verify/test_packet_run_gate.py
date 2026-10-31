@@ -6,7 +6,8 @@ Linux, at the version being tagged, from a clean source commit the released
 commit carries, on a runtime version the committed canary evidence export
 certifies. These checks pin how the assertion reads the machine-local
 receipts: which receipts count, how a missing, failed or uncertified run is
-named, and how a malformed receipt or export is refused.
+named, how a malformed receipt or export is refused, and how the receipts
+committed beside the export are read alongside the local ones.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from eawf.kernel.release.signals import ReleaseSignalOutcome, ReleaseSignalStatu
 from eawf.kernel.runtime.certification import CertifiedVersionRange
 from eawf.workflow.evidence.provider_certification import canary_evidence_path
 from eawf.workflow.release.packet_run import (
+    PACKET_RECEIPTS_EXPORT_FILENAME,
     PACKET_RECEIPTS_FILENAME,
     PacketOrigin,
     PacketReceiptError,
@@ -31,9 +33,11 @@ from eawf.workflow.release.packet_run import (
     PacketStep,
     append_packet_receipt,
     packet_coverage,
+    packet_receipts_export_path,
     packet_run_dir,
     read_packet_receipts,
 )
+from eawf.workflow.verify import realization_assertions
 from eawf.workflow.verify.realization_assertions import packet_run_outcome
 
 pytestmark = pytest.mark.integration
@@ -48,9 +52,11 @@ PAIRS: Final = (
     ("codex", PacketOrigin.ADOPTED),
 )
 
+REPO_ROOT: Final = Path(__file__).resolve().parents[4]
+
 #: The committed stable export; it certifies claude-code 2.1.314..2.1.999
 #: and codex 0.164.0..0.199.999 on Linux.
-STABLE_EXPORT: Final = canary_evidence_path(Path(__file__).resolve().parents[4], RELEASE_KEY)
+STABLE_EXPORT: Final = canary_evidence_path(REPO_ROOT, RELEASE_KEY)
 
 #: A runtime version inside each certified range.
 CERTIFIED: Final = {"claude-code": "2.1.320", "codex": "0.170.0"}
@@ -390,6 +396,116 @@ def test_packet_run_breaks_on_an_unreadable_export(tmp_path: Path) -> None:
     assert outcome.evidence_refs == ("packet_run:canary-evidence",)
 
 
+# ---- the receipts committed beside the export -----------------------------------
+
+
+def committed_receipts(repo: Path) -> Path:
+    """Return the committed receipt file of :data:`RELEASE_KEY` in *repo*."""
+    path = packet_receipts_export_path(repo, RELEASE_KEY)
+    assert path is not None
+    return path
+
+
+def test_packet_run_holds_from_committed_receipts_alone(tmp_path: Path) -> None:
+    file_all_four(tmp_path)
+    (packet_run_dir(tmp_path) / PACKET_RECEIPTS_FILENAME).unlink()
+
+    assert outcome_of(tmp_path).status is ReleaseSignalStatus.PASS
+
+
+def test_read_packet_receipts_counts_a_receipt_held_locally_and_committed_once(
+    tmp_path: Path,
+) -> None:
+    file_all_four(tmp_path)
+
+    assert len(read_packet_receipts(tmp_path, RELEASE_KEY)) == 4
+
+
+def test_read_packet_receipts_orders_the_union_by_when_each_run_ended(tmp_path: Path) -> None:
+    release_repo(tmp_path)
+    later = packet_receipt(
+        *PAIRS[0], started_at=STARTED + timedelta(hours=1), ended_at=STARTED + timedelta(hours=2)
+    )
+    earlier = packet_receipt(*PAIRS[0], outcome="fail", failed_step=PacketStep.LAND)
+    committed_receipts(tmp_path).write_text(later.model_dump_json() + "\n", encoding="utf-8")
+    local = packet_run_dir(tmp_path) / PACKET_RECEIPTS_FILENAME
+    local.parent.mkdir(parents=True)
+    local.write_text(earlier.model_dump_json() + "\n", encoding="utf-8")
+
+    assert read_packet_receipts(tmp_path, RELEASE_KEY) == (earlier, later)
+
+
+def test_packet_run_refuses_a_malformed_committed_receipt_by_line(tmp_path: Path) -> None:
+    file_all_four(tmp_path)
+    with committed_receipts(tmp_path).open("a", encoding="utf-8") as handle:
+        handle.write('{"runtime": "codex", "outcome": "pass", "scratch": "x"}\n')
+
+    outcome = outcome_of(tmp_path)
+
+    assert outcome.status is ReleaseSignalStatus.FAIL
+    assert outcome.remediation.startswith(
+        f"packet_run: {PACKET_RECEIPTS_EXPORT_FILENAME} line 5 is not a packet-run receipt"
+    )
+    assert outcome.evidence_refs == ("packet_run:malformed-receipt",)
+
+
+def test_append_packet_receipt_files_beside_the_export_once(tmp_path: Path) -> None:
+    release_repo(tmp_path)
+    receipt = packet_receipt(*PAIRS[0])
+
+    append_packet_receipt(tmp_path, receipt)
+    append_packet_receipt(tmp_path, receipt)
+
+    exported = committed_receipts(tmp_path)
+    assert exported.parent == canary_evidence_path(tmp_path, RELEASE_KEY).parent
+    assert exported.read_text(encoding="utf-8") == receipt.model_dump_json() + "\n"
+    local = packet_run_dir(tmp_path) / PACKET_RECEIPTS_FILENAME
+    assert len(local.read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_append_packet_receipt_keeps_the_receipt_local_without_an_export(tmp_path: Path) -> None:
+    append_packet_receipt(tmp_path, packet_receipt(*PAIRS[0]))
+
+    assert not committed_receipts(tmp_path).exists()
+    assert not committed_receipts(tmp_path).parent.exists()
+    assert (packet_run_dir(tmp_path) / PACKET_RECEIPTS_FILENAME).is_file()
+
+
+def test_append_packet_receipt_keeps_an_unmapped_version_local(tmp_path: Path) -> None:
+    release_repo(tmp_path)
+
+    append_packet_receipt(tmp_path, packet_receipt(*PAIRS[0], version="9.9.9"))
+
+    assert packet_receipts_export_path(tmp_path, "REL-9.9.9") is None
+    assert not committed_receipts(tmp_path).exists()
+
+
+def test_the_committed_stable_receipts_pass_the_gate_without_a_local_store(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The tag workflow's fresh checkout carries only the committed files.
+
+    The committed export and receipt file are copied into an empty tree, so
+    no local store is read; ancestry is still decided against this
+    repository's history, which holds the commit the receipts name.
+    """
+    for source in (STABLE_EXPORT, committed_receipts(REPO_ROOT)):
+        target = tmp_path / source.relative_to(REPO_ROOT)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
+    in_repo = realization_assertions._is_ancestor
+    monkeypatch.setattr(
+        realization_assertions,
+        "_is_ancestor",
+        lambda _root, release_commit, commit: in_repo(REPO_ROOT, release_commit, commit),
+    )
+
+    outcome = outcome_of(tmp_path)
+
+    assert not packet_run_dir(tmp_path).exists()
+    assert outcome.status is ReleaseSignalStatus.PASS, outcome.remediation
+
+
 # ---- the receipt store -----------------------------------------------------------
 
 
@@ -398,14 +514,14 @@ def test_read_packet_receipts_returns_none_from_an_empty_file(tmp_path: Path) ->
     path.parent.mkdir(parents=True)
     path.write_text("\n", encoding="utf-8")
 
-    assert read_packet_receipts(tmp_path) == ()
+    assert read_packet_receipts(tmp_path, RELEASE_KEY) == ()
 
 
 def test_read_packet_receipts_round_trips_one_receipt(tmp_path: Path) -> None:
     receipt = packet_receipt(*PAIRS[0])
     append_packet_receipt(tmp_path, receipt)
 
-    assert read_packet_receipts(tmp_path) == (receipt,)
+    assert read_packet_receipts(tmp_path, RELEASE_KEY) == (receipt,)
 
 
 @pytest.mark.parametrize(
@@ -419,7 +535,7 @@ def test_read_packet_receipts_refuses_a_malformed_line(tmp_path: Path, line: str
     path.write_text(f"{line}\n", encoding="utf-8")
 
     with pytest.raises(PacketReceiptError, match="line 1 is not a packet-run receipt"):
-        read_packet_receipts(tmp_path)
+        read_packet_receipts(tmp_path, RELEASE_KEY)
 
 
 def test_packet_coverage_puts_every_pair_in_exactly_one_bucket() -> None:

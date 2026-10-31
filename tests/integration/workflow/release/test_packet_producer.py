@@ -154,7 +154,7 @@ def test_run_packet_passes_a_packet_end_to_end(isolated: Path, origin: PacketOri
     assert receipt.eawf_version == __version__
     assert receipt.eawf_commit == _head(packet_producer._PACKAGE_DIR)
     assert receipt.budget_tokens == 600_000
-    assert read_packet_receipts(checkout) == (receipt,)
+    assert read_packet_receipts(checkout, f"REL-{__version__}") == (receipt,)
     evidence = packet_run_dir(checkout) / f"{receipt.evidence_digest.removeprefix('sha256:')}.json"
     log = json.loads(evidence.read_text(encoding="utf-8"))
     commands = [entry["argv"][:3] for entry in log if "argv" in entry]
@@ -213,7 +213,7 @@ def test_run_packet_refuses_before_running(
             origin=PacketOrigin.BORN_NATIVE,
             budget=budget,
         )
-    assert read_packet_receipts(checkout) == ()
+    assert read_packet_receipts(checkout, f"REL-{__version__}") == ()
 
 
 def test_run_packet_refuses_a_package_outside_a_checkout(
@@ -227,7 +227,7 @@ def test_run_packet_refuses_a_package_outside_a_checkout(
         run_packet(
             checkout, isolated / "scratch", runtime=StubRuntime(), origin=PacketOrigin.ADOPTED
         )
-    assert read_packet_receipts(checkout) == ()
+    assert read_packet_receipts(checkout, f"REL-{__version__}") == ()
 
 
 @pytest.mark.parametrize(
@@ -291,7 +291,7 @@ def test_run_packet_files_a_failed_receipt_for_an_unexpected_exception(
     with pytest.raises(error):
         run_packet(checkout, isolated / "scratch", runtime=runtime, origin=PacketOrigin.ADOPTED)
 
-    (receipt,) = read_packet_receipts(checkout)
+    (receipt,) = read_packet_receipts(checkout, f"REL-{__version__}")
     assert receipt.outcome == "fail"
     assert receipt.failed_step is step
     assert receipt.failure == failure
@@ -327,4 +327,4 @@ def test_release_packet_run_refuses_a_scratch_inside_the_checkout(isolated: Path
 
     assert done.returncode != 0
     assert "packet_scratch_inside_checkout" in done.stdout + done.stderr
-    assert read_packet_receipts(checkout) == ()
+    assert read_packet_receipts(checkout, f"REL-{__version__}") == ()

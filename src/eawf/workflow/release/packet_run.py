@@ -3,9 +3,11 @@
 One packet run carries a scratch repository from ``eawf init --quick`` through
 one planned Task, its native Run on a real runtime, the landed Batch and the
 Run's printed transcript; :mod:`eawf.workflow.release.packet_producer` drives
-it. Each run appends one receipt to this machine's local store. The stable
-checkpoint's ``packet_run`` assertion then asks whether every runtime and
-repository origin passed on Linux for the version being tagged.
+it. Each run appends one receipt to this machine's local store and, when
+the version's canary evidence export is committed, to a receipt file beside
+it, so a fresh checkout such as the tag workflow's carries the receipts too.
+The stable checkpoint's ``packet_run`` assertion then asks whether every
+runtime and repository origin passed on Linux for the version being tagged.
 
 A receipt binds to the eawf *version* that ran it and to the source commit
 the run imported eawf from. The commit a stable tag points at is the
@@ -31,7 +33,11 @@ from pydantic import Field, ValidationError, model_validator
 from eawf.kernel.runtime.certification import CertifiedVersionRange
 from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.state.types import Sha256DigestStr, ShaStr, UtcDatetime
-from eawf.workflow.evidence.provider_certification import OsClass
+from eawf.workflow.evidence.provider_certification import (
+    CANARY_EVIDENCE_DIRS,
+    OsClass,
+    canary_evidence_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +47,9 @@ PACKET_RUN_DIR: Final[tuple[str, ...]] = (".ea", "local", "release", "packet-run
 
 #: The append-only receipt file inside :data:`PACKET_RUN_DIR`.
 PACKET_RECEIPTS_FILENAME: Final[str] = "receipts.jsonl"
+
+#: The committed receipt file beside a release's canary evidence export.
+PACKET_RECEIPTS_EXPORT_FILENAME: Final[str] = "packet-run-receipts.jsonl"
 
 #: The runtimes a packet run is dispatched to.
 PacketRuntimeId = Literal["claude-code", "codex"]
@@ -174,20 +183,49 @@ def write_packet_evidence(repo_root: Path, log: bytes) -> str:
     return f"sha256:{hexdigest}"
 
 
+def packet_receipts_export_path(repo_root: Path, release_key: str) -> Path | None:
+    """Return the committed receipt file of *release_key*, or ``None`` when it has none.
+
+    Args:
+        repo_root: The checkout the canary evidence export is committed in.
+        release_key: The checkpoint whose receipts are wanted.
+
+    Returns:
+        The receipt file beside the release's export, whether or not it
+        exists; ``None`` when no export directory is mapped for the release.
+    """
+    if release_key not in CANARY_EVIDENCE_DIRS:
+        return None
+    return canary_evidence_path(repo_root, release_key).parent / PACKET_RECEIPTS_EXPORT_FILENAME
+
+
 def append_packet_receipt(repo_root: Path, receipt: PacketRunReceipt) -> Path:
     """Append *receipt* to *repo_root*'s receipt file and return the file.
+
+    The receipt also goes to the committed receipt file of its version's
+    release when that release's canary evidence export exists, unless the
+    file already holds the identical line; a checkout without the export
+    keeps the receipt local only.
 
     Args:
         repo_root: The repository whose local store receives the receipt.
         receipt: A validated receipt.
 
     Returns:
-        The receipt file.
+        The local receipt file.
     """
+    line = receipt.model_dump_json() + "\n"
     path = packet_run_dir(repo_root) / PACKET_RECEIPTS_FILENAME
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
-        handle.write(receipt.model_dump_json() + "\n")
+        handle.write(line)
+    release_key = f"REL-{receipt.eawf_version}"
+    exported = packet_receipts_export_path(repo_root, release_key)
+    if exported is not None and canary_evidence_path(repo_root, release_key).is_file():
+        held = exported.read_text(encoding="utf-8").splitlines() if exported.is_file() else []
+        if line.rstrip("\n") not in held:
+            with exported.open("a", encoding="utf-8") as handle:
+                handle.write(line)
     logger.info(
         f"append_packet_receipt runtime={receipt.runtime} origin={receipt.origin.value} "
         f"outcome={receipt.outcome} version={receipt.eawf_version!r}"
@@ -195,22 +233,14 @@ def append_packet_receipt(repo_root: Path, receipt: PacketRunReceipt) -> Path:
     return path
 
 
-def read_packet_receipts(repo_root: Path) -> tuple[PacketRunReceipt, ...]:
-    """Return every receipt *repo_root* holds, in the order they were appended.
-
-    Args:
-        repo_root: The repository whose local store is read.
-
-    Returns:
-        The receipts; none when the file is absent.
+def _read_receipt_file(path: Path) -> list[PacketRunReceipt]:
+    """Return the receipts in *path* in file order; none when it is absent.
 
     Raises:
-        PacketReceiptError: A line is not JSON or not a valid receipt,
-            named by its line number.
+        PacketReceiptError: A line is not JSON or not a valid receipt.
     """
-    path = packet_run_dir(repo_root) / PACKET_RECEIPTS_FILENAME
     if not path.is_file():
-        return ()
+        return []
     receipts: list[PacketRunReceipt] = []
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
@@ -219,10 +249,36 @@ def read_packet_receipts(repo_root: Path) -> tuple[PacketRunReceipt, ...]:
             receipts.append(PacketRunReceipt.model_validate(json.loads(line)))
         except (ValueError, ValidationError) as exc:
             raise PacketReceiptError(
-                f"{PACKET_RECEIPTS_FILENAME} line {number} is not a packet-run receipt: "
-                f"{str(exc).splitlines()[0]}"
+                f"{path.name} line {number} is not a packet-run receipt: {str(exc).splitlines()[0]}"
             ) from exc
-    return tuple(receipts)
+    return receipts
+
+
+def read_packet_receipts(repo_root: Path, release_key: str) -> tuple[PacketRunReceipt, ...]:
+    """Return every receipt *repo_root* holds for *release_key*, oldest run first.
+
+    The committed receipt file and the local store are read together; a
+    receipt both hold counts once. Runs are ordered by when they ended, and
+    receipts that ended together keep the committed file's order, then the
+    local store's, so append order still decides between them.
+
+    Args:
+        repo_root: The repository whose local store and committed receipt
+            file are read.
+        release_key: The checkpoint whose committed receipt file is read.
+
+    Returns:
+        The receipts; none when neither file exists.
+
+    Raises:
+        PacketReceiptError: A line of either file is not JSON or not a valid
+            receipt, named by its file and line number.
+    """
+    exported = packet_receipts_export_path(repo_root, release_key)
+    committed = [] if exported is None else _read_receipt_file(exported)
+    local = _read_receipt_file(packet_run_dir(repo_root) / PACKET_RECEIPTS_FILENAME)
+    unique = list({receipt.model_dump_json(): receipt for receipt in committed + local}.values())
+    return tuple(sorted(unique, key=lambda receipt: receipt.ended_at))
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,6 +382,7 @@ def packet_coverage(
 
 __all__ = [
     "PACKET_OS_CLASS",
+    "PACKET_RECEIPTS_EXPORT_FILENAME",
     "PACKET_RECEIPTS_FILENAME",
     "PACKET_RUNTIMES",
     "PACKET_RUN_DIR",
@@ -337,6 +394,7 @@ __all__ = [
     "PacketStep",
     "append_packet_receipt",
     "packet_coverage",
+    "packet_receipts_export_path",
     "packet_run_dir",
     "read_packet_receipts",
     "write_packet_evidence",

@@ -10,9 +10,10 @@ in :mod:`eawf.workflow.verify.release_probes`, because they read the
 chokepoint's inputs; the rest are decided here from the working copy and
 the running package.
 
-One assertion is decided from this machine's local store rather than the
-checkout: the packet run, which drives the perfect-realization packet on
-two runtimes and two repository origins and files one receipt per run
+One assertion is decided from filed run receipts: the packet run, which
+drives the perfect-realization packet on two runtimes and two repository
+origins and files one receipt per run, in this machine's local store and
+beside the release's committed canary evidence export
 (:mod:`eawf.workflow.release.packet_run`). Only the stable checkpoint
 requires it; a release candidate's row greens without it.
 """
@@ -259,9 +260,9 @@ def packet_run_outcome(
     """Decide whether every runtime and origin passed the packet for *version* on Linux.
 
     Args:
-        repo_root: Working copy whose local store holds the receipts and
-            whose committed canary evidence export records each runtime's
-            certified version range.
+        repo_root: Working copy whose local store and committed receipt
+            file hold the receipts and whose committed canary evidence
+            export records each runtime's certified version range.
         version: The version being tagged; a receipt of any other version
             does not count.
         release_key: The checkpoint whose canary evidence export is read.
@@ -277,7 +278,7 @@ def packet_run_outcome(
     """
     name = RealizationAssertion.PACKET_RUN.value
     try:
-        receipts = read_packet_receipts(repo_root)
+        receipts = read_packet_receipts(repo_root, release_key)
     except PacketReceiptError as exc:
         return _broken(f"{name}: {exc}", f"{name}:malformed-receipt")
     try:
