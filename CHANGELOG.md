@@ -4,12 +4,46 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
-## [Unreleased]
+## [0.7.0]
+
+This is the stable release of v0.7.0. It drops the epoch-1 migration stack, so 0.7.0rc4 stays the last release that migrates a 0.6 tree; read the Migration section before upgrading. A release is now tagged only after its push CI is green, and stable is gated on the full suite and a live packet run on both declared runtimes. Agent sessions can no longer act as the operator, a Track admits no Milestone beyond its active limit, and every Run's transcript can be read locally.
+
+### Added
+
+- **Local transcripts.** Each Run's runtime transcript file is indexed locally; `eawf run transcript <KEY>` prints a Run's or a Task's transcripts in full, the console transcript route opens a Run's full transcript on `r`, and `eawf session bind <TASK_KEY>` binds a host session to the Task it serves, superseding its earlier binding.
+- **The packet-run gate.** `eawf release packet-run --runtime claude-code|codex` initialises a scratch repository, plans and certifies, dispatches one Task, lands its commit, closes the Batch, prints the Run's transcript and records the receipt; the stable checkpoint's `packet_run` gate requires that receipt.
+- **The 0.7.0 stable checkpoint config.** It is rendered from the stable profile with the `full_suite` gate running the whole suite, the `packet_run` gate, a live telemetry fixture that measures the checkout's own Task Runs and declared `runtime_claims` for claude-code and codex, so the canary export advertises both runtimes; earlier rungs render byte-identically.
+- **Runtime version-range certification.** `eawf runtime certify` with `--min-version` and `--max-version` covers an inclusive SemVer range, and the canary export re-probes an installed version inside that range instead of refusing every new harness release until another canary walk runs.
+- **Frozen platform claims.** The stable candidate manifest (`frozen-manifest/v2`) digests the advertised platform claims beside the artifact set, so a claim cannot be dropped or re-pointed after the pin; the 0.7.0 prereleases keep their v1 digests.
+- **Research modes.** `/research` gains swift and rounds modes (`--depth`, `--rounds <1..5>`) and writes a local brief with Question, Findings, Alternatives, Recommendation, Open gaps and References sections, which `eawf research check <BRIEF>` checks.
+- **Skill pages.** Each skill page's report fields are generated from its report model, and host skill pages name the `eawf` commands they run.
+- **`eawf help limitations`** renders the 0.7.0 limitations as a help topic.
+- **Commit-trailer and branch-name lints.** The pre-push commit lint refuses a `Batch:` or `Task:` trailer outside the final trailer block, in CI history and on a first push; a branch-name lint at the commit and push stages refuses a `feature/<symbol>-v...` branch that is not `feature/<symbol>-v<X.Y>` or its Task form.
+- **An idle-function ceiling.** The idle-contract gate fails when the count of idle public functions rises above the recorded ceiling and asks for the ceiling to be lowered when the count falls.
+- **A nightly perf lane.** Duration budgets with product value run in `tests/perf`, budgeted on nightly and hand-started CI runs; blocking tests prove their claims with counters and events instead of wall-clock asserts.
+
+### Changed
+
+- **Pull-request CI matches push CI.** A pull request runs the same test selection, e2e and perf steps and eval coverage gate as a push, so a merge is no longer the first full run; the macOS suite is sharded and the resvg binary is cached.
+- **A release is tagged only after green push CI.** `eawf release pipeline` waits for a successful push run of `ci.yaml` on the pinned commit and opens the release record before preflight and tag; a hand-run tag on a commit CI has not proved green is refused, and a retried release reuses its fresh gate receipts.
+- **Agent sessions cannot act as the operator.** The daemon refuses the operator identity on any command run from a Claude Code or Codex agent session, so plan approvals and Milestone acceptances are recorded only by the operator.
+- **A Track's active-Milestone limit is enforced.** `eawf milestone activate` and both reopen edges refuse a Milestone beyond the Track's active-Milestone limit (`eawf track set-policy --active-milestones`), naming the Track, its limit and its ACTIVE Milestones; follow-up scope is appended to the ACTIVE Milestone instead.
+- **Free-text skill arguments.** Skill argument text that does not split as shell words is split on whitespace, and the data-loss guard reads an unlexable Bash line again with quotes and backslashes taken literally before it judges it.
+- **Merged policy rules.** Duplicate conduct rules are folded into the rule that owns each obligation, shrinking the rendered policy, and the Claude installer leaves agent pages to the marketplace plugin, so Claude Code no longer loads each agent twice.
+- **Retired gates.** The quarantine CI step, which could not fail, and a lint test that never fired since it was added are removed; the `--quarantine-lane` option stays.
 
 ### Removed
 
 - **The epoch-1 migration stack and the `eawf migrate` verbs.** This release no longer reads or cuts over a 0.6 tree. On a 0.6 tree each writing verb of a contract group (`track`, `milestone`, `batch`, `task`, `run`, `release`, `campaign`, `question`, `action`, `decision`, `workspace`, `config`, `daemon`, `memory` and `reflect`), the console (`eawf ui`) and a bare `eawf` refuse with `MigrationRequired` (exit 4) and name the upgrade path. `eawf daemon stop` and `eawf daemon restart` still run, so a user can stop an older daemon; read verbs still answer.
-- **The `eawf session` and `eawf worktree` groups and `eawf memory compact`.** They served only 0.6 state; typing one ends with `No such command`.
+- **The `eawf session` and `eawf worktree` groups and `eawf memory compact`.** They served only 0.6 state; typing one ends with `No such command`. The `eawf session` group now holds only `bind`, listed under Added.
+
+### Fixed
+
+- A Run stopped by a domain verb releases its leases.
+- `eawf run transcript` selects transcripts from Run briefs instead of full readings, so it answers quickly on a large tree.
+- Dispatched Runs whose transcript directory was never written are back-filled, and worktree sessions' rows stay in the main tree.
+- A 0.6 tree can still stop its daemon, and the 0.6 upgrade docs name only verbs this release carries.
+- On Windows, tag, push, branch-probe and packet-producer spawns no longer flash a console window.
 
 ### Migration
 

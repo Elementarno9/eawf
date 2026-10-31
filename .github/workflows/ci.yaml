@@ -190,12 +190,6 @@ jobs:
           path: pytest-junit.xml
           if-no-files-found: error
 
-      - name: Quarantine lane (reports, never blocks)
-        # Every blocking leg deselects the tests in tests/quarantine.json;
-        # this lane runs only those and prints how many failed. It exits
-        # clean whatever they did, so a known flake never reds the build.
-        if: startsWith(matrix.os, 'ubuntu-') && matrix.shard == '1'
-        run: uv run pytest -n0 --quarantine-lane
       - name: Pytest (serial e2e timing)
         # Console latency must be measured without competing pytest workers.
         if: matrix.shard == '1'

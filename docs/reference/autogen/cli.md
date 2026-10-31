@@ -179,7 +179,7 @@ _No verbs registered._
 
 ### `eawf help`
 
-Show prose help topics (exit-codes, daemon, profiles, urns, migration, upgrade-from-0.6, streaming).
+Show prose help topics (exit-codes, daemon, profiles, urns, migration, upgrade-from-0.6, streaming, limitations).
 
 _No verbs registered._
 

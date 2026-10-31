@@ -498,9 +498,7 @@ def test_junit_artifact_names_are_unique_per_leg() -> None:
     assert len(rendered) == len(_LEGS)
 
 
-@pytest.mark.parametrize(
-    "step", ["Quarantine lane (reports, never blocks)", "Pytest (serial perf structure)"]
-)
+@pytest.mark.parametrize("step", ["Pytest (serial perf structure)"])
 def test_once_per_run_steps_run_on_one_ubuntu_shard(step: str) -> None:
     ran = [shard for shard in _SHARDS if _runs_on(step, "ubuntu-24.04", shard)]
     assert ran == ["1"]

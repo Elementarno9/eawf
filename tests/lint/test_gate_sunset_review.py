@@ -6,7 +6,7 @@ review both outcomes look identical from the tree -- a kept gate and a
 forgotten one are the same line of YAML -- so this module is where each
 verdict is pinned.
 
-Four verdicts are recorded here; the three that leave something in the tree
+Six verdicts are recorded here; the four that leave something in the tree
 to check are pinned by a test.
 
 The telemetry-sync CI step is a KEEP. It guards a silent regression: an
@@ -33,6 +33,22 @@ archive-independence gate ``AUTH-037`` names) is a RETIRE before it was
 built, on the same ground: a check whose only input is a file no clone has
 passes vacuously everywhere a reviewer would run it. Nothing was built, so
 nothing is pinned.
+
+The 0.7.0 review covered every gate added since the last 0.6 tag. A gate
+counts as fired when it reds at the parent of the commit that added it,
+on a defect that commit fixes, or on any later commit or CI run. Nearly
+all of them fired that way; two never did and are retired here.
+
+The CI quarantine lane is a RETIRE. It ran on the ubuntu leg only and
+exits clean whatever happens, while the tests it tracks flake on a loaded
+macOS runner, so it reported zero failures on every run sampled and could
+not do otherwise. The deselection and the ``--quarantine-lane`` option
+stay, so the registry still keeps its flakes out of every blocking run.
+
+The CI-condition and admission-prose lint for the low P34 audit edges is
+a RETIRE. Both edges were repaired before the lint existed, it was green
+at the commit that added it, and neither defect has reappeared since.
+Nothing of it is left in the tree, so nothing is pinned.
 """
 
 from __future__ import annotations
@@ -59,6 +75,9 @@ _RETIRED_SYMBOL = "REASONING_UNSETTLED_RUNTIMES"
 
 #: The local packet census tool; no workflow lane may invoke it.
 _PACKET_CENSUS = "tools/packet_census.py"
+
+#: The pytest option of the local quarantine lane; no workflow lane may pass it.
+_QUARANTINE_LANE = "--quarantine-lane"
 
 
 def _ci_document() -> dict:
@@ -137,5 +156,12 @@ def _workflow_runs() -> list[tuple[str, str]]:
 def test_lint_043_retired_packet_census_runs_in_no_workflow_lane() -> None:
     """The RETIRE verdict is only real while no lane runs the census on an absent packet."""
     carriers = [name for name, run in _workflow_runs() if _PACKET_CENSUS in run]
+
+    assert carriers == []
+
+
+def test_retired_quarantine_lane_runs_in_no_workflow_lane() -> None:
+    """The RETIRE verdict is only real while no CI host runs a lane that cannot see its flakes."""
+    carriers = [name for name, run in _workflow_runs() if _QUARANTINE_LANE in run]
 
     assert carriers == []
