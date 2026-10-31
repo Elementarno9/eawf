@@ -53,6 +53,7 @@ from eawf.kernel.state.epoch2.milestone import validate_evidence_kinds
 from eawf.kernel.state.epoch2.urns import BatchUrn, EvidenceUrn, MilestoneUrn
 from eawf.kernel.state.epoch2.values import ExactRevisionBinding, TransitionReason
 from eawf.kernel.state.types import UtcDatetime
+from eawf.platform.lint.ledger_history import UNREACHABLE_KEY
 
 
 def _validate_evidence_key(value: str) -> str:
@@ -308,6 +309,25 @@ class EvidenceRow(_FrozenModel):
     kind: EvidenceKind
     summary: NonEmptyStr
     recorded_at: UtcDatetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _without_unreachable_declaration(cls, data: object) -> object:
+        """Drop the ``unreachable_shas`` declaration a superseding ledger line may carry.
+
+        An evidence line's payload is the row itself, so the declaration the ledger
+        history gate reads lands beside the row's fields; it records which archive ref
+        keeps a cited commit alive and says nothing about the observation.
+
+        Args:
+            data: The payload as the ledger holds it.
+
+        Returns:
+            *data* without the declaration, or *data* unchanged when it is not a mapping.
+        """
+        if isinstance(data, dict) and UNREACHABLE_KEY in data:
+            return {key: value for key, value in data.items() if key != UNREACHABLE_KEY}
+        return data
 
 
 class EvidenceView(_FrozenModel):
