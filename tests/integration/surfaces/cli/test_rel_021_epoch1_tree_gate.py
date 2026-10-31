@@ -144,7 +144,12 @@ def test_rel_021_the_workspace_flag_addresses_the_refused_tree(
 def test_rel_021_a_daemon_stop_verb_is_not_refused_on_a_plain_epoch1_tree(
     epoch1_tree: Path, verb: str
 ) -> None:
-    result = runner.invoke(app, ["--json", *verb.split()])
+    try:
+        result = runner.invoke(app, ["--json", *verb.split()])
+    finally:
+        # ``daemon restart`` really starts a daemon on the worker runtime dir;
+        # stop it so no later test, nor the session-end leak check, finds it.
+        runner.invoke(app, ["daemon", "stop"])
     assert result.exit_code != exit_codes.ATTACH_FAILURE, result.output
     assert upgrade_refusal.MIGRATION_REQUIRED_KIND not in result.output
 
