@@ -1,13 +1,13 @@
 <!-- Generated from the eawf profile render block `ship-process`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=ship-process version=2.0 hash=482ec9a8ce2cf7e0 -->
+<!-- BEGIN EAWF:managed id=ship-process version=2.0 hash=39ce541a1eb25534 -->
 # `ship-process`
 
 Ship a Milestone through one PR: squash to one commit per Batch before review, fix review findings by appending Batches, accept last, then fast-forward main to the reviewed commit.
 
 ### Ship process
 
-Ship is the Milestone's terminal pass, under decision D88, proposed to supersede D87 and pending operator ratification. The ordered steps from landed Batches to a merged, tagged Milestone:
+Ship is the Milestone's terminal pass, under decision D92, which superseded D87. The ordered steps from landed Batches to a merged, tagged Milestone:
 
 1. **Squash before review.** Before review opens, ``eawf batch squash`` writes the long-running feature branch again as one commit per Batch (a few for a large Batch), each carrying its ``Batch:`` and ``Task:`` trailers, plus one trailing ``state:`` commit, and proves its tree equals the source tip's. Once the branch points at it, ``eawf batch rebind`` appends a superseding row for every binding that named a source commit. Each Batch already closed when it landed: the daemon bound the Milestone branch head and walked the Batch and its Tasks to COMPLETED. A pushed branch is rewritten only before review opens, only with ``--force-with-lease``, and only after writing an archive ref of the old head.
 2. **Open the Milestone PR.** One PR per Milestone, body per the ``pr-template``. From this point the commits on the branch are fixed: every commit a reviewer reads is the commit that merges.

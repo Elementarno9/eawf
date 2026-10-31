@@ -1,4 +1,4 @@
-<!-- eawf:projection kind=card graph=sha256:31acea301aa6234a7418f3197322b3ae25816a52430431bb4171fa0674b307d5 body=sha256:5c5bf36abfbc4aebbce91d3dadec8379d82b00783b7a91bac8f976bea23e574e generated from .ea/rules.yaml by eawf sync; a hand edit fails validation -->
+<!-- eawf:projection kind=card graph=sha256:760ab30c8d012abbbb16ace145a07d7351c0eb6719f60c634b72f24f624ea2c2 body=sha256:5c5bf36abfbc4aebbce91d3dadec8379d82b00783b7a91bac8f976bea23e574e generated from .ea/rules.yaml by eawf sync; a hand edit fails validation -->
 # Eä Workflow
 
 Eä Workflow — agent-driven development framework

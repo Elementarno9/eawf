@@ -22,7 +22,8 @@ The default provider is a deterministic stub: the real ``eawfd`` with only the
 claude launcher replaced (``_smoke_stub_daemon.py``), so the supervisor, the Run
 lifecycle, the lease, the commit of the worker's edits and the report binding
 all run as shipped. ``EAWF_SMOKE_PROVIDER=claude`` runs the same flow on the
-real claude-code runtime; ``EAWF_SMOKE_EVIDENCE_DIR`` then receives the log, the
+real claude-code runtime and ``EAWF_SMOKE_PROVIDER=codex`` on the real codex
+runtime; ``EAWF_SMOKE_EVIDENCE_DIR`` then receives the log, the
 frame timeline and a dispatch smoke receipt: every dispatched Run is scored with
 ``eawf bench dispatch --check --tier fixture`` and the host's os_class is filed in
 ``dispatch-smoke-receipts.json``, which the release ``provider`` row reads.
@@ -60,8 +61,83 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.e2e
 
-#: Which runtime the Tasks are dispatched to: ``stub`` (default) or ``claude``.
+#: Which runtime the Tasks are dispatched to: ``stub`` (default), ``claude`` or ``codex``.
 PROVIDER: Final = os.environ.get("EAWF_SMOKE_PROVIDER", "stub")
+
+
+@dataclass(frozen=True)
+class SmokeRuntime:
+    """The runtime one ``EAWF_SMOKE_PROVIDER`` value dispatches to.
+
+    Attributes:
+        runtime_id: The runtime every dispatch names and its receipt records.
+        profile_id: The built-in profile the real run narrows to *model*.
+        model: The cheapest listed model that keeps the worker's report contract.
+        token_envs: The credentials the runtime reads from its environment. With
+            one set, the real run isolates HOME like the stub; without one, it
+            keeps the operator's HOME so the runtime finds its own signed-in
+            session, and isolates only what eawf owns.
+        check_prefix: How each Run's check document is named before its Run key.
+            Both runtimes' scratch trees key their Runs alike, so a second
+            runtime's documents need their own prefix to sit beside the first's.
+    """
+
+    runtime_id: str
+    profile_id: str
+    model: str
+    token_envs: tuple[str, ...]
+    check_prefix: str
+
+
+_CLAUDE_CODE: Final = SmokeRuntime(
+    runtime_id="claude-code",
+    profile_id="claude-default",
+    model="claude-haiku-4-5",
+    token_envs=("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"),
+    check_prefix="dispatch-check-",
+)
+
+#: The runtime each provider value dispatches to; the stub replaces only the
+#: claude launcher, so it dispatches to claude-code.
+SMOKE_RUNTIMES: Final = {
+    "stub": _CLAUDE_CODE,
+    "claude": _CLAUDE_CODE,
+    "codex": SmokeRuntime(
+        runtime_id="codex",
+        profile_id="codex-default",
+        # the fast gpt-6-luna tier ends a Run with its report as prose rather than
+        # through submit_report, which the daemon fails as report-unbound
+        model="gpt-6.1-sol",
+        token_envs=("CODEX_API_KEY", "OPENAI_API_KEY"),
+        check_prefix="dispatch-check-codex-",
+    ),
+}
+
+
+def smoke_runtime(provider: str) -> SmokeRuntime:
+    """Return the runtime *provider* dispatches to.
+
+    Args:
+        provider: An ``EAWF_SMOKE_PROVIDER`` value.
+
+    Returns:
+        Its row of :data:`SMOKE_RUNTIMES`.
+
+    Raises:
+        ValueError: When *provider* names no smoke runtime, so a typo cannot
+            fall through to a paid run on another runtime.
+    """
+    try:
+        return SMOKE_RUNTIMES[provider]
+    except KeyError:
+        raise ValueError(
+            f"EAWF_SMOKE_PROVIDER={provider!r} names no smoke runtime; "
+            f"name one of {', '.join(sorted(SMOKE_RUNTIMES))}"
+        ) from None
+
+
+#: The runtime this session's smoke dispatches to.
+SMOKE_RUNTIME: Final = smoke_runtime(PROVIDER)
 
 #: Where the real-provider run copies its log and frame timeline, when set.
 EVIDENCE_DIR_ENV: Final = "EAWF_SMOKE_EVIDENCE_DIR"
@@ -88,14 +164,6 @@ CONSOLE_SIZE: Final = (200, 60)
 
 #: How long one CLI command may take; a dispatch answers once its worker is announced.
 CLI_TIMEOUT_S: Final = 120.0
-
-#: The cheapest model the claude launcher lists, which the real run is narrowed to.
-CHEAPEST_MODEL: Final = "claude-haiku-4-5"
-
-#: The credentials claude reads from its environment. With one set, the claude run
-#: isolates HOME like the stub; without one, it keeps the operator's HOME so claude
-#: finds its own signed-in session, and isolates only what eawf owns.
-CLAUDE_TOKEN_ENVS: Final = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
 
 #: How long a dispatched Run may take to reach its end.
 RUN_TIMEOUT_S: Final = 60.0 if PROVIDER == "stub" else 600.0
@@ -173,10 +241,7 @@ class Smoke:
 
 
 #: What every dispatch names beyond the Task: the runtime and a token ceiling.
-PROVIDER_ARGS: Final = ("--provider", "claude-code", "--budget", "600000")
-
-#: The runtime a dispatch smoke receipt names.
-SMOKE_RUNTIME_ID: Final = PROVIDER_ARGS[1]
+PROVIDER_ARGS: Final = ("--provider", SMOKE_RUNTIME.runtime_id, "--budget", "600000")
 
 #: The os_class a dispatch smoke receipt records, by ``sys.platform``.
 OS_CLASSES: Final = {"linux": "linux", "darwin": "macos", "win32": "windows"}
@@ -404,33 +469,32 @@ def _plan(world: Smoke) -> Plan:
 
 
 def _certify(world: Smoke, plan: Plan) -> None:
-    """Certify the claude-code harness for the scratch tree.
+    """Certify the smoke's runtime harness for the scratch tree.
 
     The stub stands in for a harness no probe can reach, so its certification is
     the row the certifier writes, filed in the tree's machine-local store with the
     semantic tools a dispatched canary observes. The real runtime is narrowed to
-    its cheapest listed model, probed, and walked through the containment canary
+    its smoke model, probed, and walked through the containment canary
     under the first Task, which is what observes the semantic tools a worker
     reports through.
     """
     if PROVIDER != "stub":
         import yaml
 
+        runtime, model = SMOKE_RUNTIME.runtime_id, SMOKE_RUNTIME.model
         config = world.repo / ".ea" / "config.yaml"
         document = yaml.safe_load(config.read_text(encoding="utf-8")) if config.is_file() else {}
         document = document or {}
         document.setdefault("runtime", {})["profiles"] = [
             {
-                "profile_id": "claude-default",
+                "profile_id": SMOKE_RUNTIME.profile_id,
                 "source_ref": "config://repository/runtime",
-                "model_policy": {"allowed": [CHEAPEST_MODEL], "default": CHEAPEST_MODEL},
+                "model_policy": {"allowed": [model], "default": model},
             }
         ]
         config.write_text(yaml.safe_dump(document), encoding="utf-8")
-        world.eawf("runtime", "certify", "claude-code")
-        world.eawf(
-            "runtime", "certify", "claude-code", "--task", plan.tasks[0], "--actor", OPERATOR
-        )
+        world.eawf("runtime", "certify", runtime)
+        world.eawf("runtime", "certify", runtime, "--task", plan.tasks[0], "--actor", OPERATOR)
         return
     from eawf.kernel.runtime.certification import CapabilityCertification
     from eawf.workflow.evidence.machine_certification import append_machine_certification
@@ -484,7 +548,7 @@ def smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Smoke]:
         "GIT_COMMITTER_NAME": "smoke",
         "GIT_COMMITTER_EMAIL": "smoke@example.com",
     }
-    if PROVIDER == "stub" or any(map(os.environ.get, CLAUDE_TOKEN_ENVS)):
+    if PROVIDER == "stub" or any(map(os.environ.get, SMOKE_RUNTIME.token_envs)):
         # eawf reads its user config layer from ``Path.home()``, so HOME is what isolates it
         home = tmp_path / "home"
         home.mkdir()
@@ -1197,14 +1261,15 @@ def _file_smoke_receipt(
 
     directory.mkdir(parents=True, exist_ok=True)
     names = []
+    runtime_id = SMOKE_RUNTIME.runtime_id
     for run_key, (_passed, document) in checks.items():
-        name = f"dispatch-check-{run_key}.json"
+        name = f"{SMOKE_RUNTIME.check_prefix}{run_key}.json"
         (directory / name).write_text(document, encoding="utf-8")
         names.append(name)
     receipt = DispatchSmokeReceipt.model_validate(
         {
             "os_class": os_class,
-            "runtime_id": SMOKE_RUNTIME_ID,
+            "runtime_id": runtime_id,
             "run_refs": [_urn("run", run_key) for run_key in checks],
             "scorecard": "pass" if all(passed for passed, _doc in checks.values()) else "fail",
             "evidence_refs": names,
@@ -1218,7 +1283,7 @@ def _file_smoke_receipt(
     receipts = DispatchSmokeReceiptSet(
         release_key=release_key,
         receipts=(
-            *(r for r in kept if (r.os_class, r.runtime_id) != (os_class, SMOKE_RUNTIME_ID)),
+            *(r for r in kept if (r.os_class, r.runtime_id) != (os_class, runtime_id)),
             receipt,
         ),
     )
@@ -1276,7 +1341,8 @@ def test_smoke_milestone(smoke: Smoke) -> None:
             os_class=OS_CLASSES[sys.platform],
             release_key=f"REL-{__version__}",
         )
-        assert [r.scorecard for r in filed.receipts if r.os_class == OS_CLASSES[sys.platform]] == [
+        ours = (OS_CLASSES[sys.platform], SMOKE_RUNTIME.runtime_id)
+        assert [r.scorecard for r in filed.receipts if (r.os_class, r.runtime_id) == ours] == [
             "pass"
         ], f"a dispatched Run breached the fixture scorecard; see {target or out}"
     for run_key in {c.key for c in changes if c.kind == "run"}:

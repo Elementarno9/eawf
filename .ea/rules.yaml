@@ -81,13 +81,13 @@ rules:
     procedure_ref: docs/rules/agent-driven-large-milestone-pr.md
   - rule_id: repo.cadence-decisions
     obligation_id: delivery.cadence-provenance
-    revision: 7
+    revision: 8
     title: Cite the ratifying decision when the cadence is questioned
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      When a review questions the one-pull-request-per-Milestone cadence or the commit-history regime, cite decision D88 in the decision ledger, proposed to supersede D87 and pending operator ratification; reverse it only by superseding D88 with a new one.
+      When a review questions the one-pull-request-per-Milestone cadence or the commit-history regime, cite decision D92 in the decision ledger, which superseded D87; reverse it only by superseding D92 with a new one.
     rationale: >-
       The cadence departs from small-change practice on purpose; without the decision trail it reads as an oversight and gets reverted.
     verification:

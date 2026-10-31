@@ -1,6 +1,6 @@
 <!-- Generated from the eawf profile render block `commit-granularity`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=commit-granularity version=1.8 hash=ce6511af1732afdc -->
+<!-- BEGIN EAWF:managed id=commit-granularity version=1.8 hash=ea9d533e5d3fc5eb -->
 # `commit-granularity`
 
 One commit per Batch, squashed before review opens; after review each fix lands as an appended Batch; each push ends with one ``state:`` commit; a squash rebinds by superseding rows.
@@ -12,7 +12,7 @@ Commit count is not progress. A deliverable split across a dozen commits — cod
 
 ### Mechanism
 
-Decision D88, proposed to supersede D87 and pending operator ratification, sets the regime. Scratch and per-Task commits are free while a Batch is in flight; before review opens, ``eawf batch squash`` writes the branch again as one commit per Batch holding its code and tests, ordered by each Batch's last commit, carrying one ``Batch:`` trailer and a ``Task:`` trailer per Task, and checks every rewritten commit builds. A large Batch may land as a few buildable commits; two Batches whose work cannot be separated share one commit, and the squash says so.
+Decision D92, which superseded D87, sets the regime. Scratch and per-Task commits are free while a Batch is in flight; before review opens, ``eawf batch squash`` writes the branch again as one commit per Batch holding its code and tests, ordered by each Batch's last commit, carrying one ``Batch:`` trailer and a ``Task:`` trailer per Task, and checks every rewritten commit builds. A large Batch may land as a few buildable commits; two Batches whose work cannot be separated share one commit, and the squash says so.
 
 **No squash after review.** Once the Milestone PR is open for review, its commits are fixed. Fix a review finding with a new Batch appended on top, with its own commit and the push's trailing ``state:`` commit. After review opens, never squash, amend, rebase or force-push the branch. ``main`` then fast-forwards to the reviewed head, so each commit a reviewer read lands with the same SHA.
 

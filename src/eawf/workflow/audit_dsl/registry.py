@@ -61,6 +61,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import os
 import platform
 import re
 import shlex
@@ -722,11 +723,20 @@ def _run_in_group(
         try:
             stdout, stderr = process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
+
+            def leader_group(pgid: int) -> int:
+                # The leader is this thread's own child: nothing else reaps it, and
+                # on Linux its zombie still owns the group, so the ladder would wait
+                # out the whole grace window after the leader already exited.
+                if process.poll() is not None:
+                    raise ProcessLookupError(pgid)
+                return os.getpgid(pgid)
+
             # a group left holding only its unreaped leader refuses a signal with
             # EPERM on macOS, which means there is nothing left to stop
             if sys.platform != "win32":
                 with contextlib.suppress(PermissionError):
-                    cancel_with_grace(process.pid)
+                    cancel_with_grace(process.pid, getpgid=leader_group)
                     # the ladder reads a dead leader as a dead group; a member that
                     # ignored the soft signal is killed here
                     cancel_process_group(process.pid, hard=True)

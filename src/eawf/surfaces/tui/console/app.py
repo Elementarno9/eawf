@@ -124,6 +124,8 @@ from eawf.surfaces.tui.console.width import cell_len, pad
 from eawf.workflow.projection.acceptance import ACCEPTANCE_ROUTES, build_acceptance_view
 
 if TYPE_CHECKING:
+    from eawf.kernel.delivery.receipts import ProofReceipt
+
     # imported for the type alone: the seam pulls the daemon method registry in, and a
     # console that is drawing the prototype registers has no business registering verbs
     from eawf.surfaces.tui.console.seam import ProjectionSeam
@@ -496,6 +498,9 @@ class ConsoleApp(App[None]):
         self._tail_reading = False
         self._tail_due = False
         self._tail_owed = False
+        # the read models last built, each beside the held answers it was built from
+        self._spine: tuple[RouteProjection, SpineView] | None = None
+        self._acceptance: tuple[tuple[object, ...], RouteReadModel] | None = None
         self.session = Session()
         # the attention revisions already announced to this principal; ``None`` until the
         # first read, which seeds it so nothing already open is toasted after a restart
@@ -888,7 +893,7 @@ class ConsoleApp(App[None]):
             return None
         route = projection.route
         if route in NATIVE_ROUTES:
-            return build_spine_view(projection)
+            return self._spine_view(projection)
         # the live reads pull the daemon's method registry in, as the seam does
         from eawf.surfaces.tui.console import live_reads
 
@@ -923,19 +928,50 @@ class ConsoleApp(App[None]):
                 deadlines=lines.deadlines,
             )
         if route in ACCEPTANCE_ROUTES:
-            # the Milestone's bundle and approval are read for the subject on screen alone
-            held = self.seam.acceptance_for(self.subject) if self.seam is not None else None
-            return build_acceptance_view(
-                projection,
-                bundle=held.bundle if held is not None else None,
-                approval=held.approval if held is not None else None,
-                receipts=live(live_reads.RECEIPTS_READ) or (),
-                journey=held.journey if held is not None else (),
-                evidence=held.evidence if held is not None else (),
-                waiting_approval_urn=held.waiting_approval_urn if held is not None else None,
-                accepted_binding=held.accepted_binding if held is not None else None,
-            )
+            return self._acceptance_view(projection, live(live_reads.RECEIPTS_READ) or ())
         return None
+
+    def _spine_view(self, projection: RouteProjection) -> SpineView:
+        """Return the native read model of ``projection``, built once per projection.
+
+        One frame asks for its read model several times, and a held projection is frozen,
+        so the model built from the same projection is still the one to draw.
+        """
+        spine = self._spine
+        if spine is None or spine[0] is not projection:
+            spine = self._spine = (projection, build_spine_view(projection))
+        return spine[1]
+
+    def _acceptance_view(
+        self, projection: RouteProjection, receipts: Sequence[ProofReceipt]
+    ) -> RouteReadModel:
+        """Return the acceptance read model of ``projection``, built once per set of answers.
+
+        The seam replaces each read it holds rather than changing it, so the same
+        projection, acceptance read and receipts are the same answers.
+
+        Args:
+            projection: The acceptance route's held projection.
+            receipts: The proof receipts held for the subject on screen.
+        """
+        # the Milestone's bundle and approval are read for the subject on screen alone
+        held = self.seam.acceptance_for(self.subject) if self.seam is not None else None
+        inputs = (projection, held, receipts)
+        accepted = self._acceptance
+        if accepted is not None and all(a is b for a, b in zip(accepted[0], inputs, strict=True)):
+            return accepted[1]
+        view = build_acceptance_view(
+            projection,
+            bundle=held.bundle if held is not None else None,
+            approval=held.approval if held is not None else None,
+            receipts=receipts,
+            journey=held.journey if held is not None else (),
+            evidence=held.evidence if held is not None else (),
+            waiting_approval_urn=held.waiting_approval_urn if held is not None else None,
+            accepted_binding=held.accepted_binding if held is not None else None,
+        )
+        self._acceptance = (inputs, view)
+        return view
 
     def register_view(self) -> RegisterView | None:
         """Return the register read model the session's route draws from, if one is held."""

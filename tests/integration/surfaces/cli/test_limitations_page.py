@@ -133,7 +133,7 @@ def test_page_states_the_0_8_deferred_id_count() -> None:
     """The 0.8.0 paragraph names the committed row's decision, its id count and its release."""
     data = json.loads(_REQUIREMENTS.read_text(encoding="utf-8"))
     (row,) = [row for row in data["deferrals"] if row["release"] == "0.8.0"]
-    assert row["decision"] == "D91"
+    assert row["decision"] == "D93"
     paragraph = _paragraph(_page(), f"Decision {row['decision']} ")
     assert f"{row['decision']} defers {len(row['ids'])} requirement ids to 0.8.0" in paragraph
 

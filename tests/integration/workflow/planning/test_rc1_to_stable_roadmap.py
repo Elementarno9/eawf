@@ -6,10 +6,8 @@ three committed proposals would create is removed from the copy first, so the
 suite reads the same before and after the operator applies them live. The
 proposals are then applied through the daemon's own plan verbs, and the trace
 reads the result the way CI does. Every id must come out owned, deferred or
-satisfied, except exactly the ids a re-plan dropped. Those sit under one
-deferral to 0.8 whose decision awaits the operator, so ``check
---require-owned`` stays red until the decision is ratified and exits zero
-once it is.
+satisfied: the ids a re-plan dropped sit under one deferral to 0.8 whose
+decision the operator ratified, so ``check --require-owned`` exits zero.
 
 The gate-fire proof leaves one plan unapplied: exactly that plan's ids come
 back unowned and the same check exits nonzero.
@@ -181,7 +179,7 @@ def _replaced_ids(applied: Sequence[str]) -> set[str]:
     """Return the ids the parents of the applied re-plans had their Tasks own.
 
     A re-plan that drops atoms leaves the ids only its parent's Tasks cited
-    with no owner, and the catalog records no deferral for them yet.
+    with no owner unless a deferral in force moves them out.
     """
     return set().union(*(_proposal_ids(load_parent(name)) for name in applied if name in PARENTS))
 
@@ -194,23 +192,6 @@ def _replaced_tasks(applied: Sequence[str]) -> set[str]:
         if name in PARENTS
         for task in load_parent(name)["body"]["tasks"]
     } - set().union(*(_task_keys(name) for name in applied))
-
-
-def _ratify(root: Path, decision: str) -> None:
-    """Append the operator's ratification of *decision* to the copied decision ledger."""
-    authority = require_native_authority(root / ".ea")
-    assert authority.target is not None and authority.generation_id is not None
-    document_path = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
-    ledger = document_path.parent / "ledger" / "decision.jsonl"
-    lines = read_ledger_content(ledger).decode("utf-8").splitlines()
-    record = next(
-        json.loads(line) for line in reversed(lines) if json.loads(line)["record_key"] == decision
-    )
-    assert record["status"] == "PROPOSED", f"{decision} is not awaiting ratification"
-    record["status"] = "ACTIVE"
-    record["payload"]["payload"]["status"] = "ACTIVE"
-    with ledger.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(record) + "\n")
 
 
 def _unowned(root: Path) -> set[str]:
@@ -270,14 +251,16 @@ def test_after_the_three_plans_apply_every_id_is_accounted_for(tmp_path: Path) -
     rows = {row.id: row for row in catalog.requirements}
     assert kept, "the stable plan keeps atoms"
     assert [req_id for req_id in sorted(kept) if not stable_tasks & set(rows[req_id].owners)] == []
-    # One 0.8 deferral moves out the dropped ids no Task owns any more and the kept
-    # ids whose feature 0.7 does not build. Its decision is still proposed, so it
-    # defers nothing yet: the dropped ids hold the gate red, the kept ones stay owned.
-    (pending,) = [d for d in catalog.deferrals if d.release == "0.8.0"]
-    assert pending.decision == "D91"
-    assert set(pending.ids) <= dropped | kept
-    assert _unowned(root) == set(pending.ids) & dropped
-    assert catalog.summary.unowned == len(set(pending.ids) & dropped)
+    # One 0.8 deferral, under a ratified decision, moves out the dropped ids no Task
+    # owns any more and the kept ids whose feature 0.7 does not build.
+    (deferral,) = [d for d in catalog.deferrals if d.release == "0.8.0"]
+    assert deferral.decision == "D93"
+    assert set(deferral.ids) <= dropped | kept
+    assert {row.id for row in catalog.requirements if row.deferral == deferral.decision} == set(
+        deferral.ids
+    )
+    assert _unowned(root) == set()
+    assert catalog.summary.unowned == 0
     assert catalog.summary.satisfied == sum(len(s.ids) for s in catalog.satisfactions)
     # A later follow-up Task may cite an rc1 id too, so each id needs one rc1
     # Task among its owners rather than rc1 Tasks alone.
@@ -286,16 +269,6 @@ def test_after_the_three_plans_apply_every_id_is_accounted_for(tmp_path: Path) -
     assert rc1_rows, "the rc1 ids are in the catalog"
     assert [row.id for row in rc1_rows if not rc1_tasks & set(row.owners)] == []
     assert load_state_view(root).phases["P35"].closed
-    assert main(["--repo-root", str(root), "check", "--require-owned"]) == 1
-
-    # Once the operator ratifies the deferral's decision, every id is accounted for.
-    _ratify(root, pending.decision)
-    assert main(["--repo-root", str(root), "write"]) == 0
-    ratified = load_catalog(root / CATALOG_PATH)
-    assert {row.id for row in ratified.requirements if row.deferral == pending.decision} == set(
-        pending.ids
-    )
-    assert _unowned(root) == set()
     assert main(["--repo-root", str(root), "check", "--require-owned"]) == 0
 
 

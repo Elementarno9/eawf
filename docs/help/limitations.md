@@ -10,7 +10,7 @@ The multi-project console is also deferred to 0.7.1.
 
 ## Deferred to 0.8.0
 
-Decision D91 is proposed and waits for operator ratification; decisions D89 and D90, the earlier proposals of this deferral, are obsolete. D91 defers 80 requirement ids to 0.8.0 in its committed deferral row in `.ea/requirements.json`: the 68 ids the 0.7 re-plan dropped, 10 owned ids whose feature 0.7 does not build, and AUTH-014 and AUTH-037, whose check was retired before it was built, so no test can exercise them. Until D91 is ratified, the requirement census does not count these ids as deferred: the 68 dropped ids read unowned and the other 12 stay owned. AUTH-009 and REL-022 have tests that exercise them, so they stay owned by 0.7.0 rather than deferred.
+Decision D93 is active: the operator ratified it on 2026-10-31. Decisions D89, D90 and D91, the earlier proposals of this deferral, are obsolete. D93 defers 80 requirement ids to 0.8.0 in its committed deferral row in `.ea/requirements.json`: the 68 ids the 0.7 re-plan dropped, 10 owned ids whose feature 0.7 does not build, and AUTH-014 and AUTH-037, whose check was retired before it was built, so no test can exercise them. The requirement census reports the 80 ids as deferred under D93. AUTH-009 and REL-022 have tests that exercise them, so they stay owned by 0.7.0 rather than deferred.
 
 ## Certified runtimes
 

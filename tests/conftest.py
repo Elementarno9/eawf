@@ -29,6 +29,9 @@ from eawf.platform.lint.flake_quarantine import LaneReport, load_quarantine, par
 from eawf.platform.lint.kind_taxonomy import kind_for_test_path, marker_conflict
 from eawf.runtime.daemon.churn import SUITE_SESSION_ENV, RuntimeDirSnapshot, snapshot_runtime_dir
 
+# Every test's fsync checks its descriptor and flushes nothing; see the module.
+pytest_plugins = ["tests._fsync_stub"]
+
 # --- Hypothesis CI example-budget profile --------------------
 #
 # ``register_profile("ci", ...)`` gives CI a low ``max_examples`` budget so

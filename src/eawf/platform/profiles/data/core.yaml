@@ -213,7 +213,7 @@ render_blocks:
     body_template: |
       ### Commit prefix
 
-      A commit names the Batch and the Tasks it delivers in body trailers, under decision D88, proposed to supersede D87 and pending operator ratification. Conventional-commit types, in every form below: ``feat``, ``fix``, ``chore``, ``docs``, ``refactor``, ``test``, ``build``, ``perf``, ``ci``, ``revert``, ``state``.
+      A commit names the Batch and the Tasks it delivers in body trailers, under decision D92, which superseded D87. Conventional-commit types, in every form below: ``feat``, ``fix``, ``chore``, ``docs``, ``refactor``, ``test``, ``build``, ``perf``, ``ci``, ``revert``, ``state``.
 
       - **Batch commit** — ``<type>: <summary>`` with no bracket prefix, exactly one ``Batch: BAT-<NNNN>`` trailer and one ``Task: <KEY>`` trailer for every Task it delivers, each a Task of that Batch. A commit delivering a single Task may carry its ``Task:`` trailer alone. The pre-push ``commit-prefix-lint`` hook refuses a pushed commit naming no Task, several Tasks without a ``Batch`` trailer, a Task twice, two ``Batch`` trailers, or a Task of another Batch.
       - **Trailing state commit** — ``state: <summary>``, one per push, touching only committed state paths.
@@ -407,7 +407,7 @@ render_blocks:
     body_template: |
       ### Ship process
 
-      Ship is the Milestone's terminal pass, under decision D88, proposed to supersede D87 and pending operator ratification. The ordered steps from landed Batches to a merged, tagged Milestone:
+      Ship is the Milestone's terminal pass, under decision D92, which superseded D87. The ordered steps from landed Batches to a merged, tagged Milestone:
 
       1. **Squash before review.** Before review opens, ``eawf batch squash`` writes the long-running feature branch again as one commit per Batch (a few for a large Batch), each carrying its ``Batch:`` and ``Task:`` trailers, plus one trailing ``state:`` commit, and proves its tree equals the source tip's. Once the branch points at it, ``eawf batch rebind`` appends a superseding row for every binding that named a source commit. Each Batch already closed when it landed: the daemon bound the Milestone branch head and walked the Batch and its Tasks to COMPLETED. A pushed branch is rewritten only before review opens, only with ``--force-with-lease``, and only after writing an archive ref of the old head.
       2. **Open the Milestone PR.** One PR per Milestone, body per the ``pr-template``. From this point the commits on the branch are fixed: every commit a reviewer reads is the commit that merges.
@@ -550,7 +550,7 @@ render_blocks:
     rationale: |
       Commit count is not progress. A deliverable split across a dozen commits — code here, its test there, the golden it invalidated three commits later — cannot be reviewed as a unit or reverted as one, and ``git bisect`` lands mid-change on a tree that never worked. The opposite failure, one commit for an entire Milestone, is equally unreadable. The unit that builds, passes its tests and is reviewed is the Batch. One past delivery made the cost concrete: 1,036 commits for 525 units of work, 385 of them state-only bookkeeping — a reviewer opening the PR read twice as much bookkeeping as delivery.
     mechanism: |
-      Decision D88, proposed to supersede D87 and pending operator ratification, sets the regime. Scratch and per-Task commits are free while a Batch is in flight; before review opens, ``eawf batch squash`` writes the branch again as one commit per Batch holding its code and tests, ordered by each Batch's last commit, carrying one ``Batch:`` trailer and a ``Task:`` trailer per Task, and checks every rewritten commit builds. A large Batch may land as a few buildable commits; two Batches whose work cannot be separated share one commit, and the squash says so.
+      Decision D92, which superseded D87, sets the regime. Scratch and per-Task commits are free while a Batch is in flight; before review opens, ``eawf batch squash`` writes the branch again as one commit per Batch holding its code and tests, ordered by each Batch's last commit, carrying one ``Batch:`` trailer and a ``Task:`` trailer per Task, and checks every rewritten commit builds. A large Batch may land as a few buildable commits; two Batches whose work cannot be separated share one commit, and the squash says so.
 
       **No squash after review.** Once the Milestone PR is open for review, its commits are fixed. Fix a review finding with a new Batch appended on top, with its own commit and the push's trailing ``state:`` commit. After review opens, never squash, amend, rebase or force-push the branch. ``main`` then fast-forwards to the reviewed head, so each commit a reviewer read lands with the same SHA.
 

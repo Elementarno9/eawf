@@ -723,12 +723,14 @@ _SHUTIL_WRITERS = ("copy", "copy2", "copyfile", "copytree", "move", "rmtree")
 
 
 @pytest.fixture
-def no_writes(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def no_writes() -> Iterator[None]:
     """Replace every file-writing entry point with one that raises.
 
     The guard is structural rather than a reading of the source: it does not matter which
     module a write would come from, because the entry point itself is gone for the
-    duration. ``monkeypatch`` restores every one of them afterwards.
+    duration. Its own patch context restores every one of them when this fixture ends,
+    before ``tmp_path`` removes its directory, whatever order the shared ``monkeypatch``
+    was set up in.
     """
     real_open = builtins.open
     real_os_open = os.open
@@ -749,16 +751,17 @@ def no_writes(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
             raise WroteAFileError(f"os.open({path!r}) would write a file")
         return real_os_open(path, flags, *args, **kwargs)
 
-    monkeypatch.setattr(builtins, "open", guarded_open)
-    monkeypatch.setattr(io, "open", guarded_open)
-    monkeypatch.setattr(os, "open", guarded_os_open)
-    for name in _PATH_WRITERS:
-        monkeypatch.setattr(Path, name, refuse(f"Path.{name}"))
-    for name in _OS_WRITERS:
-        monkeypatch.setattr(os, name, refuse(f"os.{name}"))
-    for name in _SHUTIL_WRITERS:
-        monkeypatch.setattr(shutil, name, refuse(f"shutil.{name}"))
-    yield
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(builtins, "open", guarded_open)
+        mp.setattr(io, "open", guarded_open)
+        mp.setattr(os, "open", guarded_os_open)
+        for name in _PATH_WRITERS:
+            mp.setattr(Path, name, refuse(f"Path.{name}"))
+        for name in _OS_WRITERS:
+            mp.setattr(os, name, refuse(f"os.{name}"))
+        for name in _SHUTIL_WRITERS:
+            mp.setattr(shutil, name, refuse(f"shutil.{name}"))
+        yield
 
 
 class _Host:

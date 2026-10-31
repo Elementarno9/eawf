@@ -15,11 +15,17 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from textual import _wait
 
 from eawf.surfaces.tui.console import harness
 from eawf.surfaces.tui.console.harness import Contract, Result, load_contract
 
 from .goldens import LAYOUT, SHARDED, replayed_frame_ids
+
+# Sample the pilot's idle wait every 5 ms instead of 20 ms, as ``tests/tui``
+# does: the same 5 % CPU ratio decides idle, so only the sample floor shrinks.
+_wait.SLEEP_GRANULARITY = 1 / 200
+_wait.SLEEP_IDLE = _wait.SLEEP_GRANULARITY / 20.0
 
 
 @pytest.fixture(scope="session")

@@ -1,6 +1,6 @@
 <!-- Generated from the eawf profile render block `agent-driven-cadence-adr-pointer`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=agent-driven-cadence-adr-pointer version=1.6 hash=5e34e94c14c94c2d -->
+<!-- BEGIN EAWF:managed id=agent-driven-cadence-adr-pointer version=1.6 hash=e3556a926e0139cd -->
 # `agent-driven-cadence-adr-pointer`
 
 The one-PR-per-Milestone cadence and the commit-history regime are ratified by a typed decision; cite its id in review and reverse the cadence only by superseding it.
@@ -12,7 +12,7 @@ The large-PR cadence contradicts the industry small-CL / trunk-based consensus o
 
 ### Mechanism
 
-The one-PR-per-Milestone cadence and the commit-history regime are set by Decision D88, proposed to supersede D87 and pending operator ratification; D87 itself replaced D85, D-GIT-HISTORY (D76) and the earlier one-PR-per-delivery and rebase-merge decisions: each Batch closes and binds the Milestone branch head when it lands, the branch is squashed to one commit per Batch (a few for a large Batch) carrying its ``Batch:`` and ``Task:`` trailers plus one trailing ``state:`` commit only before review opens, the bindings the squash replaced are rebound by appended superseding rows, review findings are fixed by appended Batches, the Milestone is accepted last, ``main`` fast-forwards to the reviewed commit, and main and tags are never rewritten. The canonical workflow reference is ``docs/architecture/workflow.md`` (VCS, commit, PR, and merge policy). Cite the Decision id, not this rule's prose, when a review or planning discussion questions the cadence; reverse it only by superseding D88 with a new Decision row.
+The one-PR-per-Milestone cadence and the commit-history regime are set by Decision D92, which superseded D87; D87 itself replaced D85, D-GIT-HISTORY (D76) and the earlier one-PR-per-delivery and rebase-merge decisions: each Batch closes and binds the Milestone branch head when it lands, the branch is squashed to one commit per Batch (a few for a large Batch) carrying its ``Batch:`` and ``Task:`` trailers plus one trailing ``state:`` commit only before review opens, the bindings the squash replaced are rebound by appended superseding rows, review findings are fixed by appended Batches, the Milestone is accepted last, ``main`` fast-forwards to the reviewed commit, and main and tags are never rewritten. The canonical workflow reference is ``docs/architecture/workflow.md`` (VCS, commit, PR, and merge policy). Cite the Decision id, not this rule's prose, when a review or planning discussion questions the cadence; reverse it only by superseding D92 with a new Decision row.
 
 
 ### Verification
