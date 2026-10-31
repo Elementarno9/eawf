@@ -35,6 +35,7 @@ from eawf.kernel.runtime.certification import (
 )
 from eawf.kernel.runtime.compiled import RunCompileRequest
 from eawf.kernel.runtime.provider import AuthKind
+from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 from eawf.kernel.store.kinds.runtime_certification import MachineCertification
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.native_dispatch import compile_for_dispatch
@@ -45,6 +46,7 @@ from eawf.runtime.daemon.provider_facts import (
 )
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
+from eawf.workflow.dispatch.routing import model_for_runtime
 from eawf.workflow.evidence.machine_certification import append_machine_certification
 from eawf.workflow.runtime.compile import CompileRejection, RunCompileError, compile_run_spec
 from eawf.workflow.runtime.task_request import compile_task_request
@@ -393,6 +395,33 @@ def test_fresh_tree_built_in_profiles_ask_only_for_listed_models() -> None:
     listings = {m.driver_ref: set(m.listed_models) for m in shipped_launcher_manifests()}
     for profile in BUILT_IN_DEFAULTS["runtime"]["profiles"]:
         assert set(profile["model_policy"]["allowed"]) <= listings[profile["driver_ref"]]
+
+
+def test_every_codex_model_eawf_can_pick_is_listed_by_the_codex_manifest() -> None:
+    (codex,) = (m for m in shipped_launcher_manifests() if m.runtime_id == "codex")
+    routed = {
+        model_for_runtime(role, effort, "codex")
+        for role in AgentSessionRole
+        for effort in EffortBucket
+    }
+    (profile,) = (
+        p for p in BUILT_IN_DEFAULTS["runtime"]["profiles"] if p["profile_id"] == "codex-default"
+    )
+    picked = routed | set(profile["model_policy"]["allowed"])
+    assert picked <= set(codex.listed_models), picked - set(codex.listed_models)
+
+
+#: Ids a ChatGPT-account codex 0.164.0 refuses with a 400 ``model_not_found``.
+CODEX_RETIRED_MODELS: Final = frozenset({"gpt-5.5", "gpt-5.3-codex-spark"})
+
+
+def test_codex_default_profile_repro_retired_model(fresh_tree: Path) -> None:
+    record(fresh_tree, row("codex", CODEX_VERSION))
+    spec = compile_for_dispatch(compile_for("codex", facts(fresh_tree)), now=NOW)
+    (codex,) = (m for m in shipped_launcher_manifests() if m.runtime_id == "codex")
+    assert spec.profile_ref == "profile://codex-default"
+    assert spec.model_id == "gpt-6.1-sol"
+    assert not CODEX_RETIRED_MODELS & set(codex.listed_models)
 
 
 def test_fresh_tree_repository_patch_narrows_the_built_in_profile(fresh_tree: Path) -> None:

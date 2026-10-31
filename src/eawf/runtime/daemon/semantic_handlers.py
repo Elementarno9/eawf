@@ -345,6 +345,12 @@ class HandlerInputs:
     lease: WorkLease | None = None
 
 
+#: The stable code the daemon answers a handler's refusal with. The
+#: handler's own code leads the detail, so one code covers every handler
+#: and the caller still learns which check refused.
+HANDLER_REFUSED: Final = "handler_refused"
+
+
 class HandlerRefusalError(ValueError):
     """A call reached its handler and still cannot be answered as made.
 
@@ -1343,6 +1349,7 @@ REPORTABLE_PLAN_CODES: Final[frozenset[PlanRefusalCode]] = _compile_finding_code
 __all__ = [
     "BROKERED_TOOLS",
     "EVIDENCE_SPIKE_REPORT_FILE_METHOD",
+    "HANDLER_REFUSED",
     "PLAN_PROPOSAL_PAYLOAD_KIND",
     "REPORTABLE_PLAN_CODES",
     "SEMANTIC_HANDLERS",

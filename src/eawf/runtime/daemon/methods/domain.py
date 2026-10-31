@@ -107,6 +107,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, Validation
 
 from eawf.kernel.delivery.acceptance import MilestoneAcceptanceBundle
 from eawf.kernel.identity import EntityKind, QualifiedUrn
+from eawf.kernel.runtime.control import TERMINAL_RUN_STATUSES
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey, ShaStr, SlugStr, StrictPositiveInt
 from eawf.kernel.state.epoch2.batch import BatchStatus
@@ -179,6 +180,7 @@ from eawf.runtime.daemon.milestone_readmit import (
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 from eawf.runtime.daemon.record_append import RecordAppendRequest, append_record
 from eawf.runtime.daemon.run_capture_updates import bind_run_capture
+from eawf.runtime.daemon.run_supervisor import release_run_leases, supervisor_of
 from eawf.runtime.daemon.task_release import TASK_RELEASE_METHOD, file_task_release
 from eawf.workflow.delivery.acceptance import AcceptanceRefusedError, require_sealed_acceptance
 
@@ -1162,10 +1164,18 @@ async def _after_commit(
     daemon that died between the commit and the append left the release
     without its record.
 
+    A stopped Run withdraws its workspace leases, or an exclusive lease it held
+    blocks every later dispatch until its deadline. A Run a supervisor still
+    awaits keeps them: the supervisor withdraws them once its worker is gone.
+
     Returns:
         ``projection_degraded`` when a filed release record's row did not
         reach the projection; empty otherwise.
     """
+    if isinstance(verb.to_status, RunStatus) and verb.to_status in TERMINAL_RUN_STATUSES:
+        if not supervisor_of(context).busy(str(params.urn)):
+            await asyncio.to_thread(release_run_leases, context, params.urn, now=datetime.now(UTC))
+        return ()
     if verb.method != TASK_RELEASE_METHOD:
         return ()
     filed = await asyncio.to_thread(

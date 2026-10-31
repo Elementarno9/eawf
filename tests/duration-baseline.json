@@ -33276,7 +33276,7 @@
     "tests.unit.workflow.evidence.test_run_certification::test_runtime_tuple_refuses_a_missing_harness_a_bad_member_or_an_unknown_key[bad6]": 0.001,
     "tests.unit.workflow.evidence.test_run_certification::test_runtime_tuple_refuses_a_missing_harness_a_bad_member_or_an_unknown_key[bad7]": 0.001,
     "tests.unit.workflow.evidence.test_run_certification::test_runtime_tuple_round_trips_and_defaults_to_none_on_a_run": 0.015,
-    "tests.unit.workflow.evidence.test_run_certification::test_the_committed_exports_hold_each_claude_code_certification_once": 0.002,
+    "tests.unit.workflow.evidence.test_run_certification::test_the_committed_exports_hold_each_certification_once": 0.002,
     "tests.unit.workflow.integration.test_publish_binding::test_adopting_a_published_commit_binds_and_stages_nothing": 0.836,
     "tests.unit.workflow.integration.test_publish_binding::test_adopting_a_scratch_commit_stages_and_appends_no_ledger": 0.522,
     "tests.unit.workflow.integration.test_publish_binding::test_adopting_a_scratch_commit_twice_replays_the_staged_answer": 0.523,

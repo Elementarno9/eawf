@@ -56,6 +56,8 @@ def _acknowledged(waiver: ReleaseWaiver) -> WaiverAcknowledgement:
     )
 
 
+# REL-023: on the stable channel no waiver clears a gate, the perfect-realization
+# gate that carries the required packet assertions included.
 @pytest.mark.parametrize("channel", [ReleaseChannel.RC, ReleaseChannel.STABLE])
 def test_auth_052_an_explained_waiver_is_forbidden_past_the_dev_channel(
     channel: ReleaseChannel,

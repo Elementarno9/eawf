@@ -251,6 +251,9 @@ def test_a_naive_observation_instant_is_refused() -> None:
 
 # --- three reported successes never derive BAKED --------------------------
 
+# AUTH-054: a release settles only once every required target is independently
+# observed; a reported success never stands in for the observation.
+
 
 def test_three_reported_successes_do_not_observe_the_required_set() -> None:
     _release, operation, config = verifying()

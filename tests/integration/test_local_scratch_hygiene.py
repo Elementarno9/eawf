@@ -90,7 +90,7 @@ def test_spike_rule_sends_heavy_artefacts_to_scratch() -> None:
         ("", 0),
         ("keep it under `.ea/local/research/`", 0),
         ("run /plan propose", 0),
-        ("put it in /srv/scratch/models", 1),
+        ("put it in /srv/scratch/models", 1),  # pragma: allowlist secret
         ("put it in ~/scratch", 1),
         ("put it in `C:\\scratch`", 1),
     ],
@@ -391,6 +391,7 @@ def test_remove_when_clean_governs_lease_cleanup(
     tmp_path: Path, remove: bool | None, kept: bool
 ) -> None:
     from eawf.kernel.runtime.lease import LeaseStatus
+    from eawf.runtime.daemon.run_supervisor import supervisor_of
     from eawf.runtime.workspace.lease import read_lease, reconcile_root, workspace_path
     from tests.integration.runtime.daemon.test_worklease_recovery import (
         JUDGED,
@@ -411,7 +412,7 @@ def test_remove_when_clean_governs_lease_cleanup(
     assert issued is not None
     target = workspace_path(context, handle=issued.workspace_handle)
 
-    report = reconcile_root(context, now=JUDGED)
+    report = reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     released = read_lease(context, lease_id=lease_id)
     assert report.released == 1
@@ -444,6 +445,7 @@ def test_an_unusable_worktrees_layer_keeps_the_worktree_with_a_warning(
 
 def test_an_unusable_worktrees_layer_does_not_abort_the_lease_reconcile(tmp_path: Path) -> None:
     from eawf.kernel.runtime.lease import LeaseStatus
+    from eawf.runtime.daemon.run_supervisor import supervisor_of
     from eawf.runtime.workspace.lease import read_lease, reconcile_root, workspace_path
     from tests.integration.runtime.daemon.test_worklease_recovery import (
         JUDGED,
@@ -457,7 +459,7 @@ def test_an_unusable_worktrees_layer_does_not_abort_the_lease_reconcile(tmp_path
     issued = read_lease(context, lease_id=lease_id)
     assert issued is not None
 
-    report = reconcile_root(context, now=JUDGED)
+    report = reconcile_root(context, now=JUDGED, busy=supervisor_of(context).busy)
 
     released = read_lease(context, lease_id=lease_id)
     assert report.released == 1

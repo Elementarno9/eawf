@@ -551,8 +551,11 @@ def test_produce_receipts_refuses_a_version_off_the_train(ctx: MethodContext) ->
     assert "declares no checkpoint for '9.9.9'" in refused(ctx, version="9.9.9")
 
 
-def test_produce_receipts_refuses_a_rung_with_no_configuration(ctx: MethodContext) -> None:
-    """Stable has no authored configuration yet, so it has no gates to prove."""
+def test_produce_receipts_refuses_a_rung_with_no_configuration(
+    ctx: MethodContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A rung with no authored configuration has no gates to prove."""
+    monkeypatch.delitem(CHECKPOINT_CONFIGS, "0.7.0")
     assert "no release configuration" in refused(ctx, version="0.7.0")
 
 

@@ -22,7 +22,6 @@ import logging
 from datetime import datetime
 from typing import Final
 
-from eawf.kernel.runtime.lease import LeaseStatus
 from eawf.kernel.state.epoch2.base import PrincipalKey
 from eawf.kernel.state.epoch2.run import Run, RunStatus
 from eawf.kernel.store.compaction import document_rows, read_document
@@ -40,9 +39,8 @@ from eawf.runtime.daemon.run_supervisor import (
     RunSupervisor,
     _fail,
     _move,
-    release_lease,
+    release_run_leases,
 )
-from eawf.runtime.workspace.lease import root_leases
 
 logger = logging.getLogger(__name__)
 
@@ -130,9 +128,7 @@ def _reap(
         detail=None,
         now=now,
     )
-    for lease in root_leases(context):
-        if str(lease.run_ref) == str(run.urn) and lease.status is LeaseStatus.ACTIVE:
-            release_lease(context, lease_id=lease.lease_id, now=now)
+    release_run_leases(context, run.urn, now=now)
     logger.info(f"reap_lost_runs failed run={run.key!r}")
     return envelopes
 

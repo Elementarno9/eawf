@@ -44,6 +44,7 @@ from typing import Annotated, Any, Final, Literal
 
 from pydantic import ConfigDict, Field, model_validator
 
+from eawf.kernel.release.models import PlatformClaimSet
 from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.spec.release import (
     NormalizedVersionStr,
@@ -197,19 +198,27 @@ class FrozenManifest(_StrictModel):
     rather than being stored, so a manifest cannot carry a digest that
     disagrees with what it says.
 
+    ``frozen-manifest/v2`` also pins the advertised platform claims. The
+    v1 digest predates them and is kept byte for byte, because approved
+    records bind it and a re-freeze of those rungs must still reproduce
+    it; a v1 manifest therefore carries no claims at all.
+
     Attributes:
         schema_version: Record schema tag.
         release_key: ``REL-<version>`` this manifest was frozen for.
         version: Normalized version the registries are queried for.
         targets: Frozen identity and artifact set per target id.
+        platform_claims: Platforms the checkpoint advertises; always
+            empty under v1.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["frozen-manifest/v1"] = "frozen-manifest/v1"
+    schema_version: Literal["frozen-manifest/v1", "frozen-manifest/v2"] = "frozen-manifest/v1"
     release_key: ReleaseKeyStr
     version: NormalizedVersionStr
     targets: Annotated[Mapping[TargetIdStr, FrozenTarget], Field(min_length=1)]
+    platform_claims: PlatformClaimSet = PlatformClaimSet()
 
     @model_validator(mode="after")
     def _key_spells_the_version(self) -> FrozenManifest:
@@ -225,34 +234,48 @@ class FrozenManifest(_StrictModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _v1_carries_no_platform_claims(self) -> FrozenManifest:
+        """Reject claims a v1 digest would silently leave unpinned.
+
+        Raises:
+            ValueError: When a ``frozen-manifest/v1`` row carries
+                platform claims.
+        """
+        if self.schema_version == "frozen-manifest/v1" and self.platform_claims.claims:
+            raise ValueError(
+                f"frozen-manifest/v1 does not pin platform claims; {self.release_key} "
+                f"carries {[claim.platform_id for claim in self.platform_claims.claims]}"
+            )
+        return self
+
     @property
     def digest(self) -> str:
         """Return the ``sha256:`` digest of this manifest's content."""
-        body = json.dumps(
-            {
-                "release_key": self.release_key,
-                "version": self.version,
-                "targets": {
-                    target_id: {
-                        "identity": frozen.identity,
-                        "artifacts": sorted(
-                            (
-                                {
-                                    "kind": artifact.kind.value,
-                                    "filename": artifact.filename,
-                                    "digest": artifact.digest,
-                                }
-                                for artifact in frozen.artifacts
-                            ),
-                            key=lambda row: row["filename"],
+        content: dict[str, Any] = {
+            "release_key": self.release_key,
+            "version": self.version,
+            "targets": {
+                target_id: {
+                    "identity": frozen.identity,
+                    "artifacts": sorted(
+                        (
+                            {
+                                "kind": artifact.kind.value,
+                                "filename": artifact.filename,
+                                "digest": artifact.digest,
+                            }
+                            for artifact in frozen.artifacts
                         ),
-                    }
-                    for target_id, frozen in sorted(self.targets.items())
-                },
+                        key=lambda row: row["filename"],
+                    ),
+                }
+                for target_id, frozen in sorted(self.targets.items())
             },
-            sort_keys=True,
-            separators=(",", ":"),
-        )
+        }
+        if self.schema_version == "frozen-manifest/v2":
+            content["platform_claims_digest"] = self.platform_claims.digest
+        body = json.dumps(content, sort_keys=True, separators=(",", ":"))
         return f"sha256:{hashlib.sha256(body.encode('utf-8')).hexdigest()}"
 
     def target_for(self, target_id: str) -> FrozenTarget:

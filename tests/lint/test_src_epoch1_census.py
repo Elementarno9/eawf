@@ -168,7 +168,7 @@ SRC_EPOCH1_ALLOWLIST: Final[dict[str, tuple[int, Reason]]] = {
     "src/eawf/kernel/store/kinds/legacy_audit_disposition.py": (2, "historic-store-kind"),
     "src/eawf/kernel/store/kinds/spec_updated.py": (1, "historic-store-kind"),
     "src/eawf/observability/bench/seed.py": (44, "historic-store-kind"),
-    "src/eawf/observability/bench/turn_cost.py": (32, "historic-store-kind"),
+    "src/eawf/observability/bench/turn_cost.py": (34, "historic-store-kind"),
     "src/eawf/observability/doctor/checks.py": (4, "retired-key-message"),
     "src/eawf/observability/eval/__init__.py": (4, "historic-store-kind"),
     "src/eawf/observability/eval/jury_validation.py": (67, "historic-store-kind"),

@@ -56,6 +56,7 @@ from eawf.kernel.runtime.semantic import (
 )
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.runtime.daemon.semantic_gateway import HANDLER_NOT_BROKERED, IDENTITY_NOT_FOUND
+from eawf.runtime.daemon.semantic_handlers import HANDLER_REFUSED
 from eawf.runtime.sandbox.policy import TOOL_UNIVERSE
 
 logger = logging.getLogger(__name__)
@@ -115,13 +116,19 @@ FORWARD_FAILURE_CODES: Final[Mapping[ForwardFailure, SemanticToolErrorCode]] = M
 #: The daemon refusals that carry no receipt, mapped to the closed code
 #: the provider reads. A Run this root never recorded is not running as
 #: far as the caller is concerned, and a tool with no handler installed
-#: is denied until the deployment that installs one.
+#: is denied until the deployment that installs one. A call its handler
+#: refused would succeed only as another request, the code the gateway
+#: files the refusal under in the Run's transcript.
 DAEMON_REFUSAL_CODES: Final[Mapping[str, SemanticToolErrorCode]] = MappingProxyType(
     {
         IDENTITY_NOT_FOUND: SemanticToolErrorCode.RUN_NOT_ACTIVE,
         HANDLER_NOT_BROKERED: SemanticToolErrorCode.CAPABILITY_DENIED,
+        HANDLER_REFUSED: SemanticToolErrorCode.PAYLOAD_INVALID,
     }
 )
+
+#: The handler code a ``handler_refused`` answer leads its detail with.
+_HANDLER_CODE: Final = re.compile(rf"{HANDLER_REFUSED}: ([a-z_]+)")
 
 
 class ServerTableError(RuntimeError):
@@ -384,12 +391,16 @@ class SemanticStdioServer:
                 },
             )
         except Exception as error:
-            logger.info(f"_call_tool transport failed tool={name!r}")
-            return _tool_failure(
-                ForwardFailure.TRANSPORT_FAILED,
-                message=f"the daemon did not answer the {name} call",
-                cause=error,
+            # A handler's refusal travels as a daemon error too; its code is
+            # the reason the caller must change, so the message names it.
+            refused = _HANDLER_CODE.search(str(error))
+            message = (
+                f"the daemon did not answer the {name} call"
+                if refused is None
+                else f"the daemon refused the {name} call as made: {refused.group(1)}"
             )
+            logger.info(f"_call_tool unanswered tool={name!r} refused={refused is not None}")
+            return _tool_failure(ForwardFailure.TRANSPORT_FAILED, message=message, cause=error)
         return _receipt_answer(receipt)
 
     def _sealed_call(self, tool_id: SemanticToolId, arguments: Mapping[str, Any]) -> SemanticCall:

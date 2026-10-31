@@ -26,6 +26,7 @@ from typing import Final
 from eawf.kernel.release.checkpoint_template import (
     CheckpointConfigTemplate,
     DeferredPlatformClaims,
+    DeferredRuntimeClaims,
     DeferredTargets,
     render_checkpoint_config,
 )
@@ -214,6 +215,13 @@ release:
 #: second release candidate required the ``platform`` gate that reads
 #: it, and adding the row to their configurations would re-digest
 #: documents already approved.
+#:
+#: The runtime claims join at ``stable``, the first rung whose packet run
+#: needs both claude-code and codex green. Before it each export carried
+#: forward the runtimes the previous rung's export advertised, which only
+#: ever named claude-code, so codex could not be claimed however it was
+#: certified. The earlier rungs keep that carry-forward because their
+#: configurations are already approved.
 V07_CONFIG_TEMPLATE: Final[CheckpointConfigTemplate] = CheckpointConfigTemplate(
     source_branch="main",
     require_signed_tag=True,
@@ -279,6 +287,13 @@ V07_CONFIG_TEMPLATE: Final[CheckpointConfigTemplate] = CheckpointConfigTemplate(
                 "receipt_ref": "ci://eawf/.github/workflows/ci.yaml#windows",
                 "real_host": True,
             },
+        ),
+    ),
+    deferred_runtime_claims=DeferredRuntimeClaims(
+        from_profile=ReleaseGateProfile.STABLE,
+        claims=(
+            {"runtime_id": "claude-code", "required_capabilities": ["tool_use", "streaming"]},
+            {"runtime_id": "codex", "required_capabilities": ["tool_use", "streaming"]},
         ),
     ),
 )
@@ -358,6 +373,16 @@ RC4_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
     template=V07_CONFIG_TEMPLATE,
 )
 
+#: The ``0.7.0`` stable checkpoint configuration: the rc4 targets and
+#: platform claims under the ``stable`` profile, so its required list is
+#: the rc4 gates with the suite settled as ``full_suite``, the cutover
+#: rehearsal row dropped and the packet run required. It is the first
+#: configuration to declare the runtimes it claims.
+STABLE_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
+    rung=V07_TRAIN.checkpoint_for_version(V07_TARGET_VERSION),
+    template=V07_CONFIG_TEMPLATE,
+)
+
 #: Checkpoint configurations by version. ``dev1`` is authored -- it was
 #: cut before the template existed and its file is the one the burned
 #: checkpoint was swept against -- and every later rung is rendered, so
@@ -372,6 +397,7 @@ CHECKPOINT_CONFIGS: Final[dict[str, str]] = {
     "0.7.0rc2": RC2_RELEASE_CONFIG_YAML,
     "0.7.0rc3": RC3_RELEASE_CONFIG_YAML,
     "0.7.0rc4": RC4_RELEASE_CONFIG_YAML,
+    V07_TARGET_VERSION: STABLE_RELEASE_CONFIG_YAML,
 }
 
 #: What each of the eight ``dev1`` gates reads.
@@ -632,17 +658,26 @@ CROSS_PROVIDER_GATE_BINDINGS_YAML: Final[str] = (
 )
 
 #: What the ``stable`` profile's gates read: the rc4 table with the
-#: ``migration`` row left out and the suite row renamed.
+#: ``migration`` row left out, the suite row renamed and the packet run
+#: added.
 #:
 #: ``full_suite`` runs the same whole-tree suite ``epoch1_stabilization``
 #: ran, the same ``just test-all`` CI's twice-green job runs. Only the
 #: name changes: the dev1 to rc4 tables keep the old one so the receipts
 #: they issued stay bound to a gate their profile admits.
-STABLE_GATE_BINDINGS_YAML: Final[str] = CROSS_PROVIDER_GATE_BINDINGS_YAML.replace(
-    _MIGRATION_BINDING, ""
-).replace(
-    _EPOCH1_STABILIZATION_BINDING,
-    """\
+#:
+#: ``packet_run`` reads the whole ``perfect_realization`` row. On the
+#: stable channel that row requires the packet run's receipts for every
+#: runtime and origin at the tagged version beside the other realization
+#: assertions, so binding the row is what makes the sweep refuse a stable
+#: cut whose packet runs are missing or red. It is a row rather than a
+#: proof command because the row already decides the packet run from
+#: the receipts; a command reading them again would be a second judge of
+#: the same fact, free to disagree with the first.
+STABLE_GATE_BINDINGS_YAML: Final[str] = (
+    CROSS_PROVIDER_GATE_BINDINGS_YAML.replace(_MIGRATION_BINDING, "").replace(
+        _EPOCH1_STABILIZATION_BINDING,
+        """\
   - gate: full_suite
     kind: proof_command
     proof:
@@ -650,6 +685,12 @@ STABLE_GATE_BINDINGS_YAML: Final[str] = CROSS_PROVIDER_GATE_BINDINGS_YAML.replac
       argv: [just, test-all]
       timeout_seconds: 3600
 """,
+    )
+    + """\
+  - gate: packet_run
+    kind: signal
+    signal: perfect_realization
+"""
 )
 
 #: Authored gate binding tables by profile.
@@ -745,6 +786,7 @@ __all__ = [
     "RC2_RELEASE_CONFIG_YAML",
     "RC3_RELEASE_CONFIG_YAML",
     "STABLE_GATE_BINDINGS_YAML",
+    "STABLE_RELEASE_CONFIG_YAML",
     "V07_CHECKPOINTS",
     "V07_CONFIG_TEMPLATE",
     "V07_TARGET_VERSION",

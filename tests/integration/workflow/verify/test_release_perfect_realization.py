@@ -2,8 +2,8 @@
 
 Every assertion a checkout can decide is decided, pass or fail with a
 reason, and the row passes when they all hold and no assertion the
-checkpoint requires is undecided. The packet run is the one assertion no
-checkout decides; only the stable checkpoint requires it.
+checkpoint requires is undecided. The packet run is decided from the
+machine-local packet receipts; only the stable checkpoint requires it.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from eawf.kernel.spec.release import ReleaseChannel
 from eawf.kernel.spec.release_config import ReleaseConfig, load_release_config
 from eawf.surfaces.cli import verb_catalog as verb_catalog_module
 from eawf.surfaces.cli import verb_closure
+from eawf.workflow.evidence.provider_certification import CANARY_EVIDENCE_DIRS
 from eawf.workflow.release.train import DEV1_RELEASE_CONFIG_YAML, V07_TRAIN
 from eawf.workflow.verify import realization_assertions
 from eawf.workflow.verify.realization_assertions import (
@@ -42,8 +43,18 @@ from eawf.workflow.verify.release_readiness import (
     ReleaseSignalStatus,
     compute_readiness,
 )
+from tests.integration.workflow.verify.test_packet_run_gate import file_all_four
 
 _NOW = datetime(2027, 2, 1, 12, 0, tzinfo=UTC)
+
+#: The version every sweep here tags.
+_VERSION = "0.7.0.dev1"
+
+#: The checkpoint the dev1 configuration sweeps.
+_RELEASE_KEY = "REL-0.7.0.dev1"
+
+#: A checkout that holds no packet receipt.
+_NO_RECEIPTS = Path(__file__).with_name("no-packet-receipts")
 
 
 def _config() -> ReleaseConfig:
@@ -87,7 +98,9 @@ def _verdicts(
     **overrides: ReleaseSignalOutcome,
 ) -> dict[RealizationAssertion, ReleaseSignalOutcome]:
     verdicts = {assertion: _held(assertion.value) for assertion in RealizationAssertion}
-    verdicts[RealizationAssertion.PACKET_RUN] = packet_run_outcome()
+    verdicts[RealizationAssertion.PACKET_RUN] = packet_run_outcome(
+        _NO_RECEIPTS, version=_VERSION, release_key=_RELEASE_KEY, release_commit="HEAD"
+    )
     for name, outcome in overrides.items():
         verdicts[RealizationAssertion(name)] = outcome
     return verdicts
@@ -116,6 +129,20 @@ def test_perfect_realization_row_passes_when_every_decidable_assertion_holds(
     assert named == {assertion.value for assertion in RealizationAssertion}
 
 
+def test_perfect_realization_row_reads_the_packet_receipts_of_the_tagged_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # dev1 maps no canary evidence export, so the stable one stands in for it.
+    monkeypatch.setitem(CANARY_EVIDENCE_DIRS, _RELEASE_KEY, CANARY_EVIDENCE_DIRS["REL-0.7.0"])
+    repo = _clean_repo(tmp_path)
+    file_all_four(repo, version=_VERSION, release_key=_RELEASE_KEY)
+
+    row = _sweep(repo).row(ReleaseSignalName.PERFECT_REALIZATION)
+
+    assert row.status is ReleaseSignalStatus.PASS, row.remediation
+    assert "packet_run:codex/adopted:passed" in row.evidence_refs
+
+
 def test_perfect_realization_row_reds_and_names_every_broken_assertion(tmp_path: Path) -> None:
     repo = _clean_repo(tmp_path)
     (repo / REQUIREMENT_CATALOG_PATH).parent.mkdir(parents=True)
@@ -140,6 +167,10 @@ def test_perfect_realization_row_reds_and_names_every_broken_assertion(tmp_path:
 
 # ---- the conjunction ----------------------------------------------------------
 
+# AUTH-002 and AUTH-006: a candidate passes on its bounded assertion set while stable
+# needs the packet run as well, so perfect realization is an executable stable gate.
+# REL-023: stable cannot skip the packet run; the row stays unavailable until it holds.
+
 
 def test_realization_outcome_passes_a_candidate_without_the_packet_run() -> None:
     outcome = realization_outcome(_verdicts(), channel=ReleaseChannel.RC)
@@ -149,7 +180,7 @@ def test_realization_outcome_passes_a_candidate_without_the_packet_run() -> None
     assert len(outcome.evidence_refs) == len(RealizationAssertion)
 
 
-def test_realization_outcome_keeps_stable_unavailable_until_the_packet_run_has_a_producer() -> None:
+def test_realization_outcome_keeps_stable_unavailable_until_every_packet_run_passed() -> None:
     outcome = realization_outcome(_verdicts(), channel=ReleaseChannel.STABLE)
 
     assert outcome.status is ReleaseSignalStatus.UNAVAILABLE

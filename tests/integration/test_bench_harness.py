@@ -25,6 +25,7 @@ import yaml
 from pydantic import ValidationError as PydanticValidationError
 from typer.testing import CliRunner
 
+from eawf.kernel.spec.release_config import ReleaseGateName
 from eawf.observability.bench.harness import (
     HARNESS_CATALOG,
     BenchResult,
@@ -48,6 +49,7 @@ from eawf.observability.bench.turn_cost import (
 )
 from eawf.observability.telemetry.turn_cost import TurnCostRecord
 from eawf.surfaces.cli.app import app
+from eawf.workflow.release.train import CHECKPOINT_CONFIGS, V07_TRAIN, gate_bindings_for
 
 runner = CliRunner()
 
@@ -681,13 +683,44 @@ def test_cli_bench_turn_cost_measures_the_seeded_corpus_by_default(
     assert set(payload) == {"record"}
 
 
-def test_cli_bench_turn_cost_refuses_the_retired_live_corpus(
+def test_cli_bench_turn_cost_live_refuses_a_tree_with_no_runs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``live`` is no seeded fixture id, so it is refused as unknown."""
+    """``live`` reads the tree's own Runs, so a tree with none refuses rather than passing."""
     monkeypatch.delenv("EA_STATE", raising=False)
     result = runner.invoke(
         app, ["--workspace", str(tmp_path), "bench", "turn-cost", "--fixture", "live"]
     )
     assert result.exit_code == 1, result.output
-    assert "unknown turn-cost fixture" in result.output
+    assert "live turn-cost corpus is empty" in result.output
+
+
+@pytest.mark.parametrize("version", sorted(CHECKPOINT_CONFIGS))
+def test_cli_bench_turn_cost_accepts_the_fixture_each_telemetry_gate_names(
+    version: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every rung's telemetry proof argv reaches the corpus, never an unknown-fixture refusal."""
+    monkeypatch.delenv("EA_STATE", raising=False)
+    profile = V07_TRAIN.checkpoint_for_version(version).gate_profile
+    proof = gate_bindings_for(profile)[ReleaseGateName.TELEMETRY_PRODUCER].proof
+    assert proof is not None
+    assert proof.argv[:3] == ("uv", "run", "eawf")
+
+    result = runner.invoke(app, ["--workspace", str(tmp_path), *proof.argv[3:]])
+
+    # The tree holds no Runs, so the live corpus refuses by name; the fixture is accepted.
+    assert result.exit_code == 1, result.output
+    assert "unknown turn-cost fixture" not in result.output
+    assert "live turn-cost corpus is empty" in result.output
+
+
+def test_cli_bench_turn_cost_refuses_an_unknown_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A fixture id that is neither seeded nor ``live`` is refused by name."""
+    monkeypatch.delenv("EA_STATE", raising=False)
+    result = runner.invoke(
+        app, ["--workspace", str(tmp_path), "bench", "turn-cost", "--fixture", "bogus"]
+    )
+    assert result.exit_code == 1, result.output
+    assert "unknown turn-cost fixture: 'bogus'" in result.output

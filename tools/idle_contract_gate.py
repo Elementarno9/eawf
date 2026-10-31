@@ -132,6 +132,7 @@ from idle_contract_wiring import (  # noqa: E402
     check_eawf023_artifact_placement_wired,
     check_eawf024_test_tier_wired,
     check_eawf025_test_placement_wired,
+    check_idle_surface_ceiling,
     check_runtime_gate_is_not_idle,
     check_validate_jury_cli_wired,
 )
@@ -451,7 +452,8 @@ def main(argv: list[str]) -> int:
     binding probe (:func:`check_validate_jury_cli_wired`), then the runtime-gate binding
     check (:func:`check_runtime_gate_is_not_idle`), then the
     console-app construction-reachability check
-    (:func:`check_console_app_construction_wired`), then the
+    (:func:`check_console_app_construction_wired`), then the idle-surface
+    ceiling (:func:`check_idle_surface_ceiling`), then the
     registry-wide audit-DSL wired-on sweep
     (:func:`check_audit_dsl_kinds_wired`), then the meta-gate
     (:func:`detect_idle_contracts`) over the staged diff. All must pass; the
@@ -509,6 +511,8 @@ def main(argv: list[str]) -> int:
     failed |= _report_result(check_runtime_gate_is_not_idle())
 
     failed |= _report_result(check_console_app_construction_wired())
+
+    failed |= _report_result(check_idle_surface_ceiling())
 
     # Pass the module-level wired-on sources explicitly so a test (or a future
     # caller) can patch them via attribute assignment.

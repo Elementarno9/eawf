@@ -378,9 +378,9 @@ class ReleaseApprovalFreeze(_StrictModel):
     An approval is a decision about these values, not about whatever the
     record holds later, so they are copied out at approval and compared
     against the live inputs before any external effect. The manifest
-    digest covers the artifact inventory, the per-target artifact claims,
-    the platform claims and the notes, so artifacts and claims are frozen
-    through it rather than restated here.
+    digest covers each target's registry identity and frozen artifact
+    set and, from ``frozen-manifest/v2``, the advertised platform claims,
+    so those are frozen through it rather than restated here.
 
     Attributes:
         membership_refs: The accepted Milestone acceptance bundles.

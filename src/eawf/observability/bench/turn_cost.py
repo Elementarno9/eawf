@@ -5,11 +5,16 @@ The measurement itself lives in
 supplies the two things a bench verb needs around it — *where the corpus
 comes from* and *what it means to compare one record against a baseline*.
 
-The corpus comes from :func:`seed_turn_cost_corpus`, which replays a
+A seeded corpus comes from :func:`seed_turn_cost_corpus`, which replays a
 deterministic in-memory fixture. Replaying the same fixture id twice yields
 a byte-identical record, which is what makes a threshold check meaningful at
 all: without a fixed corpus, a moved p90 cannot be told apart from a
 different corpus.
+
+The ``live`` corpus comes from :func:`live_turn_cost_corpus`, which reads
+the Task Runs the repository itself recorded. It moves as work lands, so it
+answers whether the producer measures real Runs rather than whether a
+number regressed.
 
 The comparison is deliberately three-valued. A baseline recorded against a
 different fixture or a different harness revision is **not** comparable to
@@ -29,15 +34,22 @@ turns that boundary into a coin flip.
 from __future__ import annotations
 
 import logging
+from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
-from decimal import Decimal
+from datetime import timedelta
+from decimal import ROUND_HALF_EVEN, Decimal
 from enum import StrEnum
-from typing import TYPE_CHECKING, Final
+from pathlib import Path
+from typing import Final
 
 import orjson
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
+from eawf.kernel.state.epoch2.measurement import CounterName, MeasuredRuntime, Observed
+from eawf.kernel.state.epoch2.run import Run, RunPurpose, RunStatus, TaskScope
+from eawf.observability.reflect.runs import read_tree_run_records
 from eawf.observability.telemetry.models import PriceSourceKind, RuntimeName
 from eawf.observability.telemetry.turn_cost import (
     CompletedUnitRun,
@@ -45,15 +57,13 @@ from eawf.observability.telemetry.turn_cost import (
     WorkUnit,
     build_turn_cost_record,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
+from eawf.runtime.vcs.branch_name import main_checkout
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "COMPARABILITY_FIELDS",
+    "LIVE_FIXTURE_ID",
     "TURN_COST_FIXTURE_IDS",
     "TURN_COST_HARNESS_REVISION",
     "TurnCostBaseline",
@@ -63,6 +73,7 @@ __all__ = [
     "baseline_from_record",
     "build_corpus_record",
     "compare_turn_cost",
+    "live_turn_cost_corpus",
     "load_baseline",
     "seed_turn_cost_corpus",
     "write_baseline",
@@ -81,6 +92,34 @@ _SMALL_FIXTURE_ID: Final[str] = "turn-cost-small"
 
 TURN_COST_FIXTURE_IDS: Final[tuple[str, ...]] = (_SMALL_FIXTURE_ID,)
 """Every seeded fixture id :func:`seed_turn_cost_corpus` accepts."""
+
+LIVE_FIXTURE_ID: Final[str] = "live"
+"""The fixture id of the corpus :func:`live_turn_cost_corpus` reads from the tree."""
+
+#: The record runtime each harness a Run is captured under reports as.
+_LIVE_RUNTIMES: Final[Mapping[str, RuntimeName]] = {
+    "claude-code": "claude",
+    "codex": "codex",
+    "opencode": "opencode",
+}
+
+#: The agent role a Run's purpose is charged under, total over
+#: :class:`RunPurpose` so a new purpose fails here instead of going unattributed.
+_PURPOSE_ROLES: Final[Mapping[RunPurpose, AgentSessionRole]] = {
+    RunPurpose.IMPLEMENT: AgentSessionRole.EXECUTOR,
+    RunPurpose.INTEGRATE: AgentSessionRole.EXECUTOR,
+    RunPurpose.REPAIR: AgentSessionRole.EXECUTOR,
+    RunPurpose.REVIEW: AgentSessionRole.REVIEWER,
+    RunPurpose.AUDIT: AgentSessionRole.AUDITOR,
+    RunPurpose.RESEARCH: AgentSessionRole.RESEARCHER,
+    RunPurpose.PLAN: AgentSessionRole.PLANNER,
+    RunPurpose.OBSERVE: AgentSessionRole.OPERATOR,
+}
+
+#: Run states that leave the Task's work unfinished.
+_UNFINISHED_RUN_STATUSES: Final[frozenset[RunStatus]] = frozenset(
+    {RunStatus.QUEUED, RunStatus.RUNNING, RunStatus.SUSPENDED}
+)
 
 _FIXTURE_PHASE_ID: Final[str] = "P00"
 # The fixture unit ids keep the P<NN>-I<NN>-W<NN> shape the seeded corpus has always used.
@@ -265,6 +304,76 @@ def seed_turn_cost_corpus(fixture_id: str) -> TurnCostCorpus:
     )
 
 
+def live_turn_cost_corpus(state_dir: Path) -> TurnCostCorpus:
+    """Return the corpus of the Task Runs the repository recorded.
+
+    The Runs are read from the main checkout of the repository *state_dir*
+    belongs to: a linked worktree, such as the pinned checkout a release
+    proof runs in, carries no machine-local Run ledger of its own. Reading
+    takes no lock and writes nothing.
+
+    A unit is one Task, closed once none of its Runs is still queued,
+    running or suspended. Only Runs that ended with a measured capture
+    carry a wall clock and a cost, so only they are measured, and only
+    those on the most common harness and model: the record declares one
+    runtime and one model, and a Run on another is another measurement.
+    A tie goes to the greater harness and model, so it falls the same way
+    every time.
+
+    Args:
+        state_dir: The invocation's ``.ea`` directory.
+
+    Returns:
+        The live corpus, stamped :data:`LIVE_FIXTURE_ID`.
+
+    Raises:
+        ValueError: When the tree holds no ended Task Run with a measured
+            capture on a known harness, so there is nothing to measure.
+        pydantic.ValidationError: When a stored Run does not validate.
+    """
+    tree_root = main_checkout(state_dir.parent) / state_dir.name
+    runs = read_tree_run_records(tree_root)
+    task_runs = [run for run in runs if isinstance(run.scope, TaskScope)]
+    measured = [
+        (run, run.captured_runtime)
+        for run in task_runs
+        if isinstance(run.captured_runtime, MeasuredRuntime)
+        and run.captured_runtime.harness in _LIVE_RUNTIMES
+        and run.started_at is not None
+        and run.ended_at is not None
+    ]
+    if not measured:
+        raise ValueError(
+            f"live turn-cost corpus is empty: no ended Task Run carries a measured capture "
+            f"in {tree_root} ({len(runs)} Run(s) read); dispatch a Task through the daemon"
+        )
+    tuples = Counter((captured.harness, captured.model) for _, captured in measured)
+    harness, model = max(tuples, key=lambda pair: (tuples[pair], pair))
+    unfinished = {_task_key(run) for run in task_runs if run.status in _UNFINISHED_RUN_STATUSES}
+    selected = [
+        (run, captured)
+        for run, captured in measured
+        if (captured.harness, captured.model) == (harness, model)
+    ]
+    units = tuple(
+        WorkUnit(id=key, status=WaveStatus.IN_PROGRESS if key in unfinished else WaveStatus.CLOSED)
+        for key in sorted({_task_key(run) for run, _ in selected})
+    )
+    logger.info(
+        f"live_turn_cost_corpus runs={len(runs)} measured={len(measured)} "
+        f"selected={len(selected)} units={len(units)} harness={harness!r} model={model!r}"
+    )
+    return TurnCostCorpus(
+        fixture_id=LIVE_FIXTURE_ID,
+        runtime=_LIVE_RUNTIMES[harness],
+        model=model,
+        waves=units,
+        runs=tuple(
+            _live_run(run, captured, runtime=_LIVE_RUNTIMES[harness]) for run, captured in selected
+        ),
+    )
+
+
 def build_corpus_record(
     corpus: TurnCostCorpus,
     *,
@@ -438,6 +547,47 @@ def _regressed(*, baseline: Decimal, candidate: Decimal, threshold: Decimal) -> 
     if baseline == 0:
         return True
     return candidate >= baseline * (Decimal(1) + threshold)
+
+
+def _task_key(run: Run) -> str:
+    """Return the key of the Task a task-scoped *run* served."""
+    assert isinstance(run.scope, TaskScope)
+    return run.scope.task_ref.entity_key
+
+
+def _live_run(run: Run, captured: MeasuredRuntime, *, runtime: RuntimeName) -> CompletedUnitRun:
+    """Return *run*'s measured share as one corpus run of its Task.
+
+    A shared session's counters are fractional shares, so tokens are
+    rounded half-even to whole counts. A cost the capture did not observe
+    is unpriced rather than zero; an observed one is the runtime's own
+    charge, so it is billed.
+    """
+    assert run.started_at is not None and run.ended_at is not None
+    reading = captured.counters[CounterName.COST_USD]
+    cost = reading.value if isinstance(reading, Observed) else None
+    return CompletedUnitRun(
+        run_id=run.key,
+        wave_id=_task_key(run),
+        role=_PURPOSE_ROLES[run.scope.purpose],
+        runtime=runtime,
+        model=captured.model,
+        wall_clock_ms=(run.ended_at - run.started_at) // timedelta(milliseconds=1),
+        input_tokens=_tokens(captured, CounterName.INPUT_TOKENS),
+        output_tokens=_tokens(captured, CounterName.OUTPUT_TOKENS),
+        cache_read_tokens=_tokens(captured, CounterName.CACHE_READ_INPUT_TOKENS),
+        cache_write_tokens=_tokens(captured, CounterName.CACHE_CREATION_INPUT_TOKENS),
+        cost_usd=cost,
+        price_source=PriceSourceKind.UNPRICED if cost is None else PriceSourceKind.BILLED,
+    )
+
+
+def _tokens(captured: MeasuredRuntime, name: CounterName) -> int:
+    """Return counter *name* as a whole token count; zero when unobserved."""
+    reading = captured.counters[name]
+    if not isinstance(reading, Observed):
+        return 0
+    return int(reading.value.quantize(Decimal(1), rounding=ROUND_HALF_EVEN))
 
 
 def _fixture_wave(index: int) -> WorkUnit:

@@ -20,6 +20,7 @@ from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict
 
+from eawf.kernel.runtime.certification import CertifiedVersionRange
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey
 from eawf.kernel.store.envelope import Envelope
@@ -50,6 +51,9 @@ class _CertifyParams(BaseModel):
             runs the probe stage alone.
         actor: Who asked, which the canary Run is recorded against; named
             exactly when *task* is.
+        version_range: The versions the walk's driver certification stands
+            for once each passes a re-probe; named only with *task*, since
+            only a canary walk keeps a driver certification.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -57,6 +61,7 @@ class _CertifyParams(BaseModel):
     runtime: str
     task: str | None = None
     actor: PrincipalKey | None = None
+    version_range: CertifiedVersionRange | None = None
 
 
 @native_mutator(RUNTIME_CERTIFY_METHOD)
@@ -79,6 +84,11 @@ async def _certify_runtime(
         raise DaemonValidationError(
             "validation_failed: schema_validation_failed: a canary walk names both task and actor"
         )
+    if args.version_range is not None and args.task is None:
+        raise DaemonValidationError(
+            "validation_failed: schema_validation_failed: a version range is certified only "
+            "by a canary walk, which names a task"
+        )
     try:
         if args.task is None or args.actor is None:
             row = await asyncio.to_thread(certifier_for(authority.root).certify, args.runtime)
@@ -94,6 +104,7 @@ async def _certify_runtime(
                 task=task,
                 actor=args.actor,
                 publish=publish,
+                version_range=args.version_range,
             )
     except RuntimeNotProbedError as error:
         raise DaemonValidationError(f"validation_failed: {error}") from error

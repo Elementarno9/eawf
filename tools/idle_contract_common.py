@@ -31,6 +31,8 @@ class GateFailure(StrEnum):
     EAWF025_TEST_PLACEMENT_IDLE = "eawf025_test_placement_idle"
     COVERAGE_GATE_IDLE = "coverage_gate_idle"
     CONSOLE_APP_CONSTRUCTION_IDLE = "console_app_construction_idle"
+    IDLE_SURFACE_CEILING_EXCEEDED = "idle_surface_ceiling_exceeded"
+    IDLE_SURFACE_CEILING_INVALID = "idle_surface_ceiling_invalid"
 
 
 @dataclass(frozen=True, slots=True)

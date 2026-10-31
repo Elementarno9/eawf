@@ -136,7 +136,7 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
                 "codex-default",
                 "driver://codex-python-sdk/v1",
                 "auth://local-session/codex",
-                ["gpt-5.5", "gpt-5.3-codex-spark"],
+                ["gpt-6.1-sol", "gpt-6-luna"],
                 "codex",
             ),
         ],

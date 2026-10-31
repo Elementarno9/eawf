@@ -2,8 +2,9 @@
 
 The requirement catalog ``.ea/requirements.json`` carries each packet id with
 a short title and, beside it, a generated trace row: the waves whose text cites
-the id, the test modules and the production modules that name it, and the
-decision that defers it when one does. An id a closed phase already built
+the id or whose criteria a current applied plan maps the id's atom onto, the
+test modules and the production modules that name it, and the decision that
+defers it when one does. An id a closed phase already built
 without any wave text citing it carries a typed satisfied disposition instead:
 the decision that admits it, the closed phase, and the commit that built it. A
 row with no owning wave, deferral or satisfaction is ``unowned``, the state a
@@ -70,6 +71,9 @@ CLOSED_PHASE_STATUSES: Final = frozenset({"closed", "COMPLETED"})
 #: Imported backlog rows are Tasks too, but the epoch-1 trace never read the
 #: backlog, so they stay out of the owner set.
 _IMPORTED_WAVE_LIFECYCLE: Final = "wave"
+
+#: The PlanRevision status whose source atoms bind the Tasks it created.
+_APPLIED_PLAN_STATUS: Final = "APPLIED"
 
 #: Where test citations and production citations are read from.
 TEST_ROOTS: Final[tuple[str, ...]] = ("tests",)
@@ -228,6 +232,48 @@ class _PhaseView(BaseModel):
         return self.status in CLOSED_PHASE_STATUSES
 
 
+class _AtomView(BaseModel):
+    # Projection of a PlanRevision source atom; see _WaveView for why extra fields pass.
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    atom_id: str
+    mapped_criterion_ids: tuple[str, ...] = ()
+
+
+class _CriterionRefView(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    id: str
+
+
+class _PlanTaskView(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    urn: str
+    criteria: tuple[_CriterionRefView, ...] = ()
+
+    @property
+    def key(self) -> str:
+        """Return the Task key the URN ends in."""
+        return self.urn.rsplit("/", 1)[-1]
+
+
+class _PlanBodyView(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    source_atoms: tuple[_AtomView, ...] = ()
+    tasks: tuple[_PlanTaskView, ...] = ()
+
+
+class _PlanRevisionView(BaseModel):
+    # Projection of a PlanRevision: which Task criteria its source atoms map onto.
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    status: str
+    parent_key: str | None = None
+    body: _PlanBodyView = _PlanBodyView()
+
+
 class StateView(BaseModel):
     """The slice of ``.ea/state.json`` the trace reads."""
 
@@ -236,6 +282,7 @@ class StateView(BaseModel):
     waves: dict[str, _WaveView] = Field(default_factory=dict)
     decisions: dict[str, _DecisionView] = Field(default_factory=dict)
     phases: dict[str, _PhaseView] = Field(default_factory=dict)
+    plan_revisions: dict[str, _PlanRevisionView] = Field(default_factory=dict)
 
 
 class TraceInputError(ValueError):
@@ -449,7 +496,13 @@ def _generation_view(state_path: Path) -> StateView:
     for key, row in (read_document(state_path).get(Epoch2Collection.MILESTONE.value) or {}).items():
         milestones[key] = str(row.get("status", ""))
     phases = {key: _PhaseView(status=status) for key, status in milestones.items()}
-    return StateView(waves=waves, decisions=decisions, phases=phases)
+    plan_revisions = {
+        key: _PlanRevisionView.model_validate(row)
+        for key, row in (
+            read_document(state_path).get(Epoch2Collection.PLAN_REVISION.value) or {}
+        ).items()
+    }
+    return StateView(waves=waves, decisions=decisions, phases=phases, plan_revisions=plan_revisions)
 
 
 def load_state_view(repo_root: Path) -> StateView:
@@ -633,6 +686,47 @@ def _satisfied_ids(
     return satisfied
 
 
+def _plan_owners(state: StateView, known: set[str]) -> dict[str, set[str]]:
+    """Map each id a current applied plan atom carries to the live Tasks it maps onto.
+
+    A plan names the requirement ids its Tasks deliver as source atoms, each
+    mapped to criterion ids, so a Task owns an id its text never cites. Only
+    the newest applied revision of each lineage counts: an applied parent's
+    atoms were re-planned by its applied child. Criterion ids repeat across
+    plans, so an atom resolves only against the Tasks of its own revision.
+
+    Args:
+        state: The state slice, carrying the PlanRevisions and the live Tasks.
+        known: The catalog ids; an atom naming any other id owns nothing.
+
+    Returns:
+        Id to the keys of the live Tasks whose criteria the id's atoms map onto.
+    """
+    applied = {
+        key: revision
+        for key, revision in state.plan_revisions.items()
+        if revision.status == _APPLIED_PLAN_STATUS
+    }
+    replanned = {revision.parent_key for revision in applied.values()}
+    owners: dict[str, set[str]] = defaultdict(set)
+    for key, revision in applied.items():
+        if key in replanned:
+            continue
+        by_criterion: dict[str, set[str]] = defaultdict(set)
+        for task in revision.body.tasks:
+            wave = state.waves.get(task.key)
+            if wave is None or wave.status in DEAD_WAVE_STATUSES:
+                continue
+            for criterion in task.criteria:
+                by_criterion[criterion.id].add(task.key)
+        for atom in revision.body.source_atoms:
+            if atom.atom_id not in known:
+                continue
+            for criterion_id in atom.mapped_criterion_ids:
+                owners[atom.atom_id] |= by_criterion.get(criterion_id, set())
+    return owners
+
+
 def build_trace(
     *,
     titles: Mapping[str, str],
@@ -667,6 +761,8 @@ def build_trace(
             continue
         for req_id in cited_ids(wave.cited_text(), families) & known:
             owners[req_id].add(wave.id)
+    for req_id, tasks in _plan_owners(state, known).items():
+        owners[req_id] |= tasks
     tests = scan_citations(repo_root, TEST_ROOTS, families)
     producers = scan_citations(repo_root, PRODUCER_ROOTS, families)
     rows = []

@@ -28,11 +28,12 @@ release preflight the lint could only report the packet absent and pass: it
 had never fired there and never could. The scanner stays as a local tool
 for the packet's author; only the lanes that cannot see its input go.
 
-The cite-from-packet completeness check (``AUTH-014``, with the
-archive-independence gate ``AUTH-037`` names) is a RETIRE before it was
-built, on the same ground: a check whose only input is a file no clone has
-passes vacuously everywhere a reviewer would run it. Nothing was built, so
-nothing is pinned.
+The cite-from-packet completeness check, with the archive-independence
+gate it names, is a RETIRE before it was built, on the same ground: a
+check whose only input is a file no clone has passes vacuously everywhere
+a reviewer would run it. Nothing was built, so nothing is pinned, and this
+module is no test of the two cite-from-packet requirements: both are
+deferred to the 0.8.0 release by a recorded decision.
 
 The 0.7.0 review covered every gate added since the last 0.6 tag. A gate
 counts as fired when it reds at the parent of the commit that added it,

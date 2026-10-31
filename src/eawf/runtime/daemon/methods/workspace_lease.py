@@ -46,6 +46,7 @@ from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.run import RunPurpose
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.native_guard import native_mutator
+from eawf.runtime.daemon.run_supervisor import supervisor_of
 from eawf.runtime.workspace.lease import (
     LeaseRefusalCode,
     LeaseRefusedError,
@@ -365,7 +366,9 @@ async def _reconcile(
     """
     _parsed(_LeaseParams, params)
     context = ctx.native_root_context(authority.root)
-    report = await asyncio.to_thread(reconcile_root, context, now=datetime.now(UTC))
+    report = await asyncio.to_thread(
+        reconcile_root, context, now=datetime.now(UTC), busy=supervisor_of(context).busy
+    )
     return report.model_dump(mode="json")
 
 

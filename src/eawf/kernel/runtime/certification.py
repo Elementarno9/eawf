@@ -51,6 +51,7 @@ from eawf.kernel.runtime.provider import (
     SemVer,
     WorkflowUrn,
     reject_repeats,
+    semver_key,
 )
 from eawf.kernel.state.types import UtcDatetime
 
@@ -173,6 +174,51 @@ class ConformanceStageRecord(RuntimeRecord):
         if self.completed_at < self.started_at:
             raise ValueError("completed_at precedes started_at")
         return self
+
+
+class CertifiedVersionRange(RuntimeRecord):
+    """The versions one certification covers once each passes a re-probe.
+
+    Both bounds are inclusive and compare by SemVer precedence, so a
+    pre-release sorts below its own release: ``2.2.0-rc.1`` falls inside a
+    range ending at ``2.2.0`` and outside one starting there. Harnesses
+    ship several releases a week, and a range lets the certification of
+    one walk stand for its neighbours while each still has to pass the
+    probe on this machine before an export admits it.
+    """
+
+    min_version: SemVer
+    max_version: SemVer
+
+    @model_validator(mode="after")
+    def _range_is_not_empty(self) -> Self:
+        """Require the lower bound not to sort above the upper one.
+
+        Raises:
+            ValueError: ``min_version`` sorts above ``max_version``, which
+                would describe a range no version falls in.
+        """
+        if semver_key(self.min_version) > semver_key(self.max_version):
+            raise ValueError(
+                f"min_version {self.min_version} sorts above max_version {self.max_version}"
+            )
+        return self
+
+    def covers(self, version: str) -> bool:
+        """Report whether *version* falls inside the range.
+
+        Args:
+            version: A SemVer string, such as an installed harness version.
+
+        Returns:
+            ``True`` when *version* sorts between the bounds, both included.
+        """
+        key = semver_key(version)
+        return semver_key(self.min_version) <= key <= semver_key(self.max_version)
+
+    def __str__(self) -> str:
+        """Return the range as ``min..max``, the form a refusal names it in."""
+        return f"{self.min_version}..{self.max_version}"
 
 
 class LocalFactOverride(RuntimeRecord):

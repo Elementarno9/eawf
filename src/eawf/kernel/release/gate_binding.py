@@ -222,16 +222,22 @@ CROSS_PROVIDER_GATES: Final[tuple[ReleaseGateName, ...]] = (
     *CROSS_PROVIDER_ADDED_GATES,
 )
 
-#: The gates the ``stable`` profile admits: the rc4 set, with two
+#: The gates the ``stable`` profile admits: the rc4 set, with three
 #: changes. The whole suite is settled under ``full_suite`` in the slot
 #: ``epoch1_stabilization`` held, whose name stays with the dev1 to rc4
 #: rungs and the receipts bound to it. The ``migration`` row is left
 #: behind, because it reads the committed rehearsal of the epoch-1
-#: cutover and this release no longer ships that cutover.
-STABLE_GATES: Final[tuple[ReleaseGateName, ...]] = tuple(
-    ReleaseGateName.FULL_SUITE if gate is ReleaseGateName.EPOCH1_STABILIZATION else gate
-    for gate in CROSS_PROVIDER_GATES
-    if gate is not ReleaseGateName.MIGRATION
+#: cutover and this release no longer ships that cutover. ``packet_run``
+#: joins last: the realization row only requires the packet run on the
+#: stable channel, and no earlier profile bound the row, so without the
+#: gate the sweep would report it without requiring it.
+STABLE_GATES: Final[tuple[ReleaseGateName, ...]] = (
+    *(
+        ReleaseGateName.FULL_SUITE if gate is ReleaseGateName.EPOCH1_STABILIZATION else gate
+        for gate in CROSS_PROVIDER_GATES
+        if gate is not ReleaseGateName.MIGRATION
+    ),
+    ReleaseGateName.PACKET_RUN,
 )
 
 #: The gate names each profile admits. A profile missing here is a loud

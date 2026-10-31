@@ -40,6 +40,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Final
 
+from eawf.kernel.release.models import PlatformClaimSet
 from eawf.kernel.spec.release import (
     Release,
     ReleaseStatus,
@@ -76,6 +77,24 @@ _ARTIFACT_SUFFIXES: Final[Mapping[ReleaseArtifactKind, str]] = {
     ReleaseArtifactKind.WHEEL: ".whl",
     ReleaseArtifactKind.SDIST: ".tar.gz",
 }
+
+#: Checkpoints whose candidates were pinned before the manifest froze
+#: platform claims. Their approvals bind the ``frozen-manifest/v1``
+#: digest, so a re-freeze must keep producing it; every other version
+#: freezes ``frozen-manifest/v2``, which pins the claims as well.
+_V1_PINNED_VERSIONS: Final[frozenset[str]] = frozenset(
+    {
+        "0.7.0.dev1",
+        "0.7.0.dev2",
+        "0.7.0.dev3",
+        "0.7.0.dev4",
+        "0.7.0.dev5",
+        "0.7.0rc1",
+        "0.7.0rc2",
+        "0.7.0rc3",
+        "0.7.0rc4",
+    }
+)
 
 
 class CandidateRefusal(StrEnum):
@@ -247,7 +266,9 @@ def freeze_manifest(config: ReleaseConfig, *, receipts_dir: Path) -> FrozenManif
             per leg.
 
     Returns:
-        The frozen manifest, carrying one row per declared target.
+        The frozen manifest, carrying one row per declared target and,
+        outside the versions pinned under v1, the configured platform
+        claims.
 
     Raises:
         CandidateFreezeError: When a declared target left no receipt, a
@@ -270,11 +291,20 @@ def freeze_manifest(config: ReleaseConfig, *, receipts_dir: Path) -> FrozenManif
         receipt = found[target.target_id]
         _assert_receipt_version(receipt, version=config.version)
         targets[target.target_id] = _frozen_target(target, receipt, version=config.version)
-    manifest = FrozenManifest(
-        release_key=release_key(config.version),
-        version=config.version,
-        targets=targets,
-    )
+    if config.version in _V1_PINNED_VERSIONS:
+        manifest = FrozenManifest(
+            release_key=release_key(config.version),
+            version=config.version,
+            targets=targets,
+        )
+    else:
+        manifest = FrozenManifest(
+            schema_version="frozen-manifest/v2",
+            release_key=release_key(config.version),
+            version=config.version,
+            targets=targets,
+            platform_claims=PlatformClaimSet(claims=config.platform_claims),
+        )
     logger.info(
         f"freeze_manifest version={config.version!r} targets={sorted(targets)} "
         f"digest={manifest.digest!r}"

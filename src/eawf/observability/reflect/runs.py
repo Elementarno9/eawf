@@ -311,6 +311,35 @@ def read_tree_run(tree_root: Path, ref: str) -> RunReading:
     raise LookupError(f"the tree holds no Run keyed {key!r}")
 
 
+def read_tree_run_records(tree_root: Path) -> tuple[Run, ...]:
+    """Return every Run record the tree's selected generation holds, in key order.
+
+    Each record is validated whole, but no event line is joined and no
+    subtree is folded, so the cost grows with the Run count where
+    :func:`read_tree_runs` grows with its square.
+
+    Args:
+        tree_root: The tree's ``.ea`` directory.
+
+    Returns:
+        One record per Run key, live or compacted; empty for a tree at epoch 1.
+
+    Raises:
+        pydantic.ValidationError: A Run row does not validate.
+        LedgerTornTailError: The run ledger ends mid-line.
+    """
+    document_path = _document_path(tree_root)
+    if document_path is None:
+        return ()
+    payloads = _run_payloads(
+        document_rows(read_document(document_path), Epoch2Collection.RUN),
+        read_ledger_records(ledger_path(document_path, Epoch2Collection.RUN)),
+    )
+    runs = tuple(Run.model_validate(payloads[key]) for key in sorted(payloads))
+    logger.debug(f"read_tree_run_records root={tree_root.name} runs={len(runs)}")
+    return runs
+
+
 class _BriefScope(BaseModel):
     # A projection of the stored scope: only the Task a Task scope names.
     model_config = ConfigDict(extra="ignore", frozen=True)
@@ -378,5 +407,6 @@ __all__ = [
     "RunReading",
     "read_run_briefs",
     "read_tree_run",
+    "read_tree_run_records",
     "read_tree_runs",
 ]

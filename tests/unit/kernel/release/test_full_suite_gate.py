@@ -89,8 +89,8 @@ def test_stable_binds_each_shared_gate_as_rc4_does() -> None:
     rc4 = gate_bindings_for(ReleaseGateProfile.CROSS_PROVIDER)
     shared = set(stable) & set(rc4)
 
-    # Everything but the renamed suite gate is carried over.
-    assert shared == set(stable) - {ReleaseGateName.FULL_SUITE}
+    # Everything but the renamed suite gate and the stable-only packet run is carried over.
+    assert shared == set(stable) - {ReleaseGateName.FULL_SUITE, ReleaseGateName.PACKET_RUN}
     for gate in shared:
         assert stable[gate] == rc4[gate]
 

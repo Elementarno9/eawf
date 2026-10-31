@@ -128,6 +128,7 @@ AGENTS.override.md
 !.ea/artifacts/evidence/2026-10-08-rc2-cross-provider/native-canary-evidence.json
 !.ea/artifacts/evidence/2026-10-24-rc3-native-linux/native-canary-evidence.json
 !.ea/artifacts/evidence/2026-10-29-rc4-native-linux/native-canary-evidence.json
+!.ea/artifacts/evidence/2026-10-30-stable-native-linux/native-canary-evidence.json
 !.ea/artifacts/evidence/2026-09-27-dev5-product-canary/product-canary-receipts.json
 !.ea/artifacts/evidence/2026-10-24-rc3-native-linux/dispatch-smoke-receipts.json
 !.ea/artifacts/evidence/2026-10-24-rc3-native-linux/dispatch-check-RUN-*.json

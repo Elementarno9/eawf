@@ -23,6 +23,8 @@ from idle_contract_common import (
     GateFailure,
     GateResult,
 )
+from idle_surface_report import find_idle_functions
+from pydantic import BaseModel, ConfigDict, NonNegativeInt, ValidationError
 
 from eawf.platform.lint import eawf024_test_tier_contract as eawf024
 from eawf.platform.lint import eawf025_test_placement as eawf025
@@ -576,4 +578,95 @@ def check_audit_dsl_kinds_wired(
             f"idle-contract gate: ok (all {len(registered)} registered audit-DSL "
             "kinds are wired on -- each has an oracle-tier or close-gate binding)"
         ),
+    )
+
+
+# =========================================================================== #
+# Idle-surface ceiling: the count of uncalled public functions only ratchets down.
+# =========================================================================== #
+
+#: Recorded ceiling on the idle public-function count. A data file rather than
+#: a literal so the gate and its tests read one value.
+IDLE_SURFACE_CEILING_PATH = _REPO_ROOT / "tools" / "idle_surface_ceiling.json"
+
+
+class IdleSurfaceCeiling(BaseModel):
+    """The recorded idle-surface ceiling file.
+
+    Attributes:
+        ceiling: Highest idle public-function count the gate accepts.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    ceiling: NonNegativeInt
+
+
+def check_idle_surface_ceiling(
+    *,
+    idle_count: int | None = None,
+    ceiling_path: Path = IDLE_SURFACE_CEILING_PATH,
+) -> GateResult:
+    """Fail when more public functions sit idle than the recorded ceiling allows.
+
+    The count is :func:`find_idle_functions` over ``src/eawf`` with ``tools/``
+    as a caller root, the same measurement ``tools/idle_surface_report.py``
+    prints. A count below the ceiling passes with a notice to lower it: failing
+    there would block every commit that wires or deletes an idle function until
+    it also edits the ceiling file, and the suite's equality test already holds
+    the recorded value to the live count.
+
+    Args:
+        idle_count: The idle function count. ``None`` measures the working tree
+            under :data:`_REPO_ROOT`.
+        ceiling_path: The ceiling file to read.
+
+    Returns:
+        A :class:`GateResult` that fails with
+        :attr:`GateFailure.IDLE_SURFACE_CEILING_INVALID` when the file does not
+        validate, or :attr:`GateFailure.IDLE_SURFACE_CEILING_EXCEEDED` when the
+        count is above the ceiling; otherwise it passes.
+
+    Raises:
+        FileNotFoundError: *ceiling_path* does not exist.
+    """
+    try:
+        ceiling = IdleSurfaceCeiling.model_validate_json(ceiling_path.read_bytes()).ceiling
+    except ValidationError as exc:
+        return GateResult(
+            passed=False,
+            failure=GateFailure.IDLE_SURFACE_CEILING_INVALID,
+            message=(
+                f"idle-surface ceiling file {ceiling_path.name} is malformed: "
+                f"{exc.error_count()} validation error(s); expected "
+                '{"ceiling": <non-negative integer>}'
+            ),
+        )
+    if idle_count is None:
+        idle_count = len(
+            find_idle_functions(_REPO_ROOT / "src" / "eawf", caller_roots=[_REPO_ROOT / "tools"])
+        )
+    if idle_count > ceiling:
+        return GateResult(
+            passed=False,
+            failure=GateFailure.IDLE_SURFACE_CEILING_EXCEEDED,
+            message=(
+                f"idle surface {idle_count} exceeds the recorded ceiling {ceiling} "
+                f"({ceiling_path.name}): wire the new public functions to a caller "
+                "or drop them; list them with uv run python tools/idle_surface_report.py"
+            ),
+        )
+    if idle_count < ceiling:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                f"idle-contract gate: ok (idle surface {idle_count} is below the "
+                f"ceiling {ceiling}; lower {ceiling_path.name} to {idle_count})"
+            ),
+        )
+    return GateResult(
+        passed=True,
+        failure=None,
+        message=f"idle-contract gate: ok (idle surface {idle_count} equals the ceiling)",
     )

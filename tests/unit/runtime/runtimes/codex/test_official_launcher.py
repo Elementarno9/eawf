@@ -299,6 +299,15 @@ def test_the_run_server_is_the_only_mcp_server(workspace: Path) -> None:
     assert servers[_SERVER]["args"][:6] == ["-I", "-m", "eawf", "mcp", "serve", "--binding"]
 
 
+def test_codex_semantic_tools_repro_approval_rejected(workspace: Path) -> None:
+    # Under approval_policy "never" codex refuses an MCP call it would prompt
+    # for, so the run server's tools must be approved up front.
+    _run(workspace)
+
+    servers = _home_config(workspace)["mcp_servers"]
+    assert servers[_SERVER]["default_tools_approval_mode"] == "approve"
+
+
 def test_the_prompt_starts_the_turn_on_the_opened_thread(workspace: Path) -> None:
     _run(workspace)
 

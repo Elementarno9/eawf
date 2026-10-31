@@ -170,7 +170,7 @@ class RuntimeModelsConfig(BaseModel):
     swap that triple for a runtime whose account serves different model ids.
     The motivating case: a ChatGPT-account codex rejects the API-key-only
     ``gpt-5-mini`` / ``gpt-5`` / ``gpt-5-codex`` defaults, so the repo pins the
-    ids that account actually serves (``gpt-5.3-codex-spark`` / ``gpt-5.5``).
+    ids that account actually serves (``gpt-6-luna`` / ``gpt-6.1-sol``).
 
     Each field is the 3-tier ladder (cheapest, mid, top) for that runtime; a
     runtime left ``None`` falls back to the built-in default ladder, so a

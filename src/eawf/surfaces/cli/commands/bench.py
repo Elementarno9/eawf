@@ -241,7 +241,7 @@ def bench_turn_cost(
         str,
         typer.Option(
             "--fixture",
-            help="Seeded corpus fixture id to measure.",
+            help="Corpus to measure: a seeded fixture id, or 'live' for this tree's own Runs.",
         ),
     ] = "turn-cost-small",
     check: Annotated[
@@ -458,16 +458,23 @@ def _resolve_path(flags: GlobalFlags, rel: Path) -> Path:
 
 
 def _resolve_turn_cost_corpus(flags: GlobalFlags, *, fixture: str) -> TurnCostCorpus:
-    """Return the seeded corpus *fixture* names.
+    """Return the corpus *fixture* names: the tree's own Runs, or a seeded fixture.
 
     Raises:
-        typer.Exit: ``1`` when *fixture* is not a known seeded fixture.
+        typer.Exit: ``1`` when *fixture* is not a known fixture, or the live
+            corpus has nothing to measure.
     """
-    from eawf.observability.bench.turn_cost import seed_turn_cost_corpus
+    from eawf.observability.bench.turn_cost import (
+        LIVE_FIXTURE_ID,
+        live_turn_cost_corpus,
+        seed_turn_cost_corpus,
+    )
 
     try:
+        if fixture == LIVE_FIXTURE_ID:
+            return live_turn_cost_corpus(resolve_state_path(flags.workspace).parent)
         return seed_turn_cost_corpus(fixture)
-    except ValueError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         cli_errors.emit_error(cli_errors.UserError(str(exc)), flags=flags)
 
 

@@ -45,6 +45,7 @@ from typing import Annotated, Final, Literal
 from pydantic import ConfigDict, Field, ValidationError
 
 from eawf.kernel.runtime.certification import (
+    CertifiedVersionRange,
     ConformanceStage,
     ConformanceStageRecord,
     DriverCertification,
@@ -113,6 +114,12 @@ CANARY_EVIDENCE_DIRS: Final[Mapping[str, tuple[str, ...]]] = {
         "artifacts",
         "evidence",
         "2026-10-29-rc4-native-linux",
+    ),
+    "REL-0.7.0": (
+        ".ea",
+        "artifacts",
+        "evidence",
+        "2026-10-30-stable-native-linux",
     ),
 }
 
@@ -289,6 +296,10 @@ class CertificationRecord(_StrictModel):
         tuple_digest: The digest the runner addresses the tuple by in its
             stage journal.
         certification: The record the runner wrote.
+        version_range: The versions the certification stands for once each
+            passes a re-probe, as the certifying walk stored it; ``None``
+            when it stands for its own version alone or was exported
+            before ranges were carried.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -297,6 +308,7 @@ class CertificationRecord(_StrictModel):
     runtime_id: Annotated[str, Field(min_length=1, max_length=64)]
     tuple_digest: Digest
     certification: DriverCertification
+    version_range: CertifiedVersionRange | None = None
 
     @property
     def stage_sequence(self) -> tuple[str, ...]:

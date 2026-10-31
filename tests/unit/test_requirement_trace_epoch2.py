@@ -211,6 +211,145 @@ def test_native_tasks_cite_their_intent_and_criteria(repo: Path) -> None:
     assert trace["REQ-008"] == ("unowned", ())
 
 
+def _plan_task(key: str, *criterion_ids: str) -> dict[str, Any]:
+    return {
+        "urn": f"eawf://EAWF/task/{key}",
+        "criteria": [{"id": criterion_id} for criterion_id in criterion_ids],
+    }
+
+
+def _plan(
+    status: str,
+    atoms: dict[str, tuple[str, ...]],
+    tasks: list[dict[str, Any]],
+    *,
+    parent_key: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "status": status,
+        "parent_key": parent_key,
+        "body": {
+            "source_atoms": [
+                {"atom_id": atom_id, "mapped_criterion_ids": list(criterion_ids)}
+                for atom_id, criterion_ids in atoms.items()
+            ],
+            "tasks": tasks,
+        },
+    }
+
+
+def _seed_plans(repo: Path, plans: dict[str, dict[str, Any]]) -> None:
+    """Add native Tasks EAWF-0001 (live) and EAWF-0002 (cancelled) and the given plans."""
+    document_path = _generation_document(repo)
+    document = read_document(document_path)
+    document["task"]["EAWF-0001"] = {
+        "key": "EAWF-0001",
+        "status": "PLANNED",
+        "intent": "native work on REQ-009",
+        "criteria": [{"id": "CR-01", "text": "the gate holds"}],
+    }
+    document["task"]["EAWF-0002"] = {
+        "key": "EAWF-0002",
+        "status": "CANCELLED",
+        "intent": "abandoned work",
+        "criteria": [{"id": "CR-02", "text": "the gate holds"}],
+    }
+    document["plan_revision"] = plans
+    write_document(document_path, document)
+
+
+def test_an_applied_plan_atom_owns_its_id_for_the_task_holding_the_criterion(repo: Path) -> None:
+    _seed_plans(
+        repo,
+        {"PRV-0001": _plan("APPLIED", {"REQ-006": ("CR-01",)}, [_plan_task("EAWF-0001", "CR-01")])},
+    )
+
+    trace = _trace(load_state_view(repo), repo)
+
+    assert trace["REQ-006"] == ("owned", ("EAWF-0001",))
+    assert trace["REQ-009"] == ("owned", ("EAWF-0001",))
+    assert trace["REQ-008"] == ("unowned", ())
+
+
+def test_an_atom_whose_criterion_is_on_another_milestones_task_owns_nothing(repo: Path) -> None:
+    """CR-01 belongs to a Task of PRV-0002's Milestone, so PRV-0001's atom finds no Task."""
+    _seed_plans(
+        repo,
+        {
+            "PRV-0001": _plan("APPLIED", {"REQ-006": ("CR-01",)}, []),
+            "PRV-0002": _plan("APPLIED", {}, [_plan_task("EAWF-0001", "CR-01")]),
+        },
+    )
+
+    assert _trace(load_state_view(repo), repo)["REQ-006"] == ("unowned", ())
+
+
+@pytest.mark.parametrize(
+    "plans",
+    [
+        pytest.param(
+            {
+                "PRV-0001": _plan(
+                    "APPROVED", {"REQ-006": ("CR-01",)}, [_plan_task("EAWF-0001", "CR-01")]
+                )
+            },
+            id="not-applied",
+        ),
+        pytest.param(
+            {
+                "PRV-0001": _plan(
+                    "APPLIED", {"REQ-006": ("CR-01",)}, [_plan_task("EAWF-0001", "CR-01")]
+                ),
+                "PRV-0002": _plan(
+                    "APPLIED", {}, [_plan_task("EAWF-0001", "CR-01")], parent_key="PRV-0001"
+                ),
+            },
+            id="re-planned-parent",
+        ),
+        pytest.param(
+            {
+                "PRV-0001": _plan(
+                    "APPLIED", {"REQ-006": ("CR-02",)}, [_plan_task("EAWF-0002", "CR-02")]
+                )
+            },
+            id="cancelled-task",
+        ),
+        pytest.param(
+            {
+                "PRV-0001": _plan(
+                    "APPLIED", {"REQ-006": ("CR-09",)}, [_plan_task("EAWF-0001", "CR-01")]
+                )
+            },
+            id="unmapped-criterion",
+        ),
+        pytest.param(
+            {
+                "PRV-0001": _plan(
+                    "APPLIED", {"OTHER-001": ("CR-01",)}, [_plan_task("EAWF-0001", "CR-01")]
+                )
+            },
+            id="id-outside-the-catalog",
+        ),
+    ],
+)
+def test_an_atom_owns_nothing_without_a_live_task_of_a_current_applied_plan(
+    repo: Path, plans: dict[str, dict[str, Any]]
+) -> None:
+    _seed_plans(repo, plans)
+
+    trace = _trace(load_state_view(repo), repo)
+
+    assert trace["REQ-006"] == ("unowned", ())
+    assert "OTHER-001" not in trace
+
+
+def test_a_malformed_plan_revision_is_a_trace_input_error(repo: Path) -> None:
+    _seed_plans(repo, {"PRV-0001": {"status": "APPLIED", "body": {"source_atoms": [{}]}}})
+
+    with pytest.raises(TraceInputError, match="cannot read generation"):
+        load_state_view(repo)
+
+
 def test_a_superseded_decision_in_the_ledger_defers_nothing(repo: Path) -> None:
     ledger = _generation_document(repo).parent / "ledger" / "decision.jsonl"
     lines = ledger.read_text(encoding="utf-8").splitlines()

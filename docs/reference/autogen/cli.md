@@ -364,6 +364,7 @@ Tag releases and drive the release train's checkpoint records.
 | `discharge-debt` | Discharge a verification debt once its deferred gate has passed. |
 | `notes` | Render a scrubbed release-notes draft from the unreleased changelog. |
 | `observe` | Read one publication target back and settle it against the manifest. |
+| `packet-run` | Run the packet on a live runtime in a scratch repository and record the receipt. |
 | `pipeline` | Take a merged checkpoint from tag to BAKED and the train advance. |
 | `preflight` | Sweep every readiness signal for one checkpoint over this checkout. |
 | `publish` | Open the publication episode and return its reference at once. |

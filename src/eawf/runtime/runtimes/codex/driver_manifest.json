@@ -3,7 +3,7 @@
   "runtime_id": "codex",
   "driver_ref": "driver://codex-python-sdk/v1",
   "auth_profile_ref": "auth://local-session/codex",
-  "listed_models": ["gpt-5.5", "gpt-5.3-codex-spark"],
+  "listed_models": ["gpt-6.1-sol", "gpt-6-luna"],
   "manifest_id": "codex-python-sdk",
   "provider_id": "codex",
   "driver_kind": "native_sdk",
