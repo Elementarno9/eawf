@@ -1091,10 +1091,10 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 45376,
+  "canonical_sequence": 45527,
   "milestone": {
     "MLS-0103": {
-      "acceptance_bundle_revision": null,
+      "acceptance_bundle_revision": 1,
       "acceptance_journey": [
         {
           "action": "run the 0.7.0 stable readiness sweep",
@@ -1170,12 +1170,12 @@
         "eawf://EAWF/batch/BAT-0373",
         "eawf://EAWF/batch/BAT-0374"
       ],
-      "revision": 4,
+      "revision": 6,
       "status": "ACTIVE",
       "target_date": null,
       "title": "Publish 0.7.0 against the narrowed honest acceptance gate",
       "uid": "7358605e-255e-5241-8977-fc17c38a4984",
-      "updated_at": "2026-10-30T03:25:04.647993Z",
+      "updated_at": "2026-11-02T00:45:04.155207Z",
       "urn": "eawf://EAWF/milestone/MLS-0103"
     }
   },
@@ -7141,7 +7141,15 @@
       "created_at": "2026-10-24T10:17:31.307030Z",
       "default_on_timeout": null,
       "default_policy": null,
-      "dispositions": [],
+      "dispositions": [
+        {
+          "acted_at": "2026-11-02T00:22:08.467699Z",
+          "option_id": "approve",
+          "outcome": "sealed",
+          "principal_id": "OP-0001",
+          "snoozed_until": null
+        }
+      ],
       "id": "ACT-0016",
       "idempotency_key": "accept-MLS-0104-68e782f82e15a328",
       "kind": "protected_approval",
@@ -7173,17 +7181,20 @@
       ],
       "override_until": null,
       "question": "Accept MLS-0104 on revision 1 of its acceptance bundle?",
-      "receipt_ref": null,
+      "receipt_ref": "eawf://EAWF/evidence/EVD-0254",
       "recommendation_rationale": "Every Batch stands on a verified head and the journey passed, so accepting records what the evidence already shows.",
       "recommended_option_id": "approve",
       "requested_by": {
         "principal_id": "OP-0001",
         "principal_kind": "human"
       },
-      "resolution_actor": null,
-      "revision": 1,
-      "selected_option_id": null,
-      "status": "WAITING",
+      "resolution_actor": {
+        "principal_id": "OP-0001",
+        "principal_kind": "human"
+      },
+      "revision": 2,
+      "selected_option_id": "approve",
+      "status": "SEALED",
       "subject_ref": "eawf://EAWF/milestone/MLS-0104",
       "terms": [
         {
@@ -7191,7 +7202,7 @@
           "term": "MLS-0104"
         }
       ],
-      "updated_at": "2026-10-24T10:17:31.307030Z",
+      "updated_at": "2026-11-02T00:22:08.467699Z",
       "urn": "eawf://EAWF/pending-action/ACT-0016"
     },
     "ACT-0017": {
@@ -9559,6 +9570,77 @@
       ],
       "updated_at": "2026-10-30T05:58:22.095303Z",
       "urn": "eawf://EAWF/pending-action/ACT-0042"
+    },
+    "ACT-0043": {
+      "assignee_ref": null,
+      "bundle_digest": "sha256:31a3909fb3e62ada86ac77954750728152a0a1575b010ac43a59a6023938d538",
+      "created_at": "2026-10-31T06:26:18.604600Z",
+      "default_on_timeout": null,
+      "default_policy": null,
+      "dispositions": [
+        {
+          "acted_at": "2026-11-02T00:29:09.231113Z",
+          "option_id": "approve",
+          "outcome": "sealed",
+          "principal_id": "OP-0001",
+          "snoozed_until": null
+        }
+      ],
+      "id": "ACT-0043",
+      "idempotency_key": "accept-MLS-0103-31a3909fb3e62ada",
+      "kind": "protected_approval",
+      "options": [
+        {
+          "consequence": "The Milestone is recorded as accepted on exactly this bundle. A later change needs a new acceptance.",
+          "cost": "Any change after acceptance needs a new bundle and a new acceptance.",
+          "effect": "approve",
+          "label": "Accept the Milestone",
+          "option_id": "approve",
+          "preview": "Milestone MLS-0103\n  before: in acceptance review\n  after:  accepted on bundle revision 1"
+        },
+        {
+          "consequence": "The Milestone stays in review and is not accepted. Nothing else changes.",
+          "cost": "Verified work waits unaccepted, and nothing says what would make it acceptable.",
+          "effect": "decline",
+          "label": "Do not accept it",
+          "option_id": "decline",
+          "preview": "Milestone MLS-0103\n  before: in acceptance review\n  after:  in acceptance review, not accepted"
+        },
+        {
+          "consequence": "The Milestone stays in review and a repair is requested. The next bundle revision is verified and asked about again.",
+          "cost": "Delivery waits for another verified revision and another question.",
+          "effect": "request_repair",
+          "label": "Ask for changes",
+          "option_id": "repair",
+          "preview": "Milestone MLS-0103\n  before: bundle revision 1 awaits acceptance\n  after:  repair requested; bundle revision 2 is verified next"
+        }
+      ],
+      "override_until": null,
+      "question": "Accept MLS-0103 on revision 1 of its acceptance bundle?",
+      "receipt_ref": "eawf://EAWF/evidence/EVD-0263",
+      "recommendation_rationale": "Every Batch stands on a verified head and the journey passed, so accepting records what the evidence already shows.",
+      "recommended_option_id": "approve",
+      "requested_by": {
+        "principal_id": "EAWF-PLANNER",
+        "principal_kind": "agent",
+        "run_ref": "eawf://EAWF/run/RUN-00002098"
+      },
+      "resolution_actor": {
+        "principal_id": "OP-0001",
+        "principal_kind": "human"
+      },
+      "revision": 2,
+      "selected_option_id": "approve",
+      "status": "SEALED",
+      "subject_ref": "eawf://EAWF/milestone/MLS-0103",
+      "terms": [
+        {
+          "expansion": "the Milestone, a planned delivery goal, you are asked to accept",
+          "term": "MLS-0103"
+        }
+      ],
+      "updated_at": "2026-11-02T00:29:09.231113Z",
+      "urn": "eawf://EAWF/pending-action/ACT-0043"
     }
   },
   "plan_revision": {
@@ -271141,6 +271223,90 @@
       "uid": "804bced9-c2cc-5778-a479-2816b67003cf",
       "updated_at": "2026-10-26T12:41:54.323867Z",
       "urn": "eawf://EAWF/task/EAWF-0586"
+    },
+    "EAWF-0661": {
+      "active_run_ref": null,
+      "batch_ref": null,
+      "contract_revision": 1,
+      "created_at": "2026-11-02T00:49:14.497761Z",
+      "criteria": [],
+      "due_scope": null,
+      "integrated_binding": null,
+      "intent": "A Milestone acceptance journey can declare a step that only passes after merge, such as a release preflight whose ancestry signal needs main to carry the head, while acceptance must land before merge. MLS-0103 AS-04 hit this. Refuse or flag such a step when a journey is planned, or let the journey mark a step as checked at release time by the release pipeline.",
+      "key": "EAWF-0661",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 1,
+      "status": "DRAFT",
+      "title": "Flag acceptance steps that can only pass after merge",
+      "uid": "fee5d6cf-c930-5e8b-8779-ff6280e093a3",
+      "updated_at": "2026-11-02T00:49:14.497761Z",
+      "urn": "eawf://EAWF/task/EAWF-0661"
+    },
+    "EAWF-0662": {
+      "active_run_ref": null,
+      "batch_ref": null,
+      "contract_revision": 1,
+      "created_at": "2026-11-02T00:49:18.812641Z",
+      "criteria": [],
+      "due_scope": null,
+      "integrated_binding": null,
+      "intent": "When eawf milestone accept refuses a bundle whose journey steps did not pass (JOURNEY_INCOMPLETE), the remediation line still says to seal the acceptance approval, which is the generic hint of the guard and does not match the failure. Give each acceptance refusal its own remediation: for an incomplete journey, name the failed steps and the bundle-revision, open-approval and seal sequence.",
+      "key": "EAWF-0662",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P2",
+      "revision": 1,
+      "status": "DRAFT",
+      "title": "Give each acceptance refusal its own remediation hint",
+      "uid": "2d2b00f6-c3c1-5544-a166-0441443edf5d",
+      "updated_at": "2026-11-02T00:49:18.812641Z",
+      "urn": "eawf://EAWF/task/EAWF-0662"
+    },
+    "EAWF-0663": {
+      "active_run_ref": null,
+      "batch_ref": null,
+      "contract_revision": 1,
+      "created_at": "2026-11-02T01:22:08.840517Z",
+      "criteria": [],
+      "due_scope": null,
+      "integrated_binding": null,
+      "intent": "Follow-ups from the run-transcript preservation fix: the reader folds index rows by session digest and reads only the first existing file, so a second live file with the same session id would be hidden; a failed copy keeps the worktree on disk with no later removal; .ea/local/run-transcripts has no retention or garbage collection; the copy runs synchronously inside the reconcile pass; and retrying a managed Run wipes claude-config, losing the earlier attempt transcript.",
+      "key": "EAWF-0663",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P2",
+      "revision": 1,
+      "status": "DRAFT",
+      "title": "Harden preserved Run transcripts: dedup, retention, retry",
+      "uid": "cbcda688-4985-51a7-8f68-0fd1d4ac8ba0",
+      "updated_at": "2026-11-02T01:22:08.840517Z",
+      "urn": "eawf://EAWF/task/EAWF-0663"
     }
   },
   "track": {
