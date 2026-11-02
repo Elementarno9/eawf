@@ -1091,94 +1091,8 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 45527,
-  "milestone": {
-    "MLS-0103": {
-      "acceptance_bundle_revision": 1,
-      "acceptance_journey": [
-        {
-          "action": "run the 0.7.0 stable readiness sweep",
-          "actor": "system",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "every assertion including packet_run is green and unwaived",
-          "required": true,
-          "step_id": "AS-01"
-        },
-        {
-          "action": "run eawf run transcript for a Task worked by claude-code and codex, live and after",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "every Run and subagent transcript of the Task prints in full and the live one follows",
-          "required": true,
-          "step_id": "AS-02"
-        },
-        {
-          "action": "run eawf runtime certify for claude-code and codex and the dispatch smoke on a Mac",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "both runtimes certify on macOS and the smoke evidence directory is recorded",
-          "required": true,
-          "step_id": "AS-03"
-        },
-        {
-          "action": "run eawf release preflight 0.7.0",
-          "actor": "system",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "the pre-flight passes for 0.7.0",
-          "required": true,
-          "step_id": "AS-04"
-        }
-      ],
-      "accepted_binding": null,
-      "appetite": "XL",
-      "contributing_track_refs": [],
-      "created_at": "2026-09-26T22:44:59.432404Z",
-      "description": "Re-plan of 2026-10-30 from the operator's release-planning rounds: full CI on pull requests and accept-last shipping, CI speed without wall-clock asserts, epoch-1 removal, fixed skill pages, local transcripts for every agent Run, runtime version-range certification and the packet-run gate. The per-requirement test work beyond this Milestone's own ids moves to 0.8.",
-      "exclusions": [
-        "the requirement ids decision D64 defers to 0.7.1",
-        "tests for owned requirement ids outside this Milestone's Tasks, deferred to 0.8",
-        "the multi-project console, deferred to 0.7.1"
-      ],
-      "key": "MLS-0103",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "outcome": "0.7.0 is published with the packet-run gate green for claude-code and codex on a born-native and an adopted repository, full local transcripts for every agent Run, a pipeline that tags only after green CI, no epoch-1 code, and honest limitations.",
-      "primary_track_ref": "eawf://EAWF/track/TRK-EAWF-CORE",
-      "required_batch_refs": [
-        "eawf://EAWF/batch/BAT-0301",
-        "eawf://EAWF/batch/BAT-0302",
-        "eawf://EAWF/batch/BAT-0303",
-        "eawf://EAWF/batch/BAT-0370",
-        "eawf://EAWF/batch/BAT-0371",
-        "eawf://EAWF/batch/BAT-0372",
-        "eawf://EAWF/batch/BAT-0373",
-        "eawf://EAWF/batch/BAT-0374"
-      ],
-      "revision": 6,
-      "status": "ACTIVE",
-      "target_date": null,
-      "title": "Publish 0.7.0 against the narrowed honest acceptance gate",
-      "uid": "7358605e-255e-5241-8977-fc17c38a4984",
-      "updated_at": "2026-11-02T00:45:04.155207Z",
-      "urn": "eawf://EAWF/milestone/MLS-0103"
-    }
-  },
+  "canonical_sequence": 45549,
+  "milestone": {},
   "open_question": {
     "QST-0001": {
       "answer_refs": [],
@@ -9641,6 +9555,77 @@
       ],
       "updated_at": "2026-11-02T00:29:09.231113Z",
       "urn": "eawf://EAWF/pending-action/ACT-0043"
+    },
+    "ACT-0044": {
+      "assignee_ref": null,
+      "bundle_digest": "sha256:19ed9c056570659d2a4ba8334a9d466872631ad4f532da76a594b6427b348e8f",
+      "created_at": "2026-11-02T01:47:00.435222Z",
+      "default_on_timeout": null,
+      "default_policy": null,
+      "dispositions": [
+        {
+          "acted_at": "2026-11-02T21:21:35.930964Z",
+          "option_id": "approve",
+          "outcome": "sealed",
+          "principal_id": "OP-0001",
+          "snoozed_until": null
+        }
+      ],
+      "id": "ACT-0044",
+      "idempotency_key": "accept-MLS-0103-19ed9c056570659d",
+      "kind": "protected_approval",
+      "options": [
+        {
+          "consequence": "The Milestone is recorded as accepted on exactly this bundle. A later change needs a new acceptance.",
+          "cost": "Any change after acceptance needs a new bundle and a new acceptance.",
+          "effect": "approve",
+          "label": "Accept the Milestone",
+          "option_id": "approve",
+          "preview": "Milestone MLS-0103\n  before: in acceptance review\n  after:  accepted on bundle revision 2"
+        },
+        {
+          "consequence": "The Milestone stays in review and is not accepted. Nothing else changes.",
+          "cost": "Verified work waits unaccepted, and nothing says what would make it acceptable.",
+          "effect": "decline",
+          "label": "Do not accept it",
+          "option_id": "decline",
+          "preview": "Milestone MLS-0103\n  before: in acceptance review\n  after:  in acceptance review, not accepted"
+        },
+        {
+          "consequence": "The Milestone stays in review and a repair is requested. The next bundle revision is verified and asked about again.",
+          "cost": "Delivery waits for another verified revision and another question.",
+          "effect": "request_repair",
+          "label": "Ask for changes",
+          "option_id": "repair",
+          "preview": "Milestone MLS-0103\n  before: bundle revision 2 awaits acceptance\n  after:  repair requested; bundle revision 3 is verified next"
+        }
+      ],
+      "override_until": null,
+      "question": "Accept MLS-0103 on revision 2 of its acceptance bundle?",
+      "receipt_ref": "eawf://EAWF/evidence/EVD-0268",
+      "recommendation_rationale": "Every Batch stands on a verified head and the journey passed, so accepting records what the evidence already shows.",
+      "recommended_option_id": "approve",
+      "requested_by": {
+        "principal_id": "EAWF-PLANNER",
+        "principal_kind": "agent",
+        "run_ref": "eawf://EAWF/run/RUN-00002101"
+      },
+      "resolution_actor": {
+        "principal_id": "OP-0001",
+        "principal_kind": "human"
+      },
+      "revision": 2,
+      "selected_option_id": "approve",
+      "status": "SEALED",
+      "subject_ref": "eawf://EAWF/milestone/MLS-0103",
+      "terms": [
+        {
+          "expansion": "the Milestone, a planned delivery goal, you are asked to accept",
+          "term": "MLS-0103"
+        }
+      ],
+      "updated_at": "2026-11-02T21:21:35.930964Z",
+      "urn": "eawf://EAWF/pending-action/ACT-0044"
     }
   },
   "plan_revision": {
