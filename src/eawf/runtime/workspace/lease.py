@@ -81,6 +81,7 @@ from eawf.runtime.control.reducer import reduce_run_control
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession, canonical_entity_urn
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
+from eawf.runtime.session.transcript_index import preserve_run_transcripts
 from eawf.surfaces.cli import errors as cli_errors
 
 logger = logging.getLogger(__name__)
@@ -819,7 +820,7 @@ def _release_once_proven(
 def _release(context: Epoch2RootContext, *, lease: WorkLease, now: datetime) -> ReconcileOutcome:
     """End a lease whose worktree holds nothing, removing the worktree when configured to."""
     if removes_clean_worktrees(context.identity.tree_root.parent):
-        _remove_workspace(context, lease=lease)
+        _remove_workspace(context, lease=lease, now=now)
     else:
         logger.info(f"_release kept the clean worktree of lease={lease.lease_id}")
     write_lease(context, apply_lease_transition(lease, to=LeaseStatus.RELEASED, at=now))
@@ -979,15 +980,18 @@ def removes_clean_worktrees(repo_root: Path) -> bool:
         return False
 
 
-def _remove_workspace(context: Epoch2RootContext, *, lease: WorkLease) -> None:
+def _remove_workspace(context: Epoch2RootContext, *, lease: WorkLease, now: datetime) -> None:
     """Remove a worktree already shown to hold nothing, and its branch.
 
-    Failure is logged and swallowed. The residue was proven worthless
-    before this ran, so a directory that outlives its lease costs disk
-    and nothing else, while raising here would strand every later lease
-    in the same pass.
+    The Run's runtime transcripts are copied out of the isolation directory
+    first. Failure is logged and swallowed, and a transcript that could not
+    be copied keeps the worktree in place. The residue was proven worthless
+    before this ran, so a directory that outlives its lease costs disk and
+    nothing else, while raising here would strand every later lease in the
+    same pass.
     """
-    repo_root = context.identity.tree_root.parent
+    tree_root = context.identity.tree_root
+    repo_root = tree_root.parent
     target = workspace_path(context, handle=lease.workspace_handle)
     isolation_dir = target / MCP_ARTIFACT_DIRNAME
     try:
@@ -995,10 +999,17 @@ def _remove_workspace(context: Epoch2RootContext, *, lease: WorkLease) -> None:
         # isolation directory is the one untracked entry the residue check
         # discounted.
         if isolation_dir.is_dir():
+            preserve_run_transcripts(
+                tree_root,
+                isolation_dir,
+                workspace_handle=lease.workspace_handle,
+                run_ref=str(lease.run_ref),
+                now=now,
+            )
             shutil.rmtree(isolation_dir)
         git.worktree_remove(repo_root, path=target)
         git.branch_delete(repo_root, name=lease.branch)
-    except (cli_errors.CliError, OSError) as error:
+    except (cli_errors.CliError, OSError, ValidationError) as error:
         logger.warning(
             f"_remove_workspace left lease={lease.lease_id} error={type(error).__name__}"
         )

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 from collections.abc import Iterable, Iterator
 from datetime import datetime
 from pathlib import Path
@@ -37,6 +38,10 @@ logger = logging.getLogger(__name__)
 
 #: The index file, inside the tree's ``local/`` directory.
 TRANSCRIPT_INDEX_FILENAME: Final = "transcript-index.jsonl"
+
+#: The directory, inside the tree's ``local/``, holding the transcripts copied out of
+#: each removed Run workspace, one subdirectory per workspace handle.
+PRESERVED_TRANSCRIPTS_DIRNAME: Final = "run-transcripts"
 
 #: The harnesses whose transcript directories a back-fill scans.
 _HARNESSES: Final[tuple[HostHarness, ...]] = ("claude-code", "codex")
@@ -230,30 +235,101 @@ def _run_homes(tree_root: Path, dirname: str) -> list[Path]:
     return sorted((tree_root / WORKSPACE_LOCATOR).glob(f"*/{MCP_ARTIFACT_DIRNAME}/{dirname}"))
 
 
+def _root_files(harness: HostHarness, root: Path) -> Iterator[tuple[str, Path, str | None]]:
+    """Yield each transcript file under one Claude projects or Codex sessions *root*.
+
+    A Claude Code subagent's file sits under its spawning session as
+    ``<session>/subagents/agent-<id>.jsonl``, so the directory names its parent.
+    """
+    if harness == "claude-code":
+        for path in sorted(root.glob("*/*.jsonl")):
+            yield path.stem, path, None
+        for path in sorted(root.glob(f"*/*/{_SUBAGENT_DIRNAME}/{_SUBAGENT_PREFIX}*.jsonl")):
+            yield path.stem.removeprefix(_SUBAGENT_PREFIX), path, path.parent.parent.name
+        return
+    for path in sorted(root.rglob("rollout-*.jsonl")):
+        yield path.stem[-_CODEX_THREAD_ID_CHARS:], path, None
+
+
 def _session_files(harness: HostHarness, tree_root: Path) -> Iterator[tuple[str, Path, str | None]]:
     """Yield each transcript file *harness* keeps, with its session and parent ids.
 
     The operator's own transcript directory is scanned first, then each
-    dispatched Run's. A Claude Code subagent's file sits under its spawning
-    session as ``<session>/subagents/agent-<id>.jsonl``, so the directory
-    names its parent.
+    dispatched Run's.
     """
     if harness == "claude-code":
         from eawf.runtime.runtimes.claude.managed_run import MANAGED_CONFIG_DIRNAME
 
         homes = _run_homes(tree_root, MANAGED_CONFIG_DIRNAME)
-        for root in (projects_root(), *(home / "projects" for home in homes)):
-            for path in sorted(root.glob("*/*.jsonl")):
-                yield path.stem, path, None
-            for path in sorted(root.glob(f"*/*/{_SUBAGENT_DIRNAME}/{_SUBAGENT_PREFIX}*.jsonl")):
-                yield path.stem.removeprefix(_SUBAGENT_PREFIX), path, path.parent.parent.name
-        return
+        roots = (projects_root(), *(home / "projects" for home in homes))
+    else:
+        from eawf.runtime.runtimes.codex.app_server import CODEX_HOME_DIRNAME
+
+        homes = _run_homes(tree_root, CODEX_HOME_DIRNAME)
+        roots = (_codex_sessions_root(), *(home / "sessions" for home in homes))
+    for root in roots:
+        yield from _root_files(harness, root)
+
+
+def preserve_run_transcripts(
+    tree_root: Path,
+    run_dir: Path,
+    *,
+    workspace_handle: str,
+    run_ref: str,
+    now: datetime,
+) -> int:
+    """Copy the transcripts a Run's runtime wrote into its isolation directory, and index them.
+
+    The runtime writes a dispatched Run's transcript inside the Run's workspace, which
+    eawf deletes once the Run is done with it; the index would then point at nothing.
+    Each file is copied to ``<tree_root>/local/run-transcripts/<handle>/``, keeping its
+    path below *run_dir*, and indexed there: a session's file under *run_ref*, a
+    subagent's under the session that spawned it, which is how the hooks index one. The
+    reader prefers a row whose file exists, so the copy stands in for the deleted file.
+    A row the index already holds is not appended again, so preserving twice is safe.
+
+    Args:
+        tree_root: The tree's ``.ea`` directory.
+        run_dir: The Run's isolation directory, about to be deleted.
+        workspace_handle: The workspace's handle, naming the copy's directory.
+        run_ref: The Run the workspace served.
+        now: When the rows are written.
+
+    Returns:
+        How many rows were appended.
+
+    Raises:
+        OSError: A file could not be listed or copied.
+        pydantic.ValidationError: The index holds a line that does not validate.
+        StateConflict: The index's append lock could not be acquired.
+    """
+    from eawf.runtime.runtimes.claude.managed_run import MANAGED_CONFIG_DIRNAME
     from eawf.runtime.runtimes.codex.app_server import CODEX_HOME_DIRNAME
 
-    homes = _run_homes(tree_root, CODEX_HOME_DIRNAME)
-    for root in (_codex_sessions_root(), *(home / "sessions" for home in homes)):
-        for path in sorted(root.rglob("rollout-*.jsonl")):
-            yield path.stem[-_CODEX_THREAD_ID_CHARS:], path, None
+    roots: tuple[tuple[HostHarness, Path], ...] = (
+        ("claude-code", run_dir / MANAGED_CONFIG_DIRNAME / "projects"),
+        ("codex", run_dir / CODEX_HOME_DIRNAME / "sessions"),
+    )
+    destination = tree_root / LOCAL_DIRNAME / PRESERVED_TRANSCRIPTS_DIRNAME / workspace_handle
+    held = {_identity(row) for row in read_transcript_index(tree_root)}
+    recorded = 0
+    for harness, root in roots:
+        for session_id, path, parent in _root_files(harness, root):
+            copy = destination / path.relative_to(run_dir)
+            copy.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, copy)
+            row = _index_row(
+                runtime=harness,
+                session_id=session_id,
+                transcript_path=str(copy),
+                now=now,
+                run_ref=run_ref if parent is None else None,
+                parent_session_id=parent,
+            )
+            recorded += _append_unless_held(tree_root, row, held) is not None
+    logger.info(f"preserve_run_transcripts handle={workspace_handle} recorded={recorded}")
+    return recorded
 
 
 def backfill_transcript_index(
@@ -311,9 +387,11 @@ def backfill_transcript_index(
 
 
 __all__ = [
+    "PRESERVED_TRANSCRIPTS_DIRNAME",
     "TRANSCRIPT_INDEX_FILENAME",
     "TranscriptIndexRow",
     "backfill_transcript_index",
+    "preserve_run_transcripts",
     "read_transcript_index",
     "record_transcript",
     "transcript_index_path",

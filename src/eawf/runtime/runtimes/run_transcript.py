@@ -127,7 +127,8 @@ def select_transcripts(tree_root: Path, key: str) -> TranscriptSelection:
             are gathered.
 
     Returns:
-        The Runs and their files; a file indexed twice is named once.
+        The Runs and their files; a file indexed twice is named once, and a
+        session indexed at several files is read from the first that exists.
 
     Raises:
         LookupError: The tree holds no Run under *key* and neither a Run of nor
@@ -153,15 +154,23 @@ def select_transcripts(tree_root: Path, key: str) -> TranscriptSelection:
     run_keys = frozenset(run.key for run in chosen)
     seen: set[tuple[str, str]] = set()
     sources: list[TranscriptSource] = []
-    for row in _linked_rows(read_transcript_index(tree_root), run_keys, hosts):
-        if (row.runtime, row.transcript_path) in seen:
+    linked = _linked_rows(read_transcript_index(tree_root), run_keys, hosts)
+    # A session whose workspace was removed is indexed again at the copy kept of its
+    # file, so each session reads from the first of its files that still exists.
+    present: dict[tuple[str, str], str] = {}
+    for row in linked:
+        if Path(row.transcript_path).is_file():
+            present.setdefault((row.runtime, row.vendor_session_digest), row.transcript_path)
+    for row in linked:
+        path = present.get((row.runtime, row.vendor_session_digest), row.transcript_path)
+        if (row.runtime, path) in seen:
             continue
-        seen.add((row.runtime, row.transcript_path))
+        seen.add((row.runtime, path))
         sources.append(
             TranscriptSource(
                 runtime=row.runtime,
                 run_key=None if row.run_ref is None else _key_of(row.run_ref),
-                path=Path(row.transcript_path),
+                path=Path(path),
                 subagent=row.parent_session_digest is not None,
             )
         )

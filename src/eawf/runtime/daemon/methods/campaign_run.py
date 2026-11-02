@@ -116,6 +116,8 @@ from eawf.runtime.runtimes.adapter import (
     TurnOutcome,
 )
 from eawf.runtime.runtimes.metering import UsageSample
+from eawf.runtime.session.transcript_index import preserve_run_transcripts
+from eawf.runtime.workspace.lease import MCP_ARTIFACT_DIRNAME
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.workflow.dispatch.routing import model_for_runtime
 from eawf.workflow.runtime.compile import compile_run_spec
@@ -303,12 +305,15 @@ class HostResearchAgent:
             readings.append(sample)
             return await stated(sample, pgid)
 
-        async with _round_checkout(self._tree.parent) as workspace:
+        handle = f"wsh-{secrets.token_hex(16)}"
+        async with _round_checkout(
+            self._tree, run_ref=str(spec.run_ref), workspace_handle=handle
+        ) as workspace:
             launched = await launcher.launch(
                 NativeLaunchRequest(
                     spec=spec,
                     capsule=capsule,
-                    workspace_handle=f"wsh-{secrets.token_hex(16)}",
+                    workspace_handle=handle,
                     workspace=workspace,
                     repo_root=self._tree.parent,
                     prompt=round_prompt(assignment),
@@ -422,16 +427,27 @@ class HostResearchAgent:
 
 
 @contextlib.asynccontextmanager
-async def _round_checkout(repo_root: Path) -> AsyncIterator[Path]:
-    """Yield a detached checkout of *repo_root*'s ``HEAD`` outside the repository.
+async def _round_checkout(
+    tree_root: Path, *, run_ref: str, workspace_handle: str
+) -> AsyncIterator[Path]:
+    """Yield a detached checkout of the repository's ``HEAD`` outside the repository.
 
     The round reads the repository's files and history from it, and the
-    driver writes its per-Run files into it, never into *repo_root*.
+    driver writes its per-Run files into it, never into the repository.
+    The transcripts the round's runtime wrote there are kept under the tree
+    before the checkout is removed; one that cannot be kept is logged, since
+    the scratch directory is removed regardless.
+
+    Args:
+        tree_root: The tree's ``.ea`` directory, inside the repository.
+        run_ref: The round's Run, which its kept transcripts are indexed under.
+        workspace_handle: The handle the round's worker knows the checkout by.
 
     Raises:
-        UserError: *repo_root* has no ``HEAD`` commit, or git is absent.
+        UserError: The repository has no ``HEAD`` commit, or git is absent.
         StateConflict: ``git worktree add`` failed.
     """
+    repo_root = tree_root.parent
     scratch = Path(tempfile.mkdtemp(prefix="eawf-round-"))
     checkout = scratch / "checkout"
     try:
@@ -440,6 +456,18 @@ async def _round_checkout(repo_root: Path) -> AsyncIterator[Path]:
         )
         yield checkout
     finally:
+        if (checkout / MCP_ARTIFACT_DIRNAME).is_dir():
+            try:
+                await asyncio.to_thread(
+                    preserve_run_transcripts,
+                    tree_root,
+                    checkout / MCP_ARTIFACT_DIRNAME,
+                    workspace_handle=workspace_handle,
+                    run_ref=run_ref,
+                    now=datetime.now(UTC),
+                )
+            except (cli_errors.CliError, OSError, ValidationError) as error:
+                logger.warning(f"round transcripts not kept error={type(error).__name__}")
         if checkout.exists():
             try:
                 await asyncio.to_thread(git.worktree_remove, repo_root, path=checkout, force=True)
