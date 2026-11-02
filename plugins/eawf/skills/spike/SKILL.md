@@ -15,8 +15,8 @@ Build, test, independently verify and present a local proof of concept.
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
 - Operates on: proof of concept, through `runtime.run.dispatch`, `runtime.evidence.spike_report.file`.
 - Effects: Writes only under the resolved local spike folder; separate builder and verifier Runs; the report is filed and its contracts submitted for promotion.
-- Allowed RPCs: `runtime.run.dispatch`, `runtime.evidence.spike_report.file`. Any other RPC is denied before it reaches a handler.
-- Run tools: `repo_read`, `submit_report`, `submit_evidence`.
+- Allowed RPCs: `runtime.run.dispatch`, `runtime.evidence.spike_report.file`. Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
+- Run tools: `repo_read`, `submit_report`, `submit_evidence`. These exist only inside a native Run eawf dispatches; a host session has none of them and uses the `eawf` commands above instead.
 - Canonical state: never mutated by this skill.
 - Local write root: `.ea/local/spikes`; nothing is written outside it.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -51,10 +51,9 @@ Build the smallest runnable proof of concept that discriminates the stated idea.
 
 The obligations the effective rule graph holds for activities `research`, `test`. They bind what you do; they grant no capability.
 
+- must: **Finish independent work first and block only when proceeding is unsafe.** When part of the scope fails or awaits an answer, finish every independent part, state what was left undone and why, and raise a question only where the dependent work begins. Block only when proceeding on any assumption would be unsafe, or useless if wrong; unattended, record a typed open question and continue.
 - must: **Name the command and exit status behind a claim.** Back every verification claim with the command executed and its exit status; a green claim whose run cannot be located in the receipt is a fabrication, not an oversight.
-- must: **Finish independent parts when one part fails.** When part of the scope cannot be completed, complete every independent remaining part in full, then state plainly what was left undone and why.
 - must: **Re-execute only what failed.** After a failure, re-execute only what failed, unless the change is cross-cutting, the artifact is a cross-scope scorecard, or a release gate needs a full pass.
-- must: **Verify behavioural claims against the source tree.** Verify behavioural, quantitative and schema claims against the implementation before asserting them. Where a design document and the source disagree, quote the source and report the drift.
 
 ## 5. Constraints
 
@@ -62,6 +61,17 @@ The obligations the effective rule graph holds for activities `research`, `test`
 
 ## 6. Output
 
-Output one SpikeReport containing folder, hypothesis, commands, observations, contracts, verdict, limitations, independent verifier result, operator demo, retention, and stop reason.
+Output one SpikeReport. Its `summary` states the folder, hypothesis, commands, observations, contracts, verdict, limitations, independent verifier result, operator demo, retention, and stop reason.
 
-The report validates against `SpikeReport`, and its terminal outcome is exactly one of `ready`, `inconclusive`, `failed`, `cancelled`, `blocked`. It carries a `coverage` block listing what the pass covered and, with a reason each, what it did not. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /spike` before returning it.
+The report validates against `SpikeReport`, and its terminal outcome is exactly one of `ready`, `inconclusive`, `failed`, `cancelled`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /spike` before returning it. It carries these fields and no other; a nested field is written under its parent.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skill_id` | `"spike"` | yes | The id of the skill that produced the report. |
+| `outcome` | one of `"ready"`, `"inconclusive"`, `"failed"`, `"cancelled"`, `"blocked"` | yes | How the invocation ended; the result. |
+| `summary` | string | no | Explanation of the outcome and what supports it; never the result. |
+| `coverage` | object | yes | What the pass covered and did not. |
+| `coverage.covered` | list of string | yes | What the pass covered. |
+| `coverage.not_covered` | list of object | yes | What the pass did not cover, with a reason each. |
+| `coverage.not_covered[].item` | string | yes | What the pass did not reach. |
+| `coverage.not_covered[].reason` | string | yes | Why it was not reached. |

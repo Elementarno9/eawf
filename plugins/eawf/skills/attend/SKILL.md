@@ -13,10 +13,10 @@ Work the Attention queue: pending actions, open questions and open pauses.
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
-- Operates on: PendingAction, through `projection.attention.read`, `projection.notifications.read`, `runtime.delivery.seal_acceptance_approval`, `runtime.permission.decide`.
+- Operates on: PendingAction, through `projection.attention.read`, `projection.notifications.read`, `eawf milestone seal-approval`, `eawf action decide-permission`.
 - Operator-only actions: `resolve`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`), shows the bound question the answer carries, and stops; it never chooses the recommended option itself. In Codex the bound question is the answer's `numbered_prompt`, printed verbatim, and the operator's reply is relayed with `eawf question answer` (`runtime.question.answer_numbered`); the console answers the same record, and the first answer wins.
 - Effects: Attention reads plus the approval and permission verbs that answer a pending action, when resolve is explicitly selected.
-- Allowed RPCs: `projection.attention.read`, `projection.notifications.read`, `runtime.delivery.seal_acceptance_approval`, `runtime.permission.decide`, `runtime.question.answer_numbered`, `runtime.question.open_decision`. Any other RPC is denied before it reaches a handler.
+- Allowed RPCs: `projection.attention.read`, `projection.notifications.read`, `eawf milestone seal-approval` (`runtime.delivery.seal_acceptance_approval`), `eawf action decide-permission` (`runtime.permission.decide`), `eawf question answer` (`runtime.question.answer_numbered`), `eawf question open-decision` (`runtime.question.open_decision`). Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -49,11 +49,10 @@ Select exactly one action: `list`, `prepare`, `resolve`. An option the selected 
 
 The obligations the effective rule graph holds for activities `operate`. They bind what you do; they grant no capability.
 
-- must: **Record each conduct deviation as a typed local row.** Record every conduct deviation as a typed row in the machine-local store, never the committed surface, bound to its run and breached obligation, with detection method, severity, evidence reference and disposition.
+- must: **Finish independent work first and block only when proceeding is unsafe.** When part of the scope fails or awaits an answer, finish every independent part, state what was left undone and why, and raise a question only where the dependent work begins. Block only when proceeding on any assumption would be unsafe, or useless if wrong; unattended, record a typed open question and continue.
+- must: **Measure projection size against each runtime cap.** Record the projection byte size and each certified runtime's declared cap in the render transaction, and fail rather than truncate a projection over any cap. Record a cap only as a measured value with provenance, never a figure chosen for headroom; report one not re-measured on a certified runtime version as stale.
+- must: **Record each conduct deviation as a typed local row.** Record every conduct deviation, including a practice whose trigger fired and whose obligation was not met, as a typed row in the machine-local store, never the committed surface, bound to its run and breached obligation, with detection method, severity, evidence reference and disposition.
 - must: **Record the goal before the first mutating action.** Before the first mutating action, record the task as a typed goal bound to the declared success criteria of the entity it serves.
-- must: **Record a runtime cap only as a measured value.** Record a runtime's declared cap as a measured value with its measurement provenance, never as a figure chosen for headroom; report a cap not re-measured against a certified runtime version as stale.
-- must: **Record a missed practice as a conduct deviation.** Record a practice whose trigger fired and whose obligation was not met as a conduct deviation, so recall failure is counted per rule and per runtime.
-- must: **Record an open question when running unattended.** In an unattended run, record a typed open question against the entity and continue on the independent remainder; never halt to await an operator who is not present.
 
 ## 5. Constraints
 
@@ -64,6 +63,12 @@ The obligations the effective rule graph holds for activities `operate`. They bi
 
 ## 6. Output
 
-A prepared attention set: per item, its kind, subject, exact revision, options with consequences, evidence, recommendation, and what happens on no answer.
+Output one report whose `summary` gives the prepared attention set: per item, its kind, subject, exact revision, options with consequences, evidence, recommendation, and what happens on no answer.
 
-The report validates against `AttentionSkillReport`, and its terminal outcome is exactly one of `listed`, `prepared`, `resolved`, `needs_operator`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /attend` before returning it.
+The report validates against `AttentionSkillReport`, and its terminal outcome is exactly one of `listed`, `prepared`, `resolved`, `needs_operator`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /attend` before returning it. It carries these fields and no other; a nested field is written under its parent.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skill_id` | `"attend"` | yes | The id of the skill that produced the report. |
+| `outcome` | one of `"listed"`, `"prepared"`, `"resolved"`, `"needs_operator"`, `"blocked"` | yes | How the invocation ended; the result. |
+| `summary` | string | no | Explanation of the outcome and what supports it; never the result. |

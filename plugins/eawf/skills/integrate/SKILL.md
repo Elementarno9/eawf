@@ -13,10 +13,10 @@ Prepare or execute one daemon-owned integration action on a Delivery Batch.
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
-- Operates on: Batch, through `projection.batch.detail.read`, `projection.merge.conflict.read`, `runtime.candidate.report.bind`, `runtime.delivery.assemble`, `runtime.delivery.integrate`.
+- Operates on: Batch, through `projection.batch.detail.read`, `projection.merge.conflict.read`, `eawf task seal`, `eawf batch integrate`.
 - Operator-only actions: `apply`, `retry`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`), shows the bound question the answer carries, and stops; it never chooses the recommended option itself. In Codex the bound question is the answer's `numbered_prompt`, printed verbatim, and the operator's reply is relayed with `eawf question answer` (`runtime.question.answer_numbered`); the console answers the same record, and the first answer wins.
 - Effects: Batch and conflict reads plus the candidate-report, delivery-assembly and delivery-integration verbs.
-- Allowed RPCs: `projection.batch.detail.read`, `projection.merge.conflict.read`, `runtime.candidate.report.bind`, `runtime.delivery.assemble`, `runtime.delivery.integrate`, `runtime.question.answer_numbered`, `runtime.question.open_decision`. Any other RPC is denied before it reaches a handler.
+- Allowed RPCs: `projection.batch.detail.read`, `projection.merge.conflict.read`, `eawf task seal` (`runtime.candidate.report.bind`), `eawf batch integrate` (`runtime.delivery.assemble`), `eawf batch integrate` (`runtime.delivery.integrate`), `eawf question answer` (`runtime.question.answer_numbered`), `eawf question open-decision` (`runtime.question.open_decision`). Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -50,7 +50,6 @@ Select exactly one action: `seal`, `select`, `apply`, `retry`, `show`. An option
 
 The obligations the effective rule graph holds for activities `integrate`. They bind what you do; they grant no capability.
 
-- must: **Stop only at operator-declared checkpoints.** Stop at a checkpoint the operator declared and at no other point; a self-selected pause is a deviation.
 - must: **Record the goal before the first mutating action.** Before the first mutating action, record the task as a typed goal bound to the declared success criteria of the entity it serves.
 - must: **Render an unresolved view reference as a command.** Render an unresolved detailed-view reference as an actionable message naming the command that generates the view, never as a dangling path.
 
@@ -62,6 +61,12 @@ The obligations the effective rule graph holds for activities `integrate`. They 
 
 ## 6. Output
 
-Output one IntegrationSkillReport containing candidates considered, selection reasons, exact bindings, generation, conflicts, verification receipts, and terminal outcome.
+Output one IntegrationSkillReport. Its `summary` states the candidates considered, selection reasons, exact bindings, generation, conflicts, and verification receipts.
 
-The report validates against `IntegrationSkillReport`, and its terminal outcome is exactly one of `shown`, `sealed`, `selected`, `integrated`, `conflicted`, `stale`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /integrate` before returning it.
+The report validates against `IntegrationSkillReport`, and its terminal outcome is exactly one of `shown`, `sealed`, `selected`, `integrated`, `conflicted`, `stale`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /integrate` before returning it. It carries these fields and no other; a nested field is written under its parent.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skill_id` | `"integrate"` | yes | The id of the skill that produced the report. |
+| `outcome` | one of `"shown"`, `"sealed"`, `"selected"`, `"integrated"`, `"conflicted"`, `"stale"`, `"blocked"` | yes | How the invocation ended; the result. |
+| `summary` | string | no | Explanation of the outcome and what supports it; never the result. |
