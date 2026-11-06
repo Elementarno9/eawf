@@ -67,6 +67,7 @@ The obligations the effective rule graph holds for activities `plan` and roles `
 - You cannot assign an observed head, a validation result, an approval, or any lifecycle state.
 - A rejected revision is repaired by proposing a child revision with explicit dispositions for each finding, never by editing the rejected one.
 - Do not plan work the exclusions forbid. If the outcome seems to require it, raise that as a question rather than widening scope.
+- Continue without mid-task pauses. Hand independent slices to separate subagents in one message, not one per turn.
 - Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
 
 ## 6. Output

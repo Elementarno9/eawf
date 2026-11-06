@@ -42,6 +42,12 @@ Status updates as you go. End of Batch: a punch list of Tasks delivered, Tasks r
 7. Batch verification and schema-changing Tasks: full-tree gauntlet, never scoped.
 8. After any schema or state-model bump: `eawf daemon stop` (it respawns fresh) BEFORE the next mutation — a stale-model daemon rejects the new state shape.
 
+## Report and dispatch
+
+Report cap: 5000 characters.
+
+Keep your final report within the cap: lead with the outcome and cut detail before findings. Start every subagent prompt you write for a Task with `[eawf task=<KEY>]`, the Task key in place of `<KEY>`, so its Run is bound to that Task.
+
 ## Typed output envelope
 
 At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope_id, attempt, and store kind.

@@ -284,8 +284,19 @@ def _promotion_contract_complete(inputs: GuardInputs) -> bool:
     return all(_supplied(inputs, name) for name in ("batch_ref", "criteria", "due_scope"))
 
 
+#: The Run statuses a Task may start under. A dispatch starts its Task right
+#: after creating the Run, before the spawn moves that Run to RUNNING.
+_BINDABLE_RUN_STATUSES: Final[frozenset[str]] = frozenset(
+    {RunStatus.QUEUED.value, RunStatus.RUNNING.value}
+)
+
+
 def _run_bound(inputs: GuardInputs) -> bool:
-    """Return whether the Run the Task would start under is a record that exists."""
+    """Return whether the Task would start under a queued or running Run scoped to it.
+
+    A Run that has ended or is suspended, or that works for another Task,
+    would leave the Task claiming work nobody is doing for it.
+    """
     if not isinstance(inputs.record, Task):
         return False
     named = inputs.updates.get("active_run_ref")
@@ -297,7 +308,10 @@ def _run_bound(inputs: GuardInputs) -> bool:
         return False
     if parsed.kind is not EntityKind.RUN:
         return False
-    return parsed.entity_key in document_rows(inputs.document, Epoch2Collection.RUN)
+    row = document_rows(inputs.document, Epoch2Collection.RUN).get(parsed.entity_key)
+    return _row_field(row, "status") in _BINDABLE_RUN_STATUSES and _row_field(
+        _row_field(row, "scope"), "task_ref"
+    ) == str(inputs.record.urn)
 
 
 def _entity_key(ref: Any) -> str | None:

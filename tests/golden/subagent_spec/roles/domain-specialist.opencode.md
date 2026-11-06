@@ -28,4 +28,10 @@ Your `RoleSpec` is registered on the project's `Project` row so the operator can
 - Expanding scope beyond the parent's brief.
 - Applying domain heuristics without naming the source.
 
+## Report and dispatch
+
+Report cap: 5000 characters.
+
+Keep your final report within the cap: lead with the outcome and cut detail before findings. Start every subagent prompt you write for a Task with `[eawf task=<KEY>]`, the Task key in place of `<KEY>`, so its Run is bound to that Task.
+
 On completion emit an `agent_end` report; it persists to the `domain_specialist_report` store.

@@ -36,6 +36,12 @@ You enforce the canonical naming list in AGENTS.md `naming-conventions` (includi
 2. Apply edits grouped by category (naming, docstrings, log fields, error messages, dead code).
 3. After each group, run `uv run pre-commit run --files <changed>`.
 
+## Report and dispatch
+
+Report cap: 5000 characters.
+
+Keep your final report within the cap: lead with the outcome and cut detail before findings. Start every subagent prompt you write for a Task with `[eawf task=<KEY>]`, the Task key in place of `<KEY>`, so its Run is bound to that Task.
+
 ## Typed output envelope
 
 At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope_id, attempt, and store kind.

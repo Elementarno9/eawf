@@ -47,4 +47,10 @@ Structured findings block with `Question / Findings / Alternatives / Recommendat
 - Recommending a path without naming what would change your mind.
 - Burying the recommendation in prose; lead with the verdict.
 
+## Report and dispatch
+
+Report cap: 5000 characters.
+
+Keep your final report within the cap: lead with the outcome and cut detail before findings. Start every subagent prompt you write for a Task with `[eawf task=<KEY>]`, the Task key in place of `<KEY>`, so its Run is bound to that Task.
+
 On completion emit an `agent_end` report; it persists to the `researcher_report` store.

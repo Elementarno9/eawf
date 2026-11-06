@@ -44,8 +44,9 @@ Your job is to bring the Batch's ready Tasks to a candidate, by dispatching each
 2. Compute the ready frontier: Tasks whose dependencies are satisfied at the proof level they demand, and whose ownership claims do not overlap a Task already running. Do not invent a parallelism plan — the graph is the plan. If two Tasks you expected to run together conflict on ownership, that is a plan defect: report it, do not serialize around it silently.
 3. Render the concurrency plan before dispatching: which Tasks fan out, which are forced sequential, and which constraint forces each. The operator sees this before any Run starts.
 4. Dispatch each ready Task as its own Run under its own Task scope. One Task, one Run, one lease, one workspace.
-5. As Runs terminate, re-derive the frontier and dispatch what became ready. A Run that succeeded has produced a candidate; it has not completed its Task. Integration is the daemon's, not yours.
-6. Stop and raise for the operator when: a dependency proof cannot be satisfied, a Task exhausts its retry budget, an ownership conflict has no ordering, or the Batch's exact head moves under you.
+5. Write each dispatch prompt from this template: a first line [eawf task=<KEY>] with the Task key in place of <KEY>, then the Task's intent, criteria and write claims, then the closing line `Report cap: 5000 characters.` on its own.
+6. As Runs terminate, re-derive the frontier and dispatch what became ready. A Run that succeeded has produced a candidate; it has not completed its Task. Integration is the daemon's, not yours.
+7. Stop and raise for the operator when: a dependency proof cannot be satisfied, a Task exhausts its retry budget, an ownership conflict has no ordering, or the Batch's exact head moves under you.
 
 ## 4b. Applicable rules
 
@@ -67,6 +68,7 @@ The obligations the effective rule graph holds for activities `implement`. They 
 - You do not decide that work is done. A Run report is not Task completion.
 - A Task marked exclusive runs alone: dispatch nothing beside it.
 - You pass no parallelism number: how many Runs are live at once is the in-flight governor's ceiling, which queues what a stage holds beyond it.
+- Continue without mid-task pauses. Hand independent slices to separate subagents in one message, not one per turn.
 - Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `needs_operator` or `blocked` with the reason rather than guessing.
 
 ## 6. Output

@@ -15,6 +15,8 @@ host session that runs with no daemon still has a transcript worth finding.
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Final
@@ -155,6 +157,45 @@ HOST_SUBAGENT_METHODS: dict[HookEventType, str] = {
     HookEventType.SUBAGENT_STOP: "runtime.host.subagent.stop",
 }
 
+#: The marker a dispatching agent writes into a subagent's prompt to name the
+#: Task the subagent works for.
+_TASK_MARKER: Final = re.compile(r"\[eawf task=([A-Z][A-Z0-9_-]{1,15}-\d{4,})\]")
+
+
+def _first_prompt(transcript: Path) -> str | None:
+    """Return the text of the first record of a Claude transcript, when it is a prompt."""
+    try:
+        with transcript.open(encoding="utf-8") as handle:
+            record = json.loads(handle.readline())
+    except OSError, ValueError:
+        return None
+    message = record.get("message") if isinstance(record, dict) else None
+    content = message.get("content") if isinstance(message, dict) else None
+    if isinstance(content, list):
+        content = " ".join(
+            str(block.get("text", "")) for block in content if isinstance(block, dict)
+        )
+    return content if isinstance(content, str) else None
+
+
+def _subagent_task_key(payload: Mapping[str, Any], harness: str, agent_id: str) -> str | None:
+    """Return the Task key the subagent's prompt names, when its prompt can be read.
+
+    Claude's subagent events do not carry the prompt, so it is read off the
+    first record of the subagent's own transcript: the stop event names that
+    file, and the start event finds it where the host keeps it, beside the
+    spawning session's transcript. A prompt the payload carries is read first.
+    """
+    prompt = _nonempty(payload, "prompt")
+    if prompt is None and harness == "claude-code":
+        path = _nonempty(payload, "agent_transcript_path")
+        parent = _nonempty(payload, "transcript_path")
+        if path is None and parent is not None:
+            path = str(Path(parent).with_suffix("") / "subagents" / f"agent-{agent_id}.jsonl")
+        prompt = None if path is None else _first_prompt(Path(path))
+    match = None if prompt is None else _TASK_MARKER.search(prompt)
+    return None if match is None else match.group(1)
+
 
 def adopt_host_subagent(
     event: HookEvent,
@@ -169,7 +210,9 @@ def adopt_host_subagent(
     transcript under the spawning session. The daemon writes the
     Run, so every outcome is either that durable row or the daemon's typed
     refusal -- a tree still in epoch 1 answers ``native_authority_required``
-    -- and the hook never blocks the host over it.
+    -- and the hook never blocks the host over it. A Task key the subagent's
+    prompt names in a ``[eawf task=KEY]`` marker is passed on, so the Run is
+    scoped to that Task.
 
     Args:
         event: The SUBAGENT_START or SUBAGENT_STOP event.
@@ -199,6 +242,9 @@ def adopt_host_subagent(
     session_id = payload.get("session_id")
     if isinstance(session_id, str) and session_id:
         params["host_session_id"] = session_id
+    task_key = _subagent_task_key(payload, harness, agent_id)
+    if task_key is not None:
+        params["task_ref"] = task_key
     transcript = payload.get("agent_transcript_path")
     if (
         event.event_type is HookEventType.SUBAGENT_STOP

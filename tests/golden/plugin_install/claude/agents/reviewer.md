@@ -35,6 +35,12 @@ Flat findings list grouped by file and an aggregate verdict (`approve | request-
 - "LGTM" with no evidence.
 - Praise without action.
 
+## Report and dispatch
+
+Report cap: 5000 characters.
+
+Keep your final report within the cap: lead with the outcome and cut detail before findings. Start every subagent prompt you write for a Task with `[eawf task=<KEY>]`, the Task key in place of `<KEY>`, so its Run is bound to that Task.
+
 ## Typed output envelope
 
 At completion, emit an `agent_end` body matching this JSON shape. Do not include report metadata; the runtime hook derives session, scope_id, attempt, and store kind.

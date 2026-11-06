@@ -19,6 +19,7 @@ from typing import Final
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.platform.rules.records import SelectorToken
+from eawf.surfaces.render.agents import REPORT_CAP_LINE
 from eawf.workflow.planning.orchestration import ORCHESTRATION_STATEMENT
 from eawf.workflow.skills.research_brief import BRIEF_SECTIONS
 
@@ -26,6 +27,13 @@ logger = logging.getLogger(__name__)
 
 #: The brief sections the research page names, in order.
 _BRIEF_HEADINGS: Final = ", ".join(BRIEF_SECTIONS)
+
+#: Conduct the long-running skills state so the operator need not repeat
+#: "continue" or ask for parallel subagents.
+_CONDUCT: Final = (
+    "Continue without mid-task pauses. Hand independent slices to separate subagents in one"
+    " message, not one per turn."
+)
 
 
 class SkillPrompt(BaseModel):
@@ -285,6 +293,10 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " any Run starts.",
             "Dispatch each ready Task as its own Run under its own Task scope. One Task, one Run,"
             " one lease, one workspace.",
+            # The marker stays out of inline code: it is not an eawf command.
+            "Write each dispatch prompt from this template: a first line [eawf task=<KEY>]"
+            " with the Task key in place of <KEY>, then the Task's intent, criteria and write"
+            f" claims, then the closing line `{REPORT_CAP_LINE}` on its own.",
             "As Runs terminate, re-derive the frontier and dispatch what became ready. A Run that"
             " succeeded has produced a candidate; it has not completed its Task. Integration is"
             " the daemon's, not yours.",
@@ -299,6 +311,7 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             "A Task marked exclusive runs alone: dispatch nothing beside it.",
             "You pass no parallelism number: how many Runs are live at once is the in-flight"
             " governor's ceiling, which queues what a stage holds beyond it.",
+            _CONDUCT,
         ),
         output=(
             "Output one report whose `summary` gives the coordination record: the concurrency "
@@ -502,6 +515,7 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " dispositions for each finding, never by editing the rejected one.",
             "Do not plan work the exclusions forbid. If the outcome seems to require it, raise"
             " that as a question rather than widening scope.",
+            _CONDUCT,
         ),
         output=(
             "Output one report whose `summary` gives the strict PlanRevision proposal by key, "
@@ -666,8 +680,10 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
         ),
         context=(
             "The question named by `<topic...>` and `--question`, within the scope and the"
-            " sources this invocation declares. The mode is swift unless `--rounds <N>` is given,"
-            " which selects rounds mode with at most N rounds; `--depth` sets the survey budget."
+            " sources this invocation declares. With neither `--rounds` nor `--depth`, the mode"
+            " is rounds mode with at most 3 rounds. `--rounds <N>` selects rounds mode with at"
+            " most N rounds, and `--rounds 1` is swift mode; `--depth` sets the survey budget"
+            " and, without `--rounds`, selects swift mode."
         ),
         method=(
             "State the exact question and the decision or next action it informs. Narrow an"
@@ -679,7 +695,8 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " are forbidden.",
             "Rounds mode: after the first survey pass, each further round may ask the operator"
             " one preference question through the host's structured question tool, with one"
-            " option per path and a recommended option, then run one more survey pass shaped by"
+            " option per path, a concrete preview on every option of what that path yields, and"
+            " a recommended option, then run one more survey pass shaped by"
             " the answer. Ask only a question whose answer changes the recommendation, and stop"
             " at N rounds even with questions left; record the rest under Open gaps.",
             "Reconcile evidence once. Distinguish implementation fact, document claim, external"
@@ -703,6 +720,7 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             "Every parallel slice declares what its result would rule out; a slice that cannot"
             " name it is not dispatched.",
             "A brief that `eawf research check` refuses is not a result.",
+            _CONDUCT,
         ),
         output=(
             "Output one SwiftResearchReport. Its `summary` states the mode, the rounds used, the"

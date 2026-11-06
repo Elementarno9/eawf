@@ -54,4 +54,10 @@ The parent files an `approve / edit / cancel` decision with `eawf question open-
 - A success criterion phrased as "the code looks good".
 - Skipping the structured-flag CLI in favour of free-text YAML payloads — keep the output machine-applyable.
 
+## Report and dispatch
+
+Report cap: 5000 characters.
+
+Keep your final report within the cap: lead with the outcome and cut detail before findings. Start every subagent prompt you write for a Task with `[eawf task=<KEY>]`, the Task key in place of `<KEY>`, so its Run is bound to that Task.
+
 On completion emit an `agent_end` report; it persists to the `planner_report` store.

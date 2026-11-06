@@ -472,8 +472,9 @@ async def _attach_bound_tree(ctx: MethodContext) -> None:
 
     A daemon started over an epoch-1 tree, or over none, attaches nothing here.
     Once attached, the proof checkouts a stopped daemon left in the repository are
-    removed, the transcript index is back-filled for Runs it does not name yet, and
-    the tree's Runs that no worker is left to end are reaped.
+    removed, the transcript index is back-filled for Runs it does not name yet, the
+    tree's Runs that no worker is left to end are reaped, and its open Runs silent
+    past the abandonment threshold are failed.
     """
     if ctx.state_path is None or not epoch_marker_present(Path(ctx.state_path).parent):
         return
@@ -486,7 +487,7 @@ async def _attach_bound_tree(ctx: MethodContext) -> None:
     # otherwise delay a cold daemon's first answer
     from eawf.runtime.daemon.batch_proof import prune_orphan_checkouts
     from eawf.runtime.daemon.methods.permission import DAEMON_ACTOR
-    from eawf.runtime.daemon.run_reaper import reap_lost_runs
+    from eawf.runtime.daemon.run_reaper import end_abandoned_runs, reap_lost_runs
     from eawf.runtime.daemon.run_supervisor import supervisor_of
     from eawf.runtime.daemon.transcript_backfill import backfill_root_transcripts
 
@@ -509,8 +510,23 @@ async def _attach_bound_tree(ctx: MethodContext) -> None:
         )
     except Exception as exc:
         logger.warning(f"_attach_bound_tree reap skipped error={exc!r}")
-        return
+        envelopes = ()
     for envelope in envelopes:
+        publish_projection(ctx.bus, envelope)
+    # the stall loop's first pass can run before this tree is attached, so the
+    # abandoned Runs are ended here too rather than a cadence later
+    try:
+        abandoned = await asyncio.to_thread(
+            end_abandoned_runs,
+            context,
+            supervisor_of(context),
+            actor=DAEMON_ACTOR,
+            now=datetime.now(UTC),
+        )
+    except Exception as exc:
+        logger.warning(f"_attach_bound_tree abandoned run sweep skipped error={exc!r}")
+        return
+    for envelope in abandoned:
         publish_projection(ctx.bus, envelope)
 
 

@@ -27,8 +27,8 @@ Honoured flags:
   the stage resolves the ``research.agent_count`` layered-config leaf
   (default ``4``), clamped to the leaf's [1, 12] band, and carries it onto
   the route's ``--agents``.
-- ``--rounds <n>`` — the fan-out iteration ceiling (default ``1``);
-  recorded on the resolve-scope trace.
+- ``--rounds <n>`` — the fan-out iteration ceiling (default ``3`` with no
+  ``--depth``, ``1`` with one); recorded on the resolve-scope trace.
 - ``--budget <tokens>`` — token budget for the run (default uncapped);
   recorded on the resolve-scope trace.
 
@@ -67,6 +67,9 @@ _DEFAULT_RESEARCH_AGENT_COUNT = 4
 #: The ``research.agent_count`` leaf's [min, max] band (config_keys.py:390).
 _AGENT_COUNT_MIN = 1
 _AGENT_COUNT_MAX = 12
+
+#: Rounds a run gets when it names neither ``--rounds`` nor ``--depth``.
+_DEFAULT_ROUNDS = 3
 
 #: ``runtime.campaign.start`` takes at most this many questions.
 _CAMPAIGN_MAX_QUESTIONS = 12
@@ -107,7 +110,8 @@ class _ResearchInputs:
         question: The invocation's own ``--question``, or ``None``.
         brief_id: The freshly minted brief id (``BR-...``).
         rounds: The requested number of fan-out iterations (``--rounds``,
-            default 1), recorded on the resolve-scope trace.
+            default 3, or 1 with ``--depth``), recorded on the resolve-scope
+            trace.
         agents: The resolved fan-out width (``--agents`` else the
             ``research.agent_count`` layered-config leaf, clamped to [1, 12]).
         budget: The token budget for the run (``--budget``) or ``None`` when
@@ -146,11 +150,20 @@ class ResearchSkill(SkillAction):
     def _resolve_rounds(run: ActionRun) -> int:
         """Resolve the fan-out round count (``--rounds``, floor 1).
 
-        A missing / malformed / below-floor value degrades to a single round
-        rather than aborting the run.
+        With neither ``--rounds`` nor ``--depth`` the run is in rounds mode
+        with :data:`_DEFAULT_ROUNDS`; a ``--depth`` without ``--rounds`` is a
+        swift run of one round. A malformed or below-floor value degrades to
+        that default rather than aborting the run.
+
+        Args:
+            run: The active skill run; only its ``args`` are read.
+
+        Returns:
+            The resolved round count, at least 1.
         """
-        rounds = _int_arg(run.args, "rounds", default=1)
-        return rounds if rounds is not None and rounds >= 1 else 1
+        default = 1 if run.args.get("depth") is not None else _DEFAULT_ROUNDS
+        rounds = _int_arg(run.args, "rounds", default=default)
+        return rounds if rounds is not None and rounds >= 1 else default
 
     def _resolve_agents(self, run: ActionRun) -> int:
         """Resolve the fan-out width for this run.

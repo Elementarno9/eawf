@@ -54,7 +54,7 @@ from eawf.runtime.candidate.seal import accepted_report_of
 from eawf.runtime.control.reducer import reduce_run_control
 from eawf.runtime.daemon.batch_close import close_after_ready
 from eawf.runtime.daemon.content_store import file_content
-from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
+from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import (
     TransactionRefusedError,
     TransitionRequest,
@@ -104,6 +104,7 @@ class RunEndCause(StrEnum):
     PROVIDER_LOST = "provider-lost"
     WORKER_LOST = "worker-lost"
     DAEMON_STOPPED = "daemon-stopped"
+    STALLED_ABANDONED = "stalled-abandoned"
 
 
 #: What an operator reads when the turn itself said nothing about how it ended.
@@ -124,6 +125,9 @@ _CAUSE_WORDS: Final[dict[RunEndCause, str]] = {
     ),
     RunEndCause.DAEMON_STOPPED: (
         "the daemon was stopped before the worker bound a report, so it stopped the worker"
+    ),
+    RunEndCause.STALLED_ABANDONED: (
+        "the Run recorded nothing for a day and nothing awaits it, so the daemon ended it"
     ),
 }
 
@@ -823,6 +827,44 @@ def _fail(
         ),
         now=now,
     )
+    return _fail_edge(
+        context,
+        run,
+        actor=actor,
+        attempt_ref=attempt_ref,
+        code=code,
+        message=message,
+        event_ref=event_ref,
+        now=now,
+    )
+
+
+def _fail_edge(
+    context: Epoch2RootContext,
+    run: Run,
+    *,
+    actor: PrincipalKey,
+    attempt_ref: str,
+    code: str,
+    message: str,
+    event_ref: str,
+    now: datetime,
+) -> tuple[Envelope, ...]:
+    """Move a Run whose failure line stands to ``FAILED`` and requeue its Task.
+
+    Args:
+        context: The root the Run lives in.
+        run: The running Run, at the revision the edge is taken against.
+        actor: The principal the ending is attributed to.
+        attempt_ref: What names the ending's transition.
+        code: The failure code, a slug.
+        message: What an operator reads.
+        event_ref: The failure line the edge binds as its report.
+        now: The stamp of the ending.
+
+    Raises:
+        TransactionRefusedError: The transaction refused the edge.
+    """
     failed = _move(
         context,
         run,
@@ -915,11 +957,28 @@ def _state(
     now: datetime,
 ) -> None:
     """State one line the daemon observed about the Run's turn on the Run's stream."""
-    # the run verbs import the dispatch driver, which this module imports
-    from eawf.runtime.daemon.methods.run import append_run_event
+    with context.session([urn]) as session:
+        _state_in_session(
+            session, urn, actor=actor, event_ref=event_ref, kind=kind, payload=payload, now=now
+        )
 
-    append_run_event(
-        context,
+
+def _state_in_session(
+    session: RootSession,
+    urn: QualifiedUrn,
+    *,
+    actor: PrincipalKey,
+    event_ref: str,
+    kind: RunEventKind,
+    payload: ErrorPayload | ProviderLossPayload,
+    now: datetime,
+) -> None:
+    """State one observed line on the Run's stream inside a session holding its lock."""
+    # the run verbs import the dispatch driver, which this module imports
+    from eawf.runtime.daemon.methods.run import append_run_event_in_session
+
+    append_run_event_in_session(
+        session,
         RunEventAppend(
             urn=urn,
             event_ref=event_ref,

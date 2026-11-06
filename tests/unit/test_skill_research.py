@@ -212,11 +212,11 @@ def test_research_rounds_recorded_in_resolve_scope(state_dir: Path) -> None:
     assert payload["rounds"] == 3
 
 
-def test_research_rounds_below_floor_defaults_to_one(state_dir: Path) -> None:
-    """A below-floor / malformed ``--rounds`` degrades to a single round."""
+def test_research_rounds_below_floor_takes_the_default(state_dir: Path) -> None:
+    """A below-floor / malformed ``--rounds`` degrades to the 3-round default."""
     run_skill(ResearchSkill(), _ctx({"rounds": "nope"}))
     payload = _event_payload(state_dir, "research.resolve_scope")
-    assert payload["rounds"] == 1
+    assert payload["rounds"] == 3
 
 
 def test_research_budget_recorded_in_resolve_scope(state_dir: Path) -> None:
