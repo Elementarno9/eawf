@@ -38,7 +38,7 @@ anything since has moved past the fact and the next silence earns its own.
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
@@ -263,6 +263,45 @@ def run_events_of(records: Sequence[LedgerRecord], urn: QualifiedUrn) -> tuple[R
         if item.payload.get("payload_kind") == "run_event"
     ]
     return tuple(event for event in events if event.run_ref == urn)
+
+
+def run_events_by_run(
+    records: Sequence[LedgerRecord], run_keys: Collection[str] | None = None
+) -> dict[QualifiedUrn, tuple[RunEventRecord, ...]]:
+    """Return the run ledger's event lines grouped by the Run they belong to.
+
+    Each line is validated at most once, so a reader of many Runs pays for the
+    ledger once rather than once per Run as :func:`run_events_of` would.
+
+    Args:
+        records: Every line the run ledger holds.
+        run_keys: Validate only the lines whose stored Run reference ends in one
+            of these Run keys; ``None`` validates every event line.
+
+    Returns:
+        Each Run's event lines, in ledger order, keyed by the Run's URN. A Run
+        with no event line has no entry.
+
+    Raises:
+        pydantic.ValidationError: A line that is read claims to be a run event
+            and does not validate as one.
+    """
+    grouped: dict[QualifiedUrn, list[RunEventRecord]] = {}
+    for item in records:
+        if item.payload.get("payload_kind") != "run_event":
+            continue
+        raw_ref = item.payload.get("run_ref")
+        # A reference that is not a string is malformed; validating it raises
+        # rather than letting the filter skip a corrupt line silently.
+        if (
+            run_keys is not None
+            and isinstance(raw_ref, str)
+            and raw_ref.rsplit("/", 1)[-1] not in run_keys
+        ):
+            continue
+        event = RunEventRecord.model_validate(item.payload)
+        grouped.setdefault(event.run_ref, []).append(event)
+    return {urn: tuple(events) for urn, events in grouped.items()}
 
 
 def hello_facts_of(
@@ -752,6 +791,7 @@ __all__ = [
     "plan_event_append",
     "plan_stall",
     "reduce_run_events",
+    "run_events_by_run",
     "run_events_of",
     "runtime_of",
     "stall_facts_of",

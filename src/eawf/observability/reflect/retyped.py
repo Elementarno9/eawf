@@ -54,10 +54,7 @@ from eawf.kernel.config.schema import VerifyConfig
 from eawf.kernel.state.types import UtcDatetime
 from eawf.observability.reflect.report import NON_QUOTABLE_MARK, reflect_root
 from eawf.observability.reflect.titles import REFLECTION_MARKER
-from eawf.observability.telemetry.sources.session_history import (
-    claude_history_root,
-    discover_history,
-)
+from eawf.observability.telemetry.sources.session_history import project_history_lines
 from eawf.platform.rules.compile import CompiledRule, compile_card_graph
 from eawf.platform.rules.loader import RuleSourceMissingError, load_rule_source
 from eawf.platform.rules.modules import select_rule_modules
@@ -329,37 +326,33 @@ def _timestamp(record: Mapping[str, Any]) -> datetime | None:
     return stamp if stamp.tzinfo is not None else None
 
 
-def operator_turns_from_history(path: Path) -> tuple[OperatorTurn, ...]:
-    """Return the operator's typed prompts in one host session history file.
+def operator_turns_from_history(lines: Iterable[str]) -> tuple[OperatorTurn, ...]:
+    """Return the operator's typed prompts among host session history lines.
 
-    Reading is fail-open: an unreadable file or a malformed line yields fewer turns,
-    because the history is the host's file and an observation, not a record.
+    A malformed line is skipped, because the history is the host's file and an
+    observation, not a record.
 
     Args:
-        path: One session history file.
+        lines: History lines, as the session-history reader yields them.
 
     Returns:
         One scrubbed turn per human-typed prompt that carries a timestamp.
     """
     turns: list[OperatorTurn] = []
-    try:
-        with path.open(encoding="utf-8") as handle:
-            for line in handle:
-                if _USER_RECORD not in line or _TOOL_RESULT in line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(record, dict):
-                    continue
-                raw = _record_text(record)
-                at = _timestamp(record)
-                text = None if raw is None or at is None else _operator_text(raw)
-                if text is not None and at is not None:
-                    turns.append(OperatorTurn(at=at, text=text))
-    except (OSError, UnicodeDecodeError) as exc:
-        logger.warning(f"operator_turns_from_history file={path.name!r} err={type(exc).__name__}")
+    for line in lines:
+        if _USER_RECORD not in line or _TOOL_RESULT in line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(record, dict):
+            continue
+        raw = _record_text(record)
+        at = _timestamp(record)
+        text = None if raw is None or at is None else _operator_text(raw)
+        if text is not None and at is not None:
+            turns.append(OperatorTurn(at=at, text=text))
     return tuple(turns)
 
 
@@ -376,13 +369,11 @@ def mine_operator_turns(repo_root: Path, *, since: datetime | None) -> tuple[Ope
     Returns:
         The window's turns, oldest first.
     """
-    root = repo_root.resolve()
-    turns: set[OperatorTurn] = set()
-    floor = None if since is None else since.timestamp()
-    for path in discover_history(claude_history_root(root)):
-        if floor is not None and path.stat().st_mtime < floor:
-            continue
-        turns.update(operator_turns_from_history(path))
+    turns = set(
+        operator_turns_from_history(
+            project_history_lines(repo_root.resolve(), modified_since=since)
+        )
+    )
     window = sorted(
         (turn for turn in turns if since is None or turn.at >= since),
         key=lambda turn: (turn.at, turn.text),

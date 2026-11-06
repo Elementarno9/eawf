@@ -33,7 +33,7 @@ def _report(tree_root: Path) -> dict[str, Any]:
         ["-w", str(tree_root.parent), "reflect", "run", "--local-only", "--format", "json"],
     )
     assert result.exit_code == 0, result.output
-    return json.loads(result.output)
+    return json.loads(result.stdout)
 
 
 def test_own_project_rows_are_quotable_and_cross_project_rows_are_not(

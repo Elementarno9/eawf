@@ -111,7 +111,7 @@ def test_totals_sum_priced_runs_and_mark_unpriced(priced_tree: Path) -> None:
     """3500 microUSD over two priced Runs, one unpriced Run counted apart and printed unpriced."""
     result = _run(priced_tree, "--format", "json")
     assert result.exit_code == 0, result.output
-    document = json.loads(result.output)
+    document = json.loads(result.stdout)
     (row,) = document["totals"]
     assert set(row) == TOTALS_FIELDS
     assert row["scope"] == "project:RFL"
@@ -143,7 +143,7 @@ def test_totals_of_only_unpriced_runs_state_no_cost(
     own_project(tree_root, "RFL")
     result = _run(tree_root, "--format", "json")
     assert result.exit_code == 0, result.output
-    (row,) = json.loads(result.output)["totals"]
+    (row,) = json.loads(result.stdout)["totals"]
     assert row["cost_microusd"] is None
     assert (row["priced_runs"], row["unpriced_runs"]) == (0, 1)
     assert "$0.00" not in _run(tree_root).output
@@ -153,7 +153,7 @@ def test_totals_are_empty_on_an_empty_tree(tmp_path: Path, monkeypatch: pytest.M
     """Boundary: no session, no totals row and no issue."""
     monkeypatch.delenv("EA_STATE", raising=False)
     tree_root = native_tree(tmp_path, [], [])
-    document = json.loads(_run(tree_root, "--format", "json").output)
+    document = json.loads(_run(tree_root, "--format", "json").stdout)
     assert (document["totals"], document["issues"], document["sessions"]) == ([], [], [])
 
 
@@ -193,7 +193,7 @@ def test_highlighted_issues_are_typed(tmp_path: Path, monkeypatch: pytest.Monkey
     own_project(tree_root, "RFL")
     result = runner.invoke(app, ["--json", "-w", str(tmp_path), "reflect", "run", "--local-only"])
     assert result.exit_code == 0, result.output
-    report = load_report(Path(json.loads(result.output)["result"]["document"]))
+    report = load_report(Path(json.loads(result.stdout)["result"]["document"]))
     assert report.schema_version == 2
     by_kind = {issue.kind: issue for issue in report.issues}
     assert set(by_kind) == {IssueKind.RUN_FAILED, IssueKind.UNPRICED_SPEND, IssueKind.TASK_REWORKED}

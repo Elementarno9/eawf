@@ -85,6 +85,7 @@ PERF_LANE: Final = (
     "tests/perf/surfaces/cli",
     "tests/perf/runtime",
     "tests/perf/kernel",
+    "tests/perf/observability",
 )
 
 _DURATION_WORD: Final = "elapsed"

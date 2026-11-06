@@ -84,8 +84,7 @@ def highlight_issues(
     for reading, spend in zip(readings, spends, strict=True):
         if reading.run.status is RunStatus.FAILED:
             issues.append(_run_issue(IssueKind.RUN_FAILED, reading))
-        tokens = (spend.input_tokens, spend.output_tokens, spend.cache_tokens)
-        if spend.cost_microusd is None and any(value is not None for value in tokens):
+        if spend.unpriced:
             issues.append(_run_issue(IssueKind.UNPRICED_SPEND, reading))
         scope = reading.run.scope
         if isinstance(scope, TaskScope):

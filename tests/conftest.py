@@ -390,6 +390,56 @@ def marketplace_plugin_isolation() -> Iterator[None]:
 
 
 @pytest.fixture(scope="session", autouse=True)
+def session_history_isolation(runtime_dir_isolation: RuntimeDirIsolation) -> Iterator[Path]:
+    """Keep the operator's Claude and Codex session history out of every test.
+
+    ``eawf reflect run`` indexes every local history it can find, so a test
+    would otherwise sweep the machine's real transcripts. The two root
+    resolvers are patched to empty directories; a test that sets
+    ``EAWF_CLAUDE_PROJECTS_DIR``, ``CLAUDE_CONFIG_DIR`` or ``CODEX_HOME``
+    itself still reaches the history it built, because a value that differs
+    from the one the session started with is honoured.
+
+    Yields:
+        The isolated root, holding an empty ``projects`` and ``sessions``.
+    """
+    from eawf.observability.telemetry.sources import session_history
+
+    root = runtime_dir_isolation.runtime_dir / "history-home"
+    (root / "projects").mkdir(parents=True, exist_ok=True)
+    (root / "sessions").mkdir(parents=True, exist_ok=True)
+    monkeypatch = pytest.MonkeyPatch()
+    # Exported too, so an `eawf` the suite spawns as a subprocess (which the
+    # patched resolvers below cannot reach) indexes the empty roots as well.
+    monkeypatch.setenv("EAWF_CLAUDE_PROJECTS_DIR", str(root / "projects"))
+    monkeypatch.setenv("CODEX_HOME", str(root))
+    started = {
+        name: os.environ.get(name)
+        for name in ("EAWF_CLAUDE_PROJECTS_DIR", "CLAUDE_CONFIG_DIR", "CODEX_HOME")
+    }
+    claude_root = session_history.claude_projects_root
+    codex_root = session_history.codex_sessions_root
+
+    def _set_by_test(*names: str) -> bool:
+        return any(os.environ.get(name) != started[name] for name in names)
+
+    def _claude() -> Path:
+        if _set_by_test("EAWF_CLAUDE_PROJECTS_DIR", "CLAUDE_CONFIG_DIR"):
+            return claude_root()
+        return root / "projects"
+
+    def _codex() -> Path:
+        return codex_root() if _set_by_test("CODEX_HOME") else root / "sessions"
+
+    monkeypatch.setattr(session_history, "claude_projects_root", _claude)
+    monkeypatch.setattr(session_history, "codex_sessions_root", _codex)
+    try:
+        yield root
+    finally:
+        monkeypatch.undo()
+
+
+@pytest.fixture(scope="session", autouse=True)
 def plugin_registry_isolation(runtime_dir_isolation: RuntimeDirIsolation) -> Iterator[Path]:
     """Keep the operator's installed Claude and Codex plugin registries out of every test.
 

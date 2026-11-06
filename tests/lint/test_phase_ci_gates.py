@@ -1191,8 +1191,9 @@ def test_timing_suite_gate_reds_on_a_parallel_cold_import_budget() -> None:
     """The gate fires on the layout that let the cold-import ceiling trip."""
     commands = [
         "uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui "
-        "--ignore=tests/perf/runtime --ignore=tests/perf/kernel",
-        "uv run pytest -n0 tests/perf/surfaces/tui tests/perf/runtime tests/perf/kernel",
+        "--ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability",
+        "uv run pytest -n0 tests/perf/surfaces/tui tests/perf/runtime tests/perf/kernel "
+        "tests/perf/observability",
     ]
     assert timing_suite_violations(commands) == [
         "a parallel run includes the timing suite tests/perf/surfaces/cli",

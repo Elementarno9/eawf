@@ -170,7 +170,7 @@ jobs:
         # same selection, so a merge is never the first full run. The
         # end-to-end suite and the perf lane run serially below to avoid
         # worker contention.
-        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --junitxml=pytest-junit.xml --splits 3 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
+        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability --junitxml=pytest-junit.xml --splits 3 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
       - name: Duration budget (advisory)
         # Diffs every test's wall time in the parallel leg against the
         # committed baseline: a test past twice its baseline, or a fast-tier
@@ -203,7 +203,7 @@ jobs:
         if: matrix.shard == '1'
         env:
           EAWF_SKIP_PERF: "1"
-        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
+        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
 
       - name: Perf lane (nightly, reports, never blocks)
         # The same lane with its wall-clock budgets, serial and on the
@@ -211,7 +211,7 @@ jobs:
         # on an otherwise green job, so it reports without blocking.
         if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && matrix.shard == '1'
         continue-on-error: true
-        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel
+        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
 
       - name: Upload coverage data
         if: startsWith(matrix.os, 'ubuntu-')

@@ -341,7 +341,7 @@ Report where effort, time and money went; no canonical write.
 |---|---|
 | `export` | Write the newest report as a static page that opens from the filesystem. |
 | `prune` | Remove local reports and cached titles past their retention class. |
-| `run` | Read the tree's Runs, fill their titles, and write the report. |
+| `run` | Read the tree's Runs and local session history, fill titles, and write the report. |
 | `serve` | Serve the local collection read-only on loopback until interrupted. |
 | `show` | Print the newest report in the local collection. |
 

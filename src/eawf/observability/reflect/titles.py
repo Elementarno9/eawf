@@ -26,6 +26,7 @@ import os
 import secrets
 import shutil
 import subprocess
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -44,14 +45,11 @@ from eawf.kernel.state.epoch2.measurement import (
 )
 from eawf.kernel.state.types import UtcDatetime
 from eawf.observability.reflect.runs import RunReading
+from eawf.observability.telemetry.sources.session_history import REFLECTION_MARKER
 from eawf.platform.scrub.scan import redact_text
 from eawf.platform.subprocess_detach import no_window_kwargs
 
 logger = logging.getLogger(__name__)
-
-#: The marker every helper session the fill spawns opens with, so the session-history
-#: sweep records it under its own drop reason and no cohort counts it.
-REFLECTION_MARKER: Final = "[eawf-reflect-title]"
 
 #: The answer a provider gives when a digest supports no title.
 UNKNOWN_ANSWER: Final = "UNKNOWN"
@@ -61,6 +59,11 @@ TITLE_MAX_CHARS: Final = 72
 
 #: How long one provider call may take before its title falls back.
 PROVIDER_TIMEOUT_SECONDS: Final = 60.0
+
+#: The most provider calls one run makes across all its title fills. Each call is a paid
+#: helper session; a digest past the cap keeps its fallback title, and since answers are
+#: cached a later run fills the rest.
+TITLE_CALLS_PER_RUN: Final = 25
 
 #: What the provider is asked. It names no model and carries no session content: the
 #: digest that follows it is the only session-derived text sent.
@@ -198,16 +201,22 @@ class ClaudeTitleProvider:
         return [self.binary, "-p", prompt, "--output-format", "text"]
 
     def title_for(self, digest_text: str) -> str | None:
-        """Return the helper session's answer, or ``None`` when it failed or timed out."""
+        """Return the helper session's answer, or ``None`` when it failed or timed out.
+
+        The helper runs in a fresh private directory, never in a project, so no
+        project's hooks or instructions load into it.
+        """
         try:
-            done = subprocess.run(
-                self.argv(digest_text),
-                capture_output=True,
-                text=True,
-                timeout=PROVIDER_TIMEOUT_SECONDS,
-                check=False,
-                **no_window_kwargs(),
-            )
+            with tempfile.TemporaryDirectory(prefix="eawf-reflect-title-") as workdir:
+                done = subprocess.run(
+                    self.argv(digest_text),
+                    capture_output=True,
+                    text=True,
+                    timeout=PROVIDER_TIMEOUT_SECONDS,
+                    check=False,
+                    cwd=workdir,
+                    **no_window_kwargs(),
+                )
         except (OSError, subprocess.TimeoutExpired) as exc:
             logger.warning(f"title_for provider={self.name} err={exc.__class__.__name__}")
             return None
@@ -229,6 +238,33 @@ class ResolvedTitle:
     source: TitleSource
 
 
+@dataclass(slots=True)
+class CallBudget:
+    """The provider calls one run may make, shared by every title fill of the run.
+
+    Attributes:
+        limit: Calls the run may make.
+        used: Calls made so far.
+
+    Raises:
+        ValueError: When *limit* is negative.
+    """
+
+    limit: int = TITLE_CALLS_PER_RUN
+    used: int = 0
+
+    def __post_init__(self) -> None:
+        if self.limit < 0:
+            raise ValueError(f"a call budget cannot be negative, got {self.limit}")
+
+    def spend(self) -> bool:
+        """Take one call from the budget; return ``False`` when none is left."""
+        if self.used >= self.limit:
+            return False
+        self.used += 1
+        return True
+
+
 @dataclass(slots=True, kw_only=True)
 class FillAccount:
     """What the fill sent and answered, for the run's verification manifest.
@@ -237,7 +273,9 @@ class FillAccount:
         provider: The provider called, or ``None`` when none was.
         local_only: Whether ``--local-only`` was in force; every egress count is
             then zero.
-        digests_sent: Digests sent to the provider.
+        digests_sent: Provider calls made, a retried digest counting each time.
+        digests_skipped: Uncached digests left unsent because the run's call
+            budget was spent.
         cache_hits: Titles answered from the local cache.
         unknown_uncached: ``UNKNOWN`` answers left out of the cache.
         by_source: Titles resolved per source.
@@ -246,6 +284,7 @@ class FillAccount:
     provider: str | None
     local_only: bool
     digests_sent: int = 0
+    digests_skipped: int = 0
     cache_hits: int = 0
     unknown_uncached: int = 0
     by_source: dict[str, int] = field(default_factory=lambda: {s.value: 0 for s in TitleSource})
@@ -323,6 +362,7 @@ def fill_titles(
     provider: TitleProvider | None,
     local_only: bool,
     now: datetime,
+    budget: CallBudget | None = None,
 ) -> tuple[tuple[ResolvedTitle, ...], FillAccount, TitleCache]:
     """Return every listed session's title, the fill's account and the cache after it.
 
@@ -334,11 +374,14 @@ def fill_titles(
         local_only: Whether ``--local-only`` is in force. The caller passes no provider
             then, so the fill has nothing it could call out through.
         now: When an answer is stored.
+        budget: The provider calls the run may still make; a fresh
+            :data:`TITLE_CALLS_PER_RUN` budget when omitted.
 
     Returns:
         One title per reading in order, the account, and the cache with every new
         answer added under its key.
     """
+    budget = CallBudget() if budget is None else budget
     account = FillAccount(
         provider=None if provider is None else provider.name, local_only=local_only
     )
@@ -351,6 +394,8 @@ def fill_titles(
         if key in entries:
             account.cache_hits += 1
             title = entries[key].title
+        elif provider is not None and not budget.spend():
+            account.digests_skipped += 1
         elif provider is not None:
             answer = provider.title_for(digest.text())
             account.digests_sent += 1
@@ -398,10 +443,12 @@ def save_title_cache(path: Path, cache: TitleCache) -> None:
 __all__ = [
     "PROVIDER_TIMEOUT_SECONDS",
     "REFLECTION_MARKER",
+    "TITLE_CALLS_PER_RUN",
     "TITLE_INSTRUCTION",
     "TITLE_MAX_CHARS",
     "UNKNOWN_ANSWER",
     "CachedTitle",
+    "CallBudget",
     "ClaudeTitleProvider",
     "FillAccount",
     "ResolvedTitle",
