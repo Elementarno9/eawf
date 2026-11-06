@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING, Annotated
 import typer
 
 from eawf.observability.logging.scrub import configure_cli_logging
-from eawf.surfaces.cli._version_display import compose_display_version
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.help_panels import panel_for
 from eawf.surfaces.cli.output import emit_json_or_text
@@ -44,6 +43,11 @@ app = typer.Typer(
 
 def _version_callback(value: bool) -> None:
     if value:
+        # The display reads package metadata, which every other command, a
+        # hook call among them, would otherwise load at start-up for nothing;
+        # Click calls this callback on every run, flag given or not.
+        from eawf.surfaces.cli._version_display import compose_display_version
+
         typer.echo(compose_display_version())
         raise typer.Exit()
 
@@ -112,10 +116,14 @@ def _root(
     # Every daemon client, spawn and probe of this invocation dials the
     # named tree's daemon, whatever the working directory; the pin is
     # released when the command ends so in-process callers do not inherit it.
-    from eawf.runtime.daemon.runtime_dir import pin_workspace
+    # While the resolver module is not loaded no pin can be held, so a command
+    # without -w skips it and a hook process reaches its daemon call without
+    # loading the state resolver first.
+    if workspace is not None or "eawf.runtime.daemon.runtime_dir" in sys.modules:
+        from eawf.runtime.daemon.runtime_dir import pin_workspace
 
-    previous_pin = pin_workspace(workspace)
-    ctx.call_on_close(lambda: pin_workspace(previous_pin))
+        previous_pin = pin_workspace(workspace)
+        ctx.call_on_close(lambda: pin_workspace(previous_pin))
     if ctx.invoked_subcommand is None:
         # Bare ``eawf`` on a TTY opens the console; plain / no-input /
         # non-TTY writes the console's plain frame so headless callers
@@ -165,6 +173,8 @@ def _dispatch_tui(
 @app.command(name="version", rich_help_panel=panel_for("version"))
 def version_cmd(ctx: typer.Context) -> None:
     """Show the eawf version (text or JSON envelope)."""
+    from eawf.surfaces.cli._version_display import compose_display_version
+
     flags: GlobalFlags = ctx.obj
     display = compose_display_version()
     emit_json_or_text(

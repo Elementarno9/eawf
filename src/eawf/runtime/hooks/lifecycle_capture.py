@@ -21,14 +21,9 @@ from typing import Any, Final
 
 from pydantic import ValidationError
 
-from eawf.runtime.daemon.native_guard import EA_DIRNAME
 from eawf.runtime.hooks import runner
 from eawf.runtime.hooks.event import HOST_HARNESSES, HookEvent, HookEventType
 from eawf.runtime.hooks.runner import DaemonClientFactory, HookResult
-from eawf.runtime.session.task_binding import bind_session_to_branch_task
-from eawf.runtime.session.transcript_index import record_transcript
-from eawf.runtime.vcs.branch_name import branch_task_key, checked_out_branch, main_checkout
-from eawf.surfaces.cli.errors import StateConflict
 
 #: The name the session-start hook reports under.
 SESSION_INDEX_HOOK: Final = "session.transcript_index"
@@ -36,9 +31,17 @@ SESSION_INDEX_HOOK: Final = "session.transcript_index"
 #: The name the session-exit hook reports under.
 SESSION_END_HOOK: Final = "session.end_stamp"
 
-#: What writing an index or binding row can fail with: a held lock, an unwritable
-#: file, or a corrupt line already in the file.
-_ROW_FAILURES: Final = (StateConflict, OSError, ValidationError)
+
+def _row_failures() -> tuple[type[Exception], ...]:
+    """Return what writing an index or binding row can fail with.
+
+    A held lock, an unwritable file, or a corrupt line already in the file.
+    An ``except`` clause evaluates this only once an exception reaches it, so
+    the error module loads only on a failure.
+    """
+    from eawf.surfaces.cli.errors import StateConflict
+
+    return (StateConflict, OSError, ValidationError)
 
 
 def _nonempty(payload: Mapping[str, Any], key: str) -> str | None:
@@ -62,7 +65,11 @@ def _tree_root(repo_root: Path | None) -> Path:
     A session started in a linked worktree finds that worktree's own ``.ea``,
     which the main tree never reads and which is deleted with the worktree.
     """
-    return main_checkout(_here(repo_root)) / EA_DIRNAME
+    # The version-control package loads the config models, so it is imported
+    # only by a handler that reaches the tree.
+    from eawf.runtime.vcs.branch_name import main_checkout
+
+    return main_checkout(_here(repo_root)) / ".ea"
 
 
 def index_host_session(
@@ -95,6 +102,12 @@ def index_host_session(
     tree_root = _tree_root(repo_root)
     if not tree_root.is_dir():
         return HookResult(name=name, output=f"{name} skipped: not an eawf tree")
+    # The index and binding rows are typed by the state models, so they load
+    # here, in the one handler that writes them.
+    from eawf.runtime.session.task_binding import bind_session_to_branch_task
+    from eawf.runtime.session.transcript_index import record_transcript
+    from eawf.runtime.vcs.branch_name import branch_task_key, checked_out_branch
+
     try:
         row = record_transcript(
             tree_root,
@@ -103,7 +116,7 @@ def index_host_session(
             transcript_path=transcript,
             now=event.occurred_at,
         )
-    except _ROW_FAILURES as error:
+    except _row_failures() as error:
         return HookResult(name=name, output=f"{name} skipped: {_reason(error)}")
     output = f"{name} {'ok' if row else 'already indexed'}"
     # The branch is read where the session runs, which the payload names; the
@@ -117,7 +130,7 @@ def index_host_session(
         bound = bind_session_to_branch_task(
             tree_root, session_id=session_id, task_key=task_key, now=event.occurred_at
         )
-    except _ROW_FAILURES as error:
+    except _row_failures() as error:
         return HookResult(name=name, output=f"{output}; binding skipped: {_reason(error)}")
     return HookResult(name=name, output=f"{output} task={task_key}" if bound else output)
 
@@ -207,6 +220,8 @@ def adopt_host_subagent(
     # either way, with its Run only when one was adopted.
     tree_root = _tree_root(repo_root)
     if "transcript_path" in params and tree_root.is_dir():
+        from eawf.runtime.session.transcript_index import record_transcript
+
         try:
             record_transcript(
                 tree_root,
@@ -217,7 +232,7 @@ def adopt_host_subagent(
                 run_ref=run_ref,
                 parent_session_id=params.get("host_session_id"),
             )
-        except _ROW_FAILURES as error:
+        except _row_failures() as error:
             output = f"{output}; index skipped: {_reason(error)}"
     return HookResult(name=name, output=output)
 

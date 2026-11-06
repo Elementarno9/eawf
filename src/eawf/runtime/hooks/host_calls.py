@@ -14,6 +14,7 @@ import hashlib
 import time
 from collections.abc import Iterable
 from pathlib import Path
+from types import TracebackType
 from typing import Any, Final
 
 import orjson
@@ -38,6 +39,44 @@ HOST_PERMISSION_BEHAVIOR: Final[dict[str, str]] = {"approved": "allow", "denied"
 
 #: The hook whose output a host permission decision is read from.
 HOST_PERMISSION_HOOK: Final = "runtime.host_permission"
+
+#: How a host verb refuses a session that is on no live Run. The wire carries
+#: the refusal as text alone, so this is what tells it from a real failure.
+_NO_RUN_REFUSAL: Final = "identity_not_found: 0 live Runs are on the host session"
+
+
+class _NoRunSkip:
+    """Swallow a host verb's refusal of a session on no live Run, and note it.
+
+    An operator's own session is not a Run, so its tool calls have nowhere to
+    land and the hook skips them quietly. Entered inside the daemon client's
+    block, it swallows the refusal before the client sees it, so the hook
+    runner does not record it as a failure. Every other exception, a session
+    on several live Runs included, passes through.
+
+    Attributes:
+        skipped: Whether the refusal was swallowed.
+    """
+
+    def __init__(self) -> None:
+        self.skipped = False
+
+    def __enter__(self) -> _NoRunSkip:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> bool:
+        self.skipped = isinstance(exc, Exception) and _NO_RUN_REFUSAL in str(exc)
+        return self.skipped
+
+
+def _no_run_skip(name: str) -> HookResult:
+    """Return the quiet result of a hook whose host session is on no live Run."""
+    return HookResult(name=name, output=f"{name} skipped: no live Run on the host session")
 
 
 def _await_decision(
@@ -151,11 +190,13 @@ def record_host_permission(
     factory = daemon_client_factory or runner._default_daemon_client_factory
     try:
         wait_s = resolve_permission_wait_seconds(root)
-        with factory() as client:
+        with factory() as client, _NoRunSkip() as no_run:
             permission = client.call(_HOST_PERMISSION_METHOD, params)["permission"]
             decision = _await_decision(client, permission, repo_root=str(root), wait_s=wait_s)
     except Exception as exc:
         return HookResult(name=name, output=repr(exc))
+    if no_run.skipped:
+        return _no_run_skip(name)
     return HookResult(name=name, output=f"{name} {decision or 'ok'} permission={permission['key']}")
 
 
@@ -276,10 +317,12 @@ def observe_host_tool(
         params["failed"] = failed or _tool_response_failed(response)
     factory = daemon_client_factory or runner._default_daemon_client_factory
     try:
-        with factory() as client:
+        with factory() as client, _NoRunSkip() as no_run:
             answer = client.call(_HOST_TOOL_METHOD, params)
     except Exception as exc:
         return HookResult(name=name, output=repr(exc))
+    if no_run.skipped:
+        return _no_run_skip(name)
     return HookResult(
         name=name, output=f"{name} ok run={answer.get('run_ref')} call={answer.get('call_id')}"
     )
@@ -374,11 +417,13 @@ def record_host_file_edit(
     }
     factory = daemon_client_factory or runner._default_daemon_client_factory
     try:
-        with factory() as client:
+        with factory() as client, _NoRunSkip() as no_run:
             answer = client.call(_HOST_FILE_EDIT_METHODS[event.event_type], params)
     except Exception as exc:
         # A tool hook's output reaches the host's log without its name, so it leads.
         return HookResult(name=name, output=f"{name} failed: {exc!r}")
+    if no_run.skipped:
+        return _no_run_skip(name)
     return HookResult(
         name=name,
         output=f"{name} ok run={answer.get('run_ref')} event={answer.get('event_ref')}",
@@ -501,10 +546,12 @@ def record_host_question(
         params["answers"] = _host_answers(payload.get("tool_response"))
     factory = daemon_client_factory or runner._default_daemon_client_factory
     try:
-        with factory() as client:
+        with factory() as client, _NoRunSkip() as no_run:
             answer = client.call(_HOST_QUESTION_METHODS[event.event_type], params)
     except Exception as exc:
         return HookResult(name=name, output=repr(exc))
+    if no_run.skipped:
+        return _no_run_skip(name)
     refs = " ".join(ref.rsplit("/", 1)[-1] for ref in answer.get("question_refs", ()))
     return HookResult(name=name, output=f"{name} ok questions={refs}")
 
@@ -559,10 +606,12 @@ def record_host_tool_error(
     }
     factory = daemon_client_factory or runner._default_daemon_client_factory
     try:
-        with factory() as client:
+        with factory() as client, _NoRunSkip() as no_run:
             answer = client.call(_HOST_ERROR_METHOD, params)
     except Exception as exc:
         return HookResult(name=name, output=repr(exc))
+    if no_run.skipped:
+        return _no_run_skip(name)
     return HookResult(name=name, output=f"{name} ok event={answer.get('event_ref')}")
 
 

@@ -56,7 +56,7 @@ def test_session_end_subscribes_session_end_not_stop() -> None:
     assert "SessionEnd" in rendered
     assert "Stop" not in rendered
     commands = [h["command"] for entry in rendered["SessionEnd"] for h in entry["hooks"]]
-    assert commands == ["${CLAUDE_PLUGIN_ROOT}/hooks/session_end.sh"]
+    assert commands == ['bash "${CLAUDE_PLUGIN_ROOT}/hooks/session_end.sh"']
 
     routed = route_claude_payload({"hook_event_name": "SessionEnd", "session_id": "s-1"})
     assert routed is not None

@@ -110,7 +110,7 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     for entries in hooks_manifest["hooks"].values():
         for entry in entries:
             command = entry["hooks"][0]["command"]
-            assert command.startswith("${CLAUDE_PLUGIN_ROOT}/hooks/")
+            assert command.startswith('bash "${CLAUDE_PLUGIN_ROOT}/hooks/')
             assert "/Users/" not in command  # pragma: allowlist secret
     # Forbidden surfaces.
     assert not (target / "settings.json").exists()

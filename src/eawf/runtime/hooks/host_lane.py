@@ -50,7 +50,7 @@ def record_host_context_boundary(
     Before the host compacts, the Run's contract anchors are snapshotted on its
     stream; when the session starts again they are read back from the store and
     compared, and the restatement the daemon answers with is what the host hands
-    its model. A session with no live Run gets the daemon's typed refusal.
+    its model. A session on no live Run, such as an operator's own, is skipped.
 
     Args:
         event: The PRE_COMPACT or SESSION_START event.
@@ -83,6 +83,8 @@ def record_host_context_boundary(
             answer = client.call(_HOST_CONTEXT_METHOD, params)
     except Exception as exc:
         return HookResult(name=name, output=repr(exc))
+    if answer.get("outcome") == "no_run":
+        return HookResult(name=name, output=f"{name} skipped: no live Run on the host session")
     drift = ",".join(answer.get("drift", ())) or "none"
     head = f"{name} ok run={answer.get('run_ref')} drift={drift}"
     return HookResult(name=name, output=f"{head}\n{answer.get('restatement', '')}")
@@ -103,6 +105,31 @@ def host_context_restatement(results: Iterable[HookResult]) -> str | None:
         if result.name == HOST_CONTEXT_HOOK and head.startswith(f"{HOST_CONTEXT_HOOK} ok "):
             return restatement or None
     return None
+
+
+#: The hook that names an installed host plugin older or newer than the package.
+PLUGIN_VERSION_HOOK: Final = "runtime.plugin_version"
+
+
+def report_plugin_version_mismatch(*, repo_root: Path | None = None) -> HookResult:
+    """Name an installed eawf host plugin whose version differs from the package's.
+
+    The host loads the plugin's skill text, so a stale plugin steers the whole
+    session; the line is printed into the session-start context.
+
+    Args:
+        repo_root: The repository the harness runs in; the process working directory
+            when ``None``.
+
+    Returns:
+        A non-blocking :class:`HookResult` whose output is the mismatch line, or empty
+        when every installed plugin matches or none is installed.
+    """
+    from eawf.observability.doctor.checks_plugin_version import plugin_version_mismatch_line
+
+    workspace = repo_root if repo_root is not None else Path.cwd()
+    line = plugin_version_mismatch_line(workspace=workspace)
+    return HookResult(name=PLUGIN_VERSION_HOOK, output=line or "")
 
 
 #: The hook that validates a host-lane skill invocation before its Run starts.
@@ -163,6 +190,11 @@ def judge_host_skill_invocation(event: HookEvent) -> HookResult:
         A blocking :class:`HookResult` naming the refusal, or a non-blocking one
         naming the admitted invocation or why none was judged.
     """
+    name = HOST_SKILL_HOOK
+    invocation = host_skill_invocation(event)
+    if invocation is None:
+        return HookResult(name=name, output=f"{name} skipped: no eawf skill invoked")
+    # Only a skill invocation pays for the catalog: every tool call fires this hook.
     from eawf.workflow.skills.arguments import (
         InvocationRefusedError,
         check_invocation,
@@ -170,10 +202,8 @@ def judge_host_skill_invocation(event: HookEvent) -> HookResult:
     )
     from eawf.workflow.skills.catalog import SKILL_CATALOG
 
-    name = HOST_SKILL_HOOK
-    invocation = host_skill_invocation(event)
-    entry = SKILL_CATALOG.entry(invocation[0]) if invocation is not None else None
-    if invocation is None or entry is None:
+    entry = SKILL_CATALOG.entry(invocation[0])
+    if entry is None:
         return HookResult(name=name, output=f"{name} skipped: no eawf skill invoked")
     _skill, text, lane = invocation
     try:
@@ -203,8 +233,12 @@ def register_host_lane_hooks(
             event, daemon_client_factory=daemon_client_factory, repo_root=repo_root
         )
 
+    def _plugin_version_hook(_event: HookEvent) -> HookResult:
+        return report_plugin_version_mismatch(repo_root=repo_root)
+
     for event_type in _HOST_CONTEXT_BOUNDARIES:
         runner.register(event_type, _context_hook, name=HOST_CONTEXT_HOOK)
+    runner.register(HookEventType.SESSION_START, _plugin_version_hook, name=PLUGIN_VERSION_HOOK)
     for event_type in (HookEventType.USER_PROMPT_SUBMIT, HookEventType.PRE_TOOL_USE):
         runner.register(event_type, judge_host_skill_invocation, name=HOST_SKILL_HOOK)
 
@@ -213,9 +247,11 @@ __all__ = [
     "HOST_CONTEXT_HOOK",
     "HOST_SKILL_HOOK",
     "HOST_SKILL_TOOL",
+    "PLUGIN_VERSION_HOOK",
     "host_context_restatement",
     "host_skill_invocation",
     "judge_host_skill_invocation",
     "record_host_context_boundary",
     "register_host_lane_hooks",
+    "report_plugin_version_mismatch",
 ]

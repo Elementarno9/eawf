@@ -390,6 +390,53 @@ def marketplace_plugin_isolation() -> Iterator[None]:
 
 
 @pytest.fixture(scope="session", autouse=True)
+def plugin_registry_isolation(runtime_dir_isolation: RuntimeDirIsolation) -> Iterator[Path]:
+    """Keep the operator's installed Claude and Codex plugin registries out of every test.
+
+    The doctor and the session-start hook compare the installed plugin
+    versions with the package, so a test would pass or fail by what the
+    machine has installed. A test that patches the seam itself still wins.
+
+    Yields:
+        The isolated home the registries are read under, empty by default.
+    """
+    from eawf.observability.doctor import checks_plugin_version
+
+    isolated_home = runtime_dir_isolation.runtime_dir / "plugin-registry-home"
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(checks_plugin_version, "_registry_home", lambda: isolated_home)
+    try:
+        yield isolated_home
+    finally:
+        monkeypatch.undo()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def claude_user_settings_isolation(runtime_dir_isolation: RuntimeDirIsolation) -> Iterator[Path]:
+    """Keep the operator's ``~/.claude/settings.json`` out of every project install.
+
+    The Claude installer reads the user-level settings for the eawf plugin's
+    enabled flag and for a statusline the project must not override, so a
+    test would pass or fail by the machine's own settings. The seam is
+    patched rather than ``HOME``: a suite-wide ``HOME`` would also move the
+    uv cache and git identity every subprocess test inherits. A test that
+    patches the seam itself still wins.
+
+    Yields:
+        The isolated user settings path, which no test creates by default.
+    """
+    from eawf.runtime.runtimes.claude import plugin_install
+
+    isolated_path = runtime_dir_isolation.runtime_dir / "claude-home" / ".claude" / "settings.json"
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(plugin_install, "global_settings_path", lambda: isolated_path)
+    try:
+        yield isolated_path
+    finally:
+        monkeypatch.undo()
+
+
+@pytest.fixture(scope="session", autouse=True)
 def runtime_certification_isolation() -> Iterator[Callable[..., Any]]:
     """Keep the daemon's background runtime probe off every Run a test starts.
 

@@ -56,18 +56,18 @@ import orjson
 import typer
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
-from eawf.surfaces.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
+    from eawf.kernel.state.epoch2.urns import RunUrn
     from eawf.observability.logging.state_leak import StateLeakKind
     from eawf.platform.lint import LintConfig
     from eawf.runtime.hooks.event import HookEvent, HookEventType, HookRuntime
+    from eawf.runtime.hooks.health import HookFailure
     from eawf.runtime.hooks.runner import HookResult, HookRunner
     from eawf.surfaces.render.envelope import EnvelopeStatus, OutputEnvelope
 
@@ -112,6 +112,25 @@ class AgentOutputPayload(BaseModel):
     run_ref: RunUrn
     seq: int = Field(ge=0)
     text: str
+
+
+def _run_ref_model[M: type[BaseModel]](model: M) -> M:
+    """Return *model* with its ``RunUrn`` field resolved.
+
+    The payload models name ``RunUrn`` only for type checkers, so importing
+    this module does not load the state package every hook process skips;
+    the verbs that read a Run resolve it here, once per process.
+
+    Args:
+        model: A payload model whose ``run_ref`` field is a ``RunUrn``.
+
+    Returns:
+        The same model class, rebuilt when it was not yet complete.
+    """
+    from eawf.kernel.state.epoch2.urns import RunUrn
+
+    model.model_rebuild(_types_namespace={"RunUrn": RunUrn})
+    return model
 
 
 hook_app = typer.Typer(
@@ -393,6 +412,7 @@ def _seed_agent_end_verdict(
     envelope and the function returns without raising.
     """
     from eawf.runtime.daemon.dispatch_runner import native_run_author
+    from eawf.surfaces.cli.scope import resolve_state_path
     from eawf.workflow.agent_report.store import (
         AgentReportRoleMismatchError,
         AgentReportScrubError,
@@ -400,7 +420,7 @@ def _seed_agent_end_verdict(
     from eawf.workflow.dispatch.seed import seed_interim_verdict
 
     try:
-        agent_payload = AgentEndPayload.model_validate(payload)
+        agent_payload = _run_ref_model(AgentEndPayload).model_validate(payload)
         state_path = resolve_state_path(flags.workspace)
         result = seed_interim_verdict(
             author=native_run_author(state_path.parent, agent_payload.run_ref),
@@ -844,17 +864,19 @@ _SILENT_TOOL_EVENTS: frozenset[str] = frozenset(
 
 
 def _emit_session_context(results: list[HookResult]) -> None:
-    """Print the staleness report and the Run's anchors as a session-start context document.
+    """Print the staleness reports and the Run's anchors as a session-start context document.
 
     Args:
-        results: The session-start hook results; the staleness check's
-            non-empty output and the anchors a compaction boundary restated
-            are printed, and nothing at all when there are neither, so a
-            current repository with no Run on the session adds no context.
+        results: The session-start hook results; the projection staleness and
+            plugin version checks' non-empty output and the anchors a
+            compaction boundary restated are printed, and nothing at all when
+            there are none, so a current repository with no Run on the session
+            adds no context.
     """
-    from eawf.runtime.hooks.host_lane import host_context_restatement
+    from eawf.runtime.hooks.host_lane import PLUGIN_VERSION_HOOK, host_context_restatement
 
-    reports = [r.output for r in results if r.name == _STALENESS_HOOK_NAME and r.output]
+    reported = {_STALENESS_HOOK_NAME, PLUGIN_VERSION_HOOK}
+    reports = [r.output for r in results if r.name in reported and r.output]
     restatement = host_context_restatement(results)
     if restatement is not None:
         reports.append(restatement)
@@ -1019,12 +1041,15 @@ def _stood_down_for_epoch(
     return False
 
 
-def _emitted_host_answer(event: HookEvent, results: list[HookResult]) -> bool:
+def _emitted_host_answer(
+    event: HookEvent, results: list[HookResult], failed: frozenset[str]
+) -> bool:
     """Print the host-shaped answer an event owes instead of the envelope, if it owes one.
 
     Args:
         event: The dispatched event.
         results: What its hooks returned.
+        failed: The hooks whose failure was already named on stderr.
 
     Returns:
         Whether an answer was printed, so the envelope must not be.
@@ -1047,8 +1072,13 @@ def _emitted_host_answer(event: HookEvent, results: list[HookResult]) -> bool:
         return True
     if event.event_type.value in _SILENT_TOOL_EVENTS and event.runtime == "claude":
         # Claude Code reads a tool hook's stdout as a decision about the call; an
-        # observer has none to give, so what it did goes to stderr alone.
+        # observer has none to give, so what it did goes to stderr alone. A hook
+        # that skipped the call did nothing, and on every tool call of a session
+        # with no Run its line would only be noise in the host's log. A hook
+        # that failed already has its one failure line there.
         for result in results:
+            if result.name in failed or result.output.startswith(f"{result.name} skipped:"):
+                continue
             typer.echo(result.output, err=True)
         return True
     return False
@@ -1074,6 +1104,12 @@ def _guarded_pre_tool_use(
     Returns:
         Whether the command has answered the host and must stop here.
     """
+    from eawf.runtime.hooks.event import HookEventType
+
+    # Every other event leaves before the guard and its sandbox rules load.
+    if event_type != HookEventType.PRE_TOOL_USE.value:
+        return False
+
     from eawf.runtime.hooks.data_loss_guard import (
         DATA_LOSS_GUARD_HOOK,
         DENY_EMISSION_RUNTIMES,
@@ -1081,10 +1117,9 @@ def _guarded_pre_tool_use(
         guard_pre_tool_use,
         unreadable_payload_denial,
     )
-    from eawf.runtime.hooks.event import HookEventType
     from eawf.runtime.sandbox.data_loss import DataLossDenial
 
-    if event_type != HookEventType.PRE_TOOL_USE.value or runtime not in DENY_EMISSION_RUNTIMES:
+    if runtime not in DENY_EMISSION_RUNTIMES:
         return False
     denial: DataLossDenial | None
     try:
@@ -1105,6 +1140,30 @@ def _guarded_pre_tool_use(
     typer.echo(orjson.dumps(deny_document(denial)).decode("utf-8"))
     typer.echo(f"{DATA_LOSS_GUARD_HOOK} deny {denial.rule}: {denial.reason}", err=True)
     return True
+
+
+def _report_failures(failures: list[HookFailure], *, repo_root: Path) -> None:
+    """Record each handler failure in the hook health record and name it on stderr.
+
+    The hook still exits as its results say: a failure is reported, never
+    turned into a non-zero exit the host would treat as a broken hook.
+
+    Args:
+        failures: What the runner caught, oldest first.
+        repo_root: The repository the hook fired in; the record is kept in
+            its main checkout's tree.
+    """
+    if not failures:
+        return
+    from eawf.runtime.hooks.health import failure_line, record_failures
+    from eawf.runtime.vcs.branch_name import main_checkout
+
+    try:
+        record_failures(main_checkout(repo_root) / ".ea", failures)
+    except OSError as exc:
+        typer.echo(f"eawf hook: health record not written ({type(exc).__name__})", err=True)
+    for failure in failures:
+        typer.echo(failure_line(failure), err=True)
 
 
 @hook_app.command(name="run")
@@ -1205,8 +1264,10 @@ def run(
     register_runtime_capture_hooks(runner, repo_root=repo_root)
     _register_projection_staleness(runner, repo_root=repo_root)
     results = runner.run_event(event)
+    _report_failures(runner.failures, repo_root=repo_root)
 
-    if _emitted_host_answer(event, results):
+    failed = frozenset(failure.hook for failure in runner.failures)
+    if _emitted_host_answer(event, results, failed):
         return
 
     finished_at = datetime.now(UTC)
@@ -1338,13 +1399,14 @@ def agent_output(ctx: typer.Context) -> None:
     from eawf.kernel.state.urn import build as build_urn
     from eawf.kernel.store.paths import store_path
     from eawf.runtime.daemon.dispatch_runner import persist_forwarded_output_chunk
+    from eawf.surfaces.cli.scope import resolve_state_path
 
     flags: GlobalFlags = ctx.obj
     started_at = datetime.now(UTC)
 
     try:
         stdin_text = "" if sys.stdin.isatty() else sys.stdin.read()
-        chunk = AgentOutputPayload.model_validate(_parse_payload(stdin_text))
+        chunk = _run_ref_model(AgentOutputPayload).model_validate(_parse_payload(stdin_text))
         state_path = resolve_state_path(flags.workspace)
         result = persist_forwarded_output_chunk(
             store_path(state_path, StoreKind.EVENT),

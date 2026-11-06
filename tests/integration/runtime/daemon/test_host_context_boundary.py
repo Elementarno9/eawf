@@ -3,7 +3,7 @@
 The pre-compaction hook snapshots the Run's contract anchors onto its stream through
 the real daemon verb; the post-compaction session start reads them back from the store,
 names every anchor that moved, and hands the host's model a restatement in place of
-whatever the summary kept. A session with no live Run gets the daemon's typed refusal.
+whatever the summary kept. A session on no live Run gets the daemon's typed ``no_run``.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
-from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.host_context import HOST_CONTEXT_BOUNDARY_METHOD
 from eawf.runtime.daemon.methods.host_tool import HOST_TOOL_OBSERVE_METHOD
 from eawf.runtime.daemon.run_events import run_events_of
@@ -158,18 +158,19 @@ def test_run_013_a_receipt_changed_across_the_compaction_is_a_contract_mismatch(
     assert block_text(final).value == "context resumed · contract mismatch: receipts_digest"
 
 
-def test_surf_102_a_compaction_on_a_session_with_no_run_is_refused_typed(
+def test_surf_102_a_compaction_on_a_session_with_no_run_answers_no_run(
     canary: CanaryProvision, ctx: MethodContext
 ) -> None:
-    with pytest.raises(DaemonValidationError, match="identity_not_found"):
-        call(
-            HOST_CONTEXT_BOUNDARY_METHOD,
-            ctx,
-            canary,
-            harness="claude-code",
-            host_session_id="another-session",
-            boundary="compacting",
-        )
+    answer = call(
+        HOST_CONTEXT_BOUNDARY_METHOD,
+        ctx,
+        canary,
+        harness="claude-code",
+        host_session_id="another-session",
+        boundary="compacting",
+    )
+
+    assert answer == {"outcome": "no_run"}
 
 
 class _InProcessClient:

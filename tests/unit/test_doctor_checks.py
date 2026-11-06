@@ -317,7 +317,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "eawfd"))
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 18
+    assert len(results) == 19
     assert {r.name for r in results} == {
         "branch_currency",
         "tools_available",
@@ -329,6 +329,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         "authority_epoch",
         "canonical_sequence_drift",
         "gitignore_block",
+        "plugin_version",
         "cli_daemon_version",
         "launchd_agent",
         "stray_daemons",

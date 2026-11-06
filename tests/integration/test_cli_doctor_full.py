@@ -111,6 +111,7 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "authority_epoch",
         "canonical_sequence_drift",
         "gitignore_block",
+        "plugin_version",
         "cli_daemon_version",
         "launchd_agent",
         "stray_daemons",

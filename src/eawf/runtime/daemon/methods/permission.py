@@ -518,19 +518,22 @@ def _document_path(authority: RootAuthority) -> Path:
     return target.generation_path(generation_id) / GENERATION_DOCUMENT
 
 
-def host_run(authority: RootAuthority, host_session_id: str) -> RunUrn:
-    """Return the one live Run the host session is the vendor session of.
+def host_session_runs(authority: RootAuthority, host_session_id: str) -> list[str]:
+    """Return the URNs of every live Run the host session is the vendor session of.
 
     Inside a subagent the host names the subagent, whose own adopted Run is the one
     its calls belong to; elsewhere it names the session.
 
-    Raises:
-        DaemonValidationError: No live Run is on that session, or several are,
-            so the held call cannot be bound to one Run.
+    Args:
+        authority: The fence-cleared tree.
+        host_session_id: The host's id of the session or subagent.
+
+    Returns:
+        The URNs, sorted; empty when the session is on no live Run.
     """
     digest = hash_vendor_session_id(host_session_id)
     holding = {status.value for status in _HOLDING_STATUSES}
-    live = sorted(
+    return sorted(
         row["urn"]
         for row in document_rows(
             read_document(_document_path(authority)), Epoch2Collection.RUN
@@ -539,6 +542,16 @@ def host_run(authority: RootAuthority, host_session_id: str) -> RunUrn:
         and isinstance(row.get("vendor_session"), dict)
         and row["vendor_session"].get("session_digest") == digest
     )
+
+
+def host_run(authority: RootAuthority, host_session_id: str) -> RunUrn:
+    """Return the one live Run the host session is the vendor session of.
+
+    Raises:
+        DaemonValidationError: No live Run is on that session, or several are,
+            so the held call cannot be bound to one Run.
+    """
+    live = host_session_runs(authority, host_session_id)
     if len(live) != 1:
         raise DaemonValidationError(
             f"validation_failed: identity_not_found: {len(live)} live Runs are on the "
@@ -723,5 +736,6 @@ __all__ = [
     "PermissionsAnswer",
     "expire_lapsed",
     "host_run",
+    "host_session_runs",
     "open_permission_rows",
 ]
