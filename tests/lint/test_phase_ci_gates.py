@@ -462,6 +462,16 @@ _CLASSIFIER_SAYS_RUN = "(needs.changes.result != 'success' || needs.changes.outp
 #: instead of auto-skipping when the changes job itself failed.
 _CHANGES_CONDITION = f"!cancelled() && {_CLASSIFIER_SAYS_RUN}"
 
+#: The pull-request lane's macOS job runs on pull requests alone; the
+#: whole-suite macOS shards run on every other event. Both keep the
+#: fail-open changes gate.
+_PULL_REQUEST_CONDITION = (
+    f"!cancelled() && github.event_name == 'pull_request' && {_CLASSIFIER_SAYS_RUN}"
+)
+_OFF_PULL_REQUEST_CONDITION = (
+    f"!cancelled() && github.event_name != 'pull_request' && {_CLASSIFIER_SAYS_RUN}"
+)
+
 #: The one job-level condition twice-green carries: a release push runs it
 #: under the changes gate, a scheduled or dispatched run always, a pull
 #: request or a main push never.
@@ -472,8 +482,9 @@ _TWICE_GREEN_CONDITION = (
     " || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')"
 )
 
-#: The push branches the twice-green cadence names: main and the release train.
-_PUSH_BRANCHES = ["main", "release", "release/**"]
+#: The push branches the twice-green cadence names: main, the dev integration
+#: branch and the release train.
+_PUSH_BRANCHES = ["main", "dev", "release", "release/**"]
 
 #: The sentence the job comment and the lint docstring both carry, so the
 #: cadence a reader sees is the cadence the lint enforces.
@@ -666,7 +677,7 @@ def _twice_green_workflow(condition: str | None = _TWICE_GREEN_CONDITION) -> dic
         """
         on:
           push:
-            branches: [main, release, "release/**"]
+            branches: [main, dev, release, "release/**"]
           pull_request:
           schedule:
             - cron: "17 3 * * *"
@@ -795,12 +806,13 @@ def test_twice_green_gate_reds_without_a_dispatch_trigger() -> None:
         None,
         {"branches": ["**"]},
         {"branches": ["main"]},
-        {"branches": ["main", "release", "release/**", "feature/**"]},
+        {"branches": ["main", "release", "release/**"]},
+        {"branches": ["main", "dev", "release", "release/**", "feature/**"]},
         {"branches-ignore": ["gh-pages"]},
     ],
 )
 def test_twice_green_gate_reds_on_a_branch_push_trigger(push: object) -> None:
-    """A push filter wider or narrower than main and release moves the rerun."""
+    """A push filter wider or narrower than main, dev and release moves the rerun."""
     workflow = _twice_green_workflow()
     workflow[True]["push"] = push
     assert twice_green_violations(workflow) == [_PUSH_PROBLEM]
@@ -869,13 +881,16 @@ def test_twice_green_comment_gate_reds_on_a_cadence_in_another_job() -> None:
 #: not conclude success.
 _HEAVY_JOBS: dict[str, str] = {
     "test": _CHANGES_CONDITION,
+    "e2e": _CHANGES_CONDITION,
+    "test-macos": _OFF_PULL_REQUEST_CONDITION,
+    "macos-affected": _PULL_REQUEST_CONDITION,
     "twice-green": _TWICE_GREEN_CONDITION,
 }
 
 #: Jobs that run whatever the classifier says: linux-jail is a release-train
-#: receipt, windows and the wheel smoke cover what the matrix cannot, and the
-#: two PR gates are cheap enough that skipping them saves nothing.
-_CHEAP_JOBS = ("linux-jail", "windows", "tool-install-smoke", "snapshot-pairing", "prose-gate")
+#: receipt, windows covers what the matrix cannot, and the combined small
+#: gates are cheap enough that skipping them saves nothing.
+_CHEAP_JOBS = ("linux-jail", "windows", "gates")
 
 
 def _needs(job: dict[str, Any]) -> list[str]:
@@ -982,17 +997,27 @@ def test_changes_gate_reds_on_an_open_gate() -> None:
                 run: python3 tools/ci_changes.py
           test:
             runs-on: ubuntu-24.04
+          e2e:
+            needs: changes
+            if: >-
+              !cancelled() && (needs.changes.result != 'success'
+              || needs.changes.outputs.code == 'true')
+          test-macos:
+            needs: changes
+            if: >-
+              !cancelled() && (needs.changes.result != 'success'
+              || needs.changes.outputs.code == 'true')
+          macos-affected:
+            needs: changes
+            if: github.event_name == 'pull_request'
           twice-green:
             needs: changes
             if: needs.changes.outputs.code != 'false'
           linux-jail: {}
           windows:
             needs: [changes]
-          tool-install-smoke: {}
-          snapshot-pairing:
+          gates:
             if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
-          prose-gate:
-            if: github.event_name == 'pull_request'
         """
     )
     assert changes_gate_violations(defective) == [
@@ -1002,9 +1027,11 @@ def test_changes_gate_reds_on_an_open_gate() -> None:
         "the changes job's code output is not wired from the classifier step",
         "the test job does not need the changes job",
         f"the test job is not gated on exactly {_CHANGES_CONDITION!r}",
+        f"the test-macos job is not gated on exactly {_OFF_PULL_REQUEST_CONDITION!r}",
+        f"the macos-affected job is not gated on exactly {_PULL_REQUEST_CONDITION!r}",
         f"the twice-green job is not gated on exactly {_TWICE_GREEN_CONDITION!r}",
         "the windows job depends on the changes job, so it can be skipped",
-        "the snapshot-pairing job depends on the changes job, so it can be skipped",
+        "the gates job depends on the changes job, so it can be skipped",
     ]
 
 
@@ -1100,9 +1127,15 @@ def timing_suite_violations(commands: list[str]) -> list[str]:
     return problems
 
 
-def test_ci_test_leg_runs_timing_suites_serially() -> None:
-    """The CI test matrix times its budgets outside the parallel pool."""
-    steps = _load_ci()["jobs"]["test"]["steps"]
+@pytest.mark.parametrize(
+    "pipeline",
+    [("test", "e2e"), ("test-macos", "macos-affected")],
+    ids=["ubuntu", "macos"],
+)
+def test_ci_test_leg_runs_timing_suites_serially(pipeline: tuple[str, ...]) -> None:
+    """Each OS's test jobs time their budgets outside the parallel pool."""
+    jobs = _load_ci()["jobs"]
+    steps = [step for name in pipeline for step in jobs[name]["steps"]]
     commands = _pytest_commands("\n".join(str(step.get("run", "")) for step in steps))
     assert timing_suite_violations(commands) == []
 

@@ -1,4 +1,4 @@
-"""The CI requirement-trace job fails on any unaccounted requirement id.
+"""The CI requirement-trace step fails on any unaccounted requirement id.
 
 ``tools/requirement_trace.py check`` alone only proves the stored census is
 fresh; an id nobody owns stays green unless the step passes
@@ -22,7 +22,7 @@ import yaml
 pytestmark = pytest.mark.unit
 
 _CI = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yaml"
-_JOB = "requirement-trace"
+_JOB = "gates"
 _TOOL = "tools/requirement_trace.py"
 
 

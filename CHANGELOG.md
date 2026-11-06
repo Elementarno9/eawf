@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.7.1]
+
+This patch release makes the Claude Code hooks start fast and fail visibly, binds subagent Runs to their Task, renders a themed status line, makes `eawf reflect` fast enough to run on every session, and moves day-to-day integration to a `dev` branch so `main` carries only stable releases. No migration is required from 0.7.0.
+
+### Added
+
+- **Plugin version check.** A `plugin_version` doctor check compares the installed plugin with the package, and SessionStart prints one line when they differ.
+- **Powerline status line.** The status line renders as powerline segments with a light and a dark palette, chosen from the flag, then the environment, then the Claude Code theme settings, then `COLORFGBG`; a segment that cannot be sourced is left out instead of showing n/a.
+- **Reflect pages and baselines.** `eawf reflect` builds personal baselines and findings from your own history and writes offline HTML pages: an overview, a session finder and one page per session. `--scope project|workspace|user` widens the view without showing rows from projects outside the chosen scope.
+
+### Changed
+
+- **Faster hooks.** A hook on a tool event starts without importing the model layer, in about 140 ms.
+- **Status line only when absent.** Install writes the eawf status line only when neither the user nor the project settings set one.
+- **Subagent Runs bind to their Task.** A dispatch prompt carrying `[eawf task=KEY]` binds the subagent's Run to that Task; prompts carry the Task marker and a report-size cap; racing deliveries for one subagent share its Run, and key allocation is race-free.
+- **Stalled Runs end.** A Run silent for over 24 hours ends as stalled-abandoned, re-checked under its lock first.
+- **Incremental indexes.** The run ledger index is bounded to the ledgers read most recently, and `eawf reflect` indexes Claude Code and Codex history incrementally, subagent transcripts included, so a run takes seconds and shows progress.
+- **Research depth.** `/research` and a headless research run default to rounds mode with 3 rounds when no depth is given.
+- **Machine-local transcripts and receipts.** New transcripts and call receipts stay in the machine-local ledger instead of the committed tree.
+- **A fast pull-request CI lane.** A pull request runs a fast lane; the full matrix, macOS and coverage run on every push to `main`, `dev` and release branches and nightly.
+- **Dev-branch cadence.** Milestone pull requests target `dev`, pre-release tags `{version}-dev.{n}` are cut on `dev`, and a stable release fast-forwards `main` to a reviewed `dev` head and is tagged there.
+
+### Fixed
+
+- **Plugin hooks run through bash**, so a hook script without its executable bit no longer fails with exit 126, and hooks are wired from one settings source, so no handler fires twice.
+- **Hook failures are visible.** A failing hook handler is recorded locally, named in one stderr line and counted as `hook-errors:<n>` on the status line, while the hook still exits 0; a session with no Run is skipped silently.
+- **Zero-token Runs count as priced.** A Run that reported no tokens is no longer counted as unpriced spend in `eawf reflect`.
+- **MCP segment.** The status line shows `MCP: <installed>/<registered>`, and one malformed rate-limit reset time hides only its own countdown.
+- **Title helper sessions.** `eawf reflect` caps title-provider calls per run, runs the provider outside the project, and keeps its helper sessions out of usage totals.
+- **Codex plugin version.** The doctor check counts only the Codex plugin install Codex loads, not every cached version.
+- **Local ledger lines are found.** Console lookups and the redaction guard read transcript and call-receipt lines kept in the machine-local ledger.
+- **Release train per version.** Release commands resolve the train from the version, so 0.7.1 has its own one-rung train beside 0.7.0.
+
 ## [0.7.0]
 
 This is the stable release of v0.7.0. It drops the epoch-1 migration stack, so 0.7.0rc4 stays the last release that migrates a 0.6 tree; read the Migration section before upgrading. A release is now tagged only after its push CI is green, and stable is gated on the full suite and a live packet run on both declared runtimes. Agent sessions can no longer act as the operator, a Track admits no Milestone beyond its active limit, and every Run's transcript can be read locally.

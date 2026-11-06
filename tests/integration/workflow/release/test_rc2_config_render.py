@@ -62,6 +62,7 @@ from eawf.workflow.release.train import (
     V07_TRAIN,
     checkpoint_config_yaml,
     gate_bindings_for,
+    train_for_version,
 )
 from eawf.workflow.verify.release_readiness import compute_readiness
 
@@ -184,7 +185,8 @@ def test_the_windows_claim_names_a_job_the_ci_workflow_declares() -> None:
     sorted(
         version
         for version in CHECKPOINT_CONFIGS
-        if V07_TRAIN.checkpoints.index(V07_TRAIN.checkpoint_for_version(version))
+        if train_for_version(version) is V07_TRAIN
+        and V07_TRAIN.checkpoints.index(V07_TRAIN.checkpoint_for_version(version))
         < V07_TRAIN.checkpoints.index(V07_TRAIN.checkpoint_for_version(RC2_VERSION))
     ),
 )

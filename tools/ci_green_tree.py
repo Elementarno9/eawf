@@ -13,8 +13,9 @@ of the checked-out tree, which the workflow uploads as the
 passed, or when the changes job skipped them because the tree differs
 only in bookkeeping from a green tree that is itself recorded. The record
 names that inherited tree, so every record traces back to a run whose
-heavy jobs actually ran. Twice-green counts as heavy only on a push to the
-release train, the one push it runs on.
+heavy jobs actually ran. A push to main and one to dev are judged alike.
+Twice-green counts as heavy only on a push to the release train, the one
+push it runs on.
 
 ``gate`` runs in the ``require-green-ci`` job of both release workflows.
 It lists the successful push-event ``ci.yaml`` runs from this repository
@@ -73,8 +74,9 @@ CHANGES_JOB = "changes"
 
 #: The ci.yaml jobs the changes job may skip. A record needs each of them
 #: to have passed, or all of them to have been skipped against a recorded
-#: green tree.
-HEAVY_JOBS: tuple[str, ...] = ("test", "twice-green")
+#: green tree. The whole-suite macOS shards run on every push, so a push to
+#: main and one to dev stand on the same set.
+HEAVY_JOBS: tuple[str, ...] = ("test", "e2e", "test-macos", "twice-green")
 
 #: The heavy job a push runs only on the release train. A push elsewhere
 #: skips it by its own condition, so the record there stands on the rest.

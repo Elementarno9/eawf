@@ -8,9 +8,6 @@ import yaml
 
 from eawf.platform.lint.tools import astgrep_floor
 
-REPO_ROOT = Path(__file__).parents[3]
-WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "reviewdog.yml"
-
 
 def test_floor_rules_are_deterministic_polyglot_floor() -> None:
     rules = astgrep_floor.FLOOR_RULES
@@ -69,21 +66,3 @@ def test_write_floor_refuses_non_generated_config(tmp_path: Path) -> None:
         assert "refusing to overwrite non-generated file" in str(exc)
     else:
         raise AssertionError("expected FileExistsError")
-
-
-def test_reviewdog_workflow_runs_visible_floor_on_pull_requests() -> None:
-    raw = WORKFLOW_PATH.read_text(encoding="utf-8")
-    workflow = yaml.load(raw, Loader=yaml.BaseLoader)
-    job = workflow["jobs"]["ast-grep-floor"]
-    reviewdog_step = job["steps"][-1]
-
-    assert "pull_request:" in raw
-    assert "paths:" not in raw
-    assert job["name"] == "ast-grep visible floor"
-    assert workflow["permissions"]["pull-requests"] == "write"
-    assert reviewdog_step["uses"] == "reviewdog/action-ast-grep@v1.56.0"
-    assert reviewdog_step["with"]["reporter"] == astgrep_floor.REVIEWDOG_FLOOR_POLICY.reporter
-    assert reviewdog_step["with"]["level"] == astgrep_floor.REVIEWDOG_FLOOR_POLICY.level
-    assert reviewdog_step["with"]["fail_level"] == astgrep_floor.REVIEWDOG_FLOOR_POLICY.fail_level
-    assert reviewdog_step["with"]["sg_config"] == "sgconfig.yml"
-    assert reviewdog_step["with"]["sg_flags"] == "--no-ignore hidden"

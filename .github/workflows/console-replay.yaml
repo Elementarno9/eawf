@@ -1,14 +1,12 @@
 name: Console replay
 
 # The console golden contract -- 261 frames and 25 journeys -- is evidence that
-# decays the moment nothing replays it. It ran once, under a gitignored spike, and
-# would otherwise sit unexercised across two checkpoints before the console port
-# inherits it. This workflow is deliberately unfiltered on push (not just the
-# protected branches ci.yaml watches) so a branch that moves the chassis, the
-# fixture or the normalisation map learns it broke the contract on that push
-# rather than at the phase PR.
+# decays the moment nothing replays it. Every pull request replays it, whatever
+# paths it touches, so a change that moves the chassis, the fixture or the
+# normalisation map learns it broke the contract before it lands. A push runs
+# nothing here: the pull request that carried the change already replayed it,
+# and the nightly twice-green run replays the whole TUI snapshot tier.
 on:
-  push:
   pull_request:
 
 concurrency:

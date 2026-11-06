@@ -38,7 +38,11 @@ from eawf.kernel.release.waiver import ReleaseWaiver
 from eawf.kernel.spec.release import Release, ReleaseCheckpoint, ReleaseKeyStr
 from eawf.kernel.spec.release_config import ReleaseConfig, ReleaseGateName
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
-from eawf.runtime.daemon.methods.release_context import require_state_path, resolve_config
+from eawf.runtime.daemon.methods.release_context import (
+    require_state_path,
+    resolve_config,
+    train_or_refuse,
+)
 from eawf.runtime.release.chokepoint import sweep_pinned_source
 from eawf.workflow.release.advance import (
     CheckpointGateReceipt,
@@ -58,7 +62,7 @@ from eawf.workflow.release.checkpoint_receipts import (
     produce_checkpoint_receipts,
 )
 from eawf.workflow.release.records import read_release_record, read_release_records
-from eawf.workflow.release.train import V07_TRAIN, gate_bindings_for
+from eawf.workflow.release.train import gate_bindings_for, train_for_key
 from eawf.workflow.release.train_store import (
     read_checkpoint_receipts,
     read_train_advances,
@@ -130,12 +134,7 @@ def _rung(version: str) -> ReleaseCheckpoint:
         DaemonValidationError: When the version is malformed or the
             train declares no such rung.
     """
-    try:
-        return V07_TRAIN.checkpoint_for_version(version)
-    except (KeyError, ValueError) as exc:
-        raise DaemonValidationError(
-            f"validation_failed: train {V07_TRAIN.train_id} declares no checkpoint for {version!r}"
-        ) from exc
+    return train_or_refuse(version).checkpoint_for_version(version)
 
 
 def _stored_record(state_path: Path, release_key: str) -> Release:
@@ -283,6 +282,7 @@ async def produce_receipts(ctx: MethodContext, params: dict[str, Any]) -> dict[s
         args.version, membership_refs=() if stored is None else stored.membership_refs
     )
     release = _stored_record(state_path, rung.release_key)
+    train_id = train_for_key(release.key).train_id
     bindings = _bindings(rung)
     try:
         pinned_source(release)
@@ -302,7 +302,7 @@ async def produce_receipts(ctx: MethodContext, params: dict[str, Any]) -> dict[s
         )
         try:
             assert_prerequisite_receipts(
-                release, gate_config, (receipt,), now=now, train_id=V07_TRAIN.train_id
+                release, gate_config, (receipt,), now=now, train_id=train_id
             )
         except TrainAdvanceError:
             continue
@@ -335,7 +335,7 @@ async def produce_receipts(ctx: MethodContext, params: dict[str, Any]) -> dict[s
         )
         try:
             assert_prerequisite_receipts(
-                release, gate_config, (receipt,), now=finished_at, train_id=V07_TRAIN.train_id
+                release, gate_config, (receipt,), now=finished_at, train_id=train_id
             )
         except TrainAdvanceError as exc:
             del receipts[gate]
@@ -397,10 +397,12 @@ async def advance(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     try:
         records = read_release_records(state_path)
         train = derive_train(
-            V07_TRAIN, recorded_keys=records, advances=read_train_advances(state_path)
+            train_for_key(args.release_key),
+            recorded_keys=records,
+            advances=read_train_advances(state_path),
         )
         receipts = read_checkpoint_receipts(state_path, args.release_key)
-    except ValueError as exc:
+    except (KeyError, ValueError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
     current = records.get(args.release_key)
     if current is None:

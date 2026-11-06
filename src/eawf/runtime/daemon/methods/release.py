@@ -113,7 +113,6 @@ from pydantic import (
 from eawf.kernel.release.waiver import ReleaseWaiver
 from eawf.kernel.spec.release import (
     Release,
-    ReleaseCheckpoint,
     ReleaseTargetStatus,
     ReleaseTrain,
     release_key,
@@ -129,6 +128,7 @@ from eawf.runtime.daemon.methods.release_context import (
     assert_revision,
     require_state_path,
     resolve_config,
+    train_or_refuse,
     validated_release,
     void_changed_approval,
 )
@@ -151,7 +151,7 @@ from eawf.workflow.release.admission import (
     create_checkpoint_release,
     required_contract_ids,
 )
-from eawf.workflow.release.advance import TrainAdvanceError, derive_train
+from eawf.workflow.release.advance import TrainAdvanceError, current_train, derive_train
 from eawf.workflow.release.canary_receipts import CanaryReceiptSet, load_canary_receipts
 from eawf.workflow.release.ledger import record_operation
 from eawf.workflow.release.lifecycle import ReleaseTransitionError
@@ -185,7 +185,7 @@ from eawf.workflow.release.records import (
 )
 from eawf.workflow.release.settlement import follow_guarded_edges, observe_target
 from eawf.workflow.release.target_machine import TargetTransitionError
-from eawf.workflow.release.train import V07_TRAIN
+from eawf.workflow.release.train import RELEASE_TRAINS, train_for_key, train_for_version
 from eawf.workflow.release.train_store import read_checkpoint_receipts, read_train_advances
 from eawf.workflow.release.verification_debts import read_verification_debts
 from eawf.workflow.verify.checkpoint_succession import (
@@ -294,8 +294,8 @@ async def show(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             a store is corrupt.
     """
     args = ShowParams.model_validate(params)
-    records, train = _recorded_train(ctx)
-    rung = train.current_checkpoint if args.version is None else _rung_for(args.version)
+    records, train = _recorded_train(ctx, args.version)
+    rung = train.checkpoint_for_version(args.version) if args.version else train.current_checkpoint
     record = records.get(rung.release_key)
     return {
         "train_id": train.train_id,
@@ -307,53 +307,35 @@ async def show(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _recorded_train(ctx: MethodContext) -> tuple[dict[str, Release], ReleaseTrain]:
+def _recorded_train(
+    ctx: MethodContext, version: str | None
+) -> tuple[dict[str, Release], ReleaseTrain]:
     """Return the stored records and the train standing where they put it.
 
     Args:
         ctx: Server context; ``state_path`` may be unset.
+        version: The checkpoint asked about, whose train is placed;
+            ``None`` places :func:`~eawf.workflow.release.advance.current_train`.
 
     Returns:
         The current record of every stored release, and the train at
-        its derived open index. Without a state root, no records and the
-        source-declared train.
+        its derived open index. Without a state root, no records.
 
     Raises:
         DaemonValidationError: When a store exists but is corrupt. A
             checkpoint reported as never opened because its row could not
             be parsed is the one wrong answer here.
     """
-    if ctx.state_path is None:
-        return {}, V07_TRAIN
-    state_path = Path(ctx.state_path)
+    declared = None if version is None else train_or_refuse(version)
+    state_path = None if ctx.state_path is None else Path(ctx.state_path)
     try:
-        records = read_release_records(state_path)
-        advances = read_train_advances(state_path)
-        return records, derive_train(V07_TRAIN, recorded_keys=records, advances=advances)
+        records = {} if state_path is None else read_release_records(state_path)
+        advances = [] if state_path is None else read_train_advances(state_path)
+        if declared is None:
+            return records, current_train(RELEASE_TRAINS, recorded_keys=records, advances=advances)
+        return records, derive_train(declared, recorded_keys=records, advances=advances)
     except ValueError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
-
-
-def _rung_for(version: str) -> ReleaseCheckpoint:
-    """Return the ladder rung tagging *version*.
-
-    Args:
-        version: Normalized checkpoint version.
-
-    Returns:
-        The matching
-        :class:`~eawf.kernel.spec.release.ReleaseCheckpoint`.
-
-    Raises:
-        DaemonValidationError: When the version is malformed or the
-            train declares no such rung.
-    """
-    try:
-        return V07_TRAIN.checkpoint_for_version(version)
-    except (KeyError, ValueError) as exc:
-        raise DaemonValidationError(
-            f"validation_failed: train {V07_TRAIN.train_id} declares no checkpoint for {version!r}"
-        ) from exc
 
 
 def _sweep(
@@ -484,9 +466,9 @@ async def approve(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             candidate,
             config,
             read_checkpoint_receipts(state_path, candidate.key),
-            rung=V07_TRAIN.checkpoint_for_version(candidate.version),
+            rung=train_for_key(candidate.key).checkpoint_for(candidate.key),
             now=datetime.now(UTC),
-            train_id=V07_TRAIN.train_id,
+            train_id=train_for_key(candidate.key).train_id,
         )
     except TrainAdvanceError as exc:
         raise DaemonValidationError(
@@ -1249,18 +1231,19 @@ def _terminal_predecessor(state_path: Path, version: str) -> Release | None:
             is corrupt.
     """
     try:
-        rung = predecessor_rung(V07_TRAIN, version)
+        train = train_for_version(version)
+        rung = predecessor_rung(train, version)
         recorded = None if rung is None else read_release_record(state_path, rung.release_key)
         advanced = {
             row.closed_key
             for row in read_train_advances(state_path)
-            if row.train_id == V07_TRAIN.train_id
+            if row.train_id == train.train_id
         }
     except (KeyError, ValueError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
     try:
         assert_predecessor_terminal(
-            V07_TRAIN, version=version, predecessor=recorded, advanced_keys=advanced
+            train, version=version, predecessor=recorded, advanced_keys=advanced
         )
     except CheckpointSuccessionError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
@@ -1348,7 +1331,7 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     try:
         record = create_checkpoint_release(
             state,
-            train=V07_TRAIN,
+            train=train_or_refuse(args.version),
             version=args.version,
             uid=uuid4(),
             membership_refs=tuple(args.membership_refs),

@@ -25,7 +25,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from eawf.kernel.release.checkpoint_template import with_membership_refs
-from eawf.kernel.spec.release import Release, validate_release_against_train
+from eawf.kernel.spec.release import Release, ReleaseTrain, validate_release_against_train
 from eawf.kernel.spec.release_config import (
     ReleaseConfig,
     ReleaseConfigError,
@@ -39,7 +39,11 @@ from eawf.workflow.release.ledger import (
 from eawf.workflow.release.lifecycle import ReleaseTransitionError
 from eawf.workflow.release.preflight import invalidate_changed_approval
 from eawf.workflow.release.records import record_release
-from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
+from eawf.workflow.release.train import (
+    checkpoint_config_yaml,
+    train_for_key,
+    train_for_version,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +82,7 @@ def resolve_config(version: str, *, membership_refs: Sequence[str] = ()) -> Rele
     if membership_refs:
         document = with_membership_refs(source, membership_refs=membership_refs)
     try:
-        return load_release_config(document, train=V07_TRAIN)
+        return load_release_config(document, train=train_for_version(version))
     except ReleaseConfigError as exc:
         raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
 
@@ -105,10 +109,31 @@ def validated_release(payload: dict[str, Any]) -> Release:
             f"validation_failed: release payload invalid: {exc.error_count()} error(s)"
         ) from exc
     try:
-        validate_release_against_train(release, V07_TRAIN)
+        validate_release_against_train(release, train_for_key(release.key))
     except (KeyError, ValueError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
     return release
+
+
+def train_or_refuse(version: str) -> ReleaseTrain:
+    """Return the declared train whose ladder holds *version*, or refuse the verb.
+
+    Args:
+        version: Normalized checkpoint version.
+
+    Returns:
+        The matching train.
+
+    Raises:
+        DaemonValidationError: When the version is malformed or no
+            declared train has a rung for it.
+    """
+    try:
+        return train_for_version(version)
+    except (KeyError, ValueError) as exc:
+        raise DaemonValidationError(
+            f"validation_failed: no release train declares a checkpoint for {version!r}"
+        ) from exc
 
 
 def require_state_path(ctx: MethodContext) -> Path:
@@ -196,6 +221,7 @@ __all__ = [
     "assert_revision",
     "require_state_path",
     "resolve_config",
+    "train_or_refuse",
     "validated_release",
     "void_changed_approval",
 ]
