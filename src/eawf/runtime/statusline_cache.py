@@ -10,7 +10,11 @@ freshly-written line.
 
 This module owns only the cache read/write + staleness decision; it carries
 no rendering and no process management. The orchestrator supplies the render
-callable and the refresh trigger (a detached background render). Writes are
+callable and the refresh trigger (a detached background render). Each entry
+records the key it was rendered under, and an entry written under another key
+is a miss: the key carries what changes the line without changing the
+payload, such as the resolved palette, so a theme switch never serves a line
+painted in the old colours. Writes are
 atomic (temporary file + rename) because the refresh worker writes while
 other redraws read. The clock is injectable so the TTL boundary is
 deterministic under test.
@@ -56,6 +60,7 @@ SWR never evicts, it only flags staleness."""
 
 _VALUE_KEY: str = "value"
 _WRITTEN_AT_KEY: str = "written_at"
+_RENDER_KEY: str = "key"
 
 
 @dataclass(frozen=True)
@@ -66,10 +71,13 @@ class CacheEntry:
         value: The cached statusline line.
         written_at: Unix timestamp (seconds) of the write, used to compute
             staleness against the cache TTL.
+        key: The render key the value was written under; ``""`` for an
+            entry that recorded none.
     """
 
     value: str
     written_at: float
+    key: str = ""
 
 
 @dataclass(frozen=True)
@@ -102,6 +110,7 @@ class StatuslineCache:
         self,
         path: Path,
         *,
+        key: str = "",
         ttl_seconds: float = _DEFAULT_TTL_SECONDS,
         clock: Callable[[], float] = time.time,
     ) -> None:
@@ -109,6 +118,8 @@ class StatuslineCache:
 
         Args:
             path: JSON file backing this cache entry.
+            key: The render key this cache serves; an entry written under
+                another key reads as a miss.
             ttl_seconds: Freshness window in seconds (> 0). An entry older
                 than this is served stale and flags a refresh.
             clock: Zero-arg wall-clock source returning Unix seconds.
@@ -120,6 +131,7 @@ class StatuslineCache:
         if ttl_seconds <= 0:
             raise ValueError(f"ttl_seconds must be positive: {ttl_seconds!r}")
         self._path = path
+        self._key = key
         self._ttl_seconds = ttl_seconds
         self._clock = clock
 
@@ -127,9 +139,10 @@ class StatuslineCache:
         """Return the stored :class:`CacheEntry`, or ``None`` on any miss.
 
         A miss is any of: the file does not exist, is empty, fails JSON
-        decode, is not a mapping, or lacks a string ``value`` / numeric
-        ``written_at``. A corrupt cache is a miss, never a raise -- the
-        statusline must degrade, not crash.
+        decode, is not a mapping, lacks a string ``value`` / numeric
+        ``written_at``, or carries a non-string ``key``. A corrupt cache is
+        a miss, never a raise -- the statusline must degrade, not crash.
+        The entry is returned whatever its key; :meth:`get` compares it.
         """
         if not self._path.exists():
             return None
@@ -149,12 +162,17 @@ class StatuslineCache:
             return None
         value = decoded.get(_VALUE_KEY)
         written_at = decoded.get(_WRITTEN_AT_KEY)
-        if not isinstance(value, str) or not isinstance(written_at, (int, float)):
+        key = decoded.get(_RENDER_KEY, "")
+        if (
+            not isinstance(value, str)
+            or not isinstance(written_at, (int, float))
+            or not isinstance(key, str)
+        ):
             return None
-        return CacheEntry(value=value, written_at=float(written_at))
+        return CacheEntry(value=value, written_at=float(written_at), key=key)
 
     def write(self, value: str) -> None:
-        """Write *value* to the cache, stamping it with the current clock.
+        """Write *value* to the cache under this cache's key, stamped with the clock.
 
         The bytes land in a sibling temporary file that is then renamed over
         the entry, so a concurrent reader sees either the old entry or the
@@ -165,7 +183,7 @@ class StatuslineCache:
         the temporary file removed) so a read-only cache directory degrades
         to an always-cold render rather than crashing the statusline.
         """
-        entry = {_VALUE_KEY: value, _WRITTEN_AT_KEY: self._clock()}
+        entry = {_VALUE_KEY: value, _WRITTEN_AT_KEY: self._clock(), _RENDER_KEY: self._key}
         tmp = self._path.with_name(f".{self._path.name}.{os.getpid()}.tmp")
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -192,13 +210,14 @@ class StatuslineCache:
         """Read the cache and classify it for the SWR loop.
 
         Returns:
-            A :class:`CacheLookup`: a miss yields ``(None, False, False)``;
+            A :class:`CacheLookup`: a miss, an entry written under another
+            key included, yields ``(None, False, False)``;
             a fresh hit yields ``(value, True, False)``; a stale hit yields
             ``(value, True, True)`` -- the value is still served, but the
             caller should trigger a background refresh.
         """
         entry = self.read_entry()
-        if entry is None:
+        if entry is None or entry.key != self._key:
             return CacheLookup(value=None, present=False, stale=False)
         return CacheLookup(value=entry.value, present=True, stale=self.is_stale(entry))
 

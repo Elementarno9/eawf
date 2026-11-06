@@ -47,8 +47,8 @@ from eawf.kernel.state.epoch2.base import BranchName
 from eawf.kernel.state.epoch2.urns import BatchUrn
 from eawf.kernel.store.changes import MAX_PAGE, ChangePage, read_change_page
 from eawf.kernel.store.compaction import document_rows, read_document
-from eawf.kernel.store.ledger import effective_records, read_ledger_records
-from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.ledger import effective_records, read_ledger_content, read_ledger_records
+from eawf.kernel.store.paths import collection_ledger_paths, ledger_path
 from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, Epoch2Collection
 from eawf.observability.doctor.runtime_health import runtime_tuple_verdicts
 from eawf.runtime.daemon.epoch2_recovery import read_boot_recovery
@@ -159,16 +159,21 @@ def resolve_target(document_file: Path, key: str) -> TargetResolution:
     """Return whether the tree whose document is *document_file* holds anything under *key*.
 
     A ledger line that names the key anywhere counts as holding it, so a record filed only
-    on a ledger, or named only by another record's line, is never called missing.
+    on a ledger, or named only by another record's line, is never called missing. Every
+    file of a collection is read, its sealed snapshot and the machine-local ledger its
+    Run exhaust lines go to included, so a key only a host or semantic call receipt names
+    resolves too. The bytes are searched rather than parsed, since the match is textual.
     """
     document = read_document(document_file)
     held = any(key in document_rows(document, collection) for collection in Epoch2Collection)
-    quoted = f'"{key}"'
+    quoted = f'"{key}"'.encode()
     for collection in LEDGER_COLLECTIONS:
         if held:
             break
-        path = ledger_path(document_file, collection)
-        held = path.is_file() and quoted in path.read_text(encoding="utf-8")
+        held = any(
+            quoted in read_ledger_content(path)
+            for path in collection_ledger_paths(document_file, collection)
+        )
     logger.debug(f"resolve_target key={key} held={held}")
     return TargetResolution(key=key, ending=None if held else MISSING_ENDING)
 

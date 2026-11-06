@@ -3,15 +3,14 @@
 Drives the Typer app via :class:`CliRunner` with synthetic Claude JSON on
 stdin and asserts:
 
-1. ``eawf cc statusline`` emits a single line on stdout with exit ``0``.
-2. The line contains expected segment markers (``scope:``, ``git:``,
-   ``model:``, ``ses:``, ``cwd:``, ``ctx:``, ``cost:``, ``mcp:``, ``hooks:``,
-   ``mem:``, ``save:``), each unavailable one naming why.
-3. ``--theme ascii-fallback`` honors the env var precedence (flag wins).
-4. ``eawf cc statusline prewarm`` writes a cache entry at the expected
+1. ``eawf cc statusline`` emits the powerline rows on stdout with exit ``0``:
+   line 1 with the segments the payload sources, then one bar row per window,
+   and no ``n/a`` marker for a segment it cannot source.
+2. ``EAWF_STATUSLINE_THEME`` picks the palette, and ``--theme`` wins over it.
+3. ``eawf cc statusline prewarm`` writes a cache entry at the expected
    path; subsequent ``statusline`` invocations with the same session id
-   use the cached line while it is fresh.
-5. Any module exception is contained — the orchestrator never crashes.
+   use the cached rows while they are fresh.
+4. Any module exception is contained — the orchestrator never crashes.
 """
 
 from __future__ import annotations
@@ -32,6 +31,10 @@ from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 
+#: The background escapes of the dark and the light palettes' base colour.
+_DARK_BASE = "\x1b[48;2;30;30;46m"
+_LIGHT_BASE = "\x1b[48;2;239;241;245m"
+
 
 def _stub_no_git(monkeypatch: pytest.MonkeyPatch) -> None:
     """Force every git invocation to fail with FileNotFoundError so
@@ -45,7 +48,7 @@ def _stub_no_git(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.integration
-def test_statusline_e2e_emits_single_line_with_zero_exit(
+def test_statusline_e2e_emits_powerline_rows_with_zero_exit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -61,6 +64,7 @@ def test_statusline_e2e_emits_single_line_with_zero_exit(
         "session_id": "ses-int-001",
         "model": "claude-opus-4-7",
         "cwd": str(tmp_path),
+        "workspace": {"project_dir": str(tmp_path)},
         "context_window": {
             "context_window_size": 200_000,
             "current_usage": {
@@ -83,31 +87,17 @@ def test_statusline_e2e_emits_single_line_with_zero_exit(
             "cc",
             "statusline",
             "--theme",
-            "ascii-fallback",
+            "dark",
         ],
         input=json.dumps(payload),
     )
     assert result.exit_code == 0, result.output
-    line = result.stdout.rstrip("\n")
-    # One line — no embedded newlines.
-    assert "\n" not in line
-    # Each module's prefix is present (ascii-fallback drops colour, keeps
-    # the segment text verbatim).
-    for marker in (
-        "scope:n/a(epoch1-undeclared)",
-        "budget:n/a(epoch1-undeclared)",
-        "git:n/a(not-a-repository)",
-        "model:claude-opus-4-7",
-        "ses:ses-int-",
-        "cwd:",
-        "ctx:1.0k/200.0k",
-        "cost:n/a(no-cost-reported)",
-        "mcp:n/a(epoch1-undeclared)",
-        "hooks:0 plugins:n/a(no-plugin-record)",
-        "mem:n/a(epoch1-undeclared)",
-        "save:0%",
-    ):
-        assert marker in line, f"missing marker {marker!r} in line: {line!r}"
+    rows = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout.rstrip("\n")).split("\n")
+    segments = [part.strip() for part in rows[0].split("\ue0b0") if part.strip()]
+    assert segments == ["claude-opus-4-7", tmp_path.name]
+    assert len(rows) == 2
+    assert rows[1].startswith(" ctx ") and rows[1].endswith("   1% 1K/200K")
+    assert "n/a" not in result.stdout
 
 
 @pytest.mark.integration
@@ -115,9 +105,10 @@ def test_statusline_env_theme_is_honored_when_no_flag(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``EAWF_STATUSLINE_THEME`` selects the theme when ``--theme`` is omitted."""
+    """``EAWF_STATUSLINE_THEME`` selects the palette when ``--theme`` is omitted."""
     monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(tmp_path / "cache"))
-    monkeypatch.setenv("EAWF_STATUSLINE_THEME", "ascii-fallback")
+    monkeypatch.setenv("EAWF_STATUSLINE_THEME", "light")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     _stub_no_git(monkeypatch)
 
     payload = {"session_id": "ses-env-theme", "model": "haiku", "cwd": str(tmp_path)}
@@ -126,9 +117,8 @@ def test_statusline_env_theme_is_honored_when_no_flag(
     )
     assert result.exit_code == 0, result.output
     line = result.stdout.rstrip("\n")
-    # ascii-fallback theme: no ANSI escape codes in the rendered line.
-    assert "\x1b[" not in line, f"env-selected ascii-fallback theme leaked colour: {line!r}"
-    assert "model:haiku" in line
+    assert _LIGHT_BASE in line, f"env-selected light palette not drawn: {line!r}"
+    assert " haiku " in line
 
 
 @pytest.mark.integration
@@ -138,18 +128,19 @@ def test_statusline_flag_wins_over_env_theme(
 ) -> None:
     """``--theme`` flag takes precedence over ``EAWF_STATUSLINE_THEME``."""
     monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(tmp_path / "cache"))
-    monkeypatch.setenv("EAWF_STATUSLINE_THEME", "default")
+    monkeypatch.setenv("EAWF_STATUSLINE_THEME", "light")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     _stub_no_git(monkeypatch)
 
     payload = {"session_id": "ses-flag-wins", "model": "haiku", "cwd": str(tmp_path)}
     result = runner.invoke(
         app,
-        ["--workspace", str(tmp_path), "cc", "statusline", "--theme", "ascii-fallback"],
+        ["--workspace", str(tmp_path), "cc", "statusline", "--theme", "dark"],
         input=json.dumps(payload),
     )
     assert result.exit_code == 0, result.output
     line = result.stdout.rstrip("\n")
-    assert "\x1b[" not in line, f"flag override failed; theme leaked colour: {line!r}"
+    assert _DARK_BASE in line and _LIGHT_BASE not in line, f"flag override failed: {line!r}"
 
 
 @pytest.mark.integration
@@ -160,6 +151,7 @@ def test_statusline_prewarm_writes_cache_and_subsequent_run_hits_cache(
     cache_root = tmp_path / "cache"
     monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(cache_root))
     monkeypatch.delenv("EAWF_STATUSLINE_THEME", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     _stub_no_git(monkeypatch)
 
     payload = {"session_id": "ses-cache-001", "model": "haiku", "cwd": str(tmp_path)}
@@ -167,7 +159,7 @@ def test_statusline_prewarm_writes_cache_and_subsequent_run_hits_cache(
     # 1. Prewarm: same render path, but writes the line to cache.
     result = runner.invoke(
         app,
-        ["--workspace", str(tmp_path), "cc", "statusline", "prewarm", "--theme", "ascii-fallback"],
+        ["--workspace", str(tmp_path), "cc", "statusline", "prewarm", "--theme", "dark"],
         input=json.dumps(payload),
     )
     assert result.exit_code == 0, result.output
@@ -175,7 +167,8 @@ def test_statusline_prewarm_writes_cache_and_subsequent_run_hits_cache(
     assert cache_path.exists(), "prewarm should write the cache file"
     cached = orjson.loads(cache_path.read_bytes())
     assert isinstance(cached, dict)
-    assert "model:haiku" in cached["value"]
+    assert " haiku " in cached["value"]
+    assert cached["key"] == "dark"
 
     # 2. Subsequent statusline call: cache hit. Tamper the cache with a
     # sentinel string (keeping the fresh write stamp) so we can verify the
@@ -184,7 +177,7 @@ def test_statusline_prewarm_writes_cache_and_subsequent_run_hits_cache(
 
     result = runner.invoke(
         app,
-        ["--workspace", str(tmp_path), "cc", "statusline", "--theme", "ascii-fallback"],
+        ["--workspace", str(tmp_path), "cc", "statusline", "--theme", "dark"],
         input=json.dumps(payload),
     )
     assert result.exit_code == 0, result.output
@@ -193,7 +186,7 @@ def test_statusline_prewarm_writes_cache_and_subsequent_run_hits_cache(
 
 @pytest.mark.integration
 def test_statusline_healthy_call_fits_columns_and_keeps_stderr_empty(tmp_path: Path) -> None:
-    """A real process: the line fits ``COLUMNS`` and nothing reaches stderr."""
+    """A real process: every row fits ``COLUMNS`` and nothing reaches stderr."""
     env = {
         **os.environ,
         "HOME": str(tmp_path / "home"),
@@ -214,4 +207,5 @@ def test_statusline_healthy_call_fits_columns_and_keeps_stderr_empty(tmp_path: P
     assert proc.returncode == 0, proc.stderr
     assert proc.stderr == ""
     visible = re.sub(r"\x1b\[[0-9;]*m", "", proc.stdout.rstrip("\n"))
-    assert 0 < len(visible) <= 80
+    assert visible
+    assert all(len(row) <= 80 for row in visible.split("\n"))

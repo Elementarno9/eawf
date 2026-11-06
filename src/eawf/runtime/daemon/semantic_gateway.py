@@ -93,6 +93,7 @@ from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     effective_records,
+    read_collection_records,
     read_ledger_records,
 )
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -1301,10 +1302,9 @@ def run_receipts(
             than merely unfamiliar.
     """
     wanted = canonical_entity_urn(run_ref)
-    records = read_ledger_records(session.ledger_path(Epoch2Collection.RECEIPT))
     receipts = (
         SemanticCallReceipt.model_validate(item.payload)
-        for item in records
+        for item in read_collection_records(session.document_path, Epoch2Collection.RECEIPT)
         if item.payload.get("payload_kind") == RECEIPT_PAYLOAD_KIND
     )
     return tuple(item for item in receipts if canonical_entity_urn(item.run_ref) == wanted)

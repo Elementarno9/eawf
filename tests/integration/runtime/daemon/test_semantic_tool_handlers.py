@@ -56,7 +56,7 @@ from eawf.kernel.state.epoch2.plan_revision import (
 )
 from eawf.kernel.state.epoch2.run import RunPurpose
 from eawf.kernel.store.compaction import document_rows
-from eawf.kernel.store.ledger import read_ledger_records
+from eawf.kernel.store.ledger import read_collection_records, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision, canary_ref, provision_canary
 from eawf.runtime.candidate.seal import accepted_report_of, submission_record
@@ -516,7 +516,7 @@ def receipt_lines(canary: CanaryProvision, runtime_root: Path) -> int:
     """
     context = root_context(canary, runtime_root)
     with context.session([RUN_URN]) as session:
-        records = read_ledger_records(session.ledger_path(Epoch2Collection.RECEIPT))
+        records = read_collection_records(session.document_path, Epoch2Collection.RECEIPT)
     return sum(1 for item in records if item.payload.get("payload_kind") == "semantic_receipt")
 
 
@@ -993,7 +993,7 @@ def test_a_receipt_survives_the_call_that_asked_for_it(
 
     context = root_context(plan_canary, runtime_root)
     with context.session([RUN_URN]) as session:
-        records = read_ledger_records(session.ledger_path(Epoch2Collection.RECEIPT))
+        records = read_collection_records(session.document_path, Epoch2Collection.RECEIPT)
     filed = json.loads(json.dumps(records[-1].payload))
     assert receipt_lines(plan_canary, runtime_root) == before + 1
     assert filed["call_id"] == answer["call_id"]

@@ -41,10 +41,10 @@ from eawf.kernel.store.ledger import (
     LedgerError,
     LedgerRecord,
     LedgerTornTailError,
-    read_ledger_records,
+    read_collection_records,
     replace_unpublished_suffix,
 )
-from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.paths import record_ledger_path
 from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, Epoch2Collection
 from eawf.observability.logging.state_leak import default_allowed_emails
 from eawf.platform.subprocess_detach import no_window_kwargs
@@ -229,7 +229,10 @@ def _unfinished_ledger_records(wal_dir: Path, ledger: Path) -> list[str]:
     """Return the id of each pending or applied WAL record journalling a line of *ledger*.
 
     The boot replay appends such a record's line unless the ledger holds its
-    exact bytes, so rewriting that line now would bring the original back.
+    exact bytes, so rewriting that line now would bring the original back. A
+    line is matched by the file its kind is filed in, so a Run exhaust line
+    bound for the machine-local ledger never blocks a rewrite of the
+    committed one.
     A record that cannot be read is skipped: the replay poisons it instead
     of appending its line.
 
@@ -255,7 +258,10 @@ def _unfinished_ledger_records(wal_dir: Path, ledger: Path) -> list[str]:
             if not isinstance(line, str) or record.state_path is None:
                 continue
             journalled = LedgerRecord.model_validate_json(line)
-            if ledger_path(Path(record.state_path), journalled.collection) == ledger:
+            target = record_ledger_path(
+                Path(record.state_path), journalled.collection, journalled.payload
+            )
+            if target == ledger:
                 found.append(record.record_id)
     return found
 
@@ -423,7 +429,7 @@ def _elsewhere(session: RootSession) -> list[object]:
     for collection in LEDGER_COLLECTIONS:
         if collection is Epoch2Collection.ARTIFACT:
             continue
-        records = read_ledger_records(ledger_path(session.document_path, collection))
+        records = read_collection_records(session.document_path, collection)
         found.extend(record.model_dump(mode="json") for record in records)
     return found
 

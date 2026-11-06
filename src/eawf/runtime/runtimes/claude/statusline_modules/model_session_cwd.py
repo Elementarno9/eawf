@@ -1,44 +1,25 @@
-"""``model_session_cwd`` statusline module — model + session + cwd basename.
+"""``model_session_cwd`` statusline module — the model and project segments.
 
-Reads three fields from the Claude stdin payload:
-
-- ``model`` — model name (string or mapping with ``id``/``name``).
-- ``session_id`` — Claude session id (used as cache key by the prewarm
-  worker; rendered abbreviated to the first 8 chars).
-- ``cwd`` — working directory (only the basename is shown to keep the
-  segment compact).
-
-A missing field renders its own ``n/a(absent)`` marker; a payload carrying
-none of the three renders ``model:n/a(no-host-payload)``.
+The powerline's line 1 shows the model and the project apart, so
+:func:`build_model` and :func:`build_project` state each on its own segment:
+the model's display name, and the basename of the payload's
+``workspace.project_dir``.
 """
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any
 
 from eawf.runtime.runtimes.claude.statusline_modules._host import host_source
 from eawf.surfaces.render.statusline import (
-    UNAVAILABLE_MARK,
     StatuslineSegment,
     sourced_segment,
     unavailable_segment,
 )
 
-logger = logging.getLogger(__name__)
-
-_MODULE = "model_session_cwd"
-_SOURCE = host_source("model,session_id,cwd")
-
-#: What a field the host payload omits renders as, inside an otherwise present segment.
-_ABSENT = f"{UNAVAILABLE_MARK}(absent)"
-
-
-_SESSION_PREFIX_LEN: int = 8
-"""How many chars of the session id to render. 8 is enough to disambiguate
-in practice and keeps the segment narrow.
-"""
+_MODEL_SOURCE = host_source("model.display_name")
+_PROJECT_SOURCE = host_source("workspace.project_dir")
 
 
 def _model_label(payload: dict[str, Any]) -> str | None:
@@ -59,43 +40,42 @@ def _model_label(payload: dict[str, Any]) -> str | None:
     return None
 
 
-def _session_label(payload: dict[str, Any]) -> str | None:
-    """Return the 8-char prefix of ``session_id``, or ``None`` when absent."""
-    raw = payload.get("session_id")
-    if isinstance(raw, str) and raw:
-        return raw[:_SESSION_PREFIX_LEN]
-    return None
-
-
-def _cwd_label(payload: dict[str, Any]) -> str | None:
-    """Return the basename of ``cwd``, or ``None`` on missing/empty input."""
-    raw = payload.get("cwd")
-    if isinstance(raw, str) and raw:
-        return Path(raw).name or raw
-    return None
-
-
-def build(claude_payload: dict[str, Any], state_path: Path | None) -> StatuslineSegment:
-    """Return the ``model:.. ses:.. cwd:..`` segment.
+def build_model(claude_payload: dict[str, Any], state_path: Path | None) -> StatuslineSegment:
+    """Return the ``model:<display name>`` segment, or the marker naming why not.
 
     Args:
         claude_payload: Decoded Claude stdin JSON.
-        state_path: Unused — the module reads only from the Claude payload.
-            Kept for the uniform module signature.
+        state_path: Unused; kept for the uniform module signature.
 
     Returns:
-        A :class:`StatuslineSegment` with ``module="model_session_cwd"``
-        and ``status="ok"`` when at least one field was present, or the
-        ``model:n/a(no-host-payload)`` marker when none was.
+        The model segment; ``model:n/a(no-model)`` when the payload names none.
     """
     del state_path  # accepted for uniform signature
     model = _model_label(claude_payload)
-    session = _session_label(claude_payload)
-    cwd = _cwd_label(claude_payload)
-    if model is None and session is None and cwd is None:
-        return unavailable_segment(_MODULE, "model", "no-host-payload", _SOURCE)
-    value = f"{model or _ABSENT} ses:{session or _ABSENT} cwd:{cwd or _ABSENT}"
-    return sourced_segment(_MODULE, "model", value, _SOURCE)
+    if model is None:
+        return unavailable_segment("model", "model", "no-model", _MODEL_SOURCE)
+    return sourced_segment("model", "model", model, _MODEL_SOURCE)
 
 
-__all__ = ["build"]
+def build_project(claude_payload: dict[str, Any], state_path: Path | None) -> StatuslineSegment:
+    """Return the ``project:<basename>`` segment, or the marker naming why not.
+
+    Args:
+        claude_payload: Decoded Claude stdin JSON, read for
+            ``workspace.project_dir``.
+        state_path: Unused; kept for the uniform module signature.
+
+    Returns:
+        The project segment; ``project:n/a(no-project-dir)`` when the payload
+        names no project directory.
+    """
+    del state_path  # accepted for uniform signature
+    workspace = claude_payload.get("workspace")
+    raw = workspace.get("project_dir") if isinstance(workspace, dict) else None
+    name = Path(raw).name if isinstance(raw, str) else ""
+    if not name:
+        return unavailable_segment("project", "project", "no-project-dir", _PROJECT_SOURCE)
+    return sourced_segment("project", "project", name, _PROJECT_SOURCE)
+
+
+__all__ = ["build_model", "build_project"]

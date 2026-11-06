@@ -34,7 +34,7 @@ from eawf.kernel.store.ledger import (
     read_ledger_records,
     render_ledger_line,
 )
-from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.paths import ledger_path, record_ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
@@ -375,8 +375,8 @@ def test_redaction_refuses_while_the_wal_holds_an_unfinished_artifact_line(
     tmp_path: Path,
 ) -> None:
     canary, _ = make_tree(tmp_path)
-    leaked = _content("bb", "start", f"locked {SERVER_PATH}", "done")
-    record_id = _journal_applied_line(tmp_path, canary, leaked)
+    # An evidence line is committed, so its replay appends to the ledger being rewritten.
+    record_id = _journal_applied_line(tmp_path, canary, _evidence("EVD-0009", {"note": "x"}))
     before = _ledger(canary).read_bytes()
 
     with pytest.raises(DaemonValidationError, match=REDACTION_WAL_UNFINISHED) as refused:
@@ -388,3 +388,17 @@ def test_redaction_refuses_while_the_wal_holds_an_unfinished_artifact_line(
     answer = redact(tmp_path, canary, "redact-2")
     assert answer["rows"] == 1
     assert answer["record_keys"] == ["artifact://content/run-00000010/bb"]
+
+
+def test_redaction_is_not_blocked_by_an_unfinished_local_content_line(tmp_path: Path) -> None:
+    """A journalled content line replays into the local ledger, never the one rewritten."""
+    canary, published = make_tree(tmp_path)
+    local_line = _content("ee", f"later {SERVER_PATH}")
+    local = record_ledger_path(document_path(canary), Epoch2Collection.ARTIFACT, local_line.payload)
+    assert local != _ledger(canary)
+    _journal_applied_line(tmp_path, canary, local_line)
+
+    answer = redact(tmp_path, canary, "redact-1")
+
+    assert answer["record_keys"] == ["artifact://content/run-00000010/bb"]
+    assert _ledger(canary).read_bytes().startswith(published)

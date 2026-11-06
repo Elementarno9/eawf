@@ -45,8 +45,7 @@ from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.epoch2.base import RunKey
 from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.kernel.state.types import UtcDatetime
-from eawf.kernel.store.ledger import read_ledger_records
-from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.ledger import read_collection_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.reflect.runs import read_tree_run
 from eawf.runtime.daemon.semantic_gateway import RECEIPT_PAYLOAD_KIND, SemanticCallReceipt
@@ -434,7 +433,7 @@ def read_dispatch_extract(tree_root: Path, ref: str) -> DispatchExtract:
     urn = str(reading.run.urn)
     receipts = [
         SemanticCallReceipt.model_validate(item.payload)
-        for item in read_ledger_records(ledger_path(document, Epoch2Collection.RECEIPT))
+        for item in read_collection_records(document, Epoch2Collection.RECEIPT)
         if item.payload.get("payload_kind") == RECEIPT_PAYLOAD_KIND
         and item.payload.get("run_ref") == urn
     ]

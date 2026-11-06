@@ -158,7 +158,7 @@ def bind_and_observe(canary: CanaryProvision, *, cap: int, spent: int) -> None:
 
 def line(canary: CanaryProvision, session_id: str) -> str:
     """Return the rendered statusline, colour stripped, for *session_id*."""
-    rendered = render_pipeline({"session_id": session_id}, workspace=canary.root, theme_name=None)
+    rendered = render_pipeline({"session_id": session_id}, workspace=canary.root, palette="dark")
     return ANSI.sub("", rendered)
 
 
@@ -174,8 +174,8 @@ def test_live_run_started_in_the_session_shows_its_task_and_budget(tmp_path: Pat
 
     rendered = line(canary, SESSION)
 
-    assert "scope:EAWF-0042" in rendered
-    assert "budget:1.5k/10.0k" in rendered
+    assert " EAWF-0042 " in rendered
+    assert " budget: 1.5k/10.0k " in rendered
     state_path = canary.root / ".ea" / "state.json"
     assert budget.build({"session_id": SESSION}, state_path).truth.provenance_refs == (RUN_URN,)
 
@@ -186,8 +186,9 @@ def test_live_run_without_a_sealed_cap_names_why_beside_its_scope(tmp_path: Path
 
     rendered = line(canary, SESSION)
 
-    assert "scope:EAWF-0042" in rendered
-    assert "budget:n/a(no-token-cap)" in rendered
+    # The budget cannot be sourced without a sealed cap, so it is left out.
+    assert " EAWF-0042 " in rendered
+    assert "budget" not in rendered and "n/a" not in rendered
 
 
 def test_another_sessions_statusline_finds_no_run(tmp_path: Path) -> None:
@@ -197,8 +198,9 @@ def test_another_sessions_statusline_finds_no_run(tmp_path: Path) -> None:
 
     rendered = line(canary, OTHER_SESSION)
 
-    assert "scope:n/a(no-run-for-session)" in rendered
-    assert "budget:n/a(no-run-for-session)" in rendered
+    # A session bound to no Run shows neither segment.
+    assert "EAWF-0042" not in rendered
+    assert "budget" not in rendered and "n/a" not in rendered
 
 
 def test_queued_run_not_yet_started_binds_no_session(tmp_path: Path) -> None:

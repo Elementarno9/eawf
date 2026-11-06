@@ -93,7 +93,8 @@ HOST_PAYLOAD: Final[dict[str, Any]] = {
             "cache_read_input_tokens": 40_000,
         },
     },
-    "cost": {"total_cost_usd": 1.2345, "total_duration_ms": 5_000},
+    "cost": {"total_cost_usd": 1.2345, "total_duration_ms": 5_000, "total_api_duration_ms": 3_000},
+    "workspace": {"project_dir": "/work/sample-project"},
 }
 
 
@@ -181,25 +182,23 @@ def test_meas_028_every_segment_is_a_truth_field_with_producer_freshness_and_qua
     segments = orchestrator._build_segments(payload, state_path)
 
     assert [segment.module for segment in segments] == [
-        "scope",
-        "budget",
-        "git",
-        "model_session_cwd",
-        "context_tokens",
-        "rate_window",
+        "model",
+        "project",
+        "active_time",
         "cost",
         "mcp_health",
         "hooks_plugins",
-        "memory",
-        "token_saving",
+        "scope",
+        "budget",
     ]
     for segment in segments:
         assert_truthful(segment)
         assert segment.truth.freshness is Freshness.LIVE
     by_module = {segment.module: segment for segment in segments}
     assert by_module["scope"].text == "scope:EAWF-0126"
-    assert by_module["context_tokens"].text == "ctx:42.0k/200.0k"
-    assert by_module["token_saving"].text == "save:95%"
+    assert by_module["model"].text == "model:Opus"
+    assert by_module["project"].text == "project:sample-project"
+    assert by_module["active_time"].text == "active:0m · 60% active"
     assert by_module["cost"].text == "cost:$1.23"
 
 
@@ -268,38 +267,30 @@ def test_meas_029_context_segment_reads_the_host_payload_not_the_transcript(
     )
     payload = {**HOST_PAYLOAD, "transcript_path": str(transcript)}
 
-    segment = context_tokens.build(payload, None)
+    row = context_tokens.bar_row(payload)
 
-    assert segment.text == "ctx:42.0k/200.0k"
-    assert segment.truth.producer == HOST_PRODUCER
-    assert segment.truth.provenance_refs == ("statusline-payload#context_window.current_usage",)
-    assert segment.truth.measurement_quality is MeasurementQuality.EXACT
+    assert row is not None
+    assert row.detail == "42K/200K"
 
 
-def test_meas_029_context_segment_without_a_window_size_renders_the_count() -> None:
+def test_meas_029_context_without_a_window_size_draws_no_row() -> None:
     payload = {"context_window": {"current_usage": HOST_PAYLOAD["context_window"]["current_usage"]}}
 
-    assert context_tokens.build(payload, None).text == "ctx:42.0k"
+    assert context_tokens.bar_row(payload) is None
 
 
 @pytest.mark.parametrize(
-    ("payload", "text"),
+    "payload",
     [
-        ({}, "ctx:n/a(no-current-usage)"),
-        ({"context_window": {"current_usage": None}}, "ctx:n/a(no-current-usage)"),
-        (
-            {"context_window": {"current_usage": {"input_tokens": 10}}},
-            "ctx:n/a(partial-usage)",
-        ),
+        {},
+        {"context_window": {"context_window_size": 200_000, "current_usage": None}},
+        {"context_window": {"context_window_size": 200_000, "current_usage": {"input_tokens": 10}}},
     ],
 )
-def test_meas_029_context_without_complete_host_usage_is_unavailable_not_zero(
-    payload: dict[str, Any], text: str
+def test_meas_029_context_without_complete_host_usage_draws_no_row_not_zero(
+    payload: dict[str, Any],
 ) -> None:
-    segment = context_tokens.build(payload, None)
-
-    assert segment.text == text
-    assert segment.truth.state is TruthState.UNAVAILABLE
+    assert context_tokens.bar_row(payload) is None
 
 
 def test_meas_029_cost_segment_reads_the_host_cost() -> None:
@@ -472,7 +463,7 @@ def test_meas_043_no_segment_renders_a_bare_unknown_token(tmp_path: Path, state:
 
     segments = orchestrator._build_segments({"cwd": str(tmp_path / "gone")}, state_path)
 
-    assert len(segments) == len(orchestrator._module_order())
+    assert len(segments) == len(orchestrator._segment_builders())
     for segment in segments:
         assert_truthful(segment)
 
@@ -544,7 +535,7 @@ def test_prx_043_every_segment_renders_from_a_producer_with_a_freshness(tmp_path
 
     segments = orchestrator._build_segments({"cwd": str(tmp_path)}, state_path)
 
-    assert len(segments) == len(orchestrator._module_order())
+    assert len(segments) == len(orchestrator._segment_builders())
     for segment in segments:
         assert_truthful(segment)
         tokens = segment.text.replace(":", " ").split()
@@ -831,6 +822,26 @@ def test_prx_043_mcp_reads_the_registry_on_the_selected_generation(tmp_path: Pat
     assert segment.truth.truth_kind is TruthKind.STORED
 
 
+def test_line_one_draws_the_mcp_count_the_real_builder_states(tmp_path: Path) -> None:
+    from eawf.surfaces.render.statusline import load_palette, render_powerline
+
+    state_path = canary_state_path(tmp_path, {})
+    register_mcp(
+        state_path,
+        {
+            "alpha": (McpStatus.INSTALLED, "registered"),
+            "beta": (McpStatus.CONFIGURED, "registered"),
+        },
+    )
+
+    segments = orchestrator._build_segments({**HOST_PAYLOAD, "cwd": str(tmp_path)}, state_path)
+    [line_one] = render_powerline(segments, [], load_palette("dark"), width=None)
+
+    texts = [part.strip() for part in re.sub(r"\x1b\[[0-9;]*m", "", line_one).split("")]
+    # Installed over registered: the payload carries no connection state to count.
+    assert "MCP: 1/2" in texts
+
+
 @pytest.mark.parametrize(
     ("servers", "text", "status"),
     [
@@ -938,7 +949,6 @@ def test_prx_043_the_whole_line_renders_from_epoch2_producers(
     bind_token_cap(state_path, run, 10_000)
     observe_usage(state_path, run, 1, tokens=4_000)
     register_mcp(state_path, {"alpha": (McpStatus.INSTALLED, "registered")})
-    file_notes(state_path, 2)
     write_plugin_record(canary_runtime_under_tmp, {"a@m": [{"scope": "user"}]})
 
     segments = orchestrator._build_segments({**HOST_PAYLOAD, "cwd": str(tmp_path)}, state_path)
@@ -946,7 +956,7 @@ def test_prx_043_the_whole_line_renders_from_epoch2_producers(
     by_module = {segment.module: segment for segment in segments}
     assert by_module["budget"].text == "budget:4.0k/10.0k"
     assert by_module["mcp_health"].text == "mcp:1/1"
-    assert by_module["memory"].text.startswith("mem:2@")
+    assert "memory" not in by_module
     assert by_module["hooks_plugins"].text == "hooks:0 plugins:1"
     for segment in segments:
         assert_truthful(segment)

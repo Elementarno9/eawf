@@ -74,7 +74,7 @@ from eawf.kernel.state.epoch2.authority import RootAuthority, require_native_aut
 from eawf.kernel.store import paths as store_paths
 from eawf.kernel.store.commit_policy import CENSUS_SURFACE_PREFIX, PathClass, classify_path
 from eawf.kernel.store.compaction import read_document, write_document
-from eawf.kernel.store.ledger import LedgerError
+from eawf.kernel.store.ledger import LedgerError, LedgerRecord
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.lock import portalock, sibling
 
@@ -489,6 +489,29 @@ class RootSession:
             ValueError: The collection has no ledger.
         """
         return self._context.declared_path(store_paths.ledger_path(self.document_path, collection))
+
+    def ledger_target(self, record: LedgerRecord) -> tuple[Path, Epoch2Collection | None]:
+        """Return where one ledger line is appended, and the ledger its document write names.
+
+        A Run exhaust line lands in the generation's local ledger, so its
+        document write names no ledger: the committed document must not
+        advance for a line no clone carries.
+
+        Args:
+            record: The ledger line about to be appended.
+
+        Returns:
+            The declared file, and the line's collection for a committed line
+            or ``None`` for a local one.
+
+        Raises:
+            ValueError: The collection has no ledger.
+        """
+        target = store_paths.record_ledger_path(
+            self.document_path, record.collection, record.payload
+        )
+        local = target != store_paths.ledger_path(self.document_path, record.collection)
+        return self._context.declared_path(target), None if local else record.collection
 
     def read_document(self) -> dict[str, Any]:
         """Return the selected generation's document.

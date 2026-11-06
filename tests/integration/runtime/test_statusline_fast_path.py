@@ -63,7 +63,7 @@ def _env(tmp_path: Path) -> dict[str, str]:
         **os.environ,
         "HOME": str(home),
         "EAWF_STATUSLINE_CACHE": str(tmp_path / "cache"),
-        "EAWF_STATUSLINE_THEME": "ascii-fallback",
+        "EAWF_STATUSLINE_THEME": "dark",
     }
 
 
@@ -94,7 +94,7 @@ def _run(
 def _seed(tmp_path: Path, session_id: str, value: str, written_at: float) -> Path:
     path = tmp_path / "cache" / f"{session_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(orjson.dumps({"value": value, "written_at": written_at}))
+    path.write_bytes(orjson.dumps({"value": value, "written_at": written_at, "key": "dark"}))
     return path
 
 
@@ -105,9 +105,35 @@ def test_a_fresh_hit_is_printed_without_loading_the_cli_app(tmp_path: Path) -> N
     assert proc.stderr.strip() == "app-unloaded"
 
 
+def test_a_fresh_hit_resolves_its_palette_without_the_model_stack(tmp_path: Path) -> None:
+    # The resolved palette keys the entry, so a hit resolves it on every redraw.
+    _seed(tmp_path, "ses-hot", "CACHED", written_at=time.time() + 3600)
+    probe = (
+        "import sys\n"
+        "sys.argv = ['eawf', 'cc', 'statusline']\n"
+        "from eawf.__main__ import main\n"
+        "main()\n"
+        "heavy = ('pydantic', 'yaml', 'eawf.kernel.state')\n"
+        "print(sorted(name for name in heavy if name in sys.modules), file=sys.stderr)\n"
+    )
+    env = {key: value for key, value in _env(tmp_path).items() if key != "EAWF_STATUSLINE_THEME"}
+    proc = subprocess.run(
+        [sys.executable, "-c", probe],
+        input=json.dumps({"session_id": "ses-hot"}),
+        capture_output=True,
+        text=True,
+        env={**env, "COLORFGBG": "15;0"},
+        cwd=tmp_path,
+        timeout=60,
+        check=True,
+    )
+    assert proc.stdout == "CACHED\n"
+    assert proc.stderr.strip() == "[]"
+
+
 def test_a_miss_is_rendered_and_cached_without_loading_the_cli_app(tmp_path: Path) -> None:
-    proc = _run(tmp_path, {"session_id": "ses-miss", "model": "haiku"}, "--theme", "ascii-fallback")
-    assert "model:haiku" in proc.stdout
+    proc = _run(tmp_path, {"session_id": "ses-miss", "model": "haiku"}, "--theme", "dark")
+    assert " haiku " in proc.stdout
     assert proc.stderr.strip() == "app-unloaded"
     cached = orjson.loads((tmp_path / "cache" / "ses-miss.json").read_bytes())
     assert cached["value"] == proc.stdout.rstrip("\n")
@@ -127,7 +153,7 @@ def test_a_miss_prints_and_caches_what_the_cli_command_would(tmp_path: Path) -> 
 
 def test_a_payload_without_a_session_renders_uncached(tmp_path: Path) -> None:
     proc = _run(tmp_path, {"model": "haiku"})
-    assert "model:haiku" in proc.stdout
+    assert " haiku " in proc.stdout
     assert proc.stderr.strip() == "app-unloaded"
     cache = tmp_path / "cache"
     assert not cache.exists() or not any(cache.iterdir())
@@ -153,7 +179,7 @@ def test_another_statusline_form_still_goes_to_the_cli(tmp_path: Path) -> None:
     # The CLI app exits the process itself, so the probe's own marker never prints.
     assert "app-unloaded" not in proc.stderr
     cached = orjson.loads((tmp_path / "cache" / "ses-warm.json").read_bytes())
-    assert "model:haiku" in cached["value"]
+    assert " haiku " in cached["value"]
 
 
 def test_a_stale_hit_is_served_then_refreshed_in_the_background(tmp_path: Path) -> None:
@@ -168,4 +194,4 @@ def test_a_stale_hit_is_served_then_refreshed_in_the_background(tmp_path: Path) 
         if value != "OLD":
             break
         time.sleep(0.1)
-    assert "model:haiku" in value
+    assert " haiku " in value

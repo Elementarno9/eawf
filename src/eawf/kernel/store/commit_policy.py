@@ -42,15 +42,16 @@ policy, again over facts the caller collected from git.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from enum import StrEnum
 from itertools import pairwise
 from pathlib import PurePosixPath
-from typing import Annotated, Final, Self
+from types import MappingProxyType
+from typing import Annotated, Any, Final, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from eawf.kernel.store.tiers import StorageTier
+from eawf.kernel.store.tiers import Epoch2Collection, StorageTier
 
 #: The directory the classification is total over: a tracked path under
 #: this prefix that matches no declared row is a census failure.
@@ -436,7 +437,48 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
         "the root projection of the rule corpus; the committed agent contract",
         must_exist=True,
     ),
+    _row(
+        "CHANGELOG.md",
+        _YES,
+        "the release notes; the release preflight requires the version's section",
+    ),
+    _row(
+        "src/eawf/_version.py",
+        _YES,
+        "the package version an accepted Milestone bumps and the build reads",
+    ),
 )
+
+
+#: Ledger lines that are Run exhaust, by collection and ``payload_kind``. They share
+#: a collection with lines a clone needs -- proof receipts, audits, artifact
+#: revisions -- so the split is per line: an exhaust line is appended to the
+#: generation's local ledger, which no clone carries, and every other line to the
+#: committed one. Lines committed before the split stay where they are.
+LOCAL_LEDGER_ROWS: Final[Mapping[Epoch2Collection, frozenset[str]]] = MappingProxyType(
+    {
+        # The bounded text of a Run's output that a transcript block unfolds to.
+        Epoch2Collection.ARTIFACT: frozenset({"content_artifact"}),
+        # One line per brokered or host tool call a Run made.
+        Epoch2Collection.RECEIPT: frozenset({"host_call_receipt", "semantic_receipt"}),
+    }
+)
+
+
+def ledger_row_policy(collection: Epoch2Collection, payload: Mapping[str, Any]) -> CommitPolicy:
+    """Return whether a ledger line of *collection* carrying *payload* is committed.
+
+    Args:
+        collection: The collection the line is appended to.
+        payload: The line's payload; its ``payload_kind`` decides.
+
+    Returns:
+        ``NOT_COMMITTED`` for a Run exhaust line declared in
+        :data:`LOCAL_LEDGER_ROWS`, ``COMMITTED`` for every other line.
+    """
+    if payload.get("payload_kind") in LOCAL_LEDGER_ROWS.get(collection, frozenset()):
+        return CommitPolicy.NOT_COMMITTED
+    return CommitPolicy.COMMITTED
 
 
 class CensusFindingKind(StrEnum):
@@ -806,6 +848,7 @@ __all__ = [
     "CENSUS_SURFACE_PREFIX",
     "DELIVERY_PROVENANCE_SCHEME",
     "EA_PATH_CLASSES",
+    "LOCAL_LEDGER_ROWS",
     "PERMANENT_COMMIT_ORDER",
     "PROBE_SEGMENT",
     "PROMOTED_ARTIFACTS",
@@ -826,5 +869,6 @@ __all__ = [
     "census_findings",
     "classify_commit",
     "classify_path",
+    "ledger_row_policy",
     "probe_paths",
 ]

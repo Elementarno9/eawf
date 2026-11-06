@@ -3,9 +3,13 @@
 A registered MCP server is a ``capability`` row of the tree's selected
 generation; a removed one stays under its key and reads as absent. The segment
 counts the servers that stand and how many of them the registry records as
-installed into a runtime, rendering ``mcp:<installed>/<registered>``. The
-status is the recorded one: nothing here probes a server, so the segment
-reports what the registry states rather than a liveness it never measured.
+installed into a runtime, rendering ``mcp:<installed>/<registered>``.
+
+The first figure counts installed servers, not connected ones: Claude Code's
+statusline payload carries no MCP connection state, and the only way to learn
+it is to start or probe each server, which a redraw cannot afford. So the
+segment reports what the registry states rather than a liveness it never
+measured.
 
 Status meaning:
 
