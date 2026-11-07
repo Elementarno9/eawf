@@ -34,7 +34,7 @@ from eawf.kernel.store.ledger import (
     read_ledger_records,
     render_ledger_line,
 )
-from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.paths import ledger_path, record_ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
@@ -375,8 +375,8 @@ def test_redaction_refuses_while_the_wal_holds_an_unfinished_artifact_line(
     tmp_path: Path,
 ) -> None:
     canary, _ = make_tree(tmp_path)
-    leaked = _content("bb", "start", f"locked {SERVER_PATH}", "done")
-    record_id = _journal_applied_line(tmp_path, canary, leaked)
+    # An evidence line is committed, so its replay appends to the ledger being rewritten.
+    record_id = _journal_applied_line(tmp_path, canary, _evidence("EVD-0009", {"note": "x"}))
     before = _ledger(canary).read_bytes()
 
     with pytest.raises(DaemonValidationError, match=REDACTION_WAL_UNFINISHED) as refused:
@@ -388,3 +388,106 @@ def test_redaction_refuses_while_the_wal_holds_an_unfinished_artifact_line(
     answer = redact(tmp_path, canary, "redact-2")
     assert answer["rows"] == 1
     assert answer["record_keys"] == ["artifact://content/run-00000010/bb"]
+
+
+def _local_ledger(canary: CanaryProvision) -> Path:
+    path = record_ledger_path(
+        document_path(canary), Epoch2Collection.ARTIFACT, {"payload_kind": CONTENT_PAYLOAD_KIND}
+    )
+    assert path != _ledger(canary)
+    return path
+
+
+def test_redact_content_covers_the_local_artifact_ledger(tmp_path: Path) -> None:
+    canary, published = make_tree(tmp_path)
+    local = _local_ledger(canary)
+    append_ledger_record(local, _content("ee", "clean"))
+    append_ledger_record(local, _content("ff", f"later {SERVER_PATH}", "after"))
+
+    answer = redact(tmp_path, canary, "redact-1")
+
+    assert answer["record_keys"] == [
+        "artifact://content/run-00000010/bb",
+        "artifact://content/run-00000010/ff",
+    ]
+    assert answer["rows"] == 2
+    assert answer["withheld_lines"] == 2
+    assert answer["unpublished_rows"] == 4
+    assert _ledger(canary).read_bytes().startswith(published)
+    committed = StoredContent.model_validate(read_ledger_records(_ledger(canary))[1].payload)
+    assert committed.lines == ("start", WITHHELD_LINE, "done")
+    first, second = (
+        StoredContent.model_validate(record.payload) for record in read_ledger_records(local)
+    )
+    assert first.lines == ("clean",)
+    assert second.lines == (WITHHELD_LINE, "after")
+    assert second.withheld_lines == 1
+    assert second.artifact_ref == "artifact://content/run-00000010/ff"
+    assert "checkout" not in local.read_text(encoding="utf-8")
+    after = (_ledger(canary).read_bytes(), local.read_bytes())
+
+    again = redact(tmp_path, canary, "redact-2")
+
+    assert again["rows"] == 0
+    assert again["record_keys"] == []
+    assert (_ledger(canary).read_bytes(), local.read_bytes()) == after
+
+
+def test_a_clean_local_artifact_ledger_is_left_byte_for_byte(tmp_path: Path) -> None:
+    canary, _ = make_tree(tmp_path)
+    local = _local_ledger(canary)
+    append_ledger_record(local, _content("ee", "clean"))
+    before = local.read_bytes()
+
+    answer = redact(tmp_path, canary, "redact-1")
+
+    assert answer["record_keys"] == ["artifact://content/run-00000010/bb"]
+    assert answer["unpublished_rows"] == 3
+    assert local.read_bytes() == before
+
+
+def test_a_local_rewrite_refuses_while_the_wal_journals_a_local_line(tmp_path: Path) -> None:
+    canary, _ = make_tree(tmp_path)
+    leaked = _content("ff", f"later {SERVER_PATH}")
+    local = _local_ledger(canary)
+    append_ledger_record(local, leaked)
+    record_id = _journal_applied_line(tmp_path, canary, leaked)
+    before = (_ledger(canary).read_bytes(), local.read_bytes())
+
+    with pytest.raises(DaemonValidationError, match=REDACTION_WAL_UNFINISHED) as refused:
+        redact(tmp_path, canary, "redact-1")
+
+    assert record_id in str(refused.value)
+    assert (_ledger(canary).read_bytes(), local.read_bytes()) == before
+
+
+def test_a_row_cited_from_the_local_artifact_ledger_is_not_dropped(tmp_path: Path) -> None:
+    canary, _ = make_tree(tmp_path)
+    append_ledger_record(_ledger(canary), _evidence("EVD-0001", {"summary": f"at {SERVER_PATH}"}))
+    append_ledger_record(_local_ledger(canary), _content("ee", "see EVD-0001"))
+    before = _ledger(canary).read_bytes()
+
+    with pytest.raises(DaemonValidationError, match=REDACTION_ROW_CITED):
+        drop(tmp_path, canary, "EVD-0001", "drop-1")
+    assert _ledger(canary).read_bytes() == before
+
+    answer = redact(tmp_path, canary, "redact-1")
+    [remediation] = answer["remediations"]
+
+    assert remediation["record_key"] == "EVD-0001"
+    assert remediation["command"] is None
+    assert remediation["refusal"] == REDACTION_ROW_CITED
+
+
+def test_redaction_is_not_blocked_by_an_unfinished_local_content_line(tmp_path: Path) -> None:
+    """A journalled content line replays into the local ledger, never the one rewritten."""
+    canary, published = make_tree(tmp_path)
+    local_line = _content("ee", f"later {SERVER_PATH}")
+    local = record_ledger_path(document_path(canary), Epoch2Collection.ARTIFACT, local_line.payload)
+    assert local != _ledger(canary)
+    _journal_applied_line(tmp_path, canary, local_line)
+
+    answer = redact(tmp_path, canary, "redact-1")
+
+    assert answer["record_keys"] == ["artifact://content/run-00000010/bb"]
+    assert _ledger(canary).read_bytes().startswith(published)

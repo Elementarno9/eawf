@@ -14,8 +14,10 @@ The count is *informational only*: it reports how many files sit on disk, not
 whether any of them ran or exited cleanly. The module never reads a hook exit
 code, so it must not paint the segment ``status="ok"`` (a health claim it
 cannot back), and a count is no fault either, so it reports ``status="info"``.
-Only an install record that exists but cannot be read is ``degraded``; an
-absent record is ``missing``, the same as any value with no producer.
+Failures the hook health record holds are a fault: the segment then appends
+``hook-errors:<n>`` and reports ``degraded``, as it does for an install record
+that exists but cannot be read; an absent record is ``missing``, the same as
+any value with no producer.
 """
 
 from __future__ import annotations
@@ -27,11 +29,13 @@ from pathlib import Path
 from typing import Any, Final
 
 from eawf.kernel.projection.truth import TruthKind
+from eawf.runtime.hooks.health import HEALTH_RECORD, unacknowledged_count
 from eawf.runtime.runtimes.claude.statusline_modules._host import (
     HOST_PLUGIN_PRODUCER,
     HOST_PLUGIN_RECORD,
 )
 from eawf.runtime.runtimes.claude.statusline_modules._spine import NO_STATE
+from eawf.runtime.vcs.branch_name import main_checkout
 from eawf.surfaces.render.statusline import (
     UNAVAILABLE_MARK,
     SegmentSource,
@@ -109,6 +113,27 @@ def _count_hooks(state_path: Path) -> int:
         return 0
 
 
+def _hook_errors(ea_dir: Path) -> str:
+    """Return the ``hook-errors:<n>`` token for unacknowledged failures, else ``""``.
+
+    Args:
+        ea_dir: The resolved ``.ea`` directory, a linked worktree's own included.
+
+    Returns:
+        The token with a leading space, or ``""`` when nothing is unacknowledged
+        or the record cannot be read.
+    """
+    # A hook records its failures in the main checkout's tree, wherever it
+    # fired, so a worktree session reads the record there too.
+    record_dir = main_checkout(ea_dir.parent) / ea_dir.name
+    try:
+        failures = unacknowledged_count(record_dir)
+    except OSError as exc:
+        logger.debug(f"_hook_errors health-record-unreadable error={exc}")
+        return ""
+    return f" hook-errors:{failures}" if failures else ""
+
+
 def build(claude_payload: dict[str, Any], state_path: Path | None) -> StatuslineSegment:
     """Return the ``hooks:<n> plugins:<m>`` segment.
 
@@ -121,7 +146,8 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
         ``status="missing"`` when no workspace resolves or the host keeps no
         install record, ``status="degraded"`` when that record is unreadable,
         and ``status="info"`` for the counts, which claim no health because the
-        module never inspects a hook exit code. A counted
+        module never inspects a hook exit code. Unacknowledged hook failures
+        append ``hook-errors:<n>`` and make the segment ``degraded``. A counted
         plugin half names the host's install record as the producer, with the
         hooks directory as a second provenance.
     """
@@ -129,17 +155,26 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
     if state_path is None:
         return unavailable_segment(_MODULE, _LABEL, NO_STATE, _HOOKS_SOURCE)
     hooks = _count_hooks(state_path)
+    errors = _hook_errors(state_path.parent)
     installed = _installed_plugins(state_path.parent.parent)
     if isinstance(installed, str):
         plugins = f"{UNAVAILABLE_MARK}({installed})"
-        status: SegmentStatus = "missing" if installed == _NO_PLUGIN_RECORD else "degraded"
+        status: SegmentStatus = (
+            "missing" if installed == _NO_PLUGIN_RECORD and not errors else "degraded"
+        )
         return sourced_segment(
-            _MODULE, _LABEL, f"{hooks} plugins:{plugins}", _HOOKS_SOURCE, status=status
+            _MODULE, _LABEL, f"{hooks} plugins:{plugins}{errors}", _HOOKS_SOURCE, status=status
         )
     segment = sourced_segment(
-        _MODULE, _LABEL, f"{hooks} plugins:{installed}", _PLUGINS_SOURCE, status="info"
+        _MODULE,
+        _LABEL,
+        f"{hooks} plugins:{installed}{errors}",
+        _PLUGINS_SOURCE,
+        status="degraded" if errors else "info",
     )
     refs = (*segment.truth.provenance_refs, _HOOKS_PROVENANCE)
+    if errors:
+        refs = (*refs, f".ea/{HEALTH_RECORD.as_posix()}")
     return replace(segment, truth=segment.truth.model_copy(update={"provenance_refs": refs}))
 
 

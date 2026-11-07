@@ -40,6 +40,7 @@ from typing import Annotated, Any, Final, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.types import Sha256DigestStr, UtcDatetime
+from eawf.kernel.store.paths import collection_ledger_paths
 from eawf.kernel.store.tiers import Epoch2Collection, StorageTier, tier_for
 
 logger = logging.getLogger(__name__)
@@ -244,6 +245,39 @@ def read_ledger_records(path: Path) -> tuple[LedgerRecord, ...]:
         ValidationError: A line does not satisfy :class:`LedgerRecord`.
     """
     lines = split_ledger_lines(read_ledger_content(path))
+    return tuple(LedgerRecord.model_validate_json(line) for line in lines)
+
+
+def read_collection_records(
+    state_path: Path, collection: Epoch2Collection
+) -> tuple[LedgerRecord, ...]:
+    """Read every line of *collection*: the committed ledger's, then the local ledger's.
+
+    A collection whose Run exhaust lines the commit policy keeps local is
+    held in two files; lines committed before the split stay in the
+    committed file, so a reader of either kind of line reads both. A local
+    line identical to a committed one is read once.
+
+    Args:
+        state_path: Path to the tree's ``state.json``.
+        collection: A collection declared at the ledger tier.
+
+    Returns:
+        The committed records in append order, then the local ones.
+
+    Raises:
+        ValueError: The collection is not declared at the ledger tier.
+        LedgerTornTailError: A file ends mid-line.
+        LedgerSnapshotError: A snapshot does not match its digest.
+        ValidationError: A line does not satisfy :class:`LedgerRecord`.
+    """
+    committed, *local = collection_ledger_paths(state_path, collection)
+    lines = list(split_ledger_lines(read_ledger_content(committed)))
+    held = frozenset(lines)
+    for path in local:
+        lines.extend(
+            line for line in split_ledger_lines(read_ledger_content(path)) if line not in held
+        )
     return tuple(LedgerRecord.model_validate_json(line) for line in lines)
 
 
@@ -625,6 +659,7 @@ __all__ = [
     "latest_rows",
     "ledger_snapshot",
     "line_digest",
+    "read_collection_records",
     "read_ledger_content",
     "read_ledger_records",
     "render_ledger_line",

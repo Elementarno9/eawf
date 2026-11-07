@@ -43,13 +43,18 @@ from eawf.kernel.state.enums import IncidentCause, IncidentSeverity
 
 __all__ = [
     "DURATION_LABELS",
+    "HEAD_DIGEST_BYTES",
     "OTHER_LABEL",
     "DurationKind",
     "EndMarker",
+    "HistoryIndexEntry",
     "ObservedDuration",
+    "ObservedRequest",
     "ObservedSession",
     "PriceSourceKind",
+    "RequestDropReason",
     "RuntimeErrorClass",
+    "SweepDropReason",
     "TelemetryCompaction",
     "TelemetryDispatchCost",
     "TelemetryFileMeta",
@@ -548,6 +553,9 @@ class ObservedSession(BaseModel):
         price_source: Provenance of ``cost_usd``.
         rate_table_version: Rate-table revision behind a list-reconstructed
             cost.
+        cwd_digest: Digest of the working directory the session recorded,
+            or ``None`` when it recorded none. A scope matches its project
+            by comparing digests, so no path is stored.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -555,6 +563,7 @@ class ObservedSession(BaseModel):
     vendor_session_ref: str = Field(pattern=r"^vsid-[0-9a-f]{32}$")
     runtime: RuntimeName
     project_id: str
+    cwd_digest: str | None = Field(default=None, pattern=r"^cwd-[0-9a-f]{32}$")
     model: str | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
@@ -597,6 +606,197 @@ class ObservedSession(BaseModel):
             price_source=self.price_source,
             rate_table_version=self.rate_table_version,
         )
+        return self
+
+
+class ObservedRequest(BaseModel):
+    """One provider request of an observed session, with its own usage and price.
+
+    A session's token classes are the sums of its requests, so a reader can
+    weigh, rank or price requests without re-reading the history file.
+
+    Attributes:
+        vendor_session_ref: Hashed vendor session id of the owning session.
+        runtime: Runtime whose history the request came from.
+        request_ref: Digest of the runtime's own request key (``req-``).
+        lane: ``main`` for the session's own transcript, or the digest
+            (``agent-``) of the subagent transcript that made the request.
+        ordinal: 1-based position of the request in its lane.
+        ts: When the runtime recorded the request, or ``None``.
+        model: Model the request billed against, or ``None``.
+        input_tokens: Non-cached input tokens.
+        output_tokens: Output tokens, reasoning included.
+        cache_read_tokens: Prompt-cache read tokens.
+        cache_write_tokens: Prompt-cache write tokens at either rate.
+        cache_write_1h_tokens: The slice of ``cache_write_tokens`` written at
+            the 1-hour rate.
+        reasoning_tokens: Reasoning slice of output, or ``None`` when the
+            runtime reports no reasoning counter.
+        total_tokens: Input + output + cache-read + cache-write.
+        cost_usd: Priced cost in USD, or ``None`` on an unpriced row.
+        price_source: Provenance of ``cost_usd``.
+        rate_table_version: Rate-table revision behind a list-reconstructed
+            cost.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    vendor_session_ref: str = Field(pattern=r"^vsid-[0-9a-f]{32}$")
+    runtime: RuntimeName
+    request_ref: str = Field(pattern=r"^req-[0-9a-f]{32}$")
+    lane: str = Field(default="main", pattern=r"^(main|agent-[0-9a-f]{32})$")
+    ordinal: int = Field(ge=1)
+    ts: datetime | None = None
+    model: str | None = None
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    cache_read_tokens: int = Field(default=0, ge=0)
+    cache_write_tokens: int = Field(default=0, ge=0)
+    cache_write_1h_tokens: int = Field(default=0, ge=0)
+    reasoning_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int = Field(ge=0)
+    cost_usd: Decimal | None = Field(default=None, ge=Decimal("0"))
+    price_source: PriceSourceKind
+    rate_table_version: str | None = None
+
+    @model_validator(mode="after")
+    def _usage_reconciles(self) -> Self:
+        """Enforce the token identity, the cache-write split and the price contract.
+
+        Raises:
+            ValueError: When the 1-hour slice exceeds the cache writes, or
+                propagated from :func:`check_token_identity` or
+                :func:`check_price_source`.
+        """
+        if self.cache_write_1h_tokens > self.cache_write_tokens:
+            raise ValueError(
+                f"cache_write_1h_tokens {self.cache_write_1h_tokens} exceeds "
+                f"cache_write_tokens {self.cache_write_tokens}"
+            )
+        check_token_identity(
+            input_tokens=self.input_tokens,
+            output_tokens=self.output_tokens,
+            cache_read_tokens=self.cache_read_tokens,
+            cache_write_tokens=self.cache_write_tokens,
+            reasoning_tokens=self.reasoning_tokens,
+            total_tokens=self.total_tokens,
+        )
+        check_price_source(
+            cost_usd=self.cost_usd,
+            price_source=self.price_source,
+            rate_table_version=self.rate_table_version,
+        )
+        return self
+
+
+class SweepDropReason(StrEnum):
+    """Closed reasons a swept session file leaves the coverage funnel.
+
+    Values:
+        CORRUPT_RECORD: The file holds no decodable JSON record.
+        NO_OPERATOR_WORK: The session billed no request, so it has no token
+            classes to attribute.
+        PROJECTION_REFUSED: A built row failed its invariants at write.
+        REFLECTION_HELPER: The session is a reflect title helper, whose
+            prompt opens with the reflect marker; it is not work.
+    """
+
+    CORRUPT_RECORD = "corrupt_record"
+    NO_OPERATOR_WORK = "no_operator_work"
+    PROJECTION_REFUSED = "projection_refused"
+    REFLECTION_HELPER = "reflection_helper"
+
+
+class RequestDropReason(StrEnum):
+    """Closed reasons a request leaves the priced stage of the coverage funnel.
+
+    Values:
+        UNPRICED_MODEL: The request named no model, or one the rate table
+            does not list.
+        UNPRICED_RUNTIME: The runtime has no verified rate table, so its
+            requests carry tokens and a null cost.
+    """
+
+    UNPRICED_MODEL = "unpriced_model"
+    UNPRICED_RUNTIME = "unpriced_runtime"
+
+
+HEAD_DIGEST_BYTES: Final[int] = 4096
+"""How much of a history file's head the index digests to notice a rewrite."""
+
+
+class HistoryIndexEntry(BaseModel):
+    """The machine-local index row of one session-history file.
+
+    The sweep compares the file's size, mtime and head digest against this
+    row to decide whether to skip it, decode only its appended bytes, or
+    re-read it from byte 0. The row carries the file's funnel outcome so an
+    unchanged file still counts without being opened.
+
+    Attributes:
+        path_digest: Digest of the file path (``src-``); the path itself is
+            never stored.
+        runtime: Runtime whose history the file holds.
+        size: File size in bytes when it was last read.
+        mtime: File modification time when it was last read.
+        byte_offset: Bytes consumed, up to the last complete line.
+        head_bytes: How many leading bytes ``head_digest`` covers.
+        head_digest: SHA-256 hex digest of the first ``head_bytes`` bytes.
+        vendor_session_ref: The session the file folds into, or ``None``
+            before any record named one.
+        drop_reason: Why the file left the funnel, or ``None`` when it projected a
+            session.
+        requests: Requests the file holds.
+        requests_priced: Requests that carry a cost.
+        requests_unpriced_model: Requests dropped for an unpriced model.
+        requests_unpriced_runtime: Requests dropped for an unpriced runtime.
+        requests_shared: Requests skipped because another file of the same
+            session billed them first, as a resumed subagent's copied
+            history does.
+        durations: Duration labels the file measured.
+        fold: The JSON fold state an append resumes from.
+        last_scan_ts: When the file was last read.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    path_digest: str = Field(pattern=r"^src-[0-9a-f]{32}$")
+    runtime: RuntimeName
+    size: int = Field(ge=0)
+    mtime: float
+    byte_offset: int = Field(ge=0)
+    head_bytes: int = Field(ge=0, le=HEAD_DIGEST_BYTES)
+    head_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    vendor_session_ref: str | None = Field(default=None, pattern=r"^vsid-[0-9a-f]{32}$")
+    drop_reason: SweepDropReason | None = None
+    requests: int = Field(default=0, ge=0)
+    requests_priced: int = Field(default=0, ge=0)
+    requests_unpriced_model: int = Field(default=0, ge=0)
+    requests_unpriced_runtime: int = Field(default=0, ge=0)
+    requests_shared: int = Field(default=0, ge=0)
+    durations: int = Field(default=0, ge=0)
+    fold: str
+    last_scan_ts: datetime
+
+    @model_validator(mode="after")
+    def _counts_reconcile(self) -> Self:
+        """Hold the cursor inside the file and the request drops to the total.
+
+        Raises:
+            ValueError: When the offset passes the size, the head passes the
+                offset's file, or priced plus dropped requests miss the total.
+        """
+        if self.byte_offset > self.size or self.head_bytes > self.size:
+            raise ValueError(
+                f"byte_offset {self.byte_offset} or head_bytes {self.head_bytes} "
+                f"exceeds size {self.size}"
+            )
+        dropped = self.requests_unpriced_model + self.requests_unpriced_runtime
+        if self.requests_priced + dropped != self.requests:
+            raise ValueError(
+                f"requests_priced {self.requests_priced} + dropped {dropped} "
+                f"!= requests {self.requests}"
+            )
         return self
 
 

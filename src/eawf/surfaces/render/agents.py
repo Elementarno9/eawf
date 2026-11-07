@@ -26,9 +26,9 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib.resources import files
-from typing import Any
+from typing import Any, Final
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
@@ -348,6 +348,24 @@ def render_agent_md(ctx: AgentTemplateContext) -> str:
 # pointers (operator's full contract lives in docs/agents/<role>.md).
 # ---------------------------------------------------------------------------
 
+#: The ceiling on a subagent's final report, stated where every subagent
+#: and every dispatch prompt reads it rather than in operator memory.
+REPORT_CAP_LINE: Final = "Report cap: 5000 characters."
+
+#: The marker the subagent-start hook binds a dispatched Run to its Task by.
+TASK_MARKER_INSTRUCTION: Final = (
+    "Start every subagent prompt you write for a Task with `[eawf task=<KEY>]`,"
+    " the Task key in place of `<KEY>`, so its Run is bound to that Task."
+)
+
+_REPORT_AND_DISPATCH: Final = f"""## Report and dispatch
+
+{REPORT_CAP_LINE}
+
+Keep your final report within the cap: lead with the outcome and cut
+detail before findings. {TASK_MARKER_INSTRUCTION}
+"""
+
 _RESEARCHER_BODY = """# Researcher
 
 You are read-only. Your job is to reduce uncertainty, not to act on it.
@@ -467,6 +485,9 @@ criteria; if any criterion lacks evidence, surface the gap in the
    tests.
 3. Run the local gauntlet: pre-commit, mypy, pytest, ruff.
 4. Commit with the spec's commit subject and a 3-6 bullet body.
+
+Continue without mid-task pauses. When a subagent tool is available,
+hand independent slices to separate subagents in one message.
 
 ## Refuse-conditions
 
@@ -673,7 +694,7 @@ verdicts identically to executor / auditor / reviewer output.
 """
 
 
-AGENT_REGISTRY: tuple[AgentSpec, ...] = (
+_AUTHORED_SPECS: tuple[AgentSpec, ...] = (
     AgentSpec(
         role="researcher",
         description=(
@@ -781,11 +802,20 @@ AGENT_REGISTRY: tuple[AgentSpec, ...] = (
     ),
 )
 
+#: Every role's agent definition closes on the same report and dispatch
+#: conduct, so no role relies on the operator to restate either.
+AGENT_REGISTRY: tuple[AgentSpec, ...] = tuple(
+    replace(spec, body=f"{spec.body.rstrip()}\n\n{_REPORT_AND_DISPATCH}")
+    for spec in _AUTHORED_SPECS
+)
+
 
 __all__ = [
     "AGENT_REGISTRY",
+    "REPORT_CAP_LINE",
     "ROLES",
     "SERENA_READ_TOOLS",
+    "TASK_MARKER_INSTRUCTION",
     "AgentSpec",
     "AgentTemplateContext",
     "effective_agent_tools",

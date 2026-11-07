@@ -1,4 +1,4 @@
-"""An agent session cannot record an operator act; the operator's terminal can.
+"""An agent session cannot name the operator; it cites the operator's sealed answer.
 
 A real ``eawfd`` serves an epoch-2 canary and the real ``eawf`` entry point
 runs in subprocesses, so the session marker is read from the environment
@@ -193,8 +193,9 @@ def _accept(
 
 
 def _approve(
-    daemon: _Daemon, *, actor: str, approved_by: str, session: Mapping[str, str]
+    daemon: _Daemon, *, actor: str, approved_by: str | None, session: Mapping[str, str]
 ) -> subprocess.CompletedProcess[str]:
+    approver = () if approved_by is None else ("--approved-by", approved_by)
     return daemon.eawf(
         "--json",
         "plan",
@@ -204,8 +205,7 @@ def _approve(
         "1",
         "--action-ref",
         daemon.urn("pending-action", "ACT-0404"),
-        "--approved-by",
-        approved_by,
+        *approver,
         "--idempotency-key",
         "approve-0001",
         "--actor",
@@ -294,6 +294,28 @@ def test_plan_approve_refuses_operator_approver_behind_service_actor(daemon: _Da
 
     assert result.returncode == exit_codes.VALIDATION_ERROR, result.stdout + result.stderr
     assert _refused(result), result.stdout + result.stderr
+
+
+def test_plan_approve_admits_an_agent_citing_a_sealed_action(daemon: _Daemon) -> None:
+    """An agent approves under its own key; naming the operator anywhere is refused.
+
+    The admitted request reaches the verb, which looks the plan revision up;
+    each refusal points the agent at the in-session answer, not a terminal.
+    """
+    admitted = _approve(daemon, actor=_SERVICE, approved_by=None, session=_CLAUDE)
+
+    assert not _refused(admitted), admitted.stdout + admitted.stderr
+    codes = [row["code"] for row in json.loads(admitted.stdout)["errors"]]
+    assert codes == ["identity_not_found"], admitted.stdout + admitted.stderr
+
+    for actor, approved_by in ((_SERVICE, _OPERATOR), (_OPERATOR, None)):
+        refused = _approve(daemon, actor=actor, approved_by=approved_by, session=_CLAUDE)
+        output = refused.stdout + refused.stderr
+
+        assert refused.returncode == exit_codes.VALIDATION_ERROR, output
+        assert _refused(refused), output
+        assert "from their own terminal" not in output
+        assert "answering the bound question in session" in output
 
 
 def test_plan_approve_admits_operator_actor_from_operator_terminal(daemon: _Daemon) -> None:

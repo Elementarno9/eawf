@@ -40,8 +40,8 @@ class SqliteMetricsStore(AbstractMetricsStore):
     def _execute(self, sql: str, params: Sequence[Any] = ()) -> None:
         self._conn.execute(sql, tuple(params))
 
-    def _query(self, sql: str) -> list[tuple[Any, ...]]:
-        cursor = self._conn.execute(sql)
+    def _query(self, sql: str, params: Sequence[Any] = ()) -> list[tuple[Any, ...]]:
+        cursor = self._conn.execute(sql, tuple(params))
         return list(cursor.fetchall())
 
     def commit(self) -> None:

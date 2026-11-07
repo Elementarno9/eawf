@@ -148,6 +148,9 @@ STUB_DAEMON: Final = Path(__file__).resolve().with_name("_smoke_stub_daemon.py")
 #: Who every operator command is attributed to.
 OPERATOR: Final = "OPERATOR"
 
+#: Who asks for, seals and accepts the Milestone: only an operator principal seals.
+SEALING_OPERATOR: Final = "OP-0001"
+
 #: Batches in the Milestone, and Tasks per Batch.
 BATCHES: Final = 3
 TASKS_PER_BATCH: Final = 2
@@ -962,7 +965,7 @@ def _accept(world: Smoke, plan: Plan) -> None:
         world,
         "approval.json",
         {
-            "requested_by": {"principal_kind": "human", "principal_id": OPERATOR},
+            "requested_by": {"principal_kind": "human", "principal_id": SEALING_OPERATOR},
             "steps": [
                 {
                     "step_id": "AS-01",
@@ -981,7 +984,7 @@ def _accept(world: Smoke, plan: Plan) -> None:
         "open-approval",
         MILESTONE_URN,
         "--actor",
-        OPERATOR,
+        SEALING_OPERATOR,
         "--expected-milestone-revision",
         revision(),
         "--from-spec",
@@ -998,7 +1001,7 @@ def _accept(world: Smoke, plan: Plan) -> None:
         "--idempotency-key",
         "seal-1",
         "--actor",
-        OPERATOR,
+        SEALING_OPERATOR,
         "--option-id",
         "approve",
         "--receipt-ref",
@@ -1013,7 +1016,7 @@ def _accept(world: Smoke, plan: Plan) -> None:
         "--idempotency-key",
         "accept-1",
         "--actor",
-        OPERATOR,
+        SEALING_OPERATOR,
         "--approval-receipt-ref",
         sealed["action_ref"],
         "--acceptance-bundle",

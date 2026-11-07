@@ -11,8 +11,9 @@ the reflection verbs run at any time.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, replace
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -37,12 +38,15 @@ from eawf.kernel.store.ledger import (
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.measurement.fold import SubtreeFold, fold_subtree
-from eawf.runtime.daemon.run_events import run_events_of
+from eawf.runtime.daemon.run_events import run_events_by_run
 
 logger = logging.getLogger(__name__)
 
 #: The document key the tree's committed canonical high-water mark is kept under.
 CANONICAL_SEQUENCE_KEY = "canonical_sequence"
+
+#: Told a reading stage's name, the units it has done and the units it has.
+ProgressSink = Callable[[str, int, int], None]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -183,31 +187,59 @@ class _TreeRuns:
 
     Attributes:
         runs: One record per Run key across both tiers, in key order.
+        records: Every line the run ledger holds.
+        canonical_sequence: The tree's committed canonical sequence at the read.
+        decided: Each Run's gateway decisions, in ledger order, keyed by Run key.
+        children: The Runs each Run delegated directly, keyed by the parent's URN.
+        placement: Where the tree's Tasks, Batches and Milestones sit.
     """
 
     runs: tuple[Run, ...]
     records: tuple[LedgerRecord, ...]
     canonical_sequence: int
-    decided: tuple[SandboxDecision, ...]
+    decided: Mapping[str, tuple[SandboxDecision, ...]]
+    children: Mapping[str, tuple[Run, ...]]
     placement: _Placement
 
-    def reading(self, run: Run) -> RunReading:
-        """Return *run*'s reading, its subtree folded over both tiers and its scope placed."""
+    def placed(self, run: Run) -> RunReading:
+        """Return *run*'s reading from its record and placement alone, with no event joined."""
         milestone = self.placement.milestone_of(run)
         return RunReading(
             run=run,
-            events=run_events_of(self.records, run.urn),
+            events=(),
             canonical_sequence=self.canonical_sequence,
-            fold=fold_subtree(run, self.runs),
-            sandbox_decisions=tuple(
-                item for item in self.decided if item.run_ref.entity_key == run.key
-            ),
             own_project=project_code_of(run.urn.project_key) in self.placement.projects,
             milestone_key=milestone,
             track_keys=()
             if milestone is None
             else self.placement.milestone_tracks.get(milestone, ()),
         )
+
+    def reading(self, placed: RunReading, events: tuple[RunEventRecord, ...]) -> RunReading:
+        """Return *placed* with its events joined, its subtree folded and its decisions."""
+        run = placed.run
+        return replace(
+            placed,
+            events=events,
+            fold=fold_subtree(run, self._subtree(run)),
+            sandbox_decisions=self.decided.get(run.key, ()),
+        )
+
+    def _subtree(self, root: Run) -> tuple[Run, ...]:
+        """Return *root* and every Run under it, so a fold walks its subtree, not the tree."""
+        found = [root]
+        frontier = list(self.children.get(str(root.urn), ()))
+        while frontier:
+            run = frontier.pop()
+            found.append(run)
+            frontier.extend(self.children.get(str(run.urn), ()))
+        return tuple(found)
+
+
+def _report(progress: ProgressSink | None, stage: str, done: int, total: int) -> None:
+    """Pass *stage*'s count to *progress* at its start, its end and about every tenth."""
+    if progress is not None and (done in (0, total) or done % max(1, total // 10) == 0):
+        progress(stage, done, total)
 
 
 def _document_path(tree_root: Path) -> Path | None:
@@ -235,7 +267,7 @@ def _run_payloads(
     } | rows
 
 
-def _tree_runs(tree_root: Path) -> _TreeRuns | None:
+def _tree_runs(tree_root: Path, progress: ProgressSink | None = None) -> _TreeRuns | None:
     """Return the Runs the tree's selected generation holds, or ``None`` at epoch 1.
 
     Raises:
@@ -250,39 +282,107 @@ def _tree_runs(tree_root: Path) -> _TreeRuns | None:
     rows = document_rows(document, Epoch2Collection.RUN)
     records = read_ledger_records(ledger_path(document_path, Epoch2Collection.RUN))
     payloads = _run_payloads(rows, records)
+    runs: list[Run] = []
+    _report(progress, "load", 0, len(payloads))
+    for key in sorted(payloads):
+        runs.append(Run.model_validate(payloads[key]))
+        _report(progress, "load", len(runs), len(payloads))
+    children: dict[str, list[Run]] = {}
+    for run in runs:
+        if run.parent_run_ref is not None:
+            children.setdefault(str(run.parent_run_ref), []).append(run)
+    decided: dict[str, list[SandboxDecision]] = {}
+    for item in sandbox_decisions(
+        read_ledger_records(ledger_path(document_path, Epoch2Collection.RECEIPT))
+    ):
+        decided.setdefault(item.run_ref.entity_key, []).append(item)
     return _TreeRuns(
-        runs=tuple(Run.model_validate(payloads[key]) for key in sorted(payloads)),
+        runs=tuple(runs),
         records=records,
         canonical_sequence=int(document.get(CANONICAL_SEQUENCE_KEY, 0)),
-        decided=sandbox_decisions(
-            read_ledger_records(ledger_path(document_path, Epoch2Collection.RECEIPT))
-        ),
+        decided={key: tuple(items) for key, items in decided.items()},
+        children={key: tuple(items) for key, items in children.items()},
         placement=_placement(document, document_path),
     )
 
 
-def read_tree_runs(tree_root: Path) -> tuple[RunReading, ...]:
-    """Return every Run the tree's selected generation holds, live or compacted, in key order.
+def read_tree_runs(
+    tree_root: Path,
+    *,
+    admits: Callable[[RunReading], bool] | None = None,
+    started_since: datetime | None = None,
+    progress: ProgressSink | None = None,
+) -> tuple[RunReading, ...]:
+    """Return the Runs the tree's selected generation holds, live or compacted, in key order.
+
+    The Runs are selected before any event line is read, and the run ledger's
+    event lines are validated once for every kept Run together, so the cost
+    grows with the ledger rather than with the Run count times the ledger.
+
+    Args:
+        tree_root: The tree's ``.ea`` directory.
+        admits: Keep only the Runs this accepts; it is shown each Run's record
+            and placement before any event is joined, so the reading it judges
+            carries no events, fold or decisions. ``None`` keeps every Run.
+        started_since: Keep only the Runs started at or after this instant; a
+            Run that never started is dropped. ``None`` keeps every Run.
+        progress: Called with a stage (``load``, ``events``, ``analyse``), the
+            units done and the units the stage has, at its start, its end and
+            about every tenth in between.
+
+    Returns:
+        One reading per kept Run key, read from the document while the Run is
+        live and from the run ledger once it is compacted. A tree still at
+        epoch 1 holds no native Run, so it reads as empty.
+
+    Raises:
+        pydantic.ValidationError: A Run row or a kept Run's event line does not
+            validate, which means the store is corrupt rather than merely
+            unfamiliar.
+        LedgerTornTailError: The run ledger ends mid-line.
+    """
+    tree = _tree_runs(tree_root, progress)
+    if tree is None:
+        return ()
+    kept = [
+        placed
+        for placed in map(tree.placed, tree.runs)
+        if (admits is None or admits(placed))
+        and (
+            started_since is None
+            or (placed.run.started_at is not None and placed.run.started_at >= started_since)
+        )
+    ]
+    _report(progress, "events", 0, len(kept))
+    selected = admits is not None or started_since is not None
+    grouped = run_events_by_run(
+        tree.records, {placed.run.key for placed in kept} if selected else None
+    )
+    _report(progress, "events", len(kept), len(kept))
+    readings: list[RunReading] = []
+    _report(progress, "analyse", 0, len(kept))
+    for placed in kept:
+        readings.append(tree.reading(placed, grouped.get(placed.run.urn, ())))
+        _report(progress, "analyse", len(readings), len(kept))
+    logger.debug(f"read_tree_runs root={tree_root.name} runs={len(tree.runs)} kept={len(readings)}")
+    return tuple(readings)
+
+
+def tree_project_code(tree_root: Path) -> str | None:
+    """Return the code of the project the tree's selected generation holds a row for.
 
     Args:
         tree_root: The tree's ``.ea`` directory.
 
     Returns:
-        One reading per Run key, read from the document while the Run is live
-        and from the run ledger once it is compacted. A tree still at epoch 1
-        holds no native Run, so it reads as empty.
-
-    Raises:
-        pydantic.ValidationError: A Run row or an event line does not validate,
-            which means the store is corrupt rather than merely unfamiliar.
-        LedgerTornTailError: The run ledger ends mid-line.
+        The code, the least one when the document holds several, or ``None``
+        for a tree with no generation or no project row.
     """
-    tree = _tree_runs(tree_root)
-    if tree is None:
-        return ()
-    readings = tuple(tree.reading(run) for run in tree.runs)
-    logger.debug(f"read_tree_runs root={tree_root.name} runs={len(readings)}")
-    return readings
+    document_path = _document_path(tree_root)
+    if document_path is None:
+        return None
+    codes = document_rows(read_document(document_path), Epoch2Collection.PROJECT)
+    return min(codes) if codes else None
 
 
 def read_tree_run(tree_root: Path, ref: str) -> RunReading:
@@ -307,7 +407,8 @@ def read_tree_run(tree_root: Path, ref: str) -> RunReading:
     if tree is not None:
         for run in tree.runs:
             if run.key == key:
-                return tree.reading(run)
+                events = run_events_by_run(tree.records, {key}).get(run.urn, ())
+                return tree.reading(tree.placed(run), events)
     raise LookupError(f"the tree holds no Run keyed {key!r}")
 
 
@@ -403,10 +504,12 @@ def read_run_briefs(tree_root: Path) -> tuple[RunBrief, ...]:
 
 __all__ = [
     "CANONICAL_SEQUENCE_KEY",
+    "ProgressSink",
     "RunBrief",
     "RunReading",
     "read_run_briefs",
     "read_tree_run",
     "read_tree_run_records",
     "read_tree_runs",
+    "tree_project_code",
 ]

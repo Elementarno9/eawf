@@ -15,20 +15,17 @@ host session that runs with no daemon still has a transcript worth finding.
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Final
 
 from pydantic import ValidationError
 
-from eawf.runtime.daemon.native_guard import EA_DIRNAME
 from eawf.runtime.hooks import runner
 from eawf.runtime.hooks.event import HOST_HARNESSES, HookEvent, HookEventType
 from eawf.runtime.hooks.runner import DaemonClientFactory, HookResult
-from eawf.runtime.session.task_binding import bind_session_to_branch_task
-from eawf.runtime.session.transcript_index import record_transcript
-from eawf.runtime.vcs.branch_name import branch_task_key, checked_out_branch, main_checkout
-from eawf.surfaces.cli.errors import StateConflict
 
 #: The name the session-start hook reports under.
 SESSION_INDEX_HOOK: Final = "session.transcript_index"
@@ -36,9 +33,17 @@ SESSION_INDEX_HOOK: Final = "session.transcript_index"
 #: The name the session-exit hook reports under.
 SESSION_END_HOOK: Final = "session.end_stamp"
 
-#: What writing an index or binding row can fail with: a held lock, an unwritable
-#: file, or a corrupt line already in the file.
-_ROW_FAILURES: Final = (StateConflict, OSError, ValidationError)
+
+def _row_failures() -> tuple[type[Exception], ...]:
+    """Return what writing an index or binding row can fail with.
+
+    A held lock, an unwritable file, or a corrupt line already in the file.
+    An ``except`` clause evaluates this only once an exception reaches it, so
+    the error module loads only on a failure.
+    """
+    from eawf.surfaces.cli.errors import StateConflict
+
+    return (StateConflict, OSError, ValidationError)
 
 
 def _nonempty(payload: Mapping[str, Any], key: str) -> str | None:
@@ -62,7 +67,11 @@ def _tree_root(repo_root: Path | None) -> Path:
     A session started in a linked worktree finds that worktree's own ``.ea``,
     which the main tree never reads and which is deleted with the worktree.
     """
-    return main_checkout(_here(repo_root)) / EA_DIRNAME
+    # The version-control package loads the config models, so it is imported
+    # only by a handler that reaches the tree.
+    from eawf.runtime.vcs.branch_name import main_checkout
+
+    return main_checkout(_here(repo_root)) / ".ea"
 
 
 def index_host_session(
@@ -95,6 +104,12 @@ def index_host_session(
     tree_root = _tree_root(repo_root)
     if not tree_root.is_dir():
         return HookResult(name=name, output=f"{name} skipped: not an eawf tree")
+    # The index and binding rows are typed by the state models, so they load
+    # here, in the one handler that writes them.
+    from eawf.runtime.session.task_binding import bind_session_to_branch_task
+    from eawf.runtime.session.transcript_index import record_transcript
+    from eawf.runtime.vcs.branch_name import branch_task_key, checked_out_branch
+
     try:
         row = record_transcript(
             tree_root,
@@ -103,7 +118,7 @@ def index_host_session(
             transcript_path=transcript,
             now=event.occurred_at,
         )
-    except _ROW_FAILURES as error:
+    except _row_failures() as error:
         return HookResult(name=name, output=f"{name} skipped: {_reason(error)}")
     output = f"{name} {'ok' if row else 'already indexed'}"
     # The branch is read where the session runs, which the payload names; the
@@ -117,7 +132,7 @@ def index_host_session(
         bound = bind_session_to_branch_task(
             tree_root, session_id=session_id, task_key=task_key, now=event.occurred_at
         )
-    except _ROW_FAILURES as error:
+    except _row_failures() as error:
         return HookResult(name=name, output=f"{output}; binding skipped: {_reason(error)}")
     return HookResult(name=name, output=f"{output} task={task_key}" if bound else output)
 
@@ -142,6 +157,50 @@ HOST_SUBAGENT_METHODS: dict[HookEventType, str] = {
     HookEventType.SUBAGENT_STOP: "runtime.host.subagent.stop",
 }
 
+#: The marker a dispatching agent opens a subagent's prompt with to name the
+#: Task the subagent works for. Only a leading marker counts, so a prompt that
+#: merely quotes one, such as a review of the marker itself, binds nothing.
+_TASK_MARKER: Final = re.compile(r"\[eawf task=([A-Z][A-Z0-9_-]{1,15}-\d{4,})\]")
+
+
+def _first_prompt(transcript: Path) -> str | None:
+    """Return the text of the first record of a Claude transcript, when it is a prompt."""
+    try:
+        with transcript.open(encoding="utf-8") as handle:
+            record = json.loads(handle.readline())
+    except OSError, ValueError:
+        return None
+    message = record.get("message") if isinstance(record, dict) else None
+    content = message.get("content") if isinstance(message, dict) else None
+    if isinstance(content, list):
+        content = " ".join(
+            str(block.get("text", "")) for block in content if isinstance(block, dict)
+        )
+    return content if isinstance(content, str) else None
+
+
+def _subagent_task_key(payload: Mapping[str, Any], harness: str, agent_id: str) -> str | None:
+    """Return the Task key the subagent's prompt opens with, when its prompt can be read.
+
+    The marker binds only at the start of the prompt's first line, leading
+    whitespace stripped; a marker anywhere later names no Task.
+
+    Claude's subagent events do not carry the prompt, so it is read off the
+    first record of the subagent's own transcript: the stop event names that
+    file, and the start event finds it where the host keeps it, beside the
+    spawning session's transcript. A prompt the payload carries is read first.
+    """
+    prompt = _nonempty(payload, "prompt")
+    if prompt is None and harness == "claude-code":
+        path = _nonempty(payload, "agent_transcript_path")
+        parent = _nonempty(payload, "transcript_path")
+        if path is None and parent is not None:
+            path = str(Path(parent).with_suffix("") / "subagents" / f"agent-{agent_id}.jsonl")
+        prompt = None if path is None else _first_prompt(Path(path))
+    first_line = None if prompt is None else prompt.partition("\n")[0].lstrip()
+    match = None if first_line is None else _TASK_MARKER.match(first_line)
+    return None if match is None else match.group(1)
+
 
 def adopt_host_subagent(
     event: HookEvent,
@@ -156,7 +215,9 @@ def adopt_host_subagent(
     transcript under the spawning session. The daemon writes the
     Run, so every outcome is either that durable row or the daemon's typed
     refusal -- a tree still in epoch 1 answers ``native_authority_required``
-    -- and the hook never blocks the host over it.
+    -- and the hook never blocks the host over it. A Task key the subagent's
+    prompt opens with in a ``[eawf task=KEY]`` marker is passed on, so the Run
+    is scoped to that Task.
 
     Args:
         event: The SUBAGENT_START or SUBAGENT_STOP event.
@@ -186,6 +247,9 @@ def adopt_host_subagent(
     session_id = payload.get("session_id")
     if isinstance(session_id, str) and session_id:
         params["host_session_id"] = session_id
+    task_key = _subagent_task_key(payload, harness, agent_id)
+    if task_key is not None:
+        params["task_ref"] = task_key
     transcript = payload.get("agent_transcript_path")
     if (
         event.event_type is HookEventType.SUBAGENT_STOP
@@ -207,6 +271,8 @@ def adopt_host_subagent(
     # either way, with its Run only when one was adopted.
     tree_root = _tree_root(repo_root)
     if "transcript_path" in params and tree_root.is_dir():
+        from eawf.runtime.session.transcript_index import record_transcript
+
         try:
             record_transcript(
                 tree_root,
@@ -217,7 +283,7 @@ def adopt_host_subagent(
                 run_ref=run_ref,
                 parent_session_id=params.get("host_session_id"),
             )
-        except _ROW_FAILURES as error:
+        except _row_failures() as error:
             output = f"{output}; index skipped: {_reason(error)}"
     return HookResult(name=name, output=output)
 

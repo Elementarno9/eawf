@@ -35,7 +35,7 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "6b291ec9815900a3",
+    "hash": "bc272c66362010da",
     "hook_scripts": [
       {
         "event_type": "session_start",
@@ -160,7 +160,7 @@
         "version": "1.0"
       }
     ],
-    "version": "0.7.0"
+    "version": "0.7.1"
   },
   "env": {
     "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "8",

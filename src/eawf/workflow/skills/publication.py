@@ -20,7 +20,6 @@ rendered bundle before it is archived.
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import logging
 import sys
@@ -31,7 +30,9 @@ from typing import Final, Literal
 import orjson
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from eawf.workflow.skills.census import retired_nouns
+from eawf.kernel.migration.epoch2.canary import DisposableTarget
+from eawf.kernel.migration.epoch2.errors import MigrationTargetNotDisposableError
+from eawf.kernel.migration.epoch2.generation import read_marker
 
 logger = logging.getLogger(__name__)
 
@@ -265,6 +266,8 @@ def publication_findings(root: Path) -> tuple[str, ...]:
         rendered file that is missing or was edited after it was written, or
         an epoch-1 noun in a skill, manifest or hook. Empty when it checks.
     """
+    from eawf.workflow.skills.census import retired_nouns
+
     try:
         recorded = read_publication(root)
     except FileNotFoundError:
@@ -310,6 +313,36 @@ def publication_findings(root: Path) -> tuple[str, ...]:
     return tuple(findings)
 
 
+def repository_epoch(root: Path) -> Literal[1, 2]:
+    """Return the authority epoch the tree at ``root`` is in.
+
+    The answer is the one the state layer's authority resolver gives, read
+    from the same declaration and marker models, but without that layer's
+    state, spec and store models: every hook call checks its bundle's epoch
+    before it does anything else, so this read is paid per call.
+
+    Args:
+        root: The tree's root directory, normally ``<repository>/.ea``.
+
+    Returns:
+        ``2`` when the tree carries a valid declaration and a valid epoch
+        marker, ``1`` otherwise. A missing or malformed file is an answer,
+        never an error.
+    """
+    try:
+        target = DisposableTarget.require(root)
+    except MigrationTargetNotDisposableError:
+        return 1
+    try:
+        marker = read_marker(target)
+    except (OSError, ValueError) as error:
+        logger.warning(
+            f"repository_epoch root={root.name} marker_unreadable={error.__class__.__name__}"
+        )
+        return 1
+    return 1 if marker is None else 2
+
+
 def require_bundle_epoch(bundle_epoch: int, repository_root: Path) -> None:
     """Refuse to operate a bundle whose target epoch differs from the repository.
 
@@ -320,11 +353,9 @@ def require_bundle_epoch(bundle_epoch: int, repository_root: Path) -> None:
     Raises:
         BundleEpochMismatchError: The repository resolves to another epoch.
     """
-    from eawf.kernel.state.epoch2.authority import resolve_authority
-
-    repository_epoch = resolve_authority(repository_root / ".ea").epoch
-    if repository_epoch != bundle_epoch:
-        raise BundleEpochMismatchError(bundle_epoch=bundle_epoch, repository_epoch=repository_epoch)
+    epoch = repository_epoch(repository_root / ".ea")
+    if epoch != bundle_epoch:
+        raise BundleEpochMismatchError(bundle_epoch=bundle_epoch, repository_epoch=epoch)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -337,6 +368,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         ``0`` when the publication checks, ``1`` after printing every
         finding otherwise.
     """
+    # Deferred: each hook call imports this module for its epoch check alone.
+    import argparse
+
     parser = argparse.ArgumentParser(prog="eawf-publication")
     parser.add_argument("root", help="rendered bundle root to check")
     args = parser.parse_args(argv)
@@ -358,6 +392,7 @@ __all__ = [
     "main",
     "publication_findings",
     "read_publication",
+    "repository_epoch",
     "require_bundle_epoch",
     "skill_digests",
     "write_publication",

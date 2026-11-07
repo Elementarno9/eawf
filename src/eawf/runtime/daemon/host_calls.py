@@ -38,7 +38,7 @@ from eawf.kernel.runtime.semantic import (
 )
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.state.types import UtcDatetime
-from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
+from eawf.kernel.store.ledger import LedgerRecord, read_collection_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.content_store import file_content
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession, canonical_entity_urn
@@ -119,7 +119,7 @@ def host_receipts(session: RootSession, run_ref: str | QualifiedUrn) -> tuple[Ho
     wanted = canonical_entity_urn(run_ref)
     receipts = (
         HostCallReceipt.model_validate(item.payload)
-        for item in read_ledger_records(session.ledger_path(Epoch2Collection.RECEIPT))
+        for item in read_collection_records(session.document_path, Epoch2Collection.RECEIPT)
         if item.payload.get("payload_kind") == HOST_RECEIPT_PAYLOAD_KIND
     )
     return tuple(item for item in receipts if canonical_entity_urn(item.run_ref) == wanted)

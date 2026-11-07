@@ -1,9 +1,9 @@
 # Statusline integration
 
-*One line of live scope, budget and session state for Claude Code; answered from a cache in tens of milliseconds.*
+*Powerline rows of live session, scope and budget state for Claude Code; answered from a cache in tens of milliseconds.*
 
-The Claude Code statusline runs `eawf cc statusline` on every prompt redraw, feeding it the host's JSON payload on stdin and printing the single line it writes to stdout.
-The command always exits 0: a segment that cannot be sourced renders an explicit marker, never a crash and never a guessed value.
+The Claude Code statusline runs `eawf cc statusline` on every prompt redraw, feeding it the host's JSON payload on stdin and printing the rows it writes to stdout.
+The command always exits 0: a segment that cannot be sourced is left out of the rows, never drawn as a crash or a guessed value.
 
 ## Wiring
 
@@ -24,22 +24,31 @@ No hook installs the cache warm-up: a stale cache hit starts it itself, as descr
 
 ## Segments
 
-Each segment is one module under `src/eawf/runtime/runtimes/claude/statusline_modules/` exposing `build(claude_payload, state_path)`, and each degrades on its own; an exception inside a module becomes a `failed` segment, not a missing line.
-The modules render left to right in this fixed order:
+Line 1 is a row of arrow-ended powerline segments, built left to right by the modules under `src/eawf/runtime/runtimes/claude/statusline_modules/`, each taking `(claude_payload, state_path)`.
+Each segment degrades on its own: an exception inside a module becomes a `failed` segment, and a segment without a sourced value keeps its `<label>:n/a(<reason>)` marker for audit but is omitted from the row.
 
-| Module | Renders | Source |
+| Segment | Renders | Source |
 | --- | --- | --- |
-| `scope` | `scope:<key>`, the record the session's Run is scoped to | the Run bound to the host session |
-| `budget` | `budget:<spent>/<cap>`, plus `!limit` at the cap | the same Run's sealed token cap and its usage readings |
-| `git` | branch and dirty or staged state | the workspace repository |
-| `model_session_cwd` | model, session and working directory | the host payload |
-| `context_tokens` | context and token pressure | the host payload and transcript counters |
-| `rate_window` | used fraction and reset time per rate-limit window | the host payload |
-| `cost` | session cost | the host payload |
-| `mcp_health` | Model Context Protocol (MCP) registry health count | the MCP registry rows |
-| `hooks_plugins` | `hooks:<n> plugins:<m>` | files under `.claude/hooks/` and the host's plugin record |
-| `memory` | memory freshness | the memory ledger |
-| `token_saving` | `save:<pct>%`, the prompt-cache hit share of the context | the host payload |
+| model | the model's display name | the host payload |
+| project | basename of the workspace project directory | the host payload |
+| active time | `<m>m · <p>% active`, API minutes and their share of the session | the host payload's cost block |
+| cost | `$<d.dd>` session cost | the host payload |
+| MCP | `MCP: <installed>/<registered>`, filled warning or alert when some are not installed | the Model Context Protocol (MCP) registry rows |
+| hooks | `hook-errors:<n>`, shown only when hooks have failed | the hook health record |
+| scope | the key of the record the session's Run is scoped to | the Run bound to the host session |
+| budget | `budget: <spent>/<cap>`, plus `!limit` at the cap | the same Run's sealed token cap and its usage readings |
+
+The first MCP figure counts installed servers, not connected ones: Claude Code's status line input carries no MCP connection state, and learning it means probing each server, which a redraw cannot afford.
+
+Under line 1 come up to three bar rows, each a bar, the used percentage, the change in points since the session's previous render (`↑+n` or `↓-n`) and a detail:
+
+| Row | Detail | Source |
+| --- | --- | --- |
+| `ctx` | used over limit tokens, such as `64K/1.0M` | the host payload's `context_window` |
+| `5h` | time to reset, such as `2h05m` | the host payload's `rate_limits.five_hour` |
+| `7d` | time to reset, such as `6d14h` | the host payload's `rate_limits.seven_day` |
+
+A window the payload omits has no row, and a reset time that cannot be read drops only that row's countdown.
 
 ### Scope and budget
 
@@ -64,41 +73,24 @@ Every way the read can fail comes back as one reason that the segment renders as
 
 ## Fitting the terminal
 
-When the `COLUMNS` environment variable names a positive width, segments claim it in a fixed keep order and each that no longer fits is dropped:
-
-1. `scope`
-2. `budget`
-3. `context_tokens`
-4. `model_session_cwd`
-5. `git`
-6. `rate_window`
-7. `cost`
-8. `mcp_health`
-9. `hooks_plugins`
-10. `memory`
-11. `token_saving`
-
-What the operator steers by outlives the ambient counts, and a smaller low-ranked segment may still fill room a larger one could not.
+When the `COLUMNS` environment variable names a positive width, no row is wider than it and none wraps.
+Line 1 drops MCP, then active time, then project, then hooks, budget and scope, keeping model and cost, and clips the model with an ellipsis last.
+A bar row shrinks its bar from ten cells to five, then drops the trend, then the detail; a row that still does not fit is left out.
 Width is measured in terminal cells on the visible text, so colour escapes never count and wide glyphs take two cells.
-When not even the first segment fits it is kept alone and clipped with an ellipsis.
-Without a usable `COLUMNS` the line renders whole.
+Without a usable `COLUMNS` the rows render whole.
 
-## Themes and colour
+## Palettes
 
-A theme (`default`, `powerline` or `ascii-fallback`, from `src/eawf/platform/templates/themes.yaml`) sets the separator, a glyph per module, whether failed segments are skipped, and a colour per segment status.
-The `--theme` flag wins over the `EAWF_STATUSLINE_THEME` environment variable; an unknown name falls back to `default`.
-The `ascii-fallback` theme emits no colour bytes, carries no glyphs and drops failed segments, so it suits terminals that cannot show colour.
+Every row is drawn in a light or a dark 24-bit palette from `src/eawf/platform/templates/themes.yaml`, and every foreground and background pair keeps a contrast ratio of at least 4.5:1.
+The palette resolves in this order (`src/eawf/runtime/runtimes/claude/statusline_theme.py`):
 
-| Status | Colour in `default` | Used for |
-| --- | --- | --- |
-| `ok` | green | a value that makes a health claim and passes it |
-| `info` | none | a value shown with no health claim either way, such as a hook count |
-| `warn` | yellow | a value worth attention |
-| `missing` | grey | a value with no producer, such as an absent plugin record |
-| `degraded` | red | a real fault, such as a plugin record that exists but cannot be read |
-| `failed` | none | a module that raised |
+1. `--theme light|dark`, then the `EAWF_STATUSLINE_THEME` environment variable set to `light` or `dark`; any other value falls through.
+2. Claude Code's `theme` setting, from the project's `.claude/settings.local.json`, its `.claude/settings.json`, the user's `~/.claude/settings.json`, then the user's `~/.claude.json`; a value starting `light` or `dark` picks that palette.
+3. When the setting is `auto` or absent, `COLORFGBG`: a last field of 7 or 15 picks light, any other integer dark.
+4. Otherwise dark.
 
-The hook count is informational: it counts files on disk and never reads an exit code, so it renders `info` and turns red only when the plugin record is unreadable.
+The resolved palette keys the cached rows, so a theme switch shows on the next redraw.
+There is no colour-free palette: the rows always carry 24-bit colour escapes.
 
 ## Cache and refresh
 
@@ -134,7 +126,7 @@ Figures are re-measured when the import graph changes, not asserted.
 
 ## Failure behaviour
 
-- The command exits 0 on every input; an unsourced value renders `n/a(<reason>)`, never a bare `?` or `-`.
+- The command exits 0 on every input; an unsourced value is left out of the rows, and its segment carries `n/a(<reason>)`, never a bare `?` or `-`.
 - Logging is imported only on first use, because a cache hit logs nothing and the import would cost a third of the redraw. A healthy call writes nothing to stderr.
 
 ## Second runtime

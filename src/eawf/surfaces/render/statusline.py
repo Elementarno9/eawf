@@ -1,51 +1,44 @@
-"""Theme-aware statusline rendering for ``eawf cc statusline``.
+"""Powerline statusline rendering for ``eawf cc statusline``.
 
-The orchestrator in :mod:`eawf.runtime.runtimes.claude.statusline` collects a list of
-:class:`StatuslineSegment` records (one per module — see
-:mod:`eawf.runtime.runtimes.claude.statusline_modules`). This module's job is the
-last mile: take a list of segments and a theme, return a single line of
-text ready for stdout.
+The orchestrator in :mod:`eawf.runtime.runtimes.claude.statusline` collects the
+line-1 :class:`StatuslineSegment` records and the :class:`PowerlineBar` rows
+from the modules in :mod:`eawf.runtime.runtimes.claude.statusline_modules`.
+This module draws them: line 1 as arrow-ended powerline segments, then one bar
+row per window, in a light or a dark 24-bit :class:`Palette`.
 
 Public surface:
 
 - :class:`StatuslineSegment` — typed segment dataclass.
-- :class:`StatuslineTheme` — typed theme record (``separator``,
-  ``skip_failed``, ``colors``, ``glyph``).
-- :func:`load_themes` — read ``templates/themes.yaml`` into a mapping.
-- :func:`resolve_theme` — pick a theme by name with fallback to ``default``.
-- :func:`render_segments` — apply the theme to a list of segments,
-  return the joined line.
+- :class:`Palette` / :func:`load_palette` — the bundled 24-bit palettes in
+  ``templates/themes.yaml``.
+- :class:`PowerlineBar` — one bar row: label, used fraction, trend, detail.
+- :func:`render_powerline` — draw line 1 and the bar rows within a width.
+- :func:`format_countdown` / :func:`format_context_tokens` — the texts a bar
+  row shows after its trend.
 - :func:`sourced_segment` / :func:`unavailable_segment` — a segment whose
   value a named producer states, and the marker naming why it cannot be shown.
-- :func:`rate_window_segment` — one bar per host rate-limit window, with its
-  used fraction and reset time.
 - :func:`budget_segment` / :func:`budget_unavailable_segment` — the active
   scope's spend against its one ceiling, and the marker naming why it
   cannot be shown.
 
 Every segment carries a :class:`~eawf.kernel.projection.truth.TruthField`, so its
 producer, freshness and measurement quality travel with the text, and a segment
-that would render a bare unknown token is refused at construction.
-
-Theme schema is documented in ``src/eawf/platform/templates/themes.yaml``. The schema
-is intentionally permissive — unknown segment/status/module keys silently
-fall through to "no color" / "no glyph" so themes can omit modules they
-don't want to decorate.
+that would render a bare unknown token is refused at construction. A segment
+whose value cannot be sourced keeps its ``n/a(<reason>)`` marker for audit, but
+the powerline omits it rather than drawing the marker.
 """
 
 from __future__ import annotations
 
-import logging
-import os
 import re
 import unicodedata
 from collections.abc import Sequence
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from dataclasses import dataclass
 from importlib.resources import files
-from typing import Any, Final, Literal
+from typing import Annotated, Final, Literal
 
 import yaml
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from eawf.kernel.projection.truth import (
     Freshness,
@@ -55,27 +48,19 @@ from eawf.kernel.projection.truth import (
     TruthState,
 )
 from eawf.kernel.state.enums import MeasurementQuality
-from eawf.surfaces.render.bars import DEFAULT_WIDTH, render_block_bar
 from eawf.surfaces.render.units import format_tokens
-
-logger = logging.getLogger(__name__)
-
 
 SegmentStatus = Literal["ok", "info", "warn", "missing", "degraded", "failed"]
 """Status carried on each :class:`StatuslineSegment`.
 
 ``info`` marks a value that is shown but makes no health claim either way, so
-themes leave it uncoloured rather than painting it green or red.
-``failed`` is reserved for modules that raised during render — the
-orchestrator wraps any module exception in a ``status="failed"`` segment so
-the renderer can decide whether to skip it or render its
-``<module>:n/a(render-failed)`` marker based on ``StatuslineTheme.skip_failed``.
+it keeps its module's fill. ``warn`` and ``degraded`` switch the fill to the
+palette's warning and alert colours. ``failed`` is reserved for modules that
+raised during render: the orchestrator wraps any module exception in a
+``status="failed"`` segment carrying the ``<module>:n/a(render-failed)``
+marker, which the powerline omits.
 """
 
-
-_THEMES_FILENAME: str = "themes.yaml"
-_TEMPLATES_PACKAGE: str = "eawf.platform.templates"
-_DEFAULT_THEME_NAME: str = "default"
 
 #: The marker a segment renders in place of a value it cannot source, always followed
 #: by the parenthesised reason.
@@ -248,167 +233,225 @@ def unavailable_segment(
     )
 
 
-@dataclass(frozen=True)
-class StatuslineTheme:
-    """Resolved theme record used by :func:`render_segments`.
+#: The bundled palette file and the package it ships in.
+_PALETTES_FILENAME: Final = "themes.yaml"
+_TEMPLATES_PACKAGE: Final = "eawf.platform.templates"
+
+Colour = Annotated[str, StringConstraints(pattern=r"^#[0-9a-f]{6}$")]
+"""A 24-bit colour as lower-case ``#rrggbb``."""
+
+
+class Palette(BaseModel):
+    """One 24-bit statusline palette.
+
+    Every colour the renderer emits comes from here, so the contrast of each
+    foreground and background pair can be checked against the palette alone.
 
     Attributes:
-        name: Theme name as found in ``themes.yaml`` (e.g. ``"default"``).
-        separator: String inserted between segments. Defaults to ``" | "``.
-        skip_failed: When ``True``, segments with ``status="failed"`` are
-            dropped silently. When ``False``, they render as
-            ``"<module>:!"`` so the operator sees the broken module.
-        colors: Mapping ``status -> ANSI escape``. Empty string or missing
-            entry disables colour for that status. ``reset`` is the
-            terminator emitted after every coloured segment.
-        glyph: Mapping ``module -> glyph string``. Missing entries render
-            without a glyph prefix.
+        base: Background of every cell outside a segment fill, separator
+            gaps and bar rows included; meant to match the terminal.
+        ink: Text on a segment fill.
+        text: The used percentage on ``base``.
+        muted: A reset countdown or the context size on ``base``.
+        track: The unfilled part of a bar on ``base``.
+        label: Fill of a bar row's label.
+        model: Fill of the model segment.
+        project: Fill of the project segment.
+        active_time: Fill of the active-time segment.
+        cost: Fill of the session-cost segment.
+        mcp: Fill of the MCP segment.
+        scope: Fill of the Run scope segment.
+        budget: Fill of the Run budget segment.
+        warn: Fill of a segment whose status is ``warn``.
+        alert: Fill of a segment whose status is ``degraded`` or ``failed``.
+        low: Bar fill below half used.
+        mid: Bar fill from half to four fifths used.
+        high: Bar fill from four fifths used.
+        rising: A rising trend on ``base``.
+        falling: A falling trend on ``base``.
     """
 
-    name: str
-    separator: str = " | "
-    skip_failed: bool = False
-    colors: dict[str, str] = field(default_factory=dict)
-    glyph: dict[str, str] = field(default_factory=dict)
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    base: Colour
+    ink: Colour
+    text: Colour
+    muted: Colour
+    track: Colour
+    label: Colour
+    model: Colour
+    project: Colour
+    active_time: Colour
+    cost: Colour
+    mcp: Colour
+    scope: Colour
+    budget: Colour
+    warn: Colour
+    alert: Colour
+    low: Colour
+    mid: Colour
+    high: Colour
+    rising: Colour
+    falling: Colour
 
 
-_ANSI_ESC: str = "\x1b"
-"""ESC byte prepended to YAML color values that start with ``[`` (CSI form).
+class _PaletteFile(BaseModel):
+    """The bundled palette file: exactly one light and one dark palette."""
 
-YAML cannot store raw control bytes portably, so ``themes.yaml`` carries
-``"[32m"`` (no ESC) and the loader prepends ``\\x1b`` here. Already-escaped
-values (rare; tests inject them directly) round-trip unchanged.
-"""
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
-
-def _normalise_color(value: str) -> str:
-    """Add the ESC byte to a CSI color value when it starts with ``[``.
-
-    Empty strings stay empty (disables color for that status). Values that
-    already begin with ``\\x1b`` are returned untouched so direct test
-    inputs and future template forms keep working.
-    """
-    if not value:
-        return ""
-    if value.startswith(_ANSI_ESC):
-        return value
-    if value.startswith("["):
-        return f"{_ANSI_ESC}{value}"
-    return value
+    light: Palette
+    dark: Palette
 
 
-def _theme_from_payload(name: str, raw: dict[str, Any]) -> StatuslineTheme:
-    """Build a :class:`StatuslineTheme` from a YAML mapping.
-
-    Permissive on shape: unknown top-level keys are ignored, and missing keys
-    fall back to the dataclass defaults. The renderer never raises on a
-    badly-shaped theme; it falls through to plain text.
-    """
-    separator = raw.get("separator", " | ")
-    if not isinstance(separator, str):
-        separator = " | "
-    skip_failed = bool(raw.get("skip_failed", False))
-    colors_raw = raw.get("colors") or {}
-    glyph_raw = raw.get("glyph") or {}
-    colors: dict[str, str] = {
-        str(k): _normalise_color(str(v) if v is not None else "") for k, v in colors_raw.items()
-    }
-    glyph: dict[str, str] = {str(k): str(v) if v is not None else "" for k, v in glyph_raw.items()}
-    return StatuslineTheme(
-        name=name,
-        separator=separator,
-        skip_failed=skip_failed,
-        colors=colors,
-        glyph=glyph,
-    )
-
-
-def load_themes() -> dict[str, StatuslineTheme]:
-    """Read ``templates/themes.yaml`` into a name-keyed mapping.
-
-    Returns a dict of every parseable theme. Themes that fail individual
-    parsing are dropped with a warning so a single bad entry can't take down
-    the renderer; callers should always check for the ``default`` key.
-
-    The bundled file is loaded via :func:`importlib.resources.files` so the
-    helper works from a wheel install, an editable install, and the source
-    tree alike (mirrors :mod:`eawf.platform.profiles.loader`).
-    """
-    raw_text: str
-    try:
-        raw_text = (files(_TEMPLATES_PACKAGE) / _THEMES_FILENAME).read_text(encoding="utf-8")
-    except FileNotFoundError:
-        logger.warning(f"load_themes themes-file-missing package={_TEMPLATES_PACKAGE!r}")
-        return {_DEFAULT_THEME_NAME: StatuslineTheme(name=_DEFAULT_THEME_NAME)}
-    parsed: Any
-    try:
-        parsed = yaml.safe_load(raw_text) or {}
-    except yaml.YAMLError as exc:
-        logger.warning(f"load_themes themes-yaml-parse-error error={exc}")
-        return {_DEFAULT_THEME_NAME: StatuslineTheme(name=_DEFAULT_THEME_NAME)}
-    if not isinstance(parsed, dict):
-        logger.warning(f"load_themes themes-yaml-not-mapping got={type(parsed).__name__}")
-        return {_DEFAULT_THEME_NAME: StatuslineTheme(name=_DEFAULT_THEME_NAME)}
-    out: dict[str, StatuslineTheme] = {}
-    for name, body in parsed.items():
-        if not isinstance(name, str):
-            continue
-        if not isinstance(body, dict):
-            logger.warning(f"load_themes theme-body-not-mapping theme={name!r}; skipping")
-            continue
-        out[name] = _theme_from_payload(name, body)
-    if _DEFAULT_THEME_NAME not in out:
-        out[_DEFAULT_THEME_NAME] = StatuslineTheme(name=_DEFAULT_THEME_NAME)
-    return out
-
-
-def resolve_theme(name: str | None, themes: dict[str, StatuslineTheme]) -> StatuslineTheme:
-    """Return the theme matching *name* with fallback to ``default``.
+def load_palette(name: Literal["light", "dark"]) -> Palette:
+    """Return the bundled palette called *name*.
 
     Args:
-        name: Requested theme name (``--theme`` flag or env var). ``None`` /
-            empty selects the default.
-        themes: Mapping built by :func:`load_themes`.
+        name: ``light`` or ``dark``.
 
     Returns:
-        The matching :class:`StatuslineTheme`. The fallback chain is:
-        requested name → ``default`` (always inserted by ``load_themes``) →
-        a fresh defaulted :class:`StatuslineTheme` (only when ``themes`` is
-        somehow empty — which shouldn't happen in production).
+        The palette, read from ``templates/themes.yaml``.
+
+    Raises:
+        pydantic.ValidationError: The bundled file does not hold exactly a
+            light and a dark palette of ``#rrggbb`` colours.
     """
-    if name and name in themes:
-        return themes[name]
-    if _DEFAULT_THEME_NAME in themes:
-        return themes[_DEFAULT_THEME_NAME]
-    return StatuslineTheme(name=_DEFAULT_THEME_NAME)
+    raw = (files(_TEMPLATES_PACKAGE) / _PALETTES_FILENAME).read_text(encoding="utf-8")
+    palettes = _PaletteFile.model_validate(yaml.safe_load(raw))
+    return palettes.light if name == "light" else palettes.dark
 
 
-_COLUMNS_ENV: Final = "COLUMNS"
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PowerlineBar:
+    """One bar row under line 1: a window's used share and what qualifies it.
 
-#: Modules from most to least worth keeping when the line must shrink. What the
-#: operator steers by (scope, spend, context, model) outlives the ambient counts.
-#: A module not listed here, such as a failed segment's module, goes first.
-_KEEP_PRIORITY: Final = (
-    "scope",
-    "budget",
-    "context_tokens",
-    "model_session_cwd",
-    "git",
-    "rate_window",
-    "cost",
-    "mcp_health",
-    "hooks_plugins",
-    "memory",
-    "token_saving",
-)
+    Attributes:
+        label: The row's name, such as ``ctx`` or ``5h``.
+        ratio: The used fraction in ``[0, 1]``.
+        detail: The text after the trend: the reset countdown of a rate
+            window, or the used over limit tokens of the context; ``None``
+            when there is nothing to show.
+        trend: Change of the used percentage in points since the session's
+            previous render; ``None`` when unknown.
 
+    Raises:
+        ValueError: *label* is empty or *ratio* is outside ``[0, 1]``.
+    """
+
+    label: str
+    ratio: float
+    detail: str | None = None
+    trend: int | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse a row the renderer could not draw."""
+        if not self.label:
+            raise ValueError("a bar row needs a label")
+        if not 0.0 <= self.ratio <= 1.0:
+            raise ValueError(f"ratio out of range, expected [0, 1]: {self.ratio!r}")
+
+    @property
+    def percent(self) -> int:
+        """Return the used share in whole percent, rounded half up."""
+        return int(self.ratio * 100 + 0.5)
+
+
+def format_countdown(seconds: float) -> str:
+    """Return the time until a reset as ``<d>d<h>h``, ``<h>h<mm>m`` or ``<m>m``.
+
+    Args:
+        seconds: Seconds until the reset; part of a minute is dropped.
+
+    Returns:
+        The countdown, such as ``6d14h``, ``2h05m`` or ``42m``.
+
+    Raises:
+        ValueError: *seconds* is negative.
+    """
+    if seconds < 0:
+        raise ValueError(f"seconds must be non-negative: {seconds!r}")
+    minutes = int(seconds // 60)
+    days, rest = divmod(minutes, 24 * 60)
+    hours, minutes = divmod(rest, 60)
+    if days:
+        return f"{days}d{hours}h"
+    if hours:
+        return f"{hours}h{minutes:02d}m"
+    return f"{minutes}m"
+
+
+def format_context_tokens(count: int) -> str:
+    """Return a token count as ``950``, ``64K`` or ``1.0M``.
+
+    Args:
+        count: The non-negative token count.
+
+    Returns:
+        The count in whole thousands below a million, in millions to one
+        decimal from there.
+
+    Raises:
+        ValueError: *count* is negative.
+    """
+    if count < 0:
+        raise ValueError(f"count must be non-negative: {count!r}")
+    if count < 1_000:
+        return str(count)
+    thousands = int(count / 1_000 + 0.5)
+    if thousands < 1_000:
+        return f"{thousands}K"
+    return f"{count / 1_000_000:.1f}M"
+
+
+_ARROW: Final = ""
+_RESET: Final = "\x1b[0m"
+_SGR: Final = re.compile(r"\x1b\[[0-9;]*m")
 _ELLIPSIS: Final = "…"
+
+#: Line-1 segments in the order they are dropped when the row is too wide;
+#: model and cost are never dropped, only clipped.
+_DROP_ORDER: Final = ("mcp_health", "active_time", "project", "hooks_plugins", "budget", "scope")
+
+#: The palette fill of each line-1 module whose status makes no claim.
+_FILL: Final = {
+    "model": "model",
+    "project": "project",
+    "active_time": "active_time",
+    "cost": "cost",
+    "mcp_health": "mcp",
+    "scope": "scope",
+    "budget": "budget",
+}
+
+#: The prefix a line-1 module's value is read by, where the value alone is ambiguous.
+_PREFIX: Final = {"mcp_health": "MCP: ", "budget": "budget: "}
+
+_HOOK_ERRORS: Final = re.compile(r"hook-errors:\d+")
+
+_BAR_WIDE: Final = 10
+_BAR_NARROW: Final = 5
+_BAR_FULL: Final = "█"
+_BAR_PARTIAL: Final = "▏▎▍▌▋▊▉"
+_BAR_TRACK: Final = "░"
+_LOW_BELOW: Final = 0.5
+_MID_BELOW: Final = 0.8
+
+
+def _fg(colour: str) -> str:
+    """Return the 24-bit foreground escape for *colour*."""
+    return f"\x1b[38;2;{int(colour[1:3], 16)};{int(colour[3:5], 16)};{int(colour[5:7], 16)}m"
+
+
+def _bg(colour: str) -> str:
+    """Return the 24-bit background escape for *colour*."""
+    return f"\x1b[48;2;{int(colour[1:3], 16)};{int(colour[3:5], 16)};{int(colour[5:7], 16)}m"
 
 
 def _cells(text: str) -> int:
     """Return the terminal cells *text* occupies; wide glyphs take two, marks none."""
     total = 0
-    for char in text:
+    for char in _SGR.sub("", text):
         if unicodedata.combining(char):
             continue
         total += 2 if unicodedata.east_asian_width(char) in {"W", "F"} else 1
@@ -427,167 +470,157 @@ def _clip(text: str, width: int) -> str:
     return f"{kept}{_ELLIPSIS}"
 
 
-def _columns() -> int | None:
-    """Return the terminal width ``COLUMNS`` names, or ``None`` when it names none.
-
-    Without a positive integer there is no width to fit against, and a
-    guessed width would cut a line the terminal could show, so the line
-    renders whole.
-    """
-    raw = os.environ.get(_COLUMNS_ENV, "").strip()
-    if not raw.isdigit():
-        return None
-    columns = int(raw)
-    return columns if columns > 0 else None
-
-
-def _fit(bodies: list[tuple[StatuslineSegment, str]], separator: str, width: int) -> list[int]:
-    """Return the indices of *bodies* that fit *width*, in their original order.
-
-    Segments claim the width in keep order, leftmost first among equals, so a
-    segment is dropped only when everything worth more already took the room
-    it needs; a smaller, lower one may still fill the space left. When not even
-    the first segment fits, it is kept alone and the caller clips it.
-    """
-
-    def rank(index: int) -> tuple[int, int]:
-        module = bodies[index][0].module
-        order = _KEEP_PRIORITY.index(module) if module in _KEEP_PRIORITY else len(_KEEP_PRIORITY)
-        return (order, index)
-
-    by_rank = sorted(range(len(bodies)), key=rank)
-    kept: list[int] = []
-    used = 0
-    gap = _cells(separator)
-    for index in by_rank:
-        need = _cells(bodies[index][1]) + (gap if kept else 0)
-        if used + need <= width:
-            kept.append(index)
-            used += need
-    if not kept and by_rank:
-        kept.append(by_rank[0])
-    return sorted(kept)
-
-
-def _colour(segment: StatuslineSegment, body: str, theme: StatuslineTheme) -> str:
-    """Wrap *body* in the theme's colour for the segment's status, if it has one."""
-    color = theme.colors.get(segment.status, "")
-    if color:
-        reset = theme.colors.get("reset", "")
-        return f"{color}{body}{reset}"
-    return body
-
-
-def render_segments(segments: list[StatuslineSegment], theme: StatuslineTheme) -> str:
-    """Apply *theme* to *segments* and return the joined statusline.
-
-    Pipeline:
-
-    1. Drop segments with ``status="failed"`` when ``theme.skip_failed`` is
-       true.
-    2. Prefix each remaining segment with its module glyph.
-    3. When ``COLUMNS`` names a width, let segments claim it in keep order
-       and drop each that no longer fits; when none fits, keep the first
-       alone, clipped.
-    4. Colour each segment by status and join with ``theme.separator``.
-
-    Width is measured on the visible text, so colour escapes never count
-    against it. The output never ends in a trailing newline — the
-    orchestrator decides how to write it to stdout.
-    """
-    bodies: list[tuple[StatuslineSegment, str]] = []
-    for segment in segments:
-        if theme.skip_failed and segment.status == "failed":
-            continue
-        glyph_prefix = theme.glyph.get(segment.module, "")
-        body = f"{glyph_prefix} {segment.text}" if glyph_prefix else segment.text
-        bodies.append((segment, body))
-    width = _columns()
-    if width is None:
-        kept = list(range(len(bodies)))
-    else:
-        kept = _fit(bodies, theme.separator, width)
-        if len(kept) == 1:
-            segment, body = bodies[kept[0]]
-            bodies[kept[0]] = (segment, _clip(body, width))
-    return theme.separator.join(_colour(*bodies[i], theme) for i in kept)
-
-
-_RATE_WINDOW_MODULE: str = "rate_window"
-"""Stable module id for the rate-limit window segment."""
-
-_RATE_WINDOW_LABEL: str = "rate"
-
-_RATE_WINDOW_JOIN: str = " · "
-
-
 @dataclass(frozen=True, slots=True)
-class RateWindow:
-    """One host rate-limit window: how full it is and when it resets.
+class _Piece:
+    """One line-1 segment as it is drawn: its module, fill and text."""
 
-    Attributes:
-        label: The window's name as the host keys it, such as ``five_hour``.
-        ratio: The used fraction in ``[0, 1]``.
-        resets_at: When the window resets, or ``None`` when the host names
-            no reset time.
+    module: str
+    fill: str
+    text: str
+
+
+def _display(segment: StatuslineSegment) -> str | None:
+    """Return the text line 1 shows for *segment*, or ``None`` to omit it.
+
+    A segment with no sourced value is omitted rather than drawn as a
+    marker, and the hooks segment shows only its failure token.
     """
+    if segment.truth.state is not TruthState.KNOWN or segment.truth.value is None:
+        return None
+    if segment.module == "hooks_plugins":
+        match = _HOOK_ERRORS.search(segment.text)
+        return match.group() if match else None
+    return f"{_PREFIX.get(segment.module, '')}{segment.truth.value}"
 
-    label: str
-    ratio: float
-    resets_at: datetime | None = None
+
+def _fill(segment: StatuslineSegment, palette: Palette) -> str:
+    """Return the fill colour *segment* is drawn on."""
+    if segment.status in {"degraded", "failed"}:
+        return palette.alert
+    if segment.status == "warn":
+        return palette.warn
+    field_name = _FILL.get(segment.module)
+    return str(getattr(palette, field_name)) if field_name else palette.label
 
 
-def render_usage_bar(ratio: float, *, width: int = DEFAULT_WIDTH) -> str:
-    """Render a *ratio* as a block-eighths progress bar of *width* cells.
+def _line_one(pieces: Sequence[_Piece], palette: Palette) -> str:
+    """Draw *pieces* as arrow-ended segments separated by one ``base`` cell."""
+    drawn = [
+        f"{_bg(piece.fill)}{_fg(palette.ink)} {piece.text} "
+        f"{_bg(palette.base)}{_fg(piece.fill)}{_ARROW}"
+        for piece in pieces
+    ]
+    return f"{' '.join(drawn)}{_RESET}"
 
-    Thin wrapper over :func:`~eawf.surfaces.render.bars.render_block_bar` so
-    the statusline bars share the one canonical block-eighths primitive
-    rather than re-deriving the glyph run.
+
+def _fit_line_one(pieces: list[_Piece], palette: Palette, width: int) -> list[_Piece]:
+    """Return the pieces that fit *width*: drop by priority, then clip the first."""
+    kept = list(pieces)
+    for module in _DROP_ORDER:
+        if _cells(_line_one(kept, palette)) <= width:
+            return kept
+        kept = [piece for piece in kept if piece.module != module]
+    while kept and (excess := _cells(_line_one(kept, palette)) - width) > 0:
+        head = kept[0]
+        room = _cells(head.text) - excess
+        if room >= 2:
+            kept[0] = _Piece(head.module, head.fill, _clip(head.text, room))
+        else:
+            kept.pop(0)
+    return kept
+
+
+def _bar_glyphs(ratio: float, width: int) -> tuple[str, str]:
+    """Return the filled and the unfilled run of a *width*-cell bar at *ratio*."""
+    units = int(ratio * width * 8 + 0.5)
+    full, remainder = divmod(units, 8)
+    filled = _BAR_FULL * full + (_BAR_PARTIAL[remainder - 1] if remainder else "")
+    return filled, _BAR_TRACK * (width - len(filled))
+
+
+def _bar_row(
+    bar: PowerlineBar, palette: Palette, *, bar_width: int, trend: bool, detail: bool
+) -> str:
+    """Draw one bar row: label, bar, percentage, then the trend and detail asked for."""
+    if bar.ratio < _LOW_BELOW:
+        level = palette.low
+    elif bar.ratio < _MID_BELOW:
+        level = palette.mid
+    else:
+        level = palette.high
+    filled, track = _bar_glyphs(bar.ratio, bar_width)
+    row = (
+        f"{_bg(palette.label)}{_fg(palette.ink)} {bar.label:<3} "
+        f"{_bg(palette.base)}{_fg(palette.label)}{_ARROW} "
+        f"{_fg(level)}{filled}{_fg(palette.track)}{track}"
+        f"{_fg(palette.text)} {bar.percent:>3}%"
+    )
+    if trend and bar.trend:
+        mark, colour = ("↑+", palette.rising) if bar.trend > 0 else ("↓", palette.falling)
+        row += f"{_fg(colour)} {mark}{bar.trend}"
+    if detail and bar.detail:
+        row += f"{_fg(palette.muted)} {bar.detail}"
+    return f"{row}{_RESET}"
+
+
+def _fit_bar_row(bar: PowerlineBar, palette: Palette, width: int | None) -> str | None:
+    """Return the widest form of *bar*'s row that fits *width*, or ``None`` when none does.
+
+    The bar shrinks to five cells first, then the trend goes, then the detail.
+    """
+    forms = (
+        (_BAR_WIDE, True, True),
+        (_BAR_NARROW, True, True),
+        (_BAR_NARROW, False, True),
+        (_BAR_NARROW, False, False),
+    )
+    for bar_width, trend, detail in forms:
+        row = _bar_row(bar, palette, bar_width=bar_width, trend=trend, detail=detail)
+        if width is None or _cells(row) <= width:
+            return row
+    return None
+
+
+def render_powerline(
+    segments: Sequence[StatuslineSegment],
+    bars: Sequence[PowerlineBar],
+    palette: Palette,
+    *,
+    width: int | None,
+) -> list[str]:
+    """Draw line 1 from *segments* and one row per bar, all in *palette*.
+
+    Line 1 shows each segment with a sourced value, in the order given; a
+    segment with none is omitted, never drawn as a marker. Every cell carries
+    an explicit foreground and background from the palette.
 
     Args:
-        ratio: Fill ratio in the closed interval ``[0, 1]``.
-        width: Bar cell count (> 0). Defaults to the shared bar default.
+        segments: The line-1 segments, in display order.
+        bars: The bar rows, in display order.
+        palette: The colours to draw with.
+        width: The terminal width in cells, or ``None`` to draw every row
+            whole. Line 1 drops MCP, then active time, then project, then
+            hooks, budget and scope, and clips the model last; a bar row
+            shrinks its bar, then drops the trend, then the detail. A row
+            that still does not fit is left out, so no row ever wraps.
 
     Returns:
-        The block-eighths bar, exactly *width* cells wide.
-
-    Raises:
-        ValueError: When *ratio* is outside ``[0, 1]`` or *width* is not
-            positive (propagated from the bar primitive).
+        The rows, top to bottom, each ending in an attribute reset; empty when
+        nothing could be sourced.
     """
-    return render_block_bar(ratio, width=width)
-
-
-def _rate_window_text(window: RateWindow, width: int) -> str:
-    """Return one window as ``<label> <bar> <pct>%`` plus its reset time when known."""
-    text = f"{window.label} {render_usage_bar(window.ratio, width=width)} {window.ratio:.0%}"
-    if window.resets_at is not None:
-        text += f" ↻{window.resets_at.astimezone(UTC):%H:%MZ}"
-    return text
-
-
-def rate_window_segment(
-    windows: Sequence[RateWindow], source: SegmentSource, *, width: int = DEFAULT_WIDTH
-) -> StatuslineSegment:
-    """Build the rate-limit segment: one bar per window the host reported.
-
-    Args:
-        windows: The windows the host's rate-limit block carries, in the
-            order it lists them; at least one.
-        source: Who states the windows.
-        width: Bar cell count per window (> 0).
-
-    Returns:
-        A ``rate:<window> <bar> <pct>% ↻<reset>`` segment, windows joined.
-
-    Raises:
-        ValueError: *windows* is empty, a ratio is outside ``[0, 1]``, or
-            *width* is not positive.
-    """
-    if not windows:
-        raise ValueError("a rate-window segment needs at least one window")
-    value = _RATE_WINDOW_JOIN.join(_rate_window_text(window, width) for window in windows)
-    return sourced_segment(_RATE_WINDOW_MODULE, _RATE_WINDOW_LABEL, value, source)
+    pieces = [
+        _Piece(segment.module, _fill(segment, palette), text)
+        for segment in segments
+        if (text := _display(segment)) is not None
+    ]
+    if width is not None:
+        pieces = _fit_line_one(pieces, palette, width)
+    rows = [_line_one(pieces, palette)] if pieces else []
+    for bar in bars:
+        row = _fit_bar_row(bar, palette, width)
+        if row is not None:
+            rows.append(row)
+    return rows
 
 
 _BUDGET_MODULE: str = "budget"
@@ -652,18 +685,17 @@ __all__ = [
     "BARE_UNKNOWN_TOKENS",
     "SEGMENT_CONTRACT_REVISION",
     "UNAVAILABLE_MARK",
-    "RateWindow",
+    "Palette",
+    "PowerlineBar",
     "SegmentSource",
     "SegmentStatus",
     "StatuslineSegment",
-    "StatuslineTheme",
     "budget_segment",
     "budget_unavailable_segment",
-    "load_themes",
-    "rate_window_segment",
-    "render_segments",
-    "render_usage_bar",
-    "resolve_theme",
+    "format_context_tokens",
+    "format_countdown",
+    "load_palette",
+    "render_powerline",
     "sourced_segment",
     "unavailable_segment",
 ]

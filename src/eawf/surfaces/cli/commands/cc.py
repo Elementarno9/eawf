@@ -64,15 +64,18 @@ def statusline_root(
         str | None,
         typer.Option(
             "--theme",
-            help="Theme name from templates/themes.yaml (default, powerline, ascii-fallback).",
+            help=(
+                "Palette, light or dark (overrides EAWF_STATUSLINE_THEME); without "
+                "either, Claude Code's theme setting, then COLORFGBG, then dark."
+            ),
         ),
     ] = None,
 ) -> None:
-    """Render one line of statusline text from a Claude JSON payload on stdin.
+    """Render the statusline rows from a Claude JSON payload on stdin.
 
-    Honors ``--theme`` and ``EAWF_STATUSLINE_THEME`` (flag wins). Exit
-    code is always ``0`` — degraded modules render a fallback string per
-    the W06 contract.
+    Honors ``--theme`` and ``EAWF_STATUSLINE_THEME`` (flag wins), each
+    ``light`` or ``dark``. Exit code is always ``0``: a segment that cannot
+    be sourced is left out of the rows.
     """
     if ctx.invoked_subcommand is not None:
         return
@@ -84,10 +87,8 @@ def statusline_root(
         workspace=flags.workspace,
         theme_name=theme,
     )
-    # ``color=True`` overrides Click's TTY-detection so the ASCII colour
-    # codes survive a pipe to Claude Code's statusline reader. The
-    # ``ascii-fallback`` theme yields zero color bytes when colour is
-    # unwanted.
+    # ``color=True`` overrides Click's TTY-detection so the 24-bit colour
+    # codes survive a pipe to Claude Code's statusline reader.
     typer.echo(line, color=True)
 
 
@@ -105,7 +106,7 @@ def statusline_prewarm(
         str | None,
         typer.Option(
             "--theme",
-            help="Theme name (overrides EAWF_STATUSLINE_THEME).",
+            help="Palette, light or dark (overrides EAWF_STATUSLINE_THEME).",
         ),
     ] = None,
 ) -> None:

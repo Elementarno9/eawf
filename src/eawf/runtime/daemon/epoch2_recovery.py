@@ -100,7 +100,7 @@ from eawf.kernel.store.ledger import (
     split_torn_tail,
     truncate_torn_tail,
 )
-from eawf.kernel.store.paths import ledger_path, store_path
+from eawf.kernel.store.paths import collection_ledger_paths, record_ledger_path, store_path
 from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, Epoch2Collection
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.epoch2_root import (
@@ -468,12 +468,13 @@ def repair_native_ledger_tails(
         try:
             ids = _envelope_ids(firehose)
             for collection in LEDGER_COLLECTIONS:
-                cut = _repair_tail(ledger_path(document, collection), collection, firehose, ids)
-                if cut is None:
-                    continue
-                truncated += 1
-                dropped += cut[0]
-                journaled += int(cut[1])
+                for ledger in collection_ledger_paths(document, collection):
+                    cut = _repair_tail(ledger, collection, firehose, ids)
+                    if cut is None:
+                        continue
+                    truncated += 1
+                    dropped += cut[0]
+                    journaled += int(cut[1])
         except LedgerError, OSError, ValueError, StateConflict, portalock.LockTimeout:
             skipped += 1
             logger.warning(
@@ -853,7 +854,9 @@ def _finish_ledger_line(record: wal.WalRecord, *, record_id: str, tally: _Tally)
     if not isinstance(line, str) or record.state_path is None:
         return
     ledger_record = LedgerRecord.model_validate_json(line)
-    target = ledger_path(Path(record.state_path), ledger_record.collection)
+    target = record_ledger_path(
+        Path(record.state_path), ledger_record.collection, ledger_record.payload
+    )
     if append_ledger_record_once(target, ledger_record):
         tally.replayed_ledger_count += 1
         logger.info(

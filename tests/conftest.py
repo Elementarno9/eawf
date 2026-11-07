@@ -390,6 +390,103 @@ def marketplace_plugin_isolation() -> Iterator[None]:
 
 
 @pytest.fixture(scope="session", autouse=True)
+def session_history_isolation(runtime_dir_isolation: RuntimeDirIsolation) -> Iterator[Path]:
+    """Keep the operator's Claude and Codex session history out of every test.
+
+    ``eawf reflect run`` indexes every local history it can find, so a test
+    would otherwise sweep the machine's real transcripts. The two root
+    resolvers are patched to empty directories; a test that sets
+    ``EAWF_CLAUDE_PROJECTS_DIR``, ``CLAUDE_CONFIG_DIR`` or ``CODEX_HOME``
+    itself still reaches the history it built, because a value that differs
+    from the one the session started with is honoured.
+
+    Yields:
+        The isolated root, holding an empty ``projects`` and ``sessions``.
+    """
+    from eawf.observability.telemetry.sources import session_history
+
+    root = runtime_dir_isolation.runtime_dir / "history-home"
+    (root / "projects").mkdir(parents=True, exist_ok=True)
+    (root / "sessions").mkdir(parents=True, exist_ok=True)
+    monkeypatch = pytest.MonkeyPatch()
+    # Exported too, so an `eawf` the suite spawns as a subprocess (which the
+    # patched resolvers below cannot reach) indexes the empty roots as well.
+    monkeypatch.setenv("EAWF_CLAUDE_PROJECTS_DIR", str(root / "projects"))
+    monkeypatch.setenv("CODEX_HOME", str(root))
+    started = {
+        name: os.environ.get(name)
+        for name in ("EAWF_CLAUDE_PROJECTS_DIR", "CLAUDE_CONFIG_DIR", "CODEX_HOME")
+    }
+    claude_root = session_history.claude_projects_root
+    codex_root = session_history.codex_sessions_root
+
+    def _set_by_test(*names: str) -> bool:
+        return any(os.environ.get(name) != started[name] for name in names)
+
+    def _claude() -> Path:
+        if _set_by_test("EAWF_CLAUDE_PROJECTS_DIR", "CLAUDE_CONFIG_DIR"):
+            return claude_root()
+        return root / "projects"
+
+    def _codex() -> Path:
+        return codex_root() if _set_by_test("CODEX_HOME") else root / "sessions"
+
+    monkeypatch.setattr(session_history, "claude_projects_root", _claude)
+    monkeypatch.setattr(session_history, "codex_sessions_root", _codex)
+    try:
+        yield root
+    finally:
+        monkeypatch.undo()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def plugin_registry_isolation(runtime_dir_isolation: RuntimeDirIsolation) -> Iterator[Path]:
+    """Keep the operator's installed Claude and Codex plugin registries out of every test.
+
+    The doctor and the session-start hook compare the installed plugin
+    versions with the package, so a test would pass or fail by what the
+    machine has installed. A test that patches the seam itself still wins.
+
+    Yields:
+        The isolated home the registries are read under, empty by default.
+    """
+    from eawf.observability.doctor import checks_plugin_version
+
+    isolated_home = runtime_dir_isolation.runtime_dir / "plugin-registry-home"
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(checks_plugin_version, "_registry_home", lambda: isolated_home)
+    try:
+        yield isolated_home
+    finally:
+        monkeypatch.undo()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def claude_user_settings_isolation(runtime_dir_isolation: RuntimeDirIsolation) -> Iterator[Path]:
+    """Keep the operator's ``~/.claude/settings.json`` out of every project install.
+
+    The Claude installer reads the user-level settings for the eawf plugin's
+    enabled flag and for a statusline the project must not override, so a
+    test would pass or fail by the machine's own settings. The seam is
+    patched rather than ``HOME``: a suite-wide ``HOME`` would also move the
+    uv cache and git identity every subprocess test inherits. A test that
+    patches the seam itself still wins.
+
+    Yields:
+        The isolated user settings path, which no test creates by default.
+    """
+    from eawf.runtime.runtimes.claude import plugin_install
+
+    isolated_path = runtime_dir_isolation.runtime_dir / "claude-home" / ".claude" / "settings.json"
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(plugin_install, "global_settings_path", lambda: isolated_path)
+    try:
+        yield isolated_path
+    finally:
+        monkeypatch.undo()
+
+
+@pytest.fixture(scope="session", autouse=True)
 def runtime_certification_isolation() -> Iterator[Callable[..., Any]]:
     """Keep the daemon's background runtime probe off every Run a test starts.
 

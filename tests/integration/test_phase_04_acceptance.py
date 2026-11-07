@@ -114,13 +114,14 @@ def test_phase_04_end_to_end(
     assert isinstance(env.body, dict)
     assert env.body["event_type"] == "post_commit"
 
-    # Step 5 — `eawf cc statusline` emits a single line on stdout.
+    # Step 5 — `eawf cc statusline` emits its powerline rows on stdout.
     monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(tmp_path / "cache"))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.delenv("EAWF_STATUSLINE_THEME", raising=False)
     _stub_no_git(monkeypatch)
     result = runner.invoke(
         app,
-        ["cc", "statusline", "--theme", "ascii-fallback"],
+        ["cc", "statusline", "--theme", "dark"],
         input=json.dumps(
             {
                 "session_id": "ses-p04-acceptance",
@@ -132,4 +133,4 @@ def test_phase_04_end_to_end(
     assert result.exit_code == 0, result.output
     line = result.stdout.rstrip("\n")
     assert "\n" not in line
-    assert "model:claude-opus-4-7" in line
+    assert " claude-opus-4-7 " in line

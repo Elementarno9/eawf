@@ -1,9 +1,21 @@
 name: CI
 
 on:
+  # The full matrix, macOS and the coverage gate run on these pushes: dev is
+  # the integration branch every pull request lands on, main takes stable
+  # releases, and the release train carries the twice-green proof.
   push:
-    branches: [main, release, "release/**"]
+    branches: [main, dev, release, "release/**"]
+  # The pull-request lane is the fast one: four ubuntu shards, the serial
+  # lane, the small gates and one macOS job over the affected tests. The
+  # ignored paths are editor and machine-local files no job reads, so a pull
+  # request that touches nothing else has nothing for CI to prove.
   pull_request:
+    paths-ignore:
+      - ".ea/local/**"
+      - ".vscode/**"
+      - ".idea/**"
+      - "**/.DS_Store"
   # The nightly and hand-started runs carry the twice-green proof between
   # pushes. GitHub fires a schedule on the default branch only.
   schedule:
@@ -57,15 +69,19 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 tools/ci_changes.py
 
-  lint:
-    name: Pre-commit, deptry and mypy
-    # Runs beside the test matrix instead of inside each leg: the hooks and
-    # the type check read the tree, not the host, so one ubuntu run proves
-    # them for both legs. It does not need the changes job: the one
-    # bookkeeping path that job lets the matrix skip, .secrets.baseline, is
-    # exactly what the detect-secrets hook reads.
+  gates:
+    name: Small gates (lint, wheel smoke, trace, evals, pull-request checks)
+    # The cheap gates share one runner and one dependency sync instead of
+    # paying a checkout and sync each. Every gate step runs once the sync
+    # succeeded, even after an earlier gate failed, so one red run reports
+    # every finding. The hooks and the type check read the tree, not the
+    # host, so one ubuntu run proves them. It does not need the changes job:
+    # the one bookkeeping path that job lets the matrix skip,
+    # .secrets.baseline, is exactly what the detect-secrets hook reads. The
+    # snapshot-pairing, commit-grammar and prose steps read the pull
+    # request's range and run on pull requests only.
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,16 +95,110 @@ jobs:
           enable-cache: true
 
       - name: Sync (frozen)
+        id: sync
         run: uv sync --frozen
 
       - name: Pre-commit
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run pre-commit run --all-files --show-diff-on-failure
 
       - name: Deptry
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run deptry .
 
       - name: Mypy
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
         run: uv run mypy src/
+
+      - name: Build wheel
+        id: wheel
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
+        run: uv build --wheel --out-dir dist
+
+      - name: Smoke the wheel with runtime deps only
+        # The test jobs always sync the dev dependency-group, so their tests
+        # are structurally blind to a runtime module importing a dev-only
+        # dependency. A published `uv tool install eawf` gets runtime deps
+        # only, so such an import crashes the installed CLI at startup while
+        # CI stays green (this is how v0.5.2 shipped a `hypothesis` import
+        # that broke `uv tool install`). `--no-project` ignores this repo's
+        # dev dependency-group; `--with <wheel>` installs the wheel plus its
+        # declared runtime deps into an ephemeral env, the same dependency
+        # closure `uv tool install` sees. Importing the CLI app and the
+        # audit-DSL registry (which eagerly binds every check-kind at
+        # startup) reds here if any runtime module reaches for a dependency
+        # that is not in `[project.dependencies]`.
+        if: ${{ !cancelled() && steps.wheel.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          wheel="$(ls dist/*.whl)"
+          echo "smoke-testing wheel: ${wheel}"
+          uv run --no-project --with "${wheel}" --python 3.14 -- eawf --version
+          uv run --no-project --with "${wheel}" --python 3.14 -- eawf --help >/dev/null
+          uv run --no-project --with "${wheel}" --python 3.14 -- python -c \
+            "import eawf.surfaces.cli, eawf.workflow.audit_dsl.registry; print('runtime import closure OK')"
+
+      - name: Requirement trace check
+        # Recomputes the per-id requirement trace from the committed catalog,
+        # state and source, and fails when the stored census differs in value
+        # or when any id is neither owned, deferred nor satisfied. A
+        # satisfied disposition cites the commit that built its ids, so the
+        # checkout carries full history.
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
+        run: uv run python tools/requirement_trace.py check --require-owned
+
+      - name: Skill envelope evals
+        # The eval marker is excluded from the default pytest run, so without
+        # this step a skill whose envelope drifts from its golden stays green.
+        # The cases compare envelope structure against committed goldens and
+        # call no model, so the step is deterministic and cheap.
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
+        run: uv run pytest tests/eval/test_skill_eval.py -m eval -q
+
+      - name: Snapshot pairing gate
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' && github.event_name == 'pull_request' }}
+        run: uv run python tools/snapshot_pairing_gate.py "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
+
+      - name: Commit grammar
+        # The commit-msg hook runs only where it is installed, so this lints
+        # the subject and Task-trailer grammar of every commit the pull
+        # request adds. History is read, never state: a commit predating the
+        # epoch-2 switch may carry any epoch-1 bracket form it was written in.
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' && github.event_name == 'pull_request' }}
+        run: uv run --no-project python tools/commit_prefix_lint.py --check-history "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+
+      - name: Ledger history
+        # Committed ledger lines stay append-only and the commits they bind
+        # must stay reachable once the branch lands; a finding fails the job.
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' && github.event_name == 'pull_request' }}
+        run: uv run eawf hook ledger-history --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+
+      - name: Install Vale + sync styles
+        # The strict prose gate installs Vale so its prose leg participates.
+        # The chokepoint still fails open on the Vale leg if this step is
+        # skipped or sync fails (an unsynced StylesPath is an E100
+        # fail-open), so the deterministic EAWF013/014/017 legs remain the
+        # blocking floor.
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' && github.event_name == 'pull_request' }}
+        run: |
+          uv tool install vale || pipx install vale || true
+          vale sync || true
+
+      - name: Validate prose (strict)
+        # The fail-closed half of the validate_prose chokepoint: locally the
+        # same chokepoint is advisory, here any EAWF013/014/017 finding reds
+        # the pull request. The diff base is the pull request's base SHA, so
+        # the scan sees exactly the Markdown the pull request adds or changes.
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' && github.event_name == 'pull_request' }}
+        run: uv run eawf hook validate-prose --strict --base "${{ github.event.pull_request.base.sha }}"
+
+      - name: Citation scope (EAWF027) over the tree and the PR body
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' && github.event_name == 'pull_request' }}
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s\n' "${PR_BODY}" > "${RUNNER_TEMP}/pr-body.md"
+          uv run eawf hook eawf027-citation-scope --pr-body "${RUNNER_TEMP}/pr-body.md"
 
   test:
     name: ${{ matrix.os }} / py${{ matrix.python }} / shard ${{ matrix.shard }}
@@ -115,13 +225,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-26]
+        os: [ubuntu-24.04]
         python: ["3.14"]
-        # Each leg runs as three pytest-split shards balanced by the
-        # committed durations, so neither OS holds the push critical path
-        # with one whole-suite job. Steps that must run once per leg, not
-        # once per shard, key on shard 1.
-        shard: ["1", "2", "3"]
+        # Four pytest-split shards balanced by the committed durations keep
+        # the pull-request wall short; the serial tiers run in their own job.
+        shard: ["1", "2", "3", "4"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -142,18 +250,16 @@ jobs:
         # restored by its pinned version and runner, and saved after the job
         # on a miss.
         id: resvg-cache
-        if: startsWith(matrix.os, 'ubuntu-')
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/resvg
           key: resvg-${{ env.RESVG_VERSION }}-${{ runner.os }}-${{ runner.arch }}
 
       - name: Install resvg (pinned, T5 SVG pixel-diff oracle)
-        # Ubuntu-only: coverage + the T5 svg_pixel_diff pixel-diff leg run on
-        # the ubuntu leg alone, so the pinned renderer is installed there. On
-        # the macOS leg the ~8 resvg-oracle tests skip cleanly via their
-        # ``shutil.which("resvg")`` guards (tests/snapshots/svg/*.py).
-        if: startsWith(matrix.os, 'ubuntu-') && steps.resvg-cache.outputs.cache-hit != 'true'
+        # Only the ubuntu shards install the pinned renderer; on macOS the
+        # resvg-oracle tests skip cleanly via their ``shutil.which("resvg")``
+        # guards (tests/snapshots/svg/*.py).
+        if: steps.resvg-cache.outputs.cache-hit != 'true'
         run: cargo install resvg --version "$RESVG_VERSION" --locked
 
       - name: Shard durations
@@ -162,27 +268,25 @@ jobs:
         run: uv run python tools/duration_budget_gate.py split tests/duration-baseline.json split-durations.json
 
       - name: Pytest (parallel)
-        # Coverage is collected on the ubuntu leg only: the ${{ }} expression
-        # appends the --cov flags on ubuntu and an empty string on macOS, so
-        # the macOS shards run the identical selection without coverage. The
-        # ubuntu shards write raw coverage data only; the coverage job
-        # combines them and judges the floors once. Every event runs this
-        # same selection, so a merge is never the first full run. The
-        # end-to-end suite and the perf lane run serially below to avoid
-        # worker contention.
-        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --junitxml=pytest-junit.xml --splits 3 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
+        # Coverage is collected off pull requests only: the ${{ }} expression
+        # appends the --cov flags on a push, nightly or manual run and an
+        # empty string on a pull request, which has no coverage job to feed.
+        # The test selection is the same on every event. The end-to-end
+        # suite and the perf lane run in the serial job to avoid worker
+        # contention.
+        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability --junitxml=pytest-junit.xml --splits 4 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json ${{ github.event_name != 'pull_request' && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
+
       - name: Duration budget (advisory)
         # Diffs every test's wall time in the parallel leg against the
         # committed baseline: a test past twice its baseline, or a fast-tier
         # test past its tier ceiling, is reported. Advisory for its first
         # checkpoint, so a finding reports and does not fail the job.
-        if: startsWith(matrix.os, 'ubuntu-')
         continue-on-error: true
         run: uv run python tools/duration_budget_gate.py check pytest-junit.xml tests/duration-baseline.json
 
       - name: Upload JUnit report
-        # Every leg and shard keeps its report, so the duration baseline can
-        # be refreshed from a real CI run and a slow shard can be read back.
+        # Every shard keeps its report, so the duration baseline can be
+        # refreshed from a real CI run and a slow shard can be read back.
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
@@ -190,37 +294,59 @@ jobs:
           path: pytest-junit.xml
           if-no-files-found: error
 
-      - name: Pytest (serial e2e timing)
-        # Console latency must be measured without competing pytest workers.
-        if: matrix.shard == '1'
-        run: uv run pytest -n0 tests/e2e ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
-
-      - name: Pytest (serial perf structure)
-        # The perf lane's import-graph and harness checks block on every
-        # event; EAWF_SKIP_PERF skips its wall-clock budgets, which a loaded
-        # runner can red with nothing broken. It runs once per leg, on shard
-        # 1, appending to that shard's data.
-        if: matrix.shard == '1'
-        env:
-          EAWF_SKIP_PERF: "1"
-        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
-
-      - name: Perf lane (nightly, reports, never blocks)
-        # The same lane with its wall-clock budgets, serial and on the
-        # nightly or hand-started run only. A breach shows as a failed step
-        # on an otherwise green job, so it reports without blocking.
-        if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && matrix.shard == '1'
-        continue-on-error: true
-        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel
-
       - name: Upload coverage data
-        if: startsWith(matrix.os, 'ubuntu-')
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-data-shard-${{ matrix.shard }}
           path: .coverage
           include-hidden-files: true
           if-no-files-found: error
+
+  e2e:
+    name: Serial lane (e2e, perf structure, telemetry sync)
+    needs: changes
+    # The tiers that must not share the host with pytest workers run here,
+    # beside the shards instead of after shard 1, so no shard carries them
+    # on the critical path. Gated like the shards.
+    if: >-
+      !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Pytest (serial e2e timing)
+        # Console latency must be measured without competing pytest workers.
+        run: uv run pytest -n0 tests/e2e ${{ github.event_name != 'pull_request' && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
+
+      - name: Pytest (serial perf structure)
+        # The perf lane's import-graph and harness checks block on every
+        # event; EAWF_SKIP_PERF skips its wall-clock budgets, which a loaded
+        # runner can red with nothing broken.
+        env:
+          EAWF_SKIP_PERF: "1"
+        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability ${{ github.event_name != 'pull_request' && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
+
+      - name: Perf lane (nightly, reports, never blocks)
+        # The same lane with its wall-clock budgets, serial and on the
+        # nightly or hand-started run only. A breach shows as a failed step
+        # on an otherwise green job, so it reports without blocking.
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
 
       - name: Telemetry sync (REL-009)
         # Telemetry ingestion is on by default, so CI must prove the sync
@@ -237,16 +363,149 @@ jobs:
         # Its fire proof is tests/integration/test_metrics_cli.py, which reds
         # on an ingestion path that writes no rows. Reviewed and kept; the
         # companion review row is tests/lint/test_gate_sunset_review.py.
-        # It runs once per leg, on shard 1.
+        run: uv run pytest -n0 tests/integration/test_metrics_cli.py
+
+      - name: Upload coverage data
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-data-serial
+          path: .coverage
+          include-hidden-files: true
+          if-no-files-found: error
+
+  test-macos:
+    name: ${{ matrix.os }} / py${{ matrix.python }} / shard ${{ matrix.shard }}
+    needs: changes
+    # The whole suite on macOS runs on pushes, nightly and manual runs; a
+    # pull request runs the affected tests only, in macos-affected. Gated on
+    # the changes job like the ubuntu shards.
+    if: >-
+      !cancelled() && github.event_name != 'pull_request'
+      && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26]
+        python: ["3.14"]
+        # Steps that must run once per leg, not once per shard, key on
+        # shard 1.
+        shard: ["1", "2", "3"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Shard durations
+        run: uv run python tools/duration_budget_gate.py split tests/duration-baseline.json split-durations.json
+
+      - name: Pytest (parallel)
+        # The ubuntu shards' selection without coverage.
+        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability --junitxml=pytest-junit.xml --splits 3 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json
+
+      - name: Upload JUnit report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-junit-${{ matrix.os }}-shard-${{ matrix.shard }}
+          path: pytest-junit.xml
+          if-no-files-found: error
+
+      - name: Pytest (serial e2e timing)
+        if: matrix.shard == '1'
+        run: uv run pytest -n0 tests/e2e
+
+      - name: Pytest (serial perf structure)
+        if: matrix.shard == '1'
+        env:
+          EAWF_SKIP_PERF: "1"
+        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
+
+      - name: Perf lane (nightly, reports, never blocks)
+        if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && matrix.shard == '1'
+        continue-on-error: true
+        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
+
+      - name: Telemetry sync (REL-009)
         if: matrix.shard == '1'
         run: uv run pytest -n0 tests/integration/test_metrics_cli.py
 
+  macos-affected:
+    name: macos-26 / affected tests
+    needs: changes
+    # The one macOS job of a pull request: the tests tools/changed_scope.py
+    # maps the pull request's diff to, in parallel with the ubuntu shards'
+    # ignores and the perf budgets skipped. It catches a macOS-only failure
+    # in what the pull request touched without the whole-suite macOS wall;
+    # the next push runs the whole suite there.
+    if: >-
+      !cancelled() && github.event_name == 'pull_request'
+      && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Select the affected tests
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          scope="$(uv run python tools/changed_scope.py --base "${BASE_SHA}" --existing-only)"
+          echo "affected: ${scope:-none}"
+          echo "scope=${scope}" >> "${GITHUB_OUTPUT}"
+
+      - name: Pytest (affected, parallel)
+        # pytest exits 5 when the ignores leave nothing to collect, which
+        # means the pull request touched only serial-tier tests.
+        if: steps.scope.outputs.scope != ''
+        env:
+          EAWF_SKIP_PERF: "1"
+          SCOPE: ${{ steps.scope.outputs.scope }}
+        run: |
+          set +e
+          # shellcheck disable=SC2086 # the scope is a space-separated path list
+          uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability $SCOPE
+          status=$?
+          if [ "${status}" -eq 5 ]; then
+            echo "no affected test outside the serial tiers"
+            exit 0
+          fi
+          exit "${status}"
+
   coverage:
     name: Coverage gate over the combined shards
-    # Each ubuntu shard measures a third of the suite, so no shard alone can
-    # judge a floor. This job runs only when every test leg passed (the
-    # default needs condition), merges the shards' data and judges once.
-    needs: test
+    # Each ubuntu shard and the serial lane measure a part of the suite, so
+    # none alone can judge a floor. A pull request collects no coverage;
+    # every push, nightly and manual run merges the parts once every one of
+    # them passed (the default needs condition) and judges once.
+    needs: [test, e2e]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -267,12 +526,12 @@ jobs:
       - name: Download shard coverage data
         uses: actions/download-artifact@v4
         with:
-          pattern: coverage-data-shard-*
+          pattern: coverage-data-*
           path: coverage-data
 
       - name: Combine shard coverage
-        # The shards ran on the same runner image and checkout path, so
-        # their measured file paths agree and combine without remapping.
+        # The parts ran on the same runner image and checkout path, so their
+        # measured file paths agree and combine without remapping.
         run: |
           uv run coverage combine coverage-data/*/.coverage
           uv run coverage xml
@@ -287,159 +546,9 @@ jobs:
       - name: Coverage floor (overall >=60)
         run: uv run coverage report
 
-  tool-install-smoke:
-    name: Fresh tool-install smoke (runtime deps only)
-    # The `test` matrix above always syncs the dev dependency-group, so its
-    # tests are structurally blind to a runtime module importing a dev-only
-    # dependency. A published `uv tool install eawf` gets RUNTIME deps only,
-    # so such an import crashes the installed CLI at startup while CI stays
-    # green (this is exactly how v0.5.2 shipped a `hypothesis` import that
-    # broke `uv tool install`). This job builds the wheel and exercises the
-    # CLI in a runtime-only environment so that class of break reds the PR.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
-        with:
-          python-version: "3.14"
-          enable-cache: true
-
-      - name: Build wheel
-        run: uv build --wheel --out-dir dist
-
-      - name: Smoke the wheel with runtime deps only
-        # `--no-project` ignores this repo's dev dependency-group; `--with
-        # <wheel>` installs the wheel plus its DECLARED runtime deps into an
-        # ephemeral env — the same dependency closure `uv tool install` sees.
-        # Importing the CLI app + the audit-DSL registry (which eagerly binds
-        # every check-kind at startup) reds here if any runtime module reaches
-        # for a dependency that is not in `[project.dependencies]`.
-        run: |
-          set -euo pipefail
-          wheel="$(ls dist/*.whl)"
-          echo "smoke-testing wheel: ${wheel}"
-          uv run --no-project --with "${wheel}" --python 3.14 -- eawf --version
-          uv run --no-project --with "${wheel}" --python 3.14 -- eawf --help >/dev/null
-          uv run --no-project --with "${wheel}" --python 3.14 -- python -c \
-            "import eawf.surfaces.cli, eawf.workflow.audit_dsl.registry; print('runtime import closure OK')"
-
-  snapshot-pairing:
-    name: Snapshot pairing gate
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
-        with:
-          python-version: "3.14"
-          enable-cache: true
-
-      - name: Sync (frozen)
-        run: uv sync --frozen
-
-      - name: Snapshot pairing gate
-        run: uv run python tools/snapshot_pairing_gate.py "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
-
-  commit-grammar:
-    name: Commit grammar over the pull request's commits
-    # The commit-msg hook runs only where it is installed, so this lints the
-    # subject and Task-trailer grammar of every commit the pull request adds.
-    # History is read, never state: a commit predating the epoch-2 switch
-    # may carry any epoch-1 bracket form it was written in.
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
-        with:
-          python-version: "3.14"
-          enable-cache: true
-
-      - name: Commit grammar
-        run: uv run --no-project python tools/commit_prefix_lint.py --check-history "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
-
-      - name: Sync (frozen)
-        run: uv sync --frozen
-
-      # Committed ledger lines stay append-only and the commits they bind
-      # must stay reachable once the branch lands; a finding fails the job.
-      - name: Ledger history
-        run: uv run eawf hook ledger-history --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
-
-  requirement-trace:
-    name: Requirement trace census (value-fresh)
-    # Recomputes the per-id requirement trace from the committed catalog,
-    # state and source, and fails when the stored census differs in value
-    # or when any id is neither owned, deferred nor satisfied. The proposal
-    # packet the ids come from is not committed, so this job never
-    # re-extracts; the catalog is its input. A satisfied disposition cites
-    # the commit that built its ids, so the checkout carries full history.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
-        with:
-          python-version: "3.14"
-          enable-cache: true
-
-      - name: Sync (frozen)
-        run: uv sync --frozen
-
-      - name: Requirement trace check
-        run: uv run python tools/requirement_trace.py check --require-owned
-
-  skill-eval:
-    name: Skill envelope evals
-    # The eval marker is excluded from the default pytest run, so without
-    # this job a skill whose envelope drifts from its golden stays green.
-    # The cases compare envelope structure against committed goldens and
-    # call no model, so the job is deterministic and cheap enough to run
-    # on every push.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
-        with:
-          python-version: "3.14"
-          enable-cache: true
-
-      - name: Sync (frozen)
-        run: uv sync --frozen
-
-      - name: Skill envelope evals
-        run: uv run pytest tests/eval/test_skill_eval.py -m eval -q
-
   linux-jail:
     name: Linux jail real-bwrap launch
-    # The `test` matrix runs on hosts WITHOUT bubblewrap, so every real-jail
+    # The test jobs run on hosts WITHOUT bubblewrap, so every real-jail
     # case skips there and the Linux backend is only ever checked by argv
     # shape. That is how a prefix that bwrap refuses to launch (a tmpfs mask
     # over an absent cred dir, a $TMPDIR pinned to a macOS-only path) stayed
@@ -489,17 +598,17 @@ jobs:
 
   twice-green:
     name: Full suite green a second time from a fresh checkout
-    # The `test` matrix runs the suite once on every event this job runs
-    # on, so this job supplies the second green run REL-026 means by
-    # reproducibly green: `just test-all` once more, on its own fresh
-    # checkout, unsharded and with the console goldens and the serial
-    # tiers in it. A third run, back to back on this checkout, never caught
-    # a defect the first two missed; the state one run leaves for the next
-    # -- a leaked runtime dir, a live daemon socket -- is named by the
-    # suite's daemon leak witness at session end instead.
+    # The test jobs run the suite once on every event this job runs on, so
+    # this job supplies the second green run REL-026 means by reproducibly
+    # green: `just test-all` once more, on its own fresh checkout, unsharded
+    # and with the console goldens and the serial tiers in it. A third run,
+    # back to back on this checkout, never caught a defect the first two
+    # missed; the state one run leaves for the next -- a leaked runtime dir,
+    # a live daemon socket -- is named by the suite's daemon leak witness at
+    # session end instead.
     # Cadence: the REL-026 proof runs on release pushes plus nightly and
-    # manual runs, never on a pull request or a main push. Its half hour
-    # on every main push bounded CI wall-clock while its second run never
+    # manual runs, never on a pull request or a main or dev push. Its half
+    # hour on every push bounded CI wall-clock while its second run never
     # caught a defect the first run missed, so a flake it finds now
     # surfaces in the next nightly run and holds the release gate until
     # fixed. A release push still skips it when the changes job concluded
@@ -540,63 +649,15 @@ jobs:
       - name: Pytest via just test-all
         run: just test-all
 
-  prose-gate:
-    name: Layer-2 prose gate (strict)
-    # The fail-closed half of the validate_prose chokepoint (doc-clarity
-    # Layer 2): runs `eawf hook validate-prose --strict` over the Markdown
-    # changed on the PR. Locally the same chokepoint is fail-open (advisory);
-    # here any EAWF013/014/017 finding reds the PR. Vale is installed + synced
-    # so its prose leg participates, but the deterministic legs block even if
-    # the Vale leg fails open. PR-only: the gate scans the PR's changed .md.
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
-        with:
-          python-version: "3.14"
-          enable-cache: true
-
-      - name: Sync (frozen)
-        run: uv sync --frozen
-
-      - name: Install Vale + sync styles
-        # The strict gate installs Vale so its prose leg participates. The
-        # chokepoint still fails open on the Vale leg if this step is skipped
-        # or sync fails (an unsynced StylesPath is an E100 fail-open), so the
-        # deterministic EAWF013/014/017 legs remain the blocking floor.
-        run: |
-          uv tool install vale || pipx install vale || true
-          vale sync || true
-
-      - name: Validate prose (strict)
-        # Diff base is the PR base SHA so the conditional scan sees exactly the
-        # Markdown the PR adds/changes; --strict makes any composed finding
-        # exit non-zero and block the PR.
-        run: uv run eawf hook validate-prose --strict --base "${{ github.event.pull_request.base.sha }}"
-
-      - name: Citation scope (EAWF027) over the tree and the PR body
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          printf '%s\n' "${PR_BODY}" > "${RUNNER_TEMP}/pr-body.md"
-          uv run eawf hook eawf027-citation-scope --pr-body "${RUNNER_TEMP}/pr-body.md"
-
   windows:
     name: Windows named-pipe transport (win32 test set)
-    # The `test` matrix above runs only on POSIX, where every win32-marked
-    # test SKIPS -- so the named-pipe transport (pywin32 CreateNamedPipe /
-    # ReadFile MORE_DATA loop / CancelIoEx teardown / PeekNamedPipe idle
-    # reap / cold-start budget) is never actually exercised there. This job
-    # runs the win32 test set plus shared CLI smoke on a real Windows host so
-    # a regression in the pipe transport or common CLI path reds PRs and
-    # protected branch pushes.
+    # The test jobs run only on POSIX, where every win32-marked test SKIPS
+    # -- so the named-pipe transport (pywin32 CreateNamedPipe / ReadFile
+    # MORE_DATA loop / CancelIoEx teardown / PeekNamedPipe idle reap /
+    # cold-start budget) is never actually exercised there. This job runs
+    # the win32 test set plus shared CLI smoke on a real Windows host so a
+    # regression in the pipe transport or common CLI path reds pull
+    # requests and protected branch pushes.
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -676,26 +737,24 @@ jobs:
     # green. It needs every other job, so it runs last and sees each
     # result. The not-cancelled guard keeps the skip of a pull-request-only
     # job from skipping it, and the result checks keep a failed or
-    # cancelled job from recording anything. Push runs only: a pull
-    # request run tests a merge of the head into the base, a tree nobody
-    # tags. The tool writes the record when the heavy jobs passed, or when
-    # the changes job skipped them against a green tree that is itself
-    # recorded, and the record names that inherited tree. A run that may
-    # not record stays green; the gates then accept only its own commit.
+    # cancelled job from recording anything. Push runs only, on main and
+    # dev alike: a pull request run tests a merge of the head into the
+    # base, a tree nobody tags. The tool writes the record when the heavy
+    # jobs passed, or when the changes job skipped them against a green
+    # tree that is itself recorded, and the record names that inherited
+    # tree. A run that may not record stays green; the gates then accept
+    # only its own commit.
     needs:
       [
         changes,
-        lint,
+        gates,
         test,
+        e2e,
+        test-macos,
+        macos-affected,
         coverage,
-        tool-install-smoke,
-        snapshot-pairing,
-        commit-grammar,
-        requirement-trace,
-        skill-eval,
         linux-jail,
         twice-green,
-        prose-gate,
         windows,
       ]
     if: >-

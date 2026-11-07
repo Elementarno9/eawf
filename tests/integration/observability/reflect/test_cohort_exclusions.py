@@ -70,7 +70,7 @@ def test_reflect_and_helper_runs_are_excluded(mixed_tree: Path) -> None:
         ["-w", str(mixed_tree.parent), "reflect", "run", "--local-only", "--format", "json"],
     )
     assert result.exit_code == 0, result.output
-    document = json.loads(result.output)
+    document = json.loads(result.stdout)
     assert [(row["run_key"], row["reason"]) for row in document["excluded"]] == [
         ("RUN-00000002", "reflect_session"),
         ("RUN-00000003", "helper_session"),

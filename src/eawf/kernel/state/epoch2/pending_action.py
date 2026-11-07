@@ -61,10 +61,17 @@ from eawf.kernel.state.epoch2.base import (
     NonEmptyStr,
     PrincipalKey,
     Sha256DigestStr,
+    StrictNonNegativeInt,
     StrictPositiveInt,
     TitleStr,
 )
-from eawf.kernel.state.epoch2.urns import AnyEntityUrn, EvidenceUrn, PendingActionUrn, RunUrn
+from eawf.kernel.state.epoch2.urns import (
+    AnyEntityUrn,
+    EvidenceUrn,
+    PendingActionUrn,
+    QuestionUrn,
+    RunUrn,
+)
 from eawf.kernel.state.types import UtcDatetime
 
 
@@ -269,6 +276,47 @@ class PrincipalDispositionRow(_FrozenModel):
         return self
 
 
+#: How the host transcript bore out an answer the harness reported. A
+#: ``mismatch`` never seals, so it is not a value an attestation holds.
+SealingTranscriptCheck = Literal["matched", "tool_use_only", "absent"]
+
+
+class HarnessAttestation(_FrozenModel):
+    """How a host harness reported the answer an action was sealed with.
+
+    The person answered inside the harness, not at an eawf surface, so the
+    seal is only as good as the harness's own report of it. This records
+    that report and each cross-check made against it, rather than a
+    verdict, because a same-user forgery stays possible and the record
+    should say what was checked, not that it was trustworthy.
+
+    Attributes:
+        harness: The harness that reported the answer.
+        host_session_digest: The digest of the host session the question
+            was asked in; the session id itself is not kept.
+        tool_use_id: The harness's id for the question call.
+        question_ref: The open question the call was recorded as.
+        run_ref: The Run the host session was bound to, if any.
+        payload_digest: The digest of the questions and answers reported.
+        transcript_check: How the host transcript bore the report out:
+            both question and answer found, only the question found yet,
+            or no transcript record of the call at all.
+        raise_gap_ms: How long the question stood before it was answered.
+        permission_mode: The harness's permission mode at the answer, as
+            it reported it.
+    """
+
+    harness: Literal["claude-code"]
+    host_session_digest: Sha256DigestStr
+    tool_use_id: NonEmptyStr
+    question_ref: QuestionUrn
+    run_ref: RunUrn | None
+    payload_digest: Sha256DigestStr
+    transcript_check: SealingTranscriptCheck
+    raise_gap_ms: StrictNonNegativeInt
+    permission_mode: NonEmptyStr | None
+
+
 @dataclass(frozen=True, slots=True)
 class AnswerResult:
     """What one answer to a pending action achieved.
@@ -332,6 +380,11 @@ class PendingAction(_FrozenModel):
     default: until when an answer still overrides it, and the persisted
     policy that permitted it. Neither means anything without a default,
     so either one filed alone is refused.
+
+    ``harness_attestation`` is how a host harness reported the answer, when
+    the seal came from one. It belongs to a seal, so only a sealed action
+    carries one, and it is left out of the dump while unset so a row filed
+    before it existed keeps its bytes and its content digest.
     """
 
     id: PendingActionKey
@@ -356,6 +409,9 @@ class PendingAction(_FrozenModel):
     receipt_ref: EvidenceUrn | None = None
     assignee_ref: PrincipalKey | None = None
     dispositions: tuple[PrincipalDispositionRow, ...] = ()
+    harness_attestation: HarnessAttestation | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -495,9 +551,10 @@ class PendingAction(_FrozenModel):
         """Require who answered, which answer, and its receipt exactly when sealed.
 
         Raises:
-            ValueError: The seal fields do not all agree with the status,
-                the chosen option is not one the question offers, or the
-                clock runs backwards.
+            ValueError: The seal fields do not all agree with the status, a
+                harness attestation rides an action that is not sealed, the
+                chosen option is not one the question offers, or the clock
+                runs backwards.
         """
         sealed = self.status is PendingActionStatus.SEALED
         present = {
@@ -510,6 +567,11 @@ class PendingAction(_FrozenModel):
             raise ValueError(
                 f"{', '.join(wrong)} must be set exactly when the action is "
                 f"{PendingActionStatus.SEALED.value}, not in {self.status.value}"
+            )
+        if self.harness_attestation is not None and not sealed:
+            raise ValueError(
+                f"harness_attestation belongs to a {PendingActionStatus.SEALED.value} action, "
+                f"not a {self.status.value} one"
             )
         if sealed and self.selected_option is None:
             raise ValueError(
@@ -567,6 +629,7 @@ class PendingAction(_FrozenModel):
         option_id: str,
         receipt_ref: object,
         at: UtcDatetime,
+        harness_attestation: HarnessAttestation | None = None,
     ) -> Self:
         """Return the question sealed with the answer a person gave.
 
@@ -579,6 +642,9 @@ class PendingAction(_FrozenModel):
             option_id: The answer they chose.
             receipt_ref: The evidence row recording the answer.
             at: When the answer was given.
+            harness_attestation: How a host harness reported the answer,
+                when it was given inside one; ``None`` for an answer given
+                at an eawf surface.
 
         Returns:
             The sealed record.
@@ -602,6 +668,7 @@ class PendingAction(_FrozenModel):
                 "selected_option_id": option_id,
                 "receipt_ref": receipt_ref,
                 "assignee_ref": None,
+                "harness_attestation": harness_attestation,
                 "updated_at": at,
             }
         )
@@ -821,6 +888,7 @@ __all__ = [
     "AgentPrincipal",
     "AnswerOutcome",
     "AnswerResult",
+    "HarnessAttestation",
     "HumanPrincipal",
     "OptionEffect",
     "OptionId",
@@ -831,5 +899,6 @@ __all__ = [
     "PendingActionStatus",
     "PreviewStr",
     "PrincipalDispositionRow",
+    "SealingTranscriptCheck",
     "TermExpansion",
 ]

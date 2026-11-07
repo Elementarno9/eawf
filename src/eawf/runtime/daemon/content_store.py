@@ -15,7 +15,7 @@ from typing import Final
 
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.runtime.content import CONTENT_PAYLOAD_KIND, StoredContent, bound_content
-from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
+from eawf.kernel.store.ledger import LedgerRecord, read_collection_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import RootSession, canonical_entity_urn
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
@@ -35,7 +35,7 @@ def stored_contents(session: RootSession, run_ref: str | QualifiedUrn) -> dict[s
     """
     wanted = canonical_entity_urn(run_ref)
     held: dict[str, StoredContent] = {}
-    for item in read_ledger_records(session.ledger_path(Epoch2Collection.ARTIFACT)):
+    for item in read_collection_records(session.document_path, Epoch2Collection.ARTIFACT):
         if item.payload.get("payload_kind") != CONTENT_PAYLOAD_KIND:
             continue
         content = StoredContent.model_validate(item.payload)

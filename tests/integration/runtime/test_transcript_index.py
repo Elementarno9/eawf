@@ -20,14 +20,13 @@ from pydantic import ValidationError
 from eawf.kernel.state.epoch2.measurement import VendorSessionRef
 from eawf.platform.install.gitignore_writer import write_gitignore
 from eawf.runtime.daemon.transcript_backfill import backfill_root_transcripts
-from eawf.runtime.hooks import lifecycle_capture
 from eawf.runtime.hooks.event import HookEvent, HookEventType, HookRuntime
 from eawf.runtime.hooks.lifecycle_capture import SESSION_END_HOOK, SESSION_INDEX_HOOK
 from eawf.runtime.hooks.runner import HookResult, HookRunner, register_runtime_capture_hooks
 from eawf.runtime.runtimes.adapter import NativeLaunchOutcome, NativeLaunchRequest
 from eawf.runtime.runtimes.claude.managed_run import MANAGED_CONFIG_DIRNAME
 from eawf.runtime.runtimes.codex.app_server import CODEX_HOME_DIRNAME
-from eawf.runtime.session import transcript_index
+from eawf.runtime.session import task_binding, transcript_index
 from eawf.runtime.session.transcript_index import (
     TranscriptIndexRow,
     backfill_transcript_index,
@@ -36,6 +35,7 @@ from eawf.runtime.session.transcript_index import (
     transcript_index_path,
 )
 from eawf.runtime.session.vendor_id import hash_vendor_session_id
+from eawf.runtime.vcs import branch_name
 from eawf.runtime.workspace.lease import MCP_ARTIFACT_DIRNAME, WORKSPACE_LOCATOR
 from eawf.surfaces.cli.errors import StateConflict
 from tests.integration.runtime.daemon.test_native_dispatch import (
@@ -320,7 +320,7 @@ def test_a_session_hook_whose_append_fails_names_why_it_skipped(
     def refuse(*args: Any, **kwargs: Any) -> None:
         raise error
 
-    monkeypatch.setattr(lifecycle_capture, "record_transcript", refuse)
+    monkeypatch.setattr(transcript_index, "record_transcript", refuse)
 
     results = capture_runner(repo).run_event(_session_start(tmp_path))
 
@@ -337,9 +337,9 @@ def test_a_session_hook_whose_binding_fails_keeps_its_row_and_names_why(
         raise StateConflict("binding lock held", kind="LockConflict")
 
     monkeypatch.setattr(
-        lifecycle_capture, "checked_out_branch", lambda cwd: "feature/eawf-v0.7-eawf-0646"
+        branch_name, "checked_out_branch", lambda cwd: "feature/eawf-v0.7-eawf-0646"
     )
-    monkeypatch.setattr(lifecycle_capture, "bind_session_to_branch_task", refuse)
+    monkeypatch.setattr(task_binding, "bind_session_to_branch_task", refuse)
 
     results = capture_runner(repo).run_event(_session_start(tmp_path))
 

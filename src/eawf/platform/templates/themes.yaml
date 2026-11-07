@@ -1,83 +1,59 @@
-# Statusline themes for `eawf cc statusline`.
+# Statusline palettes for `eawf cc statusline`.
 #
-# Each theme overrides:
-#   - separator: string joined between rendered segments (e.g. " | ").
-#   - skip_failed: when true, modules that raised are dropped from output;
-#     when false they render "<module>:n/a(render-failed)".
-#   - colors: mapping from segment status to an ANSI escape sequence (or
-#     null/empty to disable color for that status). The renderer prepends
-#     the literal ESC byte () to every non-empty value at runtime so
-#     YAML can keep the values printable.
-#     `info` marks a value that claims no health either way and stays
-#     uncoloured; `degraded` (red) is kept for a real fault.
-#   - glyph: per-module prefix glyph (or null/"" for no glyph).
+# Exactly two palettes, `light` and `dark`, each a closed set of 24-bit
+# `#rrggbb` colours (see `Palette` in src/eawf/surfaces/render/statusline.py
+# for what each role paints). The palette is picked per redraw from
+# `--theme`, `EAWF_STATUSLINE_THEME`, Claude Code's `theme` setting or
+# `COLORFGBG`, in that order, and defaults to dark.
 #
-# When `COLUMNS` names a width, the renderer drops the segments least worth
-# keeping that no longer fit; colour escapes never count against it.
+# Every foreground drawn on a background here must keep a WCAG contrast of
+# at least 4.5:1: `ink` on each segment fill, each fill on `base` (the
+# powerline arrow), and `text`, `muted`, `track`, the bar levels and the
+# trend colours on `base`. A test computes the ratio for every pair.
 #
-# Themes referenced by `EAWF_STATUSLINE_THEME` env var or `--theme` flag.
-# The orchestrator falls back to `default` if the requested theme is
-# missing.
+# The hues follow Catppuccin: Mocha accents on a Mocha base for dark, and
+# Latte accents darkened until they hold 4.5:1 on a Latte base for light.
 
-default:
-  separator: " | "
-  skip_failed: false
-  colors:
-    ok: "[32m"        # green
-    info: ""          # uncoloured
-    warn: "[33m"      # yellow
-    missing: "[90m"   # bright black (grey)
-    degraded: "[31m"  # red
-    reset: "[0m"
-  glyph:
-    scope: ""
-    git: ""
-    model_session_cwd: ""
-    context_tokens: ""
-    cost: ""
-    mcp_health: ""
-    hooks_plugins: ""
-    memory: ""
-    token_saving: ""
+dark:
+  base: "#1e1e2e"
+  ink: "#11111b"
+  text: "#cdd6f4"
+  muted: "#a6adc8"
+  track: "#9399b2"
+  label: "#bac2de"
+  model: "#cba6f7"
+  project: "#89b4fa"
+  active_time: "#94e2d5"
+  cost: "#a6e3a1"
+  mcp: "#89dceb"
+  scope: "#b4befe"
+  budget: "#f9e2af"
+  warn: "#fab387"
+  alert: "#f38ba8"
+  low: "#a6e3a1"
+  mid: "#f9e2af"
+  high: "#f38ba8"
+  rising: "#fab387"
+  falling: "#a6e3a1"
 
-powerline:
-  separator: "  "
-  skip_failed: false
-  colors:
-    ok: "[38;5;82m"
-    info: ""
-    warn: "[38;5;220m"
-    missing: "[38;5;245m"
-    degraded: "[38;5;196m"
-    reset: "[0m"
-  glyph:
-    scope: "P"
-    git: "G"
-    model_session_cwd: "M"
-    context_tokens: "C"
-    cost: "U"
-    mcp_health: "X"
-    hooks_plugins: "H"
-    memory: "R"
-    token_saving: "$"
-
-ascii-fallback:
-  separator: " | "
-  skip_failed: true
-  colors:
-    ok: ""
-    info: ""
-    warn: ""
-    missing: ""
-    degraded: ""
-    reset: ""
-  glyph:
-    scope: ""
-    git: ""
-    model_session_cwd: ""
-    context_tokens: ""
-    cost: ""
-    mcp_health: ""
-    hooks_plugins: ""
-    memory: ""
-    token_saving: ""
+light:
+  base: "#eff1f5"
+  ink: "#eff1f5"
+  text: "#4c4f69"
+  muted: "#5c5f77"
+  track: "#5c5f77"
+  label: "#4c4f69"
+  model: "#7a2fd6"
+  project: "#1a56d6"
+  active_time: "#0e6f74"
+  cost: "#2d7a1e"
+  mcp: "#036d99"
+  scope: "#4b5fd6"
+  budget: "#8a5a0a"
+  warn: "#b0450a"
+  alert: "#b80d32"
+  low: "#2d7a1e"
+  mid: "#8a5a0a"
+  high: "#b80d32"
+  rising: "#b0450a"
+  falling: "#2d7a1e"

@@ -845,7 +845,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
         subject="PlanRevision",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
-        operator_only_actions=("approve", "apply"),
+        operator_only_actions=("approve",),
         description="Propose, approve and apply a PlanRevision.",
         grammar=_grammar(
             "/plan <propose|approve|apply> [<milestone-or-revision-ref>] [--from <ref>...]"

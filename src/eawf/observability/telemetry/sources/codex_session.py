@@ -18,8 +18,10 @@ This adapter folds one rollout file into a single
 :class:`~eawf.observability.telemetry.models.TelemetrySession` row (C09 §5.9.4 — per-session
 projection): turn count from ``turn_context`` records, token totals from the
 last ``token_count`` event, session metadata from the first record that carries
-it. A line that fails JSON parsing is skipped with a logged ``WARNING`` (file +
-1-based line number) and the fold continues (C09 §6 F3); a rollout with no
+it. The same fold yields one :class:`CodexRequestUsage` per new cumulative
+reading, which the session-history sweep turns into per-request rows. A line
+that fails JSON parsing is skipped with a logged ``WARNING`` (file + 1-based
+line number) and the fold continues (C09 §6 F3); a rollout with no
 parseable records yields nothing. Unknown record types are skipped silently for
 forward compatibility. The adapter implements the
 :class:`~eawf.observability.telemetry.sources.base.SessionSource` protocol over
@@ -32,9 +34,11 @@ import json
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
+
+from pydantic import BaseModel, ConfigDict
 
 from eawf.observability.telemetry.models import TelemetrySession
 
@@ -45,15 +49,32 @@ _TURN_CONTEXT = "turn_context"
 _EVENT_MSG = "event_msg"
 _TOKEN_COUNT = "token_count"
 
+#: No single request reads more than the largest context window plus its
+#: output; a reading above this is a counter a forked thread inherited from
+#: its parent, not work the thread itself did.
+_MAX_SINGLE_REQUEST_TOKENS: Final = 2_000_000
 
-@dataclass
-class _CodexAccumulator:
-    """Running fold of one Codex rollout transcript into a session row."""
+
+class _CodexAccumulator(BaseModel):
+    """Running fold of one Codex rollout transcript into a session row.
+
+    A model, not a plain record, so the session-history index can store the
+    fold and resume it when the rollout grows.
+
+    Attributes:
+        model_current: Model of the latest ``turn_context``, which the next
+            request bills against.
+        last_total: The latest cumulative reading as ``(input, cached,
+            output, reasoning)``; a repeated reading is no new request.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     session_id: str | None = None
     cwd: str | None = None
     git_branch_first: str | None = None
     model_primary: str | None = None
+    model_current: str | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
     total_input_tokens: int = 0
@@ -61,16 +82,45 @@ class _CodexAccumulator:
     total_reasoning_output_tokens: int = 0
     total_cache_read: int = 0
     turn_count: int = 0
+    last_total: tuple[int, int, int, int] | None = None
+
+
+CodexFold = _CodexAccumulator
+"""The public name of the rollout fold the session-history sweep resumes."""
+
+
+@dataclass(frozen=True, slots=True)
+class CodexRequestUsage:
+    """The usage of one Codex request, read off a new cumulative reading.
+
+    Attributes:
+        model: Model the request billed against, or ``None``.
+        input_tokens: Non-cached input tokens.
+        cache_read_tokens: Cached input tokens.
+        output_tokens: Output tokens, reasoning included.
+        reasoning_tokens: Reasoning slice of the output.
+    """
+
+    model: str | None
+    input_tokens: int
+    cache_read_tokens: int
+    output_tokens: int
+    reasoning_tokens: int
 
 
 def _parse_ts(raw: object) -> datetime | None:
-    """Return a parsed ISO-8601 timestamp, or ``None`` when absent / malformed."""
+    """Return a parsed ISO-8601 timestamp, or ``None`` when absent / malformed.
+
+    A timestamp without an offset is read as UTC, so every instant returned
+    compares with every other one.
+    """
     if not isinstance(raw, str) or not raw:
         return None
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except ValueError:
         return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 def _coerce_int(raw: object) -> int:
@@ -129,15 +179,24 @@ class CodexSessionSource:
                     )
                     continue
                 record_seen = True
-                _fold_record(acc, record)
+                fold_codex_record(acc, record)
 
         if not record_seen:
             return
         yield _session_from_accumulator(acc, jsonl_path=path)
 
 
-def _fold_record(acc: _CodexAccumulator, record: dict[str, Any]) -> None:
-    """Fold one rollout record into the running accumulator."""
+def fold_codex_record(acc: _CodexAccumulator, record: dict[str, Any]) -> CodexRequestUsage | None:
+    """Fold one rollout record into *acc*.
+
+    Args:
+        acc: The running fold of the rollout.
+        record: One decoded rollout line.
+
+    Returns:
+        The request a ``token_count`` record completed, or ``None`` for any
+        other record and for a repeated reading.
+    """
     ts = _parse_ts(record.get("timestamp"))
     if ts is not None:
         if acc.started_at is None or ts < acc.started_at:
@@ -148,14 +207,15 @@ def _fold_record(acc: _CodexAccumulator, record: dict[str, Any]) -> None:
     record_type = record.get("type")
     payload = record.get("payload")
     if not isinstance(payload, dict):
-        return
+        return None
 
     if record_type == _SESSION_META:
         _fold_session_meta(acc, payload)
     elif record_type == _TURN_CONTEXT:
         _fold_turn_context(acc, payload)
     elif record_type == _EVENT_MSG and payload.get("type") == _TOKEN_COUNT:
-        _fold_token_count(acc, payload)
+        return _fold_token_count(acc, payload)
+    return None
 
 
 def _fold_session_meta(acc: _CodexAccumulator, payload: dict[str, Any]) -> None:
@@ -176,15 +236,17 @@ def _fold_session_meta(acc: _CodexAccumulator, payload: dict[str, Any]) -> None:
 def _fold_turn_context(acc: _CodexAccumulator, payload: dict[str, Any]) -> None:
     """Count one turn and capture the primary model from a ``turn_context``."""
     acc.turn_count += 1
-    if acc.model_primary is None:
-        model = payload.get("model")
-        acc.model_primary = model if isinstance(model, str) and model else None
+    model = payload.get("model")
+    if isinstance(model, str) and model:
+        acc.model_current = model
+        if acc.model_primary is None:
+            acc.model_primary = model
     if acc.cwd is None:
         cwd = payload.get("cwd")
         acc.cwd = cwd if isinstance(cwd, str) and cwd else None
 
 
-def _fold_token_count(acc: _CodexAccumulator, payload: dict[str, Any]) -> None:
+def _fold_token_count(acc: _CodexAccumulator, payload: dict[str, Any]) -> CodexRequestUsage | None:
     """Adopt cumulative token totals from a ``token_count`` event payload.
 
     Codex reports running cumulative totals on every ``token_count`` event under
@@ -197,19 +259,66 @@ def _fold_token_count(acc: _CodexAccumulator, payload: dict[str, Any]) -> None:
     plus ``output_tokens`` on every observed rollout. It is therefore kept on
     its own accumulator field and never added to the output total, which would
     double-count the reasoning slice.
+
+    Codex repeats the latest reading when it only refreshes its rate limits,
+    so a reading equal to the previous one completes no request. A new one
+    takes its request's usage from ``last_token_usage``, or from the movement
+    since the previous reading when that is absent or over the single-request
+    ceiling.
+
+    Returns:
+        The request a new reading completed, or ``None``.
     """
     info = payload.get("info")
     if not isinstance(info, dict):
-        return
+        return None
     totals = info.get("total_token_usage")
     if not isinstance(totals, dict):
-        return
-    input_tokens = _coerce_int(totals.get("input_tokens"))
-    cached_input = _coerce_int(totals.get("cached_input_tokens"))
+        return None
+    current = _usage_tuple(totals)
+    input_tokens, cached_input, output_tokens, reasoning_tokens = current
     acc.total_input_tokens = max(input_tokens - cached_input, 0)
     acc.total_cache_read = cached_input
-    acc.total_output_tokens = _coerce_int(totals.get("output_tokens"))
-    acc.total_reasoning_output_tokens = _coerce_int(totals.get("reasoning_output_tokens"))
+    acc.total_output_tokens = output_tokens
+    acc.total_reasoning_output_tokens = reasoning_tokens
+    previous = acc.last_total
+    if current == previous:
+        return None
+    acc.last_total = current
+    last = info.get("last_token_usage")
+    usage = _usage_tuple(last) if isinstance(last, dict) else _movement(previous, current)
+    if usage[0] + usage[2] > _MAX_SINGLE_REQUEST_TOKENS:
+        if previous is None:
+            return None
+        usage = _movement(previous, current)
+    gross, cached, output, reasoning = usage
+    return CodexRequestUsage(
+        model=acc.model_current,
+        input_tokens=max(gross - cached, 0),
+        cache_read_tokens=min(cached, gross),
+        output_tokens=output,
+        reasoning_tokens=min(reasoning, output),
+    )
+
+
+def _usage_tuple(raw: dict[str, Any]) -> tuple[int, int, int, int]:
+    """Return ``(input, cached, output, reasoning)`` of one Codex usage mapping."""
+    return (
+        max(_coerce_int(raw.get("input_tokens")), 0),
+        max(_coerce_int(raw.get("cached_input_tokens")), 0),
+        max(_coerce_int(raw.get("output_tokens")), 0),
+        max(_coerce_int(raw.get("reasoning_output_tokens")), 0),
+    )
+
+
+def _movement(
+    previous: tuple[int, int, int, int] | None, current: tuple[int, int, int, int]
+) -> tuple[int, int, int, int]:
+    """Return how far each counter moved since *previous*, never below zero."""
+    if previous is None:
+        return current
+    a, b, c, d = (max(now - before, 0) for now, before in zip(current, previous, strict=True))
+    return (a, b, c, d)
 
 
 def _session_from_accumulator(acc: _CodexAccumulator, *, jsonl_path: Path) -> TelemetrySession:
@@ -239,4 +348,4 @@ def _session_from_accumulator(acc: _CodexAccumulator, *, jsonl_path: Path) -> Te
     )
 
 
-__all__ = ["CodexSessionSource"]
+__all__ = ["CodexFold", "CodexRequestUsage", "CodexSessionSource", "fold_codex_record"]

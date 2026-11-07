@@ -58,7 +58,7 @@ from eawf.workflow.evidence.provider_certification import (
     canary_evidence_path,
     load_canary_evidence,
 )
-from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
+from eawf.workflow.release.train import checkpoint_config_yaml, train_for_key
 
 logger = logging.getLogger(__name__)
 
@@ -440,7 +440,7 @@ def write_canary_export(
     """
     repo_root = state_path.parent.parent
     prior = prior_canary_evidence(repo_root, release_key)
-    version = V07_TRAIN.checkpoint_for(release_key).version
+    version = train_for_key(release_key).checkpoint_for(release_key).version
     declared = parse_release_config(checkpoint_config_yaml(version)).runtime_claims
     installed = {
         claim.runtime_id: _installed_version(claim.runtime_id)

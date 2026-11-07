@@ -210,6 +210,34 @@ def test_an_answer_whose_raise_never_arrived_raises_first(
     assert questions(canary, tmp_path)["QST-0002"].question.status is OpenQuestionStatus.BLOCKED
 
 
+def test_an_unmarked_answer_seals_nothing_and_says_so(
+    canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    """A question no pending action is marked on is recorded as before, and seals nothing."""
+    ask(ctx, canary, HOST_QUESTION_RAISE_METHOD)
+
+    answer = ask(
+        ctx, canary, HOST_QUESTION_ANSWER_METHOD, answers={QUESTIONS[0]["question"]: "SQLite"}
+    )
+
+    assert answer["run_ref"] == RUN_URN
+    assert (answer["answered"], answer["sealed_action_refs"], answer["seal_refusals"]) == (
+        1,
+        [],
+        [],
+    )
+
+
+def test_a_seal_fact_of_the_wrong_type_is_refused(
+    canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    """Error path: the seal facts are typed at the boundary like every other param."""
+    with pytest.raises(DaemonValidationError, match="schema_validation_failed"):
+        ask(ctx, canary, HOST_QUESTION_RAISE_METHOD, preanswered="yes")
+    with pytest.raises(DaemonValidationError, match="schema_validation_failed"):
+        ask(ctx, canary, HOST_QUESTION_RAISE_METHOD, transcript_path="")
+
+
 def test_a_repeated_answer_writes_nothing_twice(
     canary: CanaryProvision, ctx: MethodContext, tmp_path: Path
 ) -> None:

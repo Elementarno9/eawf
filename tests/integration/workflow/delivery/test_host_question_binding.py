@@ -42,6 +42,9 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
 
 OPEN_METHOD: Final = "runtime.delivery.open_acceptance_approval"
 SEAL_METHOD: Final = "runtime.delivery.seal_acceptance_approval"
+NUMBERED_METHOD: Final = "runtime.question.answer_numbered"
+#: An agent principal: a valid key that is not an operator's.
+AGENT_ID: Final = "EAWF-PLANNER"
 OPERATOR: Final[dict[str, Any]] = {"principal_kind": "human", "principal_id": "OP-0001"}
 RECEIPT_URN: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/evidence/EVD-0001"
 INSTALL_EVIDENCE: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/evidence/EVD-0002"
@@ -215,6 +218,54 @@ def test_surf_030_the_presented_option_id_is_what_seals_the_action(
     assert filed_action(canary)["selected_option_id"] == "decline"
     assert sealed["host_question"] is None
     assert open_approval(canary, tmp_path)["host_question"] is None
+
+
+@pytest.mark.parametrize(
+    ("method", "answer"),
+    [(SEAL_METHOD, {"option_id": "approve"}), (NUMBERED_METHOD, {"reply": "1"})],
+)
+def test_a_non_operator_resolver_is_refused_at_the_seal(
+    canary: CanaryProvision, tmp_path: Path, method: str, answer: dict[str, str]
+) -> None:
+    """An agent naming itself the resolver seals nothing; the operator's same answer seals."""
+    opened = open_approval(canary, tmp_path)
+    before = document_path(canary).read_bytes()
+
+    with pytest.raises(TransactionRefusedError) as refused:
+        call(
+            canary,
+            tmp_path,
+            method,
+            urn=opened["action_ref"],
+            expected_revision=opened["revision"],
+            idempotency_key="req-seal-agent",
+            actor=AGENT_ID,
+            resolver={"principal_kind": "human", "principal_id": AGENT_ID},
+            receipt_ref=RECEIPT_URN,
+            **answer,
+        )
+
+    assert refused.value.guard == "acceptance_resolver_not_operator"
+    assert AGENT_ID in str(refused.value)
+    assert document_path(canary).read_bytes() == before
+    row = filed_action(canary)
+    assert (row["status"], row["revision"]) == ("WAITING", opened["revision"])
+
+    sealed = call(
+        canary,
+        tmp_path,
+        method,
+        urn=opened["action_ref"],
+        expected_revision=opened["revision"],
+        idempotency_key="req-seal-operator",
+        actor="OP-0001",
+        resolver=dict(OPERATOR),
+        receipt_ref=RECEIPT_URN,
+        **answer,
+    )
+
+    assert sealed["status"] == "SEALED"
+    assert filed_action(canary)["resolution_actor"] == OPERATOR
 
 
 def test_surf_111_the_produced_acceptance_question_passes_every_presentation_rule(

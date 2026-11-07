@@ -89,8 +89,8 @@ def _ci_document() -> dict:
 
 
 def _test_job_steps() -> list[dict]:
-    """Return the steps of the matrix test job the review covers."""
-    steps = _ci_document()["jobs"]["test"]["steps"]
+    """Return the steps of the serial lane job the review covers."""
+    steps = _ci_document()["jobs"]["e2e"]["steps"]
     assert isinstance(steps, list)
     return steps
 

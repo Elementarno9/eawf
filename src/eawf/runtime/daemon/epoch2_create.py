@@ -41,7 +41,7 @@ import copy
 import logging
 import subprocess
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal
@@ -69,7 +69,7 @@ from eawf.kernel.store.ledger import LedgerError, LedgerRecord, read_ledger_reco
 from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, Epoch2Collection, StorageTier, tier_for
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.daemon.delegation import delegation_overrun
-from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
+from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession, session_subjects
 from eawf.runtime.daemon.epoch2_transaction import (
     CANONICAL_SEQUENCE_KEY,
     LIFECYCLE_ENTITIES,
@@ -170,6 +170,7 @@ def run_create(
     request: CreateRequest,
     now: datetime,
     over_ceiling: Literal["refuse", "record"] = "refuse",
+    decide: Callable[[RootSession], CreateRequest] | None = None,
 ) -> CommittedTransaction:
     """Admit one new record into the tree, or refuse it having written nothing.
 
@@ -188,6 +189,11 @@ def run_create(
             child the host already started is admitted and the breach is
             filed on the run ledger, because refusing its record would hide
             the child rather than stop it.
+        decide: Re-decides the request from the locked session, whose
+            answer replaces *request*, which is then only the caller's
+            unlocked guess. A caller whose key is one past every key the
+            tree holds needs it: two such callers deciding before the lock
+            pick the same key, and every one but the first is refused.
 
     Returns:
         The receipt of the committed create beside the firehose envelope
@@ -212,6 +218,15 @@ def run_create(
     spec = _create_spec(entity, request=request)
     record = _admitted_record(entity, spec=spec, request=request, now=now)
     with context.session([request.urn]) as session:
+        if decide is not None:
+            request = decide(session)
+            entity = _entity_for(request.urn)
+            collection = ENTITY_COLLECTIONS[request.urn.kind]
+            spec = _create_spec(entity, request=request)
+            record = _admitted_record(entity, spec=spec, request=request, now=now)
+            # The lock is the whole document's, so only the subject a ledger
+            # line is filed against follows the re-decided record.
+            session.locked_urns = session_subjects([request.urn])
         replayed = _replayed_receipt(context, request=request)
         if replayed is not None:
             logger.info(

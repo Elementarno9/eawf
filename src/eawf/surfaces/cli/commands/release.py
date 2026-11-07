@@ -172,25 +172,26 @@ def release_train_show(
 
     The open index is derived from the release-record and train-advance
     stores (:func:`~eawf.workflow.release.advance.derive_train`), not read
-    off the source-declared :data:`~eawf.workflow.release.train.V07_TRAIN`
-    constant -- that constant always starts at rung zero, so rendering it
+    off a source-declared train in
+    :data:`~eawf.workflow.release.train.RELEASE_TRAINS` -- a declared
+    train always starts at rung zero, so rendering it
     unread would report ``dev1`` open long after the train walked past it.
     """
     from eawf.workflow.release.advance import (
-        derive_train,
+        current_train,
         render_train_ladder,
         render_train_ladder_text,
     )
     from eawf.workflow.release.records import read_release_records
-    from eawf.workflow.release.train import V07_TRAIN
+    from eawf.workflow.release.train import RELEASE_TRAINS
     from eawf.workflow.release.train_store import read_train_advances
 
     flags: GlobalFlags = ctx.obj
     if json_output:
         flags = replace(flags, json_output=True)
     state_path, _reason = resolve_with_reason(flags.workspace)
-    train = derive_train(
-        V07_TRAIN,
+    train = current_train(
+        RELEASE_TRAINS,
         recorded_keys=read_release_records(state_path).keys(),
         advances=read_train_advances(state_path),
     )

@@ -649,6 +649,43 @@ def derive_train(
     )
 
 
+def current_train(
+    trains: Sequence[ReleaseTrain],
+    *,
+    recorded_keys: Iterable[str],
+    advances: Sequence[TrainAdvanceRecord],
+) -> ReleaseTrain:
+    """Return the train a version-less ladder view describes, derived from the stores.
+
+    The newest train holding a release record or a train advance is the
+    one work stands on; a declared train nothing has touched yet is not
+    current until its first record opens. With nothing recorded, the
+    first declared train is, since its head is where releasing begins.
+
+    Args:
+        trains: Every declared train, oldest first.
+        recorded_keys: The key of every record in the release-record
+            collection.
+        advances: Every recorded train advance.
+
+    Returns:
+        The chosen train at its derived open index.
+
+    Raises:
+        ValueError: When an advance of the chosen train names a rung its
+            ladder does not declare.
+    """
+    keys = set(recorded_keys)
+    advanced = {row.train_id for row in advances}
+    touched = [
+        train
+        for train in trains
+        if train.train_id in advanced or any(rung.release_key in keys for rung in train.checkpoints)
+    ]
+    chosen = touched[-1] if touched else trains[0]
+    return derive_train(chosen, recorded_keys=keys, advances=advances)
+
+
 def ladder_status(train: ReleaseTrain, index: int) -> CheckpointLadderStatus:
     """Return where the rung at *index* stands relative to the open one.
 
@@ -751,6 +788,7 @@ __all__ = [
     "advance_train",
     "assert_checkpoint_terminal",
     "assert_prerequisite_receipts",
+    "current_train",
     "derive_train",
     "draft_release_for",
     "ladder_status",

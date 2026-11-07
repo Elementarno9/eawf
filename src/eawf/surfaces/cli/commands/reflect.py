@@ -5,14 +5,18 @@ the tree and writes only to the local reflection collection under ``.ea/local/re
 its title cache, or an output path the operator names; an output path inside the
 canonical store is refused before anything is read. ``run`` is the one verb that may call
 out: it fills session titles from a scrubbed structural digest, and ``--local-only``
-turns that off. The other four never call out under any flag.
+turns that off. The other four never call out under any flag. ``run`` also indexes the
+local Claude and Codex session history incrementally into the collection and writes its
+analysis there beside the report, with offline overview, finder and session pages over
+the sessions ``--scope`` covers. Since the index holds every project's sessions, an
+output directory git would commit is refused before anything is written into it.
 
 The handlers parse, dispatch to :mod:`eawf.observability.reflect` and format.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
@@ -66,6 +70,16 @@ def _output(tree_root: Path, out: Path | None, *, flags: GlobalFlags) -> Path | 
         cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
 
 
+def _progress(stage: str, done: int, total: int) -> None:
+    """Print one progress line on stderr, so stdout stays the report alone."""
+    typer.echo(f"reflect: {stage} {done}/{total}", err=True)
+
+
+def _index_wait() -> None:
+    """Say on stderr that this run waits for another one holding the history index."""
+    typer.echo("reflect: waiting for another reflect run to release the history index", err=True)
+
+
 @reflect_app.command("run")
 def reflect_run(
     ctx: typer.Context,
@@ -80,17 +94,24 @@ def reflect_run(
     ] = None,
     scope: Annotated[
         str,
-        typer.Option("--scope", help="project, milestone:<KEY> or track:<KEY>."),
+        typer.Option(
+            "--scope",
+            help="project, workspace, user (or all_local), milestone:<KEY> or track:<KEY>.",
+        ),
     ] = "project",
     fmt: Annotated[
         _ReportFormat,
         typer.Option("--format", help="Print the text report, or the report JSON."),
     ] = _ReportFormat.TEXT,
 ) -> None:
-    """Read the tree's Runs, fill their titles, and write the report."""
+    """Read the tree's Runs and local session history, fill titles, and write the report."""
     from eawf.observability.reflect import report as rp
+    from eawf.observability.reflect import scopes as sc
     from eawf.observability.reflect import titles as tt
     from eawf.observability.reflect.runs import read_tree_runs
+    from eawf.observability.reflect.sessions import reflect_sessions
+    from eawf.observability.telemetry.projector import IndexBusyError, LocalHistory
+    from eawf.observability.telemetry.sources.session_history import claude_history_root
 
     try:
         selected_scope = rp.parse_scope(scope)
@@ -101,27 +122,63 @@ def reflect_run(
     tree_root = _tree_root(flags)
     target = _output(tree_root, out, flags=flags)
     root = rp.reflect_root(tree_root)
+    area = sc.OutputArea.of(root if target is None else target.parent, tree_root=tree_root)
     now = datetime.now(UTC)
-    cohort = rp.select_cohort(
-        read_tree_runs(tree_root), scope=selected_scope, window_days=window_days, now=now
+    kept = read_tree_runs(
+        tree_root,
+        admits=selected_scope.admits,
+        started_since=None if window_days is None else now - timedelta(days=window_days),
+        progress=_progress,
     )
+    cohort = rp.select_cohort(kept, scope=selected_scope, window_days=window_days, now=now)
     readings = cohort.sessions
     cache_path = root / rp.TITLE_CACHE_FILENAME
     provider = None if local_only else tt.ClaudeTitleProvider.discover()
+    budget = tt.CallBudget()
     titles, account, cache = tt.fill_titles(
         readings,
         cache=tt.load_title_cache(cache_path),
         provider=provider,
         local_only=local_only,
         now=now,
+        budget=budget,
     )
+    try:
+        sessions = reflect_sessions(
+            tree_root,
+            report_scope=selected_scope,
+            area=area,
+            history=LocalHistory.discover(),
+            harness_store=claude_history_root(tree_root.parent),
+            cache=cache,
+            provider=provider,
+            budget=budget,
+            local_only=local_only,
+            now=now,
+            on_wait=_index_wait,
+            progress=_progress,
+        )
+    except sc.ForeignRowsRefusedError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
+    except IndexBusyError as exc:
+        cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="IndexBusy"), flags=flags)
     if not local_only:
-        tt.save_title_cache(cache_path, cache)
+        tt.save_title_cache(cache_path, sessions.cache)
+    skipped = account.digests_skipped + sessions.account.digests_skipped
+    if skipped:
+        typer.echo(
+            f"reflect: titles {budget.used} calls made, {skipped} left for a later run"
+            f" (cap {budget.limit} calls per run)",
+            err=True,
+        )
+    _progress("render", 0, 2)
     report = rp.build_report(
         cohort, titles, scope=selected_scope, window_days=window_days, local_only=local_only
     )
+    _progress("render", 1, 2)
     manifest = rp.fill_manifest(account, sessions=len(readings))
     stored = rp.store_report(root, report, manifest, on=now.date(), out=target)
+    _progress("render", 2, 2)
     if fmt is _ReportFormat.JSON:
         typer.echo(report.model_dump_json(indent=2))
         return
@@ -130,8 +187,11 @@ def reflect_run(
             "report": str(stored.text),
             "document": str(stored.document),
             "manifest": manifest.model_dump(mode="json"),
+            "analysis": str(sessions.analysis),
+            "pages": str(sessions.overview),
         },
-        f"{rp.render_text(report)}report: {stored.text}",
+        f"{rp.render_text(report)}sessions: {sessions.analysis}\npages: {sessions.overview}\n"
+        f"report: {stored.text}",
         flags=flags,
     )
 

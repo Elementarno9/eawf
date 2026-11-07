@@ -29,12 +29,16 @@ from eawf.observability.telemetry.projector import (
     sweep_session_history,
 )
 from eawf.observability.telemetry.sources.session_history import (
+    ParsedTranscript,
+    RequestLedger,
+    TranscriptFold,
     classify_label,
     claude_history_root,
     discover_history,
-    parse_transcript,
+    fold_history_lines,
 )
 from eawf.observability.telemetry.store import SqliteMetricsStore
+from eawf.runtime.session.vendor_id import hash_vendor_session_id
 
 _PRICED_MODEL = "claude-opus-4-7"
 _SECRET_COMMAND = "tee notes.txt <<'EOF'\nprivate operator words\nEOF"
@@ -100,6 +104,15 @@ def _working_session(session_id: str, *, model: str = _PRICED_MODEL) -> list[dic
         _result(9, "t-task"),
         _result(2, "t-heredoc"),
     ]
+
+
+def parse_transcript(path: Path) -> ParsedTranscript:
+    """Fold one whole Claude transcript the way the sweep reads a new file."""
+    fold = TranscriptFold(runtime="claude")
+    ledger = RequestLedger()
+    with path.open("rb") as handle:
+        fold_history_lines(handle, fold, ledger, fallback_session_id=path.stem)
+    return ParsedTranscript.merged([fold], ledger.rows.values())
 
 
 def _write(root: Path, name: str, records: list[dict[str, Any]]) -> Path:
@@ -321,7 +334,7 @@ def test_parse_transcript_skips_malformed_lines_but_keeps_good_ones(tmp_path: Pa
 
     assert parsed is not None
     assert parsed.skipped_lines == 2
-    assert parsed.session_id == "raw-session-id"
+    assert parsed.vendor_session_ref == hash_vendor_session_id("raw-session-id")
 
 
 def test_parse_transcript_falls_back_to_file_stem_for_session_id(tmp_path: Path) -> None:
@@ -330,7 +343,7 @@ def test_parse_transcript_falls_back_to_file_stem_for_session_id(tmp_path: Path)
     parsed = parse_transcript(_write(tmp_path, "stem-id.jsonl", [record]))
 
     assert parsed is not None
-    assert parsed.session_id == "stem-id"
+    assert parsed.vendor_session_ref == hash_vendor_session_id("stem-id")
 
 
 @pytest.mark.parametrize(

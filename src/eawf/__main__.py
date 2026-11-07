@@ -4,7 +4,8 @@ Claude Code runs ``eawf cc statusline`` on every redraw, and importing the
 CLI app costs several hundred milliseconds. The plain statusline invocation
 is therefore answered here without importing the app: a cached line is
 printed at once, and a miss is rendered and cached exactly as the
-``cc statusline`` command would. Every other invocation goes to the full CLI.
+``cc statusline`` command would. A bare ``--version`` is answered here too.
+Every other invocation goes to the full CLI.
 """
 
 from __future__ import annotations
@@ -60,9 +61,24 @@ def _serve_statusline(argv: list[str]) -> bool:
     return True
 
 
+def _serve_version(argv: list[str]) -> bool:
+    """Print the version for a bare ``eawf --version`` and return ``True`` when served.
+
+    The CLI app's import pulls Typer, the error models and Pydantic, which a
+    version probe never needs. Any other argument alongside the flag goes to
+    the full CLI, whose eager option prints the same line.
+    """
+    if argv != ["--version"]:
+        return False
+    from eawf.surfaces.cli._version_display import compose_display_version
+
+    sys.stdout.write(f"{compose_display_version()}\n")
+    return True
+
+
 def main() -> None:
     """Run the ``eawf`` command line for the current process arguments."""
-    if _serve_statusline(sys.argv[1:]):
+    if _serve_version(sys.argv[1:]) or _serve_statusline(sys.argv[1:]):
         return
     from eawf.surfaces.cli.app import main as cli_main
 

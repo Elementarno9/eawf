@@ -8,6 +8,8 @@ no option can honour is refused rather than asked about).
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any, Final
 
@@ -21,6 +23,7 @@ from eawf.kernel.state.epoch2.pending_action import (
     PendingActionKind,
     PendingActionStatus,
 )
+from eawf.kernel.state.epoch2.plan_revision import PlanRevision, plan_content_digest
 from eawf.workflow.decision_question import (
     AUTO_CHOOSE_KEY,
     MAX_OVERRIDE_WINDOW_MINUTES,
@@ -28,12 +31,14 @@ from eawf.workflow.decision_question import (
     DecisionRefusedError,
     DecisionRequest,
     decision_question,
+    waiver_digest,
 )
 from eawf.workflow.host_question import (
     PresentationRefusal,
     QuestionPresentationError,
     present_pending_action,
 )
+from tests.unit.workflow.planning.test_plan_revision_fsm import make_revision
 
 CONTAINER: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
 SUBJECT: Final = f"{CONTAINER}/milestone/MLS-0030"
@@ -273,3 +278,130 @@ def test_surf_038_an_axis_must_name_a_dotted_leaf_and_map_an_option(axis: dict[s
     """Error path: an undotted or capitalised key, or an empty mapping, does not validate."""
     with pytest.raises(ValidationError):
         _request(config_axis=axis)
+
+
+# ---------- a waiver decision binds the waiver it consents to ----------
+
+TASK: Final = f"{CONTAINER}/task/EAWF-0042"
+WAIVER: Final = {"criterion_id": "CR-0042-2", "reason": "its test file was deleted"}
+
+
+def _expected_digest(task_ref: str, criterion_id: str, reason: str) -> str:
+    """Return the digest the waiver contract spells, computed independently."""
+    body = {"criterion_id": criterion_id, "reason": reason, "task_ref": task_ref}
+    text = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return f"sha256:{hashlib.sha256(text.encode('utf-8')).hexdigest()}"
+
+
+def test_a_waiver_request_binds_its_digest() -> None:
+    """A Task subject gets the waiver's digest; a Milestone subject is refused."""
+    action = _decide(_request(urn=TASK, waiver=WAIVER))
+
+    expected = _expected_digest(TASK, "CR-0042-2", "its test file was deleted")
+    assert action.bundle_digest == expected
+    assert action.kind is PendingActionKind.OPERATOR_DECISION
+    assert waiver_digest(parse_qualified_urn(TASK), "CR-0042-2", "its test file was deleted") == (
+        expected
+    )
+
+    with pytest.raises(DecisionRefusedError) as caught:
+        _decide(_request(urn=SUBJECT, waiver=WAIVER))
+    assert caught.value.code is DecisionRefusal.WAIVER_SUBJECT_NOT_TASK
+    assert str(caught.value).startswith("waiver_subject_not_task: ")
+
+
+def test_a_decision_without_a_waiver_binds_no_digest() -> None:
+    """Boundary: a plain decision, on a Task subject too, carries no digest."""
+    assert _decide(_request()).bundle_digest is None
+    assert _decide(_request(urn=TASK)).bundle_digest is None
+
+
+@pytest.mark.parametrize("reason", ["x", "r" * 500, "naïve ünïcode"])
+def test_the_waiver_digest_covers_the_reason_at_its_bounds(reason: str) -> None:
+    """Boundary: the shortest, the longest and a non-ASCII reason each digest as spelled."""
+    action = _decide(_request(urn=TASK, waiver={"criterion_id": "CR-1", "reason": reason}))
+
+    assert action.bundle_digest == _expected_digest(TASK, "CR-1", reason)
+
+
+def test_the_waiver_digest_differs_by_task_criterion_and_reason() -> None:
+    """Each of the three bound facts moves the digest."""
+    task = parse_qualified_urn(TASK)
+    other = parse_qualified_urn(f"{CONTAINER}/task/EAWF-0043")
+    base = waiver_digest(task, "CR-1", "why")
+
+    assert len({base, waiver_digest(other, "CR-1", "why"), waiver_digest(task, "CR-2", "why")}) == 3
+    assert waiver_digest(task, "CR-1", "why not") != base
+
+
+@pytest.mark.parametrize(
+    "waiver",
+    [
+        {"criterion_id": "", "reason": "why"},
+        {"criterion_id": "C" * 65, "reason": "why"},
+        {"criterion_id": "CR-1", "reason": ""},
+        {"criterion_id": "CR-1", "reason": "r" * 501},
+        {"criterion_id": "CR-1"},
+        {"criterion_id": "CR-1", "reason": "why", "actor": "OP-0001"},
+        {"criterion_id": 7, "reason": "why"},
+    ],
+)
+def test_a_malformed_waiver_does_not_validate(waiver: dict[str, Any]) -> None:
+    """Error path: empty, over-long, missing, unknown or mistyped waiver fields are refused."""
+    with pytest.raises(ValidationError):
+        _request(urn=TASK, waiver=waiver)
+
+
+# ---------- a plan-approval decision binds the revision it approves ----------
+
+
+def _plan_decide(request: DecisionRequest, plan: PlanRevision | None) -> PendingAction:
+    return decision_question(
+        request,
+        key="ACT-0003",
+        urn=parse_qualified_urn(ACTION),
+        configured=None,
+        auto_choose=AutoChoose.OFF,
+        at=AT,
+        plan=plan,
+    )
+
+
+def test_a_plan_approval_request_binds_the_revision_content() -> None:
+    """The Milestone's revision binds its plan content digest; nothing else binds."""
+    plan = make_revision()
+
+    action = _plan_decide(_request(plan_revision="PRV-0001"), plan)
+
+    assert action.bundle_digest == plan_content_digest(plan.body)
+    assert action.bundle_digest == plan.content_digest
+    assert _plan_decide(_request(), plan).bundle_digest is None
+
+
+@pytest.mark.parametrize(
+    ("subject", "plan", "code"),
+    [
+        (SUBJECT, None, DecisionRefusal.PLAN_REVISION_UNHELD),
+        (f"{CONTAINER}/milestone/MLS-0031", "held", DecisionRefusal.PLAN_SUBJECT_MISMATCH),
+        (f"{CONTAINER}/task/EAWF-0042", "held", DecisionRefusal.PLAN_SUBJECT_MISMATCH),
+    ],
+    ids=["revision-not-held", "another-milestone", "a-task"],
+)
+def test_a_plan_approval_request_off_its_revision_is_refused(
+    subject: str, plan: str | None, code: DecisionRefusal
+) -> None:
+    """Error path: a revision the tree does not hold, or one of another subject, binds nothing."""
+    held = make_revision() if plan == "held" else None
+
+    with pytest.raises(DecisionRefusedError) as caught:
+        _plan_decide(_request(urn=subject, plan_revision="PRV-0001"), held)
+
+    assert caught.value.code is code
+    assert str(caught.value).startswith(f"{code.value}: ")
+
+
+@pytest.mark.parametrize("key", ["PRV-1", "prv-0001", "ACT-0001", ""])
+def test_a_malformed_plan_revision_key_does_not_validate(key: str) -> None:
+    """Error path: only a PRV- key of four or more digits names a revision."""
+    with pytest.raises(ValidationError):
+        _request(plan_revision=key)

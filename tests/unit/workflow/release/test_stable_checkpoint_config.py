@@ -103,9 +103,9 @@ def test_the_stable_config_requires_membership_like_every_epoch_two_rung() -> No
         resolve_config(V07_TARGET_VERSION)
 
 
-def test_a_version_past_the_train_still_has_no_config() -> None:
-    with pytest.raises(DaemonValidationError, match=r"no release configuration for '0\.7\.1'"):
-        resolve_config("0.7.1", membership_refs=_MEMBERSHIP)
+def test_a_version_past_every_train_still_has_no_config() -> None:
+    with pytest.raises(DaemonValidationError, match=r"no release configuration for '0\.7\.2'"):
+        resolve_config("0.7.2", membership_refs=_MEMBERSHIP)
 
 
 def test_the_stable_config_requires_full_suite_packet_run_and_telemetry() -> None:

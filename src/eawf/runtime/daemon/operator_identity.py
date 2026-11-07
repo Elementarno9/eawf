@@ -2,8 +2,12 @@
 
 An operator principal (an ``OP-`` key) is the one identity whose acts --
 approving a plan, accepting a Milestone -- mean a human decided. An agent
-session that names it as ``--actor`` records a human decision nobody
-made, so the daemon refuses such a request before any handler runs.
+session that names it as ``--actor`` or ``--approved-by`` records a human
+decision nobody made, so the daemon refuses such a request before any
+handler runs. An agent still completes such an act, under its own
+principal, by citing the pending action the operator sealed by answering
+the bound question in session; the operator's answer is the approval, and
+the verb checks that seal, not who sent the request.
 
 The daemon is a separate process and cannot see the caller's
 environment, which is the only place an agent session is visible: Claude
@@ -133,9 +137,9 @@ def admit_operator_identity(method: str, params: Mapping[str, Any]) -> dict[str,
     logger.info(f"admit_operator_identity refused method={method} runtime={runtime}")
     raise OperatorIdentityRefusedError(
         f"validation_failed: {OPERATOR_IDENTITY_REFUSED}: {method} names operator principal "
-        f"{', '.join(operators)} from a {runtime} agent session; only the operator records "
-        "an operator act, from their own terminal, and an agent acts under its own service "
-        "principal"
+        f"{', '.join(operators)} from a {runtime} agent session; an agent never names an "
+        f"{OPERATOR_PRINCIPAL_PREFIX} key: it acts under its own principal and cites the "
+        "action the operator sealed by answering the bound question in session"
     )
 
 

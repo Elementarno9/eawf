@@ -120,7 +120,8 @@ class ApprovePlanParams(BaseModel):
         key: The plan revision to approve.
         expected_revision: The compare-and-swap token the caller read.
         action_ref: The PendingAction the approval is sealed as.
-        approved_by: The human principal approving.
+        approved_by: The human principal approving, or ``None`` to record
+            the operator who sealed the cited action.
         actor: Who asked.
         idempotency_key: The client's name for this request.
     """
@@ -130,7 +131,7 @@ class ApprovePlanParams(BaseModel):
     key: PlanRevisionKey
     expected_revision: StrictPositiveInt
     action_ref: AnyEntityUrn
-    approved_by: OwnerPrincipal
+    approved_by: OwnerPrincipal | None = None
     actor: PrincipalKey
     idempotency_key: Annotated[str, StringConstraints(strict=True, min_length=1, max_length=128)]
 

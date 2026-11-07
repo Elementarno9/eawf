@@ -5,10 +5,13 @@ otherwise be invisible to Eawf: no Run, no Activity row, no transcript. These tw
 adopt it. The start and stop hooks the plugin subscribes to call them, so harness-side
 and daemon-side fan-out land in one Run register and one Activity view instead of two.
 
-``start`` admits the subagent as a Run and starts it. The scope is typed and is not a
-Task's: the subagent was spawned by the harness, not dispatched against a Task, so it
-is a repository-scoped Run observing the repository it runs in, and it writes nothing
-Eawf integrates. The Run's vendor session is the subagent's own id, so its counters
+``start`` admits the subagent as a Run and starts it. The subagent was spawned by the
+harness, not dispatched, so its Run observes and writes nothing Eawf integrates. When
+the hook read a Task key off the subagent's prompt and the tree holds that Task, the
+Run is scoped to it; otherwise it is a repository-scoped Run observing the repository
+it runs in. Its key is decided under the document lock, because parallel subagents
+start together and a key decided before the lock is the same key for all of them.
+The Run's vendor session is the subagent's own id, so its counters
 are read against that session. When the spawning session is itself the vendor session
 of exactly one live Run, that Run is recorded as the parent, which is the delegation
 lineage a subtree is counted over. The subagent is already running when it is adopted,
@@ -59,7 +62,9 @@ from eawf.kernel.state.epoch2.run import (
     RunCreateSpec,
     RunPurpose,
     RunStatus,
+    TaskScope,
 )
+from eawf.kernel.state.epoch2.task_status import TERMINAL_TASK_STATUSES
 from eawf.kernel.state.epoch2.transitions import ObservedFact
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
@@ -72,11 +77,10 @@ from eawf.runtime.daemon.epoch2_recovery import (
     publish_projection,
     read_idempotency_receipt,
 )
-from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
+from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import (
     CANONICAL_SEQUENCE_KEY,
     MutationReceipt,
-    TransactionRefusalCode,
     TransactionRefusedError,
     TransitionRequest,
     run_transaction,
@@ -104,14 +108,12 @@ HARNESS_ACTORS: Final[Mapping[str, str]] = {
     "codex": "HARNESS-CODEX",
 }
 
-#: How many times a create is re-decided after another writer moved the tree's
-#: cursor first. Parallel subagents start together, so losing that race once is
-#: ordinary; losing it every time means the tree is busier than a hook should wait.
-_CREATE_ATTEMPTS: Final = 3
-
 _RUN_KEY: Final = re.compile(r"^RUN-(\d{8})$")
 
 _HostId = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=256)]
+
+#: A Task key: the project code's grammar, a hyphen and the ordinal.
+_TaskKey = Annotated[str, StringConstraints(strict=True, pattern=r"^[A-Z][A-Z0-9_-]{1,15}-\d{4,}$")]
 
 
 class HostSubagentStart(BaseModel):
@@ -121,6 +123,8 @@ class HostSubagentStart(BaseModel):
         harness: The harness that spawned the subagent.
         agent_id: The harness's own id for the subagent.
         host_session_id: The session that spawned it, when the hook named one.
+        task_ref: The key of the Task the subagent's prompt says it works
+            for, when the prompt carried one.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -128,6 +132,7 @@ class HostSubagentStart(BaseModel):
     harness: HostHarness
     agent_id: _HostId
     host_session_id: _HostId | None = None
+    task_ref: _TaskKey | None = None
 
 
 class HostSubagentStop(HostSubagentStart):
@@ -244,6 +249,24 @@ def _parent_of(document: dict[str, Any], host_session_id: str | None) -> Qualifi
     return parse_qualified_urn(live[0]) if len(live) == 1 else None
 
 
+def _scope(
+    document: dict[str, Any], repository: QualifiedUrn, task_ref: str | None
+) -> TaskScope | RepositoryScope:
+    """Return the scope the subagent is adopted under: its Task's when that Task is open.
+
+    A Task already completed, cancelled or failed takes no new work, so a
+    marker naming one adopts the Run repository-scoped instead.
+    """
+    row = None if task_ref is None else document_rows(document, Epoch2Collection.TASK).get(task_ref)
+    if row is not None and row.get("status") not in TERMINAL_TASK_STATUSES:
+        return TaskScope(
+            scope_kind="task", task_ref=parse_qualified_urn(row["urn"]), purpose=RunPurpose.OBSERVE
+        )
+    return RepositoryScope(
+        scope_kind="repository", repository_ref=repository, purpose=RunPurpose.OBSERVE
+    )
+
+
 def _adopted_urn(context: Epoch2RootContext, adoption: _Adoption) -> QualifiedUrn | None:
     """Return the Run an earlier call already adopted the subagent as, if one did."""
     namespaced = context.idempotency_key(adoption.key("adopt"))
@@ -251,6 +274,32 @@ def _adopted_urn(context: Epoch2RootContext, adoption: _Adoption) -> QualifiedUr
     if stored is None:
         return None
     return MutationReceipt.model_validate(stored.receipt).entity_ref
+
+
+class _AlreadyAdoptedError(Exception):
+    """Stops a create whose subagent another delivery adopted while this one waited."""
+
+    def __init__(self, urn: QualifiedUrn) -> None:
+        super().__init__(str(urn))
+        self.urn = urn
+
+
+def _create_request(adoption: _Adoption, document: dict[str, Any], ledger: Path) -> CreateRequest:
+    """Return the create that admits the subagent against *document* as it stands."""
+    repository = _repository_urn(document)
+    key = _next_run_key(document, ledger)
+    spec = RunCreateSpec(
+        key=key,
+        scope=_scope(document, repository, adoption.params.task_ref),
+        parent_run_ref=_parent_of(document, adoption.params.host_session_id),
+    )
+    return CreateRequest(
+        urn=dataclasses.replace(repository, kind=EntityKind.RUN, entity_key=key),
+        expected_revision=document.get(CANONICAL_SEQUENCE_KEY, 0),
+        idempotency_key=adoption.key("adopt"),
+        actor=adoption.actor,
+        spec=spec.model_dump(mode="json"),
+    )
 
 
 def _create(
@@ -261,51 +310,50 @@ def _create(
     now: datetime,
     envelopes: list[Envelope],
 ) -> QualifiedUrn:
-    """Admit the subagent as a queued, repository-scoped Run.
+    """Admit the subagent as a queued Run, scoped to its Task when the tree holds it.
+
+    The key, the cursor and the parent are decided again under the document
+    lock, so parallel subagents never pick the same key or a stale cursor. A
+    second delivery for the same subagent that lost the race to the lock finds
+    the Run the first one adopted there and answers with it, because a create
+    re-decided against the moved tree would name the next key under the same
+    idempotency key and be refused as a conflict.
 
     Raises:
-        TransactionRefusedError: The tree kept moving under every attempt, or
-            the create was refused for any other reason.
+        TransactionRefusedError: The create was refused.
     """
     document_path = _document_path(authority)
-    for attempt in range(1, _CREATE_ATTEMPTS + 1):
-        document = read_document(document_path)
-        repository = _repository_urn(document)
-        key = _next_run_key(document, ledger_path(document_path, Epoch2Collection.RUN))
-        urn = dataclasses.replace(repository, kind=EntityKind.RUN, entity_key=key)
-        parent = _parent_of(document, adoption.params.host_session_id)
-        spec = RunCreateSpec(
-            key=key,
-            scope=RepositoryScope(
-                scope_kind="repository",
-                repository_ref=repository,
-                purpose=RunPurpose.OBSERVE,
-            ),
-            parent_run_ref=parent,
+    ledger = ledger_path(document_path, Epoch2Collection.RUN)
+    decided: list[CreateRequest] = []
+
+    def decide(session: RootSession) -> CreateRequest:
+        adopted = _adopted_urn(context, adoption)
+        if adopted is not None:
+            raise _AlreadyAdoptedError(adopted)
+        decided.append(_create_request(adoption, session.read_document(), ledger))
+        return decided[-1]
+
+    guess = _create_request(adoption, read_document(document_path), ledger)
+    try:
+        committed = run_create(
+            context=context, request=guess, now=now, over_ceiling="record", decide=decide
         )
-        request = CreateRequest(
-            urn=urn,
-            expected_revision=document.get(CANONICAL_SEQUENCE_KEY, 0),
-            idempotency_key=adoption.key("adopt"),
-            actor=adoption.actor,
-            spec=spec.model_dump(mode="json"),
+    except _AlreadyAdoptedError as raced:
+        return raced.urn
+    if committed.envelope is not None:
+        envelopes.append(committed.envelope)
+    urn = committed.receipt.entity_ref
+    task_ref = adoption.params.task_ref
+    if (
+        not committed.replayed
+        and task_ref is not None
+        and decided[-1].spec["scope"]["scope_kind"] != "task"
+    ):
+        logger.warning(
+            f"host subagent names task={task_ref} the tree holds no open Task for; "
+            f"run={urn.entity_key} stays repository-scoped"
         )
-        try:
-            committed = run_create(context=context, request=request, now=now, over_ceiling="record")
-        except TransactionRefusedError as refusal:
-            if refusal.code is not TransactionRefusalCode.REVISION_CONFLICT:
-                raise
-            logger.info(f"host subagent create raced attempt={attempt} key={key}")
-            continue
-        if committed.envelope is not None:
-            envelopes.append(committed.envelope)
-        return urn
-    raise TransactionRefusedError(
-        code=TransactionRefusalCode.REVISION_CONFLICT,
-        detail=f"the tree's cursor moved under {_CREATE_ATTEMPTS} create attempts in a row",
-        entity_ref=adoption.key("adopt"),
-        remediation="Re-deliver the subagent's start hook once the tree is quieter.",
-    )
+    return urn
 
 
 def _move(
@@ -319,23 +367,38 @@ def _move(
     observations: tuple[ObservedFact, ...] = (),
     envelopes: list[Envelope],
 ) -> None:
-    """Take one Run edge, with the counter readings the edge records."""
+    """Take one Run edge, with the counter readings the edge records.
+
+    Another delivery for the same subagent may take the edge between this one's
+    read and its write; its timestamps differ, so this write is refused. The Run
+    then already stands where the edge leads, or past it, and that is accepted.
+
+    Raises:
+        TransactionRefusedError: The edge was refused and the Run has not
+            reached its status or ended.
+    """
     captured = bind_run_capture(
         context, urn=run.urn, to_status=to_status, updates=updates, actor=adoption.actor
     )
-    committed = run_transaction(
-        context=context,
-        request=TransitionRequest(
-            urn=run.urn,
-            to_status=to_status.value,
-            expected_revision=run.revision,
-            idempotency_key=adoption.key(step),
-            actor=adoption.actor,
-            observations=observations,
-            updates=captured,
-        ),
-        now=datetime.now(UTC),
-    )
+    try:
+        committed = run_transaction(
+            context=context,
+            request=TransitionRequest(
+                urn=run.urn,
+                to_status=to_status.value,
+                expected_revision=run.revision,
+                idempotency_key=adoption.key(step),
+                actor=adoption.actor,
+                observations=observations,
+                updates=captured,
+            ),
+            now=datetime.now(UTC),
+        )
+    except TransactionRefusedError:
+        current = _read_run(context, run.urn).status
+        if current is to_status or current in TERMINAL_RUN_STATUSES:
+            return
+        raise
     if committed.envelope is not None:
         envelopes.append(committed.envelope)
 
@@ -522,7 +585,7 @@ def _published(
 async def _start_host_subagent(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
-    """Adopt one host subagent as a repository-scoped Run and start it."""
+    """Adopt one host subagent as a Run and start it."""
     args = native_params(HostSubagentStart, params)
     context = ctx.native_root_context(authority.root)
     envelopes: list[Envelope] = []

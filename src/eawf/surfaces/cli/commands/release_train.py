@@ -44,10 +44,10 @@ def _proof_wait_seconds(version: str) -> float:
             binding table is authored for its profile.
     """
     from eawf.workflow.release.checkpoint_receipts import proof_budget_seconds
-    from eawf.workflow.release.train import V07_TRAIN, gate_bindings_for
+    from eawf.workflow.release.train import gate_bindings_for, train_for_version
 
     try:
-        rung = V07_TRAIN.checkpoint_for_version(version)
+        rung = train_for_version(version).checkpoint_for_version(version)
         return float(proof_budget_seconds(gate_bindings_for(rung.gate_profile)))
     except (KeyError, ValueError) as exc:
         raise cli_errors.UserError(

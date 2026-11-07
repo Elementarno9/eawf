@@ -26,7 +26,7 @@ The epoch-2 tiers are siblings of ``store/`` rather than members of it::
     <state_dir>/indexes/<collection>.index.json   derived
     <state_dir>/local/<collection>                local store
     <state_dir>/local/status.json                 status projection
-    <state_dir>/local/ledger/<collection>.jsonl   status ledger
+    <state_dir>/local/ledger/<collection>.jsonl   status ledger, or Run exhaust lines
     <state_dir>/local/staged/<binding>.json       staged commit bindings
     <state_dir>/store/event.jsonl                 firehose
 
@@ -35,7 +35,11 @@ they sit in ``local/status.json`` and the Run ledger under
 ``local/ledger/``, so a claim, a start or a completion rewrites nothing
 version control carries. A Run ledger once kept at ``ledger/`` stays
 there as the committed seed a clone rebuilds its status ledger from
-(:func:`seed_ledger_path`). The Task ledger is committed.
+(:func:`seed_ledger_path`). The Task ledger is committed. A Run's
+transcript content and tool call receipts share the artifact and receipt
+collections with committed lines, so each line is placed by the commit
+policy (:func:`record_ledger_path`) and read back from both files
+(:func:`collection_ledger_paths`).
 
 The ledger, its derived index and the local store have resolvers; a
 store kind whose rows are machine-local resolves under ``local/`` through
@@ -51,8 +55,9 @@ because it is not a ledger and never compacts.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.tiers import (
@@ -157,6 +162,56 @@ def seed_ledger_path(state_path: Path, collection: Epoch2Collection) -> Path:
             f"{collection.value!r} is declared at the {tier_for(collection).value} tier, not ledger"
         )
     return ledger_dir(state_path) / f"{collection.value}.jsonl"
+
+
+def record_ledger_path(
+    state_path: Path, collection: Epoch2Collection, payload: Mapping[str, Any]
+) -> Path:
+    """Return the ledger file one line of *collection* carrying *payload* is appended to.
+
+    Args:
+        state_path: Path to the tree's ``state.json``.
+        collection: The collection the line belongs to.
+        payload: The line's payload, which the commit policy classifies.
+
+    Returns:
+        ``<state_dir>/local/ledger/<collection>.jsonl`` for a Run exhaust line
+        the commit policy keeps local, else :func:`ledger_path`.
+
+    Raises:
+        ValueError: The collection is not declared at the ledger tier.
+    """
+    # Deferred: the commit policy loads pydantic, which the hook handlers that
+    # resolve paths must not pay for at startup.
+    from eawf.kernel.store.commit_policy import CommitPolicy, ledger_row_policy
+
+    committed = ledger_path(state_path, collection)
+    if ledger_row_policy(collection, payload) is CommitPolicy.NOT_COMMITTED:
+        return state_path.parent / LOCAL_DIRNAME / LEDGER_DIRNAME / committed.name
+    return committed
+
+
+def collection_ledger_paths(state_path: Path, collection: Epoch2Collection) -> tuple[Path, ...]:
+    """Return every file holding *collection*'s lines, the committed ledger first.
+
+    Args:
+        state_path: Path to the tree's ``state.json``.
+        collection: The collection to locate.
+
+    Returns:
+        :func:`ledger_path`, followed by the local ledger of a collection
+        whose Run exhaust lines the commit policy keeps local.
+
+    Raises:
+        ValueError: The collection is not declared at the ledger tier.
+    """
+    # Deferred for the same reason as in record_ledger_path.
+    from eawf.kernel.store.commit_policy import LOCAL_LEDGER_ROWS
+
+    committed = ledger_path(state_path, collection)
+    if collection not in LOCAL_LEDGER_ROWS:
+        return (committed,)
+    return (committed, state_path.parent / LOCAL_DIRNAME / LEDGER_DIRNAME / committed.name)
 
 
 def status_projection_path(state_path: Path) -> Path:

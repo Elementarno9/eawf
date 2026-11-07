@@ -21,9 +21,10 @@ names the revision after the one it last read, and the question binds a
 successor carrying the earlier revision's digest, so a seal given in the
 earlier review stays bound to bytes the Milestone has outgrown.
 
-Whether an answer seals it. Only a waiting question at the revision the
-answer was given against is sealed. A second seal therefore refuses: the
-question is no longer waiting, and nothing leaves ``SEALED``.
+Whether an answer seals it. Only an operator's answer to a waiting
+question at the revision the answer was given against is sealed. A
+second seal therefore refuses: the question is no longer waiting, and
+nothing leaves ``SEALED``.
 """
 
 from __future__ import annotations
@@ -40,10 +41,12 @@ from eawf.kernel.delivery.acceptance import (
     MilestoneAcceptanceBundle,
 )
 from eawf.kernel.identity import EntityKind, format_entity_key
+from eawf.kernel.state.epoch2.base import OPERATOR_PRINCIPAL_PREFIX
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
 from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
 from eawf.kernel.state.epoch2.pending_action import (
     AgentPrincipal,
+    HarnessAttestation,
     HumanPrincipal,
     OptionEffect,
     PendingAction,
@@ -147,6 +150,7 @@ class ApprovalRefusal(StrEnum):
     BUNDLE_DIVERGED = "acceptance_bundle_diverged"
     ACTION_NOT_WAITING = "acceptance_action_not_waiting"
     ACTION_STALE = "acceptance_action_stale"
+    RESOLVER_NOT_OPERATOR = "acceptance_resolver_not_operator"
 
 
 class ApprovalRefusedError(ValueError):
@@ -493,6 +497,7 @@ def seal_question(
     option_id: str,
     receipt_ref: EvidenceUrn,
     at: datetime,
+    harness_attestation: HarnessAttestation | None = None,
 ) -> PendingAction:
     """Return *action* sealed with the operator's answer, or refuse.
 
@@ -503,16 +508,27 @@ def seal_question(
         option_id: The answer they chose.
         receipt_ref: The evidence row recording the answer.
         at: When the answer was given.
+        harness_attestation: How a host harness reported the answer, when
+            the operator gave it inside one.
 
     Returns:
         The sealed question, one revision on.
 
     Raises:
-        ApprovalRefusedError: The question is not waiting, which is what
-            a second seal finds, or it moved past the revision the answer
-            was given against.
+        ApprovalRefusedError: The resolver is not an operator principal,
+            the question is not waiting, which is what a second seal
+            finds, or it moved past the revision the answer was given
+            against.
         ValueError: The option is not one the question offers.
     """
+    # The resolver's kind is self-declared on the wire, so only the key
+    # prefix tells an operator from an agent that named itself human.
+    if not resolver.principal_id.startswith(OPERATOR_PRINCIPAL_PREFIX):
+        raise ApprovalRefusedError(
+            ApprovalRefusal.RESOLVER_NOT_OPERATOR,
+            f"{resolver.principal_id} is not an operator principal; only an "
+            f"{OPERATOR_PRINCIPAL_PREFIX} principal seals {action.id}",
+        )
     if action.status is not PendingActionStatus.WAITING:
         raise ApprovalRefusedError(
             ApprovalRefusal.ACTION_NOT_WAITING,
@@ -526,7 +542,13 @@ def seal_question(
             f"{action.id} is at revision {action.revision}, not the {expected_revision} the "
             "answer was given against",
         )
-    sealed = action.seal(resolver=resolver, option_id=option_id, receipt_ref=receipt_ref, at=at)
+    sealed = action.seal(
+        resolver=resolver,
+        option_id=option_id,
+        receipt_ref=receipt_ref,
+        at=at,
+        harness_attestation=harness_attestation,
+    )
     logger.info(
         f"seal_question action={action.id} option={option_id} resolver={resolver.principal_id}"
     )

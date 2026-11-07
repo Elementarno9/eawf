@@ -651,6 +651,60 @@ def test_approve_forwards_an_operator_principal(
     assert params["action_ref"] == _ACTION_URN
 
 
+def _approve_args(tmp_path: Path, *extra: str) -> list[str]:
+    return [
+        "--workspace",
+        str(tmp_path),
+        "plan",
+        "approve",
+        "PRV-0001",
+        "--expected-plan-revision",
+        "1",
+        *extra,
+        "--idempotency-key",
+        "key-0001",
+        "--actor",
+        "EAWF-PLANNER",
+    ]
+
+
+def test_plan_approve_without_approver_omits_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """No --approved-by sends no approver, so the daemon records the sealing operator."""
+    _install(monkeypatch, result=_plan_receipt_envelope(plan_cmd.PLAN_APPROVE_METHOD, "PRV-0001"))
+
+    result = runner.invoke(app, _approve_args(tmp_path, "--action-ref", _ACTION_URN))
+
+    assert result.exit_code == exit_codes.OK, result.output
+    method, params = _FakeClient.calls[0]
+    assert method == plan_cmd.PLAN_APPROVE_METHOD
+    assert "approved_by" not in params
+    assert params["action_ref"] == _ACTION_URN
+
+    _FakeClient.calls.clear()
+    named = runner.invoke(
+        app, _approve_args(tmp_path, "--action-ref", _ACTION_URN, "--approved-by", "OP-0001")
+    )
+
+    assert named.exit_code == exit_codes.OK, named.output
+    _, params = _FakeClient.calls[0]
+    assert params["approved_by"] == {"principal_kind": "operator", "principal_id": "OP-0001"}
+
+
+def test_plan_approve_still_requires_an_action_ref(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Error path: an approval with no sealed action to cite never reaches the wire."""
+    _install(monkeypatch, result=_plan_receipt_envelope(plan_cmd.PLAN_APPROVE_METHOD, "PRV-0001"))
+
+    result = runner.invoke(app, _approve_args(tmp_path))
+
+    assert result.exit_code != exit_codes.OK
+    assert "--action-ref" in result.output
+    assert _FakeClient.calls == []
+
+
 def test_apply_non_positive_revision_is_refused_before_the_wire(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

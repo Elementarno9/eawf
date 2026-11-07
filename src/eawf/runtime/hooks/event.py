@@ -22,13 +22,29 @@ The optional ``payloads`` mapping carries per-event extension shapes;
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Final, Literal
+from typing import Annotated, Any, Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
-from eawf.kernel.state.types import UtcDatetime
+
+def _ensure_utc(value: datetime) -> datetime:
+    """Return *value* in UTC, refusing a naive datetime.
+
+    Mirrors the state models' ``UtcDatetime`` without importing the state
+    package, which every hook process would otherwise load before it reaches
+    the daemon.
+    """
+    if value.tzinfo is None:
+        raise ValueError("datetime must be timezone-aware (got naive)")
+    if value.utcoffset() != timedelta(0):
+        return value.astimezone(UTC)
+    return value
+
+
+_UtcDatetime = Annotated[datetime, AfterValidator(_ensure_utc)]
 
 
 class HookEventType(StrEnum):
@@ -108,7 +124,7 @@ class HookEvent(BaseModel):
     command: str = ""
     args: dict[str, Any] = Field(default_factory=dict)
     runtime: HookRuntime = "generic"
-    occurred_at: UtcDatetime
+    occurred_at: _UtcDatetime
     payloads: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 

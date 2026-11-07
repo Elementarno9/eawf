@@ -38,7 +38,9 @@ from typing import Any, Final, Literal, get_args, get_origin
 from pydantic import BaseModel
 
 from eawf.observability.telemetry.models import (
+    HistoryIndexEntry,
     ObservedDuration,
+    ObservedRequest,
     ObservedSession,
     TelemetryCompaction,
     TelemetryDispatchCost,
@@ -136,6 +138,18 @@ TABLES: Final[tuple[TableSpec, ...]] = (
         name="telemetry_observed_durations",
         model=ObservedDuration,
         primary_key=("runtime", "vendor_session_ref", "kind", "label"),
+    ),
+    TableSpec(
+        name="telemetry_observed_requests",
+        model=ObservedRequest,
+        primary_key=("runtime", "vendor_session_ref", "request_ref"),
+        not_null=frozenset({"ordinal", "total_tokens", "price_source"}),
+    ),
+    TableSpec(
+        name="telemetry_history_index",
+        model=HistoryIndexEntry,
+        primary_key=("path_digest",),
+        not_null=frozenset({"runtime", "size", "mtime", "byte_offset", "fold", "last_scan_ts"}),
     ),
     TableSpec(
         name="telemetry_incidents",
@@ -297,8 +311,8 @@ class AbstractMetricsStore(ABC):
         """Execute a single statement with bound ``params``."""
 
     @abstractmethod
-    def _query(self, sql: str) -> list[tuple[Any, ...]]:
-        """Run a read query and return all rows as tuples."""
+    def _query(self, sql: str, params: Sequence[Any] = ()) -> list[tuple[Any, ...]]:
+        """Run a read query with bound ``params`` and return all rows as tuples."""
 
     @abstractmethod
     def commit(self) -> None:
@@ -319,15 +333,17 @@ class AbstractMetricsStore(ABC):
 
         A table created by an older row model lacks the model's newer
         columns, and ``CREATE TABLE IF NOT EXISTS`` would leave it that way.
-        Such a table is dropped and recreated, and every scan cursor is
-        cleared, so the next rebuild re-projects its rows from the source
-        logs instead of reading rows the current model cannot validate.
+        Such a table is dropped and recreated, and every scan cursor and
+        history index row is cleared, so the next rebuild and sweep
+        re-project their rows from the source logs instead of reading rows
+        the current model cannot validate.
         """
 
         for statement in render_ddl():
             self._execute(statement)
         if self._recreate_drifted_tables():
             self._execute("DELETE FROM telemetry_file_meta")
+            self._execute("DELETE FROM telemetry_history_index")
         self.upsert(
             "telemetry_schema_meta",
             TelemetrySchemaMeta(key="telemetry_schema_version", value=SCHEMA_VERSION),
@@ -378,6 +394,54 @@ class AbstractMetricsStore(ABC):
 
         for row in rows:
             self.upsert(table, row)
+
+    def delete_where(self, table: str, **equals: object) -> None:
+        """Delete every row of ``table`` whose columns equal ``equals``.
+
+        Args:
+            table: Target table name (must appear in :data:`TABLES`).
+            **equals: Column name to the value it must equal.
+
+        Raises:
+            ValueError: When no column is named, so a call cannot empty the
+                whole table by accident.
+        """
+
+        sql, values = self._where(table, equals)
+        self._execute(f"DELETE FROM {table}{sql}", values)
+
+    def fetch_where(self, table: str, model: type[BaseModel], **equals: object) -> list[BaseModel]:
+        """Read the rows of ``table`` whose columns equal ``equals``.
+
+        Args:
+            table: Source table name (must appear in :data:`TABLES`).
+            model: Row model the table's columns validate into.
+            **equals: Column name to the value it must equal.
+
+        Returns:
+            The matching rows, validated into ``model``.
+
+        Raises:
+            ValueError: When no column is named.
+        """
+
+        sql, values = self._where(table, equals)
+        cols = column_names(model)
+        records = self._query(f"SELECT {', '.join(cols)} FROM {table}{sql}", values)
+        return [model.model_validate(dict(zip(cols, record, strict=True))) for record in records]
+
+    def _where(self, table: str, equals: dict[str, object]) -> tuple[str, list[Any]]:
+        """Render a ``WHERE`` clause over known columns of ``table``."""
+
+        if not equals:
+            raise ValueError(f"a keyed statement on {table} names no column")
+        spec = next(spec for spec in TABLES if spec.name == table)
+        unknown = set(equals) - set(column_names(spec.model))
+        if unknown:
+            raise ValueError(f"{table} has no column {sorted(unknown)}")
+        placeholder = self._placeholder()
+        clause = " AND ".join(f"{col} = {placeholder}" for col in equals)
+        return f" WHERE {clause}", [encode_value(value) for value in equals.values()]
 
     def fetch_all(self, table: str, model: type[BaseModel]) -> list[BaseModel]:
         """Read every row of ``table`` back into ``model`` instances.

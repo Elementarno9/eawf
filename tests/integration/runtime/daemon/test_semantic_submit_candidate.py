@@ -35,7 +35,7 @@ from eawf.kernel.runtime.capsule import AuthorityCapsule
 from eawf.kernel.runtime.lease import WorkLease
 from eawf.kernel.runtime.semantic import SemanticCall, SemanticToolErrorCode
 from eawf.kernel.state.enums import AgentSessionRole
-from eawf.kernel.store.ledger import read_ledger_records
+from eawf.kernel.store.ledger import read_collection_records, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision, canary_ref, provision_canary
 from eawf.runtime.daemon import methods
@@ -263,7 +263,7 @@ def receipt_lines(canary: CanaryProvision, runtime_root: Path) -> int:
     """
     context = root_context(canary, runtime_root)
     with context.session([RUN_URN]) as session:
-        records = read_ledger_records(session.ledger_path(Epoch2Collection.RECEIPT))
+        records = read_collection_records(session.document_path, Epoch2Collection.RECEIPT)
     return sum(1 for item in records if item.payload.get("payload_kind") == "semantic_receipt")
 
 

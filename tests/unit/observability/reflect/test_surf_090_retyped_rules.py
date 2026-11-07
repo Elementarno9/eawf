@@ -37,6 +37,7 @@ from eawf.observability.reflect.retyped import (
     store_retyped_rows,
 )
 from eawf.observability.reflect.titles import REFLECTION_MARKER
+from eawf.observability.telemetry.sources.session_history import history_lines
 
 T0: Final = datetime(2026, 9, 20, 9, 0, tzinfo=UTC)
 
@@ -107,7 +108,9 @@ def test_surf_090_a_short_word_keeps_its_suffix() -> None:
 
 
 def test_surf_090_a_human_marked_prompt_is_a_turn(tmp_path: Path) -> None:
-    turns = operator_turns_from_history(_history(tmp_path, [_prompt("Run the hooks first.")]))
+    turns = operator_turns_from_history(
+        history_lines(_history(tmp_path, [_prompt("Run the hooks first.")]))
+    )
 
     assert turns == (OperatorTurn(at=T0, text="Run the hooks first."),)
 
@@ -133,7 +136,7 @@ def test_surf_090_a_human_marked_prompt_is_a_turn(tmp_path: Path) -> None:
 def test_surf_090_a_record_the_operator_did_not_type_is_no_turn(
     tmp_path: Path, label: str, record: dict[str, Any]
 ) -> None:
-    assert operator_turns_from_history(_history(tmp_path, [record])) == (), label
+    assert operator_turns_from_history(history_lines(_history(tmp_path, [record]))) == (), label
 
 
 def test_surf_090_malformed_lines_are_skipped_not_raised(tmp_path: Path) -> None:
@@ -142,11 +145,13 @@ def test_surf_090_malformed_lines_are_skipped_not_raised(tmp_path: Path) -> None
         ['{"type":"user", broken', '["type":"user"]', _prompt("Keep this one.", minutes=1)],
     )
 
-    assert [turn.text for turn in operator_turns_from_history(path)] == ["Keep this one."]
+    assert [turn.text for turn in operator_turns_from_history(history_lines(path))] == [
+        "Keep this one."
+    ]
 
 
 def test_surf_090_a_missing_history_file_reads_as_no_turns(tmp_path: Path) -> None:
-    assert operator_turns_from_history(tmp_path / "absent.jsonl") == ()
+    assert operator_turns_from_history(history_lines(tmp_path / "absent.jsonl")) == ()
 
 
 def test_surf_090_text_blocks_join_and_images_drop(tmp_path: Path) -> None:
@@ -156,7 +161,7 @@ def test_surf_090_text_blocks_join_and_images_drop(tmp_path: Path) -> None:
         {"type": "text", "text": "Second line."},
     ]
 
-    turns = operator_turns_from_history(_history(tmp_path, [_prompt(content)]))
+    turns = operator_turns_from_history(history_lines(_history(tmp_path, [_prompt(content)])))
 
     assert [turn.text for turn in turns] == ["First line.\nSecond line."]
 
@@ -165,7 +170,7 @@ def test_surf_090_a_turn_is_scrubbed_before_it_is_kept(tmp_path: Path) -> None:
     private = Path.home() / "private" / "notes.txt"
     raw = f"Never write {private} or mail someone@corp.example."
 
-    (turn,) = operator_turns_from_history(_history(tmp_path, [_prompt(raw)]))
+    (turn,) = operator_turns_from_history(history_lines(_history(tmp_path, [_prompt(raw)])))
 
     assert str(Path.home()) not in turn.text
     assert "someone@corp.example" not in turn.text

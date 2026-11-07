@@ -1480,6 +1480,90 @@
       "title": "ExclusionReason",
       "type": "string"
     },
+    "HarnessAttestation": {
+      "additionalProperties": false,
+      "description": "How a host harness reported the answer an action was sealed with.\n\nThe person answered inside the harness, not at an eawf surface, so the\nseal is only as good as the harness's own report of it. This records\nthat report and each cross-check made against it, rather than a\nverdict, because a same-user forgery stays possible and the record\nshould say what was checked, not that it was trustworthy.\n\nAttributes:\n    harness: The harness that reported the answer.\n    host_session_digest: The digest of the host session the question\n        was asked in; the session id itself is not kept.\n    tool_use_id: The harness's id for the question call.\n    question_ref: The open question the call was recorded as.\n    run_ref: The Run the host session was bound to, if any.\n    payload_digest: The digest of the questions and answers reported.\n    transcript_check: How the host transcript bore the report out:\n        both question and answer found, only the question found yet,\n        or no transcript record of the call at all.\n    raise_gap_ms: How long the question stood before it was answered.\n    permission_mode: The harness's permission mode at the answer, as\n        it reported it.",
+      "properties": {
+        "harness": {
+          "const": "claude-code",
+          "title": "Harness",
+          "type": "string"
+        },
+        "host_session_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Host Session Digest",
+          "type": "string"
+        },
+        "payload_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Payload Digest",
+          "type": "string"
+        },
+        "permission_mode": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Permission Mode"
+        },
+        "question_ref": {
+          "format": "eawf-urn",
+          "title": "Question Ref",
+          "type": "string"
+        },
+        "raise_gap_ms": {
+          "minimum": 0,
+          "title": "Raise Gap Ms",
+          "type": "integer"
+        },
+        "run_ref": {
+          "anyOf": [
+            {
+              "format": "eawf-urn",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Run Ref"
+        },
+        "tool_use_id": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Tool Use Id",
+          "type": "string"
+        },
+        "transcript_check": {
+          "enum": [
+            "matched",
+            "tool_use_only",
+            "absent"
+          ],
+          "title": "Transcript Check",
+          "type": "string"
+        }
+      },
+      "required": [
+        "harness",
+        "host_session_digest",
+        "tool_use_id",
+        "question_ref",
+        "run_ref",
+        "payload_digest",
+        "transcript_check",
+        "raise_gap_ms",
+        "permission_mode"
+      ],
+      "title": "HarnessAttestation",
+      "type": "object"
+    },
     "HumanPrincipal": {
       "additionalProperties": false,
       "description": "A person, by immutable qualified key.\n\nThere is no Run field and no unknown key is admitted, so this shape\ncannot carry an agent that spelled itself human.",
@@ -2427,7 +2511,7 @@
     },
     "PendingAction": {
       "additionalProperties": false,
-      "description": "One queued question, its offered answers, and the seal of the answer given.\n\nThe three seal fields move together. A row carrying a resolver and no\nreceipt claims an answer nothing recorded, and a row carrying a\nreceipt and no resolver claims an answer nobody gave; both are\nrefused, so ``SEALED`` means all of \"who\", \"which\" and \"proved by\"\nare on file.\n\n``revision`` is the compare-and-swap token a seal is decided against,\nso an answer given to a question that has since moved is refused\nrather than landed on top of it. It defaults to one because a row\nnothing has moved yet is at its first revision.\n\n``urn`` addresses the row itself, the way every other epoch-2 record\naddresses its own row: a route projection keys and validates every\nrow it renders by this field, so a stored row without one refuses\nthe whole route's read rather than just its own. A row written\nbefore the field existed is read the way a fresh write would have\nset it -- :meth:`_urn_defaults_from_subject` derives it from\n``subject_ref``, which is filed in the same repository -- so an\nolder row is still addressable rather than failing to load.\n\n``assignee_ref`` names the principal expected to answer. It transfers\nno authority -- anyone eligible may still answer -- and any\nresolution clears it, so a sealed action never carries one.\n``dispositions`` is the per-principal record beside ``status``: one\nrow per principal who has answered, telling a caller who answered\nwhat without exposing the whole answer race as an error.\n\n``recommended_option_id`` and ``recommendation_rationale`` are the\nasker's one recommendation and its one-sentence reason, and ``terms``\nexpands every identifier the question shows. A recommendation is not\nconsent: nothing reads it as an answer.\n\n``override_until`` and ``default_policy`` travel with a timeout\ndefault: until when an answer still overrides it, and the persisted\npolicy that permitted it. Neither means anything without a default,\nso either one filed alone is refused.",
+      "description": "One queued question, its offered answers, and the seal of the answer given.\n\nThe three seal fields move together. A row carrying a resolver and no\nreceipt claims an answer nothing recorded, and a row carrying a\nreceipt and no resolver claims an answer nobody gave; both are\nrefused, so ``SEALED`` means all of \"who\", \"which\" and \"proved by\"\nare on file.\n\n``revision`` is the compare-and-swap token a seal is decided against,\nso an answer given to a question that has since moved is refused\nrather than landed on top of it. It defaults to one because a row\nnothing has moved yet is at its first revision.\n\n``urn`` addresses the row itself, the way every other epoch-2 record\naddresses its own row: a route projection keys and validates every\nrow it renders by this field, so a stored row without one refuses\nthe whole route's read rather than just its own. A row written\nbefore the field existed is read the way a fresh write would have\nset it -- :meth:`_urn_defaults_from_subject` derives it from\n``subject_ref``, which is filed in the same repository -- so an\nolder row is still addressable rather than failing to load.\n\n``assignee_ref`` names the principal expected to answer. It transfers\nno authority -- anyone eligible may still answer -- and any\nresolution clears it, so a sealed action never carries one.\n``dispositions`` is the per-principal record beside ``status``: one\nrow per principal who has answered, telling a caller who answered\nwhat without exposing the whole answer race as an error.\n\n``recommended_option_id`` and ``recommendation_rationale`` are the\nasker's one recommendation and its one-sentence reason, and ``terms``\nexpands every identifier the question shows. A recommendation is not\nconsent: nothing reads it as an answer.\n\n``override_until`` and ``default_policy`` travel with a timeout\ndefault: until when an answer still overrides it, and the persisted\npolicy that permitted it. Neither means anything without a default,\nso either one filed alone is refused.\n\n``harness_attestation`` is how a host harness reported the answer, when\nthe seal came from one. It belongs to a seal, so only a sealed action\ncarries one, and it is left out of the dump while unset so a row filed\nbefore it existed keeps its bytes and its content digest.",
       "properties": {
         "assignee_ref": {
           "anyOf": [
@@ -2494,6 +2578,17 @@
           },
           "title": "Dispositions",
           "type": "array"
+        },
+        "harness_attestation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HarnessAttestation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "id": {
           "title": "Id",

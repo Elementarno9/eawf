@@ -54,13 +54,18 @@ bounded working set (C09 §5.9.4 bounded-memory invariant).
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import logging
+import os
 import tempfile
-from collections.abc import Iterable, Iterator
+from collections import defaultdict
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import IO, Final
 
 from eawf.kernel.store.envelope import Envelope
 from eawf.observability.telemetry.aggregator import (
@@ -70,8 +75,14 @@ from eawf.observability.telemetry.aggregator import (
     session_from_envelope,
 )
 from eawf.observability.telemetry.models import (
+    HEAD_DIGEST_BYTES,
+    HistoryIndexEntry,
     ObservedDuration,
+    ObservedRequest,
     ObservedSession,
+    PriceSourceKind,
+    RequestDropReason,
+    SweepDropReason,
     TelemetryDispatchCost,
     TelemetryFileMeta,
     TelemetryIncident,
@@ -79,11 +90,23 @@ from eawf.observability.telemetry.models import (
 )
 from eawf.observability.telemetry.sources.base import SessionSource
 from eawf.observability.telemetry.sources.session_history import (
-    discover_history,
+    HistoryFile,
+    ParsedTranscript,
+    RequestLedger,
+    SessionDetail,
+    TranscriptFold,
+    claude_projects_root,
+    codex_sessions_root,
+    discover_claude_project,
+    discover_history_files,
+    fold_history_lines,
+    history_path_digest,
     observed_rows,
-    parse_transcript,
+    read_session_detail,
 )
 from eawf.observability.telemetry.store.base import AbstractMetricsStore
+from eawf.runtime.lock import portalock
+from eawf.runtime.session.vendor_id import hash_vendor_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +116,8 @@ _DISPATCH_COSTS_TABLE = "telemetry_dispatch_costs"
 _FILE_META_TABLE = "telemetry_file_meta"
 _OBSERVED_SESSIONS_TABLE = "telemetry_observed_sessions"
 _OBSERVED_DURATIONS_TABLE = "telemetry_observed_durations"
+_OBSERVED_REQUESTS_TABLE = "telemetry_observed_requests"
+_HISTORY_INDEX_TABLE = "telemetry_history_index"
 
 #: Source adapters whose files are line-independent: every line parses to a
 #: complete, self-contained row, so the incremental tail slice (bytes past the
@@ -514,21 +539,6 @@ class SweepStage(StrEnum):
     PROJECTED = "projected"
 
 
-class SweepDropReason(StrEnum):
-    """Closed reasons a swept session file leaves the coverage funnel.
-
-    Values:
-        CORRUPT_RECORD: The file holds no decodable JSON record.
-        NO_OPERATOR_WORK: The session billed no assistant message, so it has
-            no token classes to attribute.
-        PROJECTION_REFUSED: A built row failed its invariants at write.
-    """
-
-    CORRUPT_RECORD = "corrupt_record"
-    NO_OPERATOR_WORK = "no_operator_work"
-    PROJECTION_REFUSED = "projection_refused"
-
-
 @dataclass(frozen=True, slots=True)
 class SweepDrop:
     """One session file that left the funnel, named by its file name only.
@@ -546,34 +556,240 @@ class SweepDrop:
 
 @dataclass(slots=True)
 class SweepFunnel:
-    """Coverage funnel of one session-history sweep.
+    """Coverage funnel of one session-history sweep over the whole index.
 
-    Every stage counts files that reached it, so the counts never increase
-    from one stage to the next, and each file missing from a later stage has
-    exactly one :class:`SweepDrop` saying why.
+    The file stages count files that reached them, so the counts never
+    increase from one stage to the next, and each file missing from a later
+    stage has exactly one :class:`SweepDrop` saying why. A Claude subagent
+    transcript is a file of its own here and bills its parent session. The
+    request stages count the requests of every parsed file: each request is
+    priced or dropped for exactly one :class:`RequestDropReason`. An
+    unchanged file counts from its index row without being opened.
 
     Attributes:
         seen: Session files discovered.
+        subagent_files: The seen files that are subagent transcripts.
         parsed: Files holding at least one decodable record.
-        attributed: Parsed sessions with billed work to attribute.
-        projected: Sessions whose rows were written.
-        durations: Per-kind duration rows written.
+        attributed: Parsed files with billed work to attribute.
+        projected: Files whose session's rows were written.
+        durations: Per-kind duration rows the projected sessions hold.
         drops: One entry per file that left the funnel.
-        sessions: The observed session rows written, which the pricing
-            coverage is weighed over.
+        requests: Requests the parsed files hold.
+        requests_priced: Requests that carry a cost.
+        request_drops: Unpriced requests by reason.
+        requests_shared: Requests a file skipped because another file of
+            the same session billed them first; counted once, there.
+        files_read: Files this sweep opened past their index check.
+        lines_decoded: Lines this sweep decoded.
+        sessions: The observed session rows of the projected files, which
+            the pricing coverage is weighed over.
     """
 
     seen: int = 0
+    subagent_files: int = 0
     parsed: int = 0
     attributed: int = 0
     projected: int = 0
     durations: int = 0
     drops: list[SweepDrop] = field(default_factory=list)
+    requests: int = 0
+    requests_priced: int = 0
+    request_drops: dict[RequestDropReason, int] = field(default_factory=dict)
+    requests_shared: int = 0
+    files_read: int = 0
+    lines_decoded: int = 0
     sessions: list[ObservedSession] = field(default_factory=list)
 
     def stages(self) -> tuple[int, int, int, int]:
         """Return ``(seen, parsed, attributed, projected)``."""
         return (self.seen, self.parsed, self.attributed, self.projected)
+
+    def _count(self, file: HistoryFile, entry: HistoryIndexEntry | None) -> None:
+        """Add one file's outcome, read from its index row, to the funnel."""
+        self.seen += 1
+        self.subagent_files += file.subagent
+        drop = SweepDropReason.CORRUPT_RECORD if entry is None else entry.drop_reason
+        if drop is SweepDropReason.CORRUPT_RECORD:
+            self.drops.append(SweepDrop(file.path.name, SweepStage.PARSED, drop))
+            return
+        assert entry is not None
+        self.parsed += 1
+        self.requests += entry.requests
+        self.requests_priced += entry.requests_priced
+        self.requests_shared += entry.requests_shared
+        for reason, count in (
+            (RequestDropReason.UNPRICED_MODEL, entry.requests_unpriced_model),
+            (RequestDropReason.UNPRICED_RUNTIME, entry.requests_unpriced_runtime),
+        ):
+            if count:
+                self.request_drops[reason] = self.request_drops.get(reason, 0) + count
+        if drop in (SweepDropReason.NO_OPERATOR_WORK, SweepDropReason.REFLECTION_HELPER):
+            self.drops.append(SweepDrop(file.path.name, SweepStage.ATTRIBUTED, drop))
+            return
+        self.attributed += 1
+        if drop is SweepDropReason.PROJECTION_REFUSED:
+            self.drops.append(SweepDrop(file.path.name, SweepStage.PROJECTED, drop))
+            return
+        self.projected += 1
+
+
+IndexProgress = Callable[[str, int, int], None]
+"""Receives ``("index", done, total)`` as the sweep works through the files."""
+
+INDEX_LOCK_WAIT_SECONDS: Final = 900.0
+"""How long a run waits for another run indexing into the same history index."""
+
+
+class IndexBusyError(RuntimeError):
+    """Another run held the history index for longer than a run waits."""
+
+
+@contextmanager
+def history_index_lock(index_path: Path, *, on_wait: Callable[[], None]) -> Iterator[None]:
+    """Hold the history index for one run, waiting while another run holds it.
+
+    The sweep writes the whole index in one transaction, so a second run
+    reading or writing the same index meanwhile would fail on SQLite's lock;
+    it waits here instead, for up to :data:`INDEX_LOCK_WAIT_SECONDS`.
+
+    Args:
+        index_path: The history index database file.
+        on_wait: Called once, before waiting, when another run holds it.
+
+    Yields:
+        Nothing; the index is this run's until the block exits.
+
+    Raises:
+        IndexBusyError: When the other run still holds it after the wait.
+    """
+    with contextlib.ExitStack() as held:
+        try:
+            held.enter_context(portalock.acquire(index_path, timeout=0))
+        except portalock.LockTimeout:
+            on_wait()
+            try:
+                held.enter_context(portalock.acquire(index_path, timeout=INDEX_LOCK_WAIT_SECONDS))
+            except portalock.LockTimeout as exc:
+                raise IndexBusyError(
+                    f"another reflect run held the session-history index for over "
+                    f"{INDEX_LOCK_WAIT_SECONDS:.0f} s; try again when it finishes"
+                ) from exc
+        yield
+
+
+def index_session_history(
+    store: AbstractMetricsStore,
+    files: Sequence[HistoryFile],
+    *,
+    project_id: str,
+    progress: IndexProgress | None = None,
+) -> SweepFunnel:
+    """Bring the observed collection up to date with *files*, reading only what changed.
+
+    The sole writer of the observed tables. Each file has a row in the
+    machine-local history index holding its size, mtime, consumed offset,
+    head digest and resumable fold:
+
+    * a file whose size and mtime match its row is not opened;
+    * a file that grew, kept its head and did not move its mtime backwards
+      resumes its fold and decodes only the appended complete lines;
+    * any other file, and a new one, is read from byte 0 and the request
+      rows its earlier read wrote are replaced.
+
+    Each file writes its own request rows, under its lane. A session whose
+    files changed then has its session and duration rows rebuilt from every
+    one of its files, so a Claude session's subagent transcripts add their
+    requests, tokens and durations to it. A trailing line with no newline is
+    left for a later sweep.
+
+    Args:
+        store: An initialised metrics store.
+        files: The history files to index; a session's own transcript
+            before its subagent transcripts, so it bills a request both
+            hold.
+        project_id: Scope label stamped on each session row this sweep
+            writes; reflect scopes match projects by ``cwd_digest`` instead.
+        progress: Called at the start, the end and about every tenth file.
+
+    Returns:
+        The coverage funnel over every file in *files*.
+    """
+    index = {
+        row.path_digest: row
+        for row in store.fetch_all(_HISTORY_INDEX_TABLE, HistoryIndexEntry)
+        if isinstance(row, HistoryIndexEntry)
+    }
+    funnel = SweepFunnel()
+    total = len(files)
+    _report_progress(progress, 0, total)
+    digests: list[str] = []
+    touched: set[tuple[str, str]] = set()
+    owners = _RequestOwners(store)
+    for done, file in enumerate(files, start=1):
+        digest = history_path_digest(file.path)
+        digests.append(digest)
+        held = index.get(digest)
+        entry = _index_file(store, file, held, digest=digest, funnel=funnel, owners=owners)
+        if entry is not None and entry is not held:
+            index[digest] = entry
+            touched.update(
+                (row.runtime, row.vendor_session_ref)
+                for row in (held, entry)
+                if row is not None and row.vendor_session_ref is not None
+            )
+        _report_progress(progress, done, total)
+    _project_sessions(store, index, touched, project_id=project_id)
+    store.commit()
+    projected: set[tuple[str, str]] = set()
+    for file, digest in zip(files, digests, strict=True):
+        entry = index.get(digest)
+        funnel._count(file, entry)
+        if entry is not None and entry.drop_reason is None and entry.vendor_session_ref is not None:
+            projected.add((entry.runtime, entry.vendor_session_ref))
+    funnel.sessions = [
+        row
+        for row in store.fetch_all(_OBSERVED_SESSIONS_TABLE, ObservedSession)
+        if isinstance(row, ObservedSession) and (row.runtime, row.vendor_session_ref) in projected
+    ]
+    funnel.durations = sum(
+        1
+        for row in store.fetch_all(_OBSERVED_DURATIONS_TABLE, ObservedDuration)
+        if isinstance(row, ObservedDuration) and (row.runtime, row.vendor_session_ref) in projected
+    )
+    logger.info(
+        f"index_session_history files={funnel.seen} subagent={funnel.subagent_files} "
+        f"read={funnel.files_read} lines={funnel.lines_decoded} parsed={funnel.parsed} "
+        f"attributed={funnel.attributed} projected={funnel.projected} "
+        f"requests={funnel.requests} priced={funnel.requests_priced} "
+        f"shared={funnel.requests_shared} drops={len(funnel.drops)}"
+    )
+    return funnel
+
+
+def _project_sessions(
+    store: AbstractMetricsStore,
+    index: dict[str, HistoryIndexEntry],
+    touched: set[tuple[str, str]],
+    *,
+    project_id: str,
+) -> None:
+    """Rebuild each touched session's rows and mark its files' projection outcome."""
+    by_session: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for digest, row in index.items():
+        if row.vendor_session_ref is not None:
+            by_session[(row.runtime, row.vendor_session_ref)].append(digest)
+    for key in sorted(touched):
+        written = _project_session(store, key, [index[d] for d in by_session[key]], project_id)
+        for digest in by_session[key]:
+            row = index[digest]
+            if written and row.drop_reason is SweepDropReason.PROJECTION_REFUSED:
+                drop = None
+            elif not written and row.drop_reason is None:
+                drop = SweepDropReason.PROJECTION_REFUSED
+            else:
+                continue
+            index[digest] = row.model_copy(update={"drop_reason": drop})
+            store.upsert(_HISTORY_INDEX_TABLE, index[digest])
 
 
 def sweep_session_history(
@@ -581,74 +797,358 @@ def sweep_session_history(
     history_root: Path,
     *,
     project_id: str,
-    runtime: str = "claude",
 ) -> SweepFunnel:
-    """Sweep local session history into the observed collection.
-
-    The sole writer of the observed tables: each transcript under
-    *history_root* is parsed, attributed when it billed work, and projected
-    into one observed session row plus its per-kind duration rows. A file
-    that fails a stage is dropped with a typed reason and the sweep goes on.
+    """Index the Claude transcripts of one project directory, subagents included.
 
     Args:
         store: An initialised metrics store.
-        history_root: The runtime's local history directory; a missing
+        history_root: One project's Claude history directory; a missing
             directory sweeps nothing.
         project_id: Scope label stamped on every observed session row.
-        runtime: Runtime the history belongs to.
 
     Returns:
         The coverage funnel of the sweep.
     """
-    funnel = SweepFunnel()
-    for path in discover_history(history_root):
-        funnel.seen += 1
-        parsed = parse_transcript(path)
-        if parsed is None:
-            funnel.drops.append(
-                SweepDrop(path.name, SweepStage.PARSED, SweepDropReason.CORRUPT_RECORD)
-            )
-            continue
-        funnel.parsed += 1
-        if not parsed.has_operator_work:
-            funnel.drops.append(
-                SweepDrop(path.name, SweepStage.ATTRIBUTED, SweepDropReason.NO_OPERATOR_WORK)
-            )
-            continue
-        funnel.attributed += 1
-        try:
-            session, durations = observed_rows(parsed, runtime=runtime, project_id=project_id)
-        except ValueError as exc:
-            logger.warning(f"sweep_session_history file={path.name!r} error={exc!r} refused")
-            funnel.drops.append(
-                SweepDrop(path.name, SweepStage.PROJECTED, SweepDropReason.PROJECTION_REFUSED)
-            )
-            continue
-        _write_observed(store, session, durations)
-        funnel.sessions.append(session)
-        funnel.projected += 1
-        funnel.durations += len(durations)
-    store.commit()
-    logger.info(
-        f"sweep_session_history runtime={runtime} seen={funnel.seen} parsed={funnel.parsed} "
-        f"attributed={funnel.attributed} projected={funnel.projected} "
-        f"durations={funnel.durations} drops={len(funnel.drops)}"
-    )
-    return funnel
+    files = discover_claude_project(history_root)
+    return index_session_history(store, files, project_id=project_id)
 
 
-def _write_observed(
+def load_session_detail(
     store: AbstractMetricsStore,
-    session: ObservedSession,
-    durations: list[ObservedDuration],
-) -> None:
-    """Upsert one observed session and its duration rows."""
+    files: Sequence[HistoryFile],
+    vendor_session_ref: str,
+) -> SessionDetail | None:
+    """Return one indexed session's detail, read from its own history file.
+
+    The index keeps only path digests, so the file is found by digesting the
+    candidate *files*. A subagent transcript is never read as the session:
+    the session page draws subagents from the delegation spans of its own
+    transcript.
+
+    Args:
+        store: The metrics store the session was indexed into.
+        files: The history files to look among.
+        vendor_session_ref: The session's hashed id.
+
+    Returns:
+        The detail, or ``None`` when no candidate file is the session's own.
+    """
+    digests = {
+        row.path_digest
+        for row in store.fetch_where(
+            _HISTORY_INDEX_TABLE, HistoryIndexEntry, vendor_session_ref=vendor_session_ref
+        )
+        if isinstance(row, HistoryIndexEntry)
+    }
+    for file in files:
+        if not file.subagent and history_path_digest(file.path) in digests:
+            return read_session_detail(file)
+    return None
+
+
+@dataclass(frozen=True, slots=True)
+class LocalHistory:
+    """This machine's Claude and Codex session history, located once for one run.
+
+    A reader that must not handle history paths itself indexes and reads
+    sessions through this, never through the files it holds.
+
+    Attributes:
+        files: The history files, in the order the sweep reads them.
+    """
+
+    files: tuple[HistoryFile, ...]
+
+    @classmethod
+    def discover(cls) -> LocalHistory:
+        """Return every Claude transcript and Codex rollout on this machine."""
+        return cls(
+            tuple(
+                discover_history_files(
+                    claude_projects=claude_projects_root(), codex_sessions=codex_sessions_root()
+                )
+            )
+        )
+
+    @property
+    def file_count(self) -> int:
+        """Return how many history files were found."""
+        return len(self.files)
+
+    def index(
+        self,
+        store: AbstractMetricsStore,
+        *,
+        project_id: str,
+        progress: IndexProgress | None = None,
+    ) -> SweepFunnel:
+        """Index the files into *store*; see :func:`index_session_history`."""
+        return index_session_history(store, self.files, project_id=project_id, progress=progress)
+
+    def detail(self, store: AbstractMetricsStore, vendor_session_ref: str) -> SessionDetail | None:
+        """Return one indexed session's detail; see :func:`load_session_detail`."""
+        return load_session_detail(store, self.files, vendor_session_ref)
+
+
+def _report_progress(progress: IndexProgress | None, done: int, total: int) -> None:
+    """Pass the count to *progress* at the start, the end and about every tenth file."""
+    if progress is not None and (done in (0, total) or done % max(1, total // 10) == 0):
+        progress("index", done, total)
+
+
+def _head_digest(head: bytes) -> str:
+    return hashlib.sha256(head).hexdigest()
+
+
+def _resumable(handle: IO[bytes], entry: HistoryIndexEntry, *, size: int, mtime: float) -> bool:
+    """Return whether the file only grew since *entry* was written."""
+    if size < entry.byte_offset or mtime < entry.mtime:
+        return False
+    handle.seek(0)
+    return _head_digest(handle.read(entry.head_bytes)) == entry.head_digest
+
+
+def _index_file(
+    store: AbstractMetricsStore,
+    file: HistoryFile,
+    entry: HistoryIndexEntry | None,
+    *,
+    digest: str,
+    funnel: SweepFunnel,
+    owners: _RequestOwners,
+) -> HistoryIndexEntry | None:
+    """Bring one file's request rows and index row up to date.
+
+    Returns:
+        The file's index row, *entry* itself when the file is unchanged, or
+        ``None`` when the file could not be read.
+    """
+    try:
+        stat = file.path.stat()
+    except OSError as exc:
+        logger.warning(f"_index_file file={file.path.name!r} error={type(exc).__name__}")
+        return None
+    if (
+        entry is not None
+        and entry.runtime == file.runtime
+        and entry.size == stat.st_size
+        and entry.mtime == stat.st_mtime
+    ):
+        return entry
+    try:
+        with file.path.open("rb") as handle:
+            fold, ledger, start = _resume_or_restart(store, owners, handle, file, entry, stat)
+            handle.seek(start)
+            consumed, decoded = fold_history_lines(
+                handle, fold, ledger, fallback_session_id=file.fallback_session_id
+            )
+            handle.seek(0)
+            head = handle.read(HEAD_DIGEST_BYTES)
+    except OSError as exc:
+        logger.warning(f"_index_file file={file.path.name!r} error={type(exc).__name__}")
+        return None
+    funnel.files_read += 1
+    funnel.lines_decoded += decoded
+    for ref in sorted(ledger.changed):
+        store.upsert(_OBSERVED_REQUESTS_TABLE, ledger.rows[ref])
+    if fold.vendor_session_ref is not None:
+        owners.claim(file.runtime, fold.vendor_session_ref, ledger.changed, lane=file.lane)
+    offset = start + consumed
+    requests = ledger.rows.values()
+    priced = sum(1 for row in requests if row.price_source is not PriceSourceKind.UNPRICED)
+    unpriced_runtime = sum(
+        1
+        for row in requests
+        if row.price_source is PriceSourceKind.UNPRICED and row.runtime == "codex"
+    )
+    drop = None
+    if not fold.records:
+        drop = SweepDropReason.CORRUPT_RECORD
+    elif fold.reflection_helper:
+        drop = SweepDropReason.REFLECTION_HELPER
+    elif not ledger.rows:
+        drop = SweepDropReason.NO_OPERATOR_WORK
+    updated = HistoryIndexEntry(
+        path_digest=digest,
+        runtime=file.runtime,
+        size=max(stat.st_size, offset, len(head)),
+        mtime=stat.st_mtime,
+        byte_offset=offset,
+        head_bytes=len(head),
+        head_digest=_head_digest(head),
+        vendor_session_ref=fold.vendor_session_ref,
+        drop_reason=drop,
+        requests=len(ledger.rows),
+        requests_priced=priced,
+        requests_unpriced_model=len(ledger.rows) - priced - unpriced_runtime,
+        requests_unpriced_runtime=unpriced_runtime,
+        requests_shared=len(fold.shared_refs),
+        durations=len(fold.tallies),
+        fold=fold.index_json(),
+        last_scan_ts=datetime.now(tz=UTC),
+    )
+    store.upsert(_HISTORY_INDEX_TABLE, updated)
+    return updated
+
+
+def _session_requests(
+    store: AbstractMetricsStore, runtime: str, vendor_session_ref: str
+) -> list[ObservedRequest]:
+    return [
+        row
+        for row in store.fetch_where(
+            _OBSERVED_REQUESTS_TABLE,
+            ObservedRequest,
+            runtime=runtime,
+            vendor_session_ref=vendor_session_ref,
+        )
+        if isinstance(row, ObservedRequest)
+    ]
+
+
+@dataclass(slots=True)
+class _RequestOwners:
+    """Which lane billed each request of a session, read once per session per sweep.
+
+    A session with hundreds of subagent transcripts would otherwise re-read
+    its whole request table once per file.
+    """
+
+    store: AbstractMetricsStore
+    lanes: dict[tuple[str, str], dict[str, str]] = field(default_factory=dict)
+
+    def _of(self, runtime: str, vendor_session_ref: str) -> dict[str, str]:
+        key = (runtime, vendor_session_ref)
+        if key not in self.lanes:
+            self.lanes[key] = {
+                row.request_ref: row.lane
+                for row in _session_requests(self.store, runtime, vendor_session_ref)
+            }
+        return self.lanes[key]
+
+    def foreign(self, runtime: str, vendor_session_ref: str, *, lane: str) -> frozenset[str]:
+        """Return the requests of the session another lane billed."""
+        held = self._of(runtime, vendor_session_ref)
+        return frozenset(ref for ref, owner in held.items() if owner != lane)
+
+    def claim(
+        self, runtime: str, vendor_session_ref: str, refs: Iterable[str], *, lane: str
+    ) -> None:
+        """Record that *lane* billed *refs*."""
+        self._of(runtime, vendor_session_ref).update(dict.fromkeys(refs, lane))
+
+    def release(self, runtime: str, vendor_session_ref: str, *, lane: str) -> None:
+        """Forget every request *lane* billed, after its rows were deleted."""
+        held = self._of(runtime, vendor_session_ref)
+        for ref in [ref for ref, owner in held.items() if owner == lane]:
+            del held[ref]
+
+
+def _resume_or_restart(
+    store: AbstractMetricsStore,
+    owners: _RequestOwners,
+    handle: IO[bytes],
+    file: HistoryFile,
+    entry: HistoryIndexEntry | None,
+    stat: os.stat_result,
+) -> tuple[TranscriptFold, RequestLedger, int]:
+    """Return the fold, request rows and byte offset the read starts from.
+
+    A file that only grew resumes from its stored fold and its own lane's
+    rows. Any other file restarts at byte 0, and the request rows its
+    earlier read wrote are deleted so the re-read replaces them instead of
+    adding to them. Either way the ledger learns which requests the
+    session's other files already billed.
+    """
+    if (
+        entry is not None
+        and entry.runtime == file.runtime
+        and _resumable(handle, entry, size=stat.st_size, mtime=stat.st_mtime)
+    ):
+        fold = TranscriptFold.model_validate_json(entry.fold)
+        ledger = RequestLedger()
+        if entry.vendor_session_ref is not None:
+            ledger.rows = {
+                row.request_ref: row
+                for row in store.fetch_where(
+                    _OBSERVED_REQUESTS_TABLE,
+                    ObservedRequest,
+                    runtime=entry.runtime,
+                    vendor_session_ref=entry.vendor_session_ref,
+                    lane=file.lane,
+                )
+                if isinstance(row, ObservedRequest)
+            }
+            ledger.foreign = owners.foreign(entry.runtime, entry.vendor_session_ref, lane=file.lane)
+        return fold, ledger, entry.byte_offset
+    if entry is not None and entry.vendor_session_ref is not None:
+        logger.info(f"_resume_or_restart file={file.path.name!r} reread_from=0 reason=rewritten")
+        store.delete_where(
+            _OBSERVED_REQUESTS_TABLE,
+            runtime=entry.runtime,
+            vendor_session_ref=entry.vendor_session_ref,
+            lane=file.lane,
+        )
+        owners.release(entry.runtime, entry.vendor_session_ref, lane=file.lane)
+    # A subagent's records name its parent session, whose own transcript is
+    # indexed first; a request another file of the session already billed is
+    # not billed again.
+    ledger = RequestLedger(
+        foreign=owners.foreign(
+            file.runtime, hash_vendor_session_id(file.fallback_session_id), lane=file.lane
+        )
+    )
+    return TranscriptFold(runtime=file.runtime, lane=file.lane), ledger, 0
+
+
+def _project_session(
+    store: AbstractMetricsStore,
+    key: tuple[str, str],
+    entries: Sequence[HistoryIndexEntry],
+    project_id: str,
+) -> bool:
+    """Rebuild one session's session and duration rows from all of its files.
+
+    Args:
+        store: The metrics store.
+        key: The session's ``(runtime, vendor_session_ref)``.
+        entries: The index rows of every file that folds into the session.
+        project_id: Scope label stamped on the session row.
+
+    Returns:
+        ``False`` when the built rows failed their invariants and none were
+        written, else ``True``.
+    """
+    runtime, ref = key
+    store.delete_where(_OBSERVED_DURATIONS_TABLE, runtime=runtime, vendor_session_ref=ref)
+    requests = _session_requests(store, runtime, ref)
+    folds = [
+        TranscriptFold.model_validate_json(entry.fold)
+        for entry in entries
+        if entry.drop_reason is not SweepDropReason.CORRUPT_RECORD
+    ]
+    if not requests or not folds:
+        store.delete_where(_OBSERVED_SESSIONS_TABLE, runtime=runtime, vendor_session_ref=ref)
+        return True
+    try:
+        session, durations = observed_rows(
+            ParsedTranscript.merged(folds, requests), project_id=project_id
+        )
+    except ValueError as exc:
+        logger.warning(f"_project_session error={exc!r} refused")
+        store.delete_where(_OBSERVED_SESSIONS_TABLE, runtime=runtime, vendor_session_ref=ref)
+        return False
     store.upsert(_OBSERVED_SESSIONS_TABLE, session)
     for row in durations:
         store.upsert(_OBSERVED_DURATIONS_TABLE, row)
+    return True
 
 
 __all__ = [
+    "INDEX_LOCK_WAIT_SECONDS",
+    "IndexBusyError",
+    "IndexProgress",
+    "LocalHistory",
     "RebuildMode",
     "RebuildReport",
     "SourceSpec",
@@ -656,6 +1156,9 @@ __all__ = [
     "SweepDropReason",
     "SweepFunnel",
     "SweepStage",
+    "history_index_lock",
+    "index_session_history",
+    "load_session_detail",
     "rebuild",
     "sweep_session_history",
 ]

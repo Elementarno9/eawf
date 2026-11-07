@@ -56,6 +56,7 @@ from eawf.kernel.state.enums import DecisionStatus, StoreKind
 from eawf.kernel.state.epoch2.base import Epoch2Model, PrincipalKey
 from eawf.kernel.state.epoch2.pending_action import PendingAction
 from eawf.kernel.state.epoch2.plan_revision import (
+    HUMAN_PRINCIPAL_KIND,
     PlanApproval,
     PlanBody,
     PlanRevision,
@@ -688,7 +689,7 @@ def approve_plan_revision(
     key: str,
     expected_revision: int,
     action_ref: AnyEntityUrn,
-    approved_by: OwnerPrincipal,
+    approved_by: OwnerPrincipal | None,
     actor: PrincipalKey,
     idempotency_key: str,
     at: UtcDatetime,
@@ -708,16 +709,22 @@ def approve_plan_revision(
     criterion still graded assumed.
 
     The cited PendingAction is dereferenced under the same locks: the tree
-    must hold it sealed, answered with its approving option, asked about
-    this plan's Milestone, and not already spent on another revision --
-    see :func:`~eawf.workflow.planning.revision.approval_action_refusal`.
+    must hold it as an operator decision sealed by an operator, answered
+    with its approving option, asked about this plan's Milestone, not
+    already spent on another revision, and filed bound to this revision's
+    plan content digest -- see
+    :func:`~eawf.workflow.planning.revision.approval_action_refusal`.
+    The receipt names that sealing operator as the approver, so an agent
+    citing the operator's answer approves under its own actor.
 
     Args:
         context: The native context of the addressed root.
         key: The plan-revision key.
         expected_revision: The compare-and-swap token the caller read.
         action_ref: The PendingAction the approval is sealed as.
-        approved_by: The human principal approving.
+        approved_by: The human principal approving, which must be the
+            operator who sealed the action, or ``None`` to record that
+            operator.
         actor: Who asked, as an immutable qualified principal key.
         idempotency_key: The client's name for this request.
         at: When the approval happened.
@@ -741,7 +748,7 @@ def approve_plan_revision(
             "key": key,
             "expected_revision": expected_revision,
             "action_ref": str(action_ref),
-            "approved_by": approved_by.model_dump(mode="json"),
+            "approved_by": None if approved_by is None else approved_by.model_dump(mode="json"),
             "actor": actor,
         },
     )
@@ -756,17 +763,25 @@ def approve_plan_revision(
         stale = _stale(record, expected_revision=expected_revision)
         if stale is not None:
             return stale
+        action = _held_action(document, action_ref)
         unconsented = approval_action_refusal(
             record,
             action_key=action_ref.entity_key,
-            action=_held_action(document, action_ref),
+            action=action,
+            approved_by=approved_by,
             spent_by=_approval_spent_by(document, action_ref),
         )
         if unconsented is not None:
             return unconsented
+        assert action is not None and action.resolution_actor is not None, (
+            "a consenting action is held and sealed"
+        )
         approval = PlanApproval(
             action_ref=action_ref,
-            approved_by=approved_by,
+            approved_by=OwnerPrincipal(
+                principal_kind=HUMAN_PRINCIPAL_KIND,
+                principal_id=action.resolution_actor.principal_id,
+            ),
             approved_at=at,
             content_digest=plan_content_digest(record.body),
             base_state_revision=record.base_state_revision,

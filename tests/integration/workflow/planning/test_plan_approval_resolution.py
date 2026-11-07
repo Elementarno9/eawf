@@ -183,7 +183,11 @@ def _submit(canary: CanaryProvision, tmp_path: Path, *, body: dict[str, Any]) ->
 def _seal(canary: CanaryProvision, tmp_path: Path) -> str:
     """Have the operator answer the plan's approval question, and return its URN."""
     return seal_plan_approval(
-        canary.root, tmp_path / "runtime", subject=MILESTONE_URN, tag=REVISION_KEY
+        canary.root,
+        tmp_path / "runtime",
+        subject=MILESTONE_URN,
+        tag=REVISION_KEY,
+        plan_revision=REVISION_KEY,
     )
 
 
@@ -321,10 +325,12 @@ def test_approval_refuses_a_measured_criterion_when_the_evidence_ledger_is_unrea
     check, admitting a contract citation nobody promoted.
     """
     canary = _planned_canary(tmp_path, code="CORRUPT1")
-    action_ref = _seal(canary, tmp_path)
-    _write_corrupt_ledger(canary, Epoch2Collection.EVIDENCE)
     body = _body(_criterion(grounding="measured", contract_refs=["MCT-NEVER-PROMOTED"]))
     assert _submit(canary, tmp_path, body=body)["status"] == "ok"
+    # sealed once the revision is held, which the approval is bound to, and before the
+    # evidence ledger the seal records into is broken
+    action_ref = _seal(canary, tmp_path)
+    _write_corrupt_ledger(canary, Epoch2Collection.EVIDENCE)
 
     answer = _approve(canary, tmp_path, action_ref=action_ref)
 

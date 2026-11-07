@@ -50,15 +50,15 @@ from eawf.kernel.migration.epoch2.errors import (
     MigrationValidationDivergedError,
 )
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel, rule_digest
-from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, Epoch2Collection, StorageTier
 
-# The build, smoke and reconcile steps import the cutover, the store readers
-# and the manifest models where they run: every reader resolving a tree's
-# authority (a statusline redraw among them) imports this module for the
-# marker alone.
+# The build, smoke and reconcile steps import the cutover, the store readers,
+# the storage tiers and the manifest models where they run: every reader
+# resolving a tree's authority (a statusline redraw and each hook's epoch
+# check among them) imports this module for the marker alone.
 if TYPE_CHECKING:
     from eawf.kernel.migration.epoch2.manifest import MigrationManifest
     from eawf.kernel.migration.epoch2.plan_mode import MigrationPlan
+    from eawf.kernel.store.tiers import Epoch2Collection
 
 logger = logging.getLogger(__name__)
 
@@ -507,6 +507,7 @@ def read_smoke(*, target: DisposableTarget, generation_id: str, manifest: Migrat
     from eawf.kernel.store.compaction import read_document
     from eawf.kernel.store.ledger import read_ledger_records
     from eawf.kernel.store.paths import ledger_path
+    from eawf.kernel.store.tiers import StorageTier
 
     placement = manifest.tier_placement
     if placement is None:
@@ -591,6 +592,7 @@ def verify_selected_generation(target: DisposableTarget, *, generation_id: str) 
     from eawf.kernel.store.compaction import read_document
     from eawf.kernel.store.ledger import LedgerError, read_ledger_records
     from eawf.kernel.store.paths import ledger_path
+    from eawf.kernel.store.tiers import LEDGER_COLLECTIONS
 
     state_path = target.generation_path(generation_id) / GENERATION_DOCUMENT
     if not state_path.is_file():
@@ -686,6 +688,8 @@ UNCITED_SOURCE: Final = "-"
 
 def _source_of(collection: Epoch2Collection, payload: Mapping[str, Any]) -> tuple[str, str | None]:
     """Return the source collection and source id one written record cites."""
+    from eawf.kernel.store.tiers import Epoch2Collection
+
     if collection is Epoch2Collection.RUN:
         from eawf.kernel.migration.epoch2.validation import ATTEMPT_RUN_SOURCE_KIND
 
@@ -719,6 +723,7 @@ def _written_sources(state_path: Path) -> dict[str, list[str | None]]:
     from eawf.kernel.store.compaction import document_rows, read_document
     from eawf.kernel.store.ledger import read_ledger_records
     from eawf.kernel.store.paths import ledger_path
+    from eawf.kernel.store.tiers import LEDGER_COLLECTIONS
 
     document = read_document(state_path)
     payloads: list[tuple[Epoch2Collection, Mapping[str, Any]]] = [

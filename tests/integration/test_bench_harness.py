@@ -49,7 +49,7 @@ from eawf.observability.bench.turn_cost import (
 )
 from eawf.observability.telemetry.turn_cost import TurnCostRecord
 from eawf.surfaces.cli.app import app
-from eawf.workflow.release.train import CHECKPOINT_CONFIGS, V07_TRAIN, gate_bindings_for
+from eawf.workflow.release.train import CHECKPOINT_CONFIGS, gate_bindings_for, train_for_version
 
 runner = CliRunner()
 
@@ -701,7 +701,7 @@ def test_cli_bench_turn_cost_accepts_the_fixture_each_telemetry_gate_names(
 ) -> None:
     """Every rung's telemetry proof argv reaches the corpus, never an unknown-fixture refusal."""
     monkeypatch.delenv("EA_STATE", raising=False)
-    profile = V07_TRAIN.checkpoint_for_version(version).gate_profile
+    profile = train_for_version(version).checkpoint_for_version(version).gate_profile
     proof = gate_bindings_for(profile)[ReleaseGateName.TELEMETRY_PRODUCER].proof
     assert proof is not None
     assert proof.argv[:3] == ("uv", "run", "eawf")

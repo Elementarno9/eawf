@@ -21,18 +21,27 @@ window closes. The window and the policy are filed with the default, so
 the host shows both. ``recommended`` and ``always`` differ only on a
 question with no recommendation, and a decision without one is refused
 before it is filed, so here they act alike.
+
+A decision that consents to something names it, and its answer is bound
+to it by digest: a criterion waiver of the subject Task, or the plan
+revision of the subject Milestone whose approval it asks for. The verb the
+consent is spent on compares the digest, so the answer cannot be carried
+over to another waiver or another revision.
 """
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Annotated, Final
 
+import orjson
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from eawf.kernel.config.schema import AutoChoose
 from eawf.kernel.delivery.integration import IdempotencyKey
+from eawf.kernel.identity import EntityKind, QualifiedUrn
 from eawf.kernel.state.epoch2.base import NonEmptyStr, PrincipalKey
 from eawf.kernel.state.epoch2.pending_action import (
     MAX_OPTIONS,
@@ -44,6 +53,11 @@ from eawf.kernel.state.epoch2.pending_action import (
     PendingActionOption,
     PendingActionStatus,
     TermExpansion,
+)
+from eawf.kernel.state.epoch2.plan_revision import (
+    PlanRevision,
+    PlanRevisionKey,
+    plan_content_digest,
 )
 from eawf.kernel.state.epoch2.urns import AnyEntityUrn, PendingActionUrn
 
@@ -72,6 +86,9 @@ class DecisionRefusal(StrEnum):
     AXIS_UNRESOLVED = "config_axis_unresolved"
     AXIS_OPTION_UNOFFERED = "config_axis_option_unoffered"
     CONFIG_UNHONOURED = "config_value_unhonoured"
+    WAIVER_SUBJECT_NOT_TASK = "waiver_subject_not_task"
+    PLAN_REVISION_UNHELD = "plan_revision_unheld"
+    PLAN_SUBJECT_MISMATCH = "plan_subject_mismatch"
 
 
 class DecisionRefusedError(ValueError):
@@ -101,6 +118,43 @@ class ConfigAxis(BaseModel):
     values: dict[OptionId, NonEmptyStr] = Field(min_length=1)
 
 
+class WaiverRequest(BaseModel):
+    """The criterion waiver a decision asks the operator to consent to.
+
+    The bounds are the waiver verb's own, so a consent filed here is one the
+    verb can be sent.
+
+    Attributes:
+        criterion_id: The criterion of the subject Task to waive.
+        reason: Why the criterion no longer needs proving, exactly as it will be
+            recorded.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    criterion_id: Annotated[str, Field(min_length=1, max_length=64, strict=True)]
+    reason: Annotated[str, Field(min_length=1, max_length=500, strict=True)]
+
+
+def waiver_digest(task_urn: QualifiedUrn, criterion_id: str, reason: str) -> str:
+    """Return the digest that binds a consent to one waiver of one criterion.
+
+    The Task is taken as it is spelled, so the waiver must name it as the
+    decision did.
+
+    Args:
+        task_urn: The Task whose criterion is waived.
+        criterion_id: The criterion waived.
+        reason: The recorded reason.
+
+    Returns:
+        ``sha256:`` and the hex digest of the sorted-key compact JSON of the
+        three facts.
+    """
+    body = {"criterion_id": criterion_id, "reason": reason, "task_ref": str(task_urn)}
+    return f"sha256:{hashlib.sha256(orjson.dumps(body, option=orjson.OPT_SORT_KEYS)).hexdigest()}"
+
+
 class DecisionRequest(BaseModel):
     """What an asker files: the question, its options and how it may default.
 
@@ -121,6 +175,11 @@ class DecisionRequest(BaseModel):
             timeout default; ``None`` asks for no default.
         assignee: The one principal the question is addressed to, or
             ``None`` for every eligible principal.
+        waiver: The criterion waiver of the subject Task the decision
+            consents to, or ``None`` for a decision that consents to none.
+        plan_revision: The plan revision of the subject Milestone whose
+            approval the decision asks for, or ``None`` for a decision that
+            approves no plan.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -138,6 +197,55 @@ class DecisionRequest(BaseModel):
         default=None, gt=0, le=MAX_OVERRIDE_WINDOW_MINUTES, strict=True
     )
     assignee: PrincipalKey | None = None
+    waiver: WaiverRequest | None = None
+    plan_revision: PlanRevisionKey | None = None
+
+
+def bound_digest(request: DecisionRequest, *, plan: PlanRevision | None) -> str | None:
+    """Return the digest a decision *request* is bound to, if it consents to anything.
+
+    A waiver binds its :func:`waiver_digest`; a plan approval binds the content
+    digest of the revision it approves, recomputed from the body, so the answer
+    approves exactly that plan and no other revision of the Milestone.
+
+    Args:
+        request: What the asker files.
+        plan: The stored revision ``request.plan_revision`` names, or ``None``
+            when the tree holds none or the request names none.
+
+    Returns:
+        The digest, or ``None`` for a decision that consents to neither.
+
+    Raises:
+        DecisionRefusedError: ``waiver_subject_not_task`` for a waiver asked about
+            a subject that is not a Task; ``plan_revision_unheld`` for a revision
+            the tree does not hold; ``plan_subject_mismatch`` for a revision of
+            another subject than the request's.
+    """
+    # A waiver is asked about a Task and a plan about a Milestone, so a request
+    # naming both fails one of the subject checks and binds neither.
+    if request.waiver is not None and request.urn.kind is not EntityKind.TASK:
+        raise DecisionRefusedError(
+            DecisionRefusal.WAIVER_SUBJECT_NOT_TASK,
+            f"a criterion waiver is asked about a Task, not the {request.urn.kind.value} "
+            f"{request.urn.entity_key}",
+        )
+    if request.plan_revision is None:
+        if request.waiver is None:
+            return None
+        return waiver_digest(request.urn, request.waiver.criterion_id, request.waiver.reason)
+    if plan is None:
+        raise DecisionRefusedError(
+            DecisionRefusal.PLAN_REVISION_UNHELD,
+            f"the tree holds no plan revision {request.plan_revision}",
+        )
+    if not request.urn.same_entity(plan.body.milestone_urn):
+        raise DecisionRefusedError(
+            DecisionRefusal.PLAN_SUBJECT_MISMATCH,
+            f"{plan.key} plans {plan.body.milestone_urn.entity_key}, so its approval is asked "
+            f"about that Milestone, not {request.urn.entity_key}",
+        )
+    return plan_content_digest(plan.body)
 
 
 def _configured_recommendation(
@@ -194,6 +302,7 @@ def decision_question(
     configured: str | None,
     auto_choose: AutoChoose,
     at: datetime,
+    plan: PlanRevision | None = None,
 ) -> PendingAction:
     """Return the waiting operator decision *request* files.
 
@@ -205,14 +314,21 @@ def decision_question(
             axis as text; ignored when it names none.
         auto_choose: The resolved ``preferences.auto_choose`` policy.
         at: When the decision was asked.
+        plan: The stored revision the request's ``plan_revision`` names, or
+            ``None`` when the tree holds none or the request names none.
 
     Returns:
         The decision, born waiting: committing it is what puts it in front
-        of the operator, so it never exists unshown.
+        of the operator, so it never exists unshown. A waiver or plan-approval
+        decision carries the :func:`bound_digest` of what it consents to as
+        its bundle digest.
 
     Raises:
-        DecisionRefusedError: The configuration axis cannot be honoured.
+        DecisionRefusedError: The configuration axis cannot be honoured, or
+            what the decision consents to is not of its subject; see
+            :func:`bound_digest`.
     """
+    digest = bound_digest(request, plan=plan)
     recommended = request.recommended_option_id
     rationale = request.recommendation_rationale
     if request.config_axis is not None:
@@ -235,6 +351,7 @@ def decision_question(
             "kind": PendingActionKind.OPERATOR_DECISION,
             "subject_ref": request.urn,
             "question": request.question,
+            "bundle_digest": digest,
             "options": request.options,
             "recommended_option_id": recommended,
             "recommendation_rationale": rationale,
@@ -258,5 +375,8 @@ __all__ = [
     "DecisionRefusal",
     "DecisionRefusedError",
     "DecisionRequest",
+    "WaiverRequest",
+    "bound_digest",
     "decision_question",
+    "waiver_digest",
 ]

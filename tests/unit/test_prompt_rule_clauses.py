@@ -43,7 +43,8 @@ _BODY_TOKEN_BUDGETS = {
     # the role carrier, so these bodies keep only method and output shape.
     "_RESEARCHER_BODY": 200,
     "_PLANNER_BODY": 300,
-    "_EXECUTOR_BODY": 260,
+    # The executor body also states its no-pause and parallel-slice conduct.
+    "_EXECUTOR_BODY": 290,
     "_AUDITOR_BODY": 220,
     "_OPERATOR_BODY": 360,
 }

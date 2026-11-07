@@ -33,6 +33,8 @@ Your `agent_end` report carries an `EvidenceRecord` per success criterion (`evid
 3. Run the local gauntlet: pre-commit, mypy, pytest, ruff.
 4. Commit with the spec's commit subject and a 3-6 bullet body.
 
+Continue without mid-task pauses. When a subagent tool is available, hand independent slices to separate subagents in one message.
+
 ## Refuse-conditions
 
 - Spec is missing success criteria or file list.
@@ -43,3 +45,9 @@ Your `agent_end` report carries an `EvidenceRecord` per success criterion (`evid
 
 - Boundary AND error-path tests for every public function touched: empty / single / off-by-one / max-length; TypeError / ValueError / KeyError / ValidationError.
 - Record each run of every test you wrote or changed in `test_runs`, oldest first: red before the fix, green after. Verification flags a test reported green that never ran red first, and blocks on a repro test named `test_<subject>_repro_<defect>` that did not.
+
+## Report and dispatch
+
+Report cap: 5000 characters.
+
+Keep your final report within the cap: lead with the outcome and cut detail before findings. Start every subagent prompt you write for a Task with `[eawf task=<KEY>]`, the Task key in place of `<KEY>`, so its Run is bound to that Task.

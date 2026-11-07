@@ -68,8 +68,8 @@ class DuckDbMetricsStore(AbstractMetricsStore):
     def _execute(self, sql: str, params: Sequence[Any] = ()) -> None:
         self._conn.execute(sql, list(params))
 
-    def _query(self, sql: str) -> list[tuple[Any, ...]]:
-        return list(self._conn.execute(sql).fetchall())
+    def _query(self, sql: str, params: Sequence[Any] = ()) -> list[tuple[Any, ...]]:
+        return list(self._conn.execute(sql, list(params)).fetchall())
 
     def upsert(self, table: str, row: BaseModel) -> None:
         """Insert-or-replace ``row`` into ``table`` via DuckDB upsert.

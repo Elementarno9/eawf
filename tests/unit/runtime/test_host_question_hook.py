@@ -102,6 +102,7 @@ def test_run_062_the_question_call_is_raised_with_its_words_and_labels(tmp_path:
         "tool_use_id": "toolu_1",
         "questions": [{"question": ASKED, "options": ["SQLite", "Redis"]}],
         "repo_root": str(tmp_path),
+        "tool_input_questions": TOOL_INPUT["questions"],
     }
 
 
@@ -160,6 +161,125 @@ def test_a_daemon_refusal_never_blocks_the_host() -> None:
     result = record_host_question(asking(), daemon_client_factory=factory)
 
     assert not result.block and "identity_not_found" in result.output
+
+
+#: A marked question asked in multi-select, with its answers pre-supplied.
+MARKED: Final = "[eawf act=ACT-0001 rev=1]\nShould this plan be applied as written?"
+SEAL_INPUT: Final[dict[str, Any]] = {
+    "questions": [
+        {
+            "question": MARKED,
+            "header": "Plan",
+            "multiSelect": True,
+            "options": [{"label": "Apply the plan"}, {"label": "Do not apply it"}],
+        },
+        {"question": ASKED, "multiSelect": False, "options": [{"label": "SQLite"}]},
+    ],
+    "answers": {MARKED: "Apply the plan"},
+}
+
+
+def test_the_hook_forwards_the_seal_facts(tmp_path: Path) -> None:
+    """Transcript, raw questions, multi-select and pre-answered reach the daemon."""
+    sink, factory = recording()
+    transcript = str(tmp_path / "session.jsonl")
+
+    record_host_question(
+        asking(
+            HookEventType.POST_TOOL_USE,
+            tool_input=SEAL_INPUT,
+            transcript_path=transcript,
+            tool_response={"answers": {MARKED: "Apply the plan"}},
+        ),
+        daemon_client_factory=factory,
+        repo_root=tmp_path,
+    )
+
+    ((method, params),) = sink
+    assert method == "runtime.host.question.answer"
+    assert params["questions"] == [
+        {
+            "question": MARKED,
+            "options": ["Apply the plan", "Do not apply it"],
+            "multi_select": True,
+        },
+        {"question": ASKED, "options": ["SQLite"]},
+    ]
+    assert params["preanswered"] is True
+    assert params["transcript_path"] == transcript
+    assert params["tool_input_questions"] == SEAL_INPUT["questions"]
+    assert params["answers"] == {MARKED: "Apply the plan"}
+
+
+def test_a_call_without_seal_facts_sends_none(tmp_path: Path) -> None:
+    """A payload with no transcript still sends its questions as asked, for the seal."""
+    sink, factory = recording()
+
+    record_host_question(asking(), daemon_client_factory=factory, repo_root=tmp_path)
+
+    params = sink[0][1]
+    assert {"preanswered", "transcript_path"}.isdisjoint(params)
+    assert params["tool_input_questions"] == TOOL_INPUT["questions"]
+    assert all("multi_select" not in question for question in params["questions"])
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"transcript_path": ""},
+        {"transcript_path": 7},
+        {"transcript_path": "s.jsonl", "tool_input": {"questions": "x"}},
+    ],
+    ids=["empty-path", "not-a-path", "questions-not-a-list"],
+)
+def test_a_transcript_the_hook_cannot_name_is_not_sent(extra: dict[str, Any]) -> None:
+    sink, factory = recording()
+    payload = {"tool_name": "AskUserQuestion", "tool_use_id": "t", "tool_input": TOOL_INPUT}
+
+    record_host_question(
+        event(HookEventType.PRE_TOOL_USE, {**payload, **extra}), daemon_client_factory=factory
+    )
+
+    assert "transcript_path" not in (sink[0][1] if sink else {})
+
+
+def test_an_empty_answers_key_still_marks_the_call_preanswered(tmp_path: Path) -> None:
+    """Boundary: the key's presence, not its contents, means nobody was asked."""
+    sink, factory = recording()
+
+    record_host_question(
+        asking(tool_input={**TOOL_INPUT, "answers": {}}), daemon_client_factory=factory
+    )
+
+    assert sink[0][1]["preanswered"] is True
+
+
+def test_the_hook_output_names_each_seal_and_refusal() -> None:
+    answer = {
+        "question_refs": ["eawf://WSP-MAIN/PRJ-EAWF/_/question/QST-0001"],
+        "sealed_action_refs": ["eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/pending-action/ACT-0001"],
+        "seal_refusals": [
+            {
+                "action_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/pending-action/ACT-0002",
+                "code": "harness_action_stale",
+                "detail": "moved",
+            }
+        ],
+    }
+
+    class _Sealing(_Client):
+        def call(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+            return answer
+
+    result = record_host_question(
+        asking(HookEventType.POST_TOOL_USE), daemon_client_factory=lambda: _Sealing([], None)
+    )
+
+    assert result.output == (
+        "runtime.host_question ok questions=QST-0001 sealed=ACT-0001 "
+        "refused=ACT-0002:harness_action_stale"
+    )
+    assert not result.block
 
 
 def failing(**extra: Any) -> HookEvent:

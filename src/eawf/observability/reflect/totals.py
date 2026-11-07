@@ -54,6 +54,16 @@ class RunSpend:
     output_tokens: int | None = None
     cache_tokens: int | None = None
 
+    @property
+    def unpriced(self) -> bool:
+        """Whether the Run reported tokens no reading priced.
+
+        A Run whose reported counters are all zero spent nothing a total could miss,
+        so only a positive token count without a cost makes its spend unpriced.
+        """
+        tokens = (self.input_tokens, self.output_tokens, self.cache_tokens)
+        return self.cost_microusd is None and any(value for value in tokens)
+
 
 class TotalsRow(BaseModel):
     """The money and tokens of every listed session of one scope.
@@ -67,7 +77,8 @@ class TotalsRow(BaseModel):
         priced_runs: The sessions whose cost was read.
         unpriced_runs: The sessions that reported tokens no reading priced; their
             spend is missing from ``cost_microusd``, so the cost is a floor whenever
-            this is not zero. A session that reported no usage is in neither count.
+            this is not zero. A session that reported no usage, or only zero tokens,
+            is in neither count.
         quotable: Whether the scope is the tree's own project.
     """
 
@@ -162,12 +173,7 @@ def scope_totals(
     rows = []
     for code, members in sorted(grouped.items()):
         priced = sum(1 for _reading, spend in members if spend.cost_microusd is not None)
-        unpriced = sum(
-            1
-            for _reading, spend in members
-            if spend.cost_microusd is None
-            and (spend.input_tokens, spend.output_tokens, spend.cache_tokens) != (None, None, None)
-        )
+        unpriced = sum(1 for _reading, spend in members if spend.unpriced)
         rows.append(
             TotalsRow(
                 scope=f"project:{code}",

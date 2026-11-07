@@ -148,6 +148,10 @@ _WAIVE_DECISION_HELP: Final = (
     "Key of the standing decision the waiver leans on (e.g. D86); required when "
     "verify.waiver_mode is C."
 )
+_WAIVE_ACTION_HELP: Final = (
+    "URN of the pending action an operator sealed approving exactly this waiver; lets a "
+    "principal other than an operator send it."
+)
 _OUT_HELP: Final = "Write the assessment document here, for task complete --assessment."
 _REFS_HELP: Final = "JSON file carrying base, exit_refs and diagnostic_ref."
 _HEAD_HELP: Final = "Full sha of the landed commit to adopt."
@@ -503,13 +507,17 @@ def task_waive_criterion_cmd(
     idempotency_key: _Key,
     actor: _Actor,
     decision: Annotated[str | None, typer.Option("--decision", help=_WAIVE_DECISION_HELP)] = None,
+    action_ref: Annotated[str | None, typer.Option("--action-ref", help=_WAIVE_ACTION_HELP)] = None,
 ) -> None:
     """Waive one criterion of a promoted Task, so its Batch closes without proving it.
 
     Allowed from PLANNED through READY_TO_INTEGRATE, and only to an operator: --actor
     must be an OP- principal such as OP-0001, or the waiver is refused as
-    waiver_operator_required. A criterion graded accepted-risk is refused, and the
-    same waiver sent again changes nothing.
+    waiver_operator_required, unless --action-ref cites a waiver decision an operator
+    sealed approving this Task, criterion and reason. An agent session takes the second
+    path under its own principal: the operator's answer to the decision's bound question
+    in session is the seal. A criterion graded accepted-risk is refused, and the same
+    waiver sent again changes nothing.
     """
     params: dict[str, Any] = {
         "urn": urn,
@@ -521,6 +529,8 @@ def task_waive_criterion_cmd(
     }
     if decision is not None:
         params["decision_ref"] = decision
+    if action_ref is not None:
+        params["action_ref"] = action_ref
     answer = _send(
         ctx,
         DELIVERY_WAIVE_CRITERION,
@@ -796,7 +806,9 @@ def milestone_seal_approval_cmd(
 
     ``domain.milestone.accept`` then requires the sealed question by
     reference. The resolver defaults to ``--actor``, which the daemon
-    requires it to equal.
+    requires it to equal and to be an ``OP-`` operator, so this runs from
+    the operator's own terminal. In a Claude Code session the operator's
+    answer to the marked AskUserQuestion seals the question instead.
     """
     if expected_revision <= 0:
         cli_errors.emit_error(

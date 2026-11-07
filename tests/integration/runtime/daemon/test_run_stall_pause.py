@@ -87,6 +87,8 @@ def test_con_106_one_unreadable_run_never_stops_the_others_settling_or_stalling(
     bad_key = "RUN-00000001"
     bad = seed_row("run", "RUNNING")
     bad["urn"], bad["key"] = RUN_URN.replace(RUN_KEY, bad_key), bad_key
+    # moved lately, so the sweep stalls it rather than ending it as abandoned
+    bad["updated_at"] = datetime.now(UTC).isoformat()
     seed(canary, {"run": {bad_key: bad}})
     quiet(ctx, canary)
     later = datetime.now(UTC) + timedelta(hours=2)

@@ -63,7 +63,7 @@ def _render(tmp_path: Path, state_path: Path, payload: str) -> subprocess.Comple
         "HOME": str(home),
         "EA_STATE": str(state_path),
         "EAWF_STATUSLINE_CACHE": str(tmp_path / "cache"),
-        "EAWF_STATUSLINE_THEME": "ascii-fallback",
+        "EAWF_STATUSLINE_THEME": "dark",
     }
     return subprocess.run(
         [sys.executable, "-c", _PROBE],
@@ -79,8 +79,8 @@ def _render(tmp_path: Path, state_path: Path, payload: str) -> subprocess.Comple
 
 def test_a_cold_render_leaves_the_heavy_modules_unloaded(tmp_path: Path, tree: Path) -> None:
     proc = _render(tmp_path, tree, json.dumps({"session_id": "ses-cold", "model": "haiku"}))
-    assert "model:haiku" in proc.stdout
-    assert "mcp:n/a(no-mcp-servers)" in proc.stdout
+    assert " haiku " in proc.stdout
+    assert "n/a" not in proc.stdout
     assert proc.stderr.strip() == ""
 
 

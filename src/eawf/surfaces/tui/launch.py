@@ -186,32 +186,24 @@ def hand_over(state: EntryState) -> str:
 def claimed_principal() -> str | None:
     """Return the principal this machine's operator claims in the user config, if any.
 
-    Only the user layer is read: a claim of identity is the person's, and a principal
-    named in a repository's committed config would make everyone who clones it act as
-    that one principal.
+    The claim is read by
+    :func:`~eawf.kernel.config.operator_claim.claimed_operator`; this adds only the
+    command a console operator runs to set it again.
 
     Returns:
         The claimed principal key; ``None`` when no claim is recorded.
 
     Raises:
-        ValueError: The user layer cannot be parsed, or its claim is not a principal key.
+        ValueError: The user layer cannot be parsed, or its claim is not a principal key;
+            the message names the command that sets the claim again.
     """
-    from pydantic import ValidationError as PydValidationError
-
-    from eawf.kernel.config.layered import global_config_path
-    from eawf.kernel.config.loader import load_yaml_layer
-    from eawf.kernel.config.schema import OperatorConfig
-    from eawf.surfaces.cli.errors import ValidationError
+    from eawf.kernel.config.operator_claim import claimed_operator
     from eawf.surfaces.tui.console.operations import CLAIM_COMMAND
 
     try:
-        block = load_yaml_layer(global_config_path()).get("operator") or {}
-        return OperatorConfig.model_validate(block).principal
-    except (ValidationError, PydValidationError) as error:
-        raise ValueError(
-            f"operator.principal in the user config is not a principal key (e.g. OP-0001): "
-            f"{error}; set it again with {CLAIM_COMMAND}"
-        ) from error
+        return claimed_operator()
+    except ValueError as error:
+        raise ValueError(f"{error}; set it again with {CLAIM_COMMAND}") from error
 
 
 def resolve_operator(*, actor: str | None, receipt_ref: str | None) -> Operator | None:

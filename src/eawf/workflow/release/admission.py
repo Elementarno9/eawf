@@ -296,7 +296,7 @@ def checkpoint_release_config(version: str, *, repo_root: Path) -> ReleaseConfig
     from eawf.kernel.release.checkpoint_template import with_membership_refs
     from eawf.kernel.spec.release import release_key
     from eawf.kernel.spec.release_config import load_release_config
-    from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
+    from eawf.workflow.release.train import checkpoint_config_yaml, train_for_version
 
     source = checkpoint_config_yaml(version)
     try:
@@ -306,7 +306,7 @@ def checkpoint_release_config(version: str, *, repo_root: Path) -> ReleaseConfig
     document: str | Mapping[str, Any] = source
     if membership_refs:
         document = with_membership_refs(source, membership_refs=membership_refs)
-    return load_release_config(document, train=V07_TRAIN)
+    return load_release_config(document, train=train_for_version(version))
 
 
 def create_checkpoint_release(

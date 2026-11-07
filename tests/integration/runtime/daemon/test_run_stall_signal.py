@@ -176,7 +176,8 @@ def test_run_029_a_run_with_no_activity_is_measured_from_its_start(
 ) -> None:
     configure(canary, {"codex": {"stall_interval_s": 0}})
     announce_as(ctx, canary, "codex")
-    now = datetime.now(UTC)
+    # inside a day of its start: a Run silent longer than that is ended as abandoned
+    now = STARTED_AT + timedelta(hours=1)
 
     assert sweep_once(ctx, now=now) == (RUN_KEY,)
     assert sweep_once(ctx, now=now + timedelta(seconds=30)) == ()

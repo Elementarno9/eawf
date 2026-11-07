@@ -37,9 +37,11 @@ HookEventType       CC event               Matcher
 ``USER_PROMPT_...`` ``UserPromptSubmit``   (none)
 ==================  =====================  ====================================
 
-Each entry resolves to a ``${CLAUDE_PLUGIN_ROOT}/hooks/<event>.sh``
-wrapper. CC expands ``CLAUDE_PLUGIN_ROOT`` to the plugin's install root
-at runtime, so the manifest stays portable across user installs.
+Each entry runs ``bash "${CLAUDE_PLUGIN_ROOT}/hooks/<event>.sh"``. CC
+expands ``CLAUDE_PLUGIN_ROOT`` to the plugin's install root at runtime, so
+the manifest stays portable across user installs. Running the wrapper
+through ``bash`` rather than as an executable keeps the hook working when
+a copy step on the release path drops the 0755 mode.
 
 Public API::
 
@@ -119,10 +121,13 @@ PLUGIN_HOOK_REGISTRY: tuple[PluginHookSpec, ...] = (
 def _command_path(spec: PluginHookSpec) -> str:
     """Return the ``command`` field for *spec*'s manifest entry.
 
-    Always resolves to ``${CLAUDE_PLUGIN_ROOT}/hooks/<event>.sh`` so the
-    manifest is portable across user installs.
+    Always ``bash "${CLAUDE_PLUGIN_ROOT}/hooks/<event>.sh"``: the plugin-root
+    variable keeps the manifest portable across user installs, the quotes
+    survive an install root with spaces, and invoking ``bash`` explicitly
+    means a wrapper shipped without its execute bit (an archive step that
+    drops POSIX modes) still runs instead of failing with exit 126.
     """
-    return f"{_PLUGIN_ROOT_VAR}/hooks/{spec.event_type.value}.sh"
+    return f'bash "{_PLUGIN_ROOT_VAR}/hooks/{spec.event_type.value}.sh"'
 
 
 # Events with a real runner-registered handler (:data:`HookSpec.has_handler`

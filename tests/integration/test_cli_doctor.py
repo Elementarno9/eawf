@@ -144,6 +144,7 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "authority_epoch",
         "canonical_sequence_drift",
         "gitignore_block",
+        "plugin_version",
         "cli_daemon_version",
         "launchd_agent",
         "stray_daemons",

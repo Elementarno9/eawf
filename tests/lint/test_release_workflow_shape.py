@@ -6,8 +6,8 @@ tests pin the shape that moves them earlier: a nightly release.yaml run
 that builds, produces the receipts and packages and validates the plugin
 while every publish job stays skipped; a PyPI upload a re-run can finish;
 a plugin-release dist wait that stops as soon as the release run it waits
-on has completed without a dist; and the prose and skill-eval gates on
-feature-branch pushes without the heavy test matrix.
+on has completed without a dist; and a CI push trigger that names no
+feature branch.
 """
 
 from __future__ import annotations
@@ -29,7 +29,6 @@ _WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 _RELEASE = _WORKFLOWS / "release.yaml"
 _PLUGIN_RELEASE = _WORKFLOWS / "plugin-release.yaml"
 _CI = _WORKFLOWS / "ci.yaml"
-_FEATURE = _WORKFLOWS / "feature-gates.yaml"
 
 #: The jobs a nightly dry run must execute: build, receipts, plugin gate.
 _DRY_RUN_JOBS = (
@@ -270,36 +269,10 @@ def test_dist_wait_keeps_waiting_while_no_release_run_exists(tmp_path: Path) -> 
     assert _sleeps(tmp_path) == 3
 
 
-# --- prose and eval gates on feature pushes ----------------------------------
-
-
-def test_feature_gates_fire_on_feature_pushes_only() -> None:
-    triggers = _triggers(_load(_FEATURE))
-    assert set(triggers) == {"push"}
-    assert triggers["push"] == {"branches": ["feature/**"]}
-
-
-def test_feature_gates_run_prose_and_eval_without_the_test_matrix() -> None:
-    jobs = _load(_FEATURE)["jobs"]
-    assert set(jobs) == {"prose-gate", "skill-eval"}
-    assert all("if" not in job for job in jobs.values())
+# --- the CI push trigger --------------------------------------------------------
 
 
 def test_ci_push_trigger_names_no_feature_branch() -> None:
+    """The release gates accept a green ci.yaml push run, so no feature push may make one."""
     branches = _triggers(_load(_CI))["push"]["branches"]
     assert not any(branch.startswith("feature") for branch in branches)
-
-
-def test_feature_prose_gate_diffs_against_the_merge_base_with_main() -> None:
-    job = _load(_FEATURE)["jobs"]["prose-gate"]
-    checkout = _step(job, "Checkout")
-    run = _step(job, "Validate prose (strict)")["run"]
-    assert checkout["with"]["fetch-depth"] == 0
-    assert 'git merge-base origin/main "${SHA}"' in run
-    assert 'validate-prose --strict --base "${base}"' in run
-
-
-def test_feature_skill_eval_runs_the_ci_command() -> None:
-    ours = _step(_load(_FEATURE)["jobs"]["skill-eval"], "Skill envelope evals")["run"]
-    theirs = _step(_load(_CI)["jobs"]["skill-eval"], "Skill envelope evals")["run"]
-    assert ours == theirs

@@ -139,7 +139,7 @@ class RepositoryHeadBinding(Epoch2Model):
     head_sha: ShaStr
 
 
-def validate_plan_approver(*, action_ref: QualifiedUrn, approved_by: OwnerPrincipal) -> None:
+def validate_plan_approver(*, action_ref: QualifiedUrn, approved_by: OwnerPrincipal | None) -> None:
     """Raise when this pair cannot seal a plan approval.
 
     The rule has one home because it is checked twice: once at the request
@@ -150,13 +150,14 @@ def validate_plan_approver(*, action_ref: QualifiedUrn, approved_by: OwnerPrinci
 
     Args:
         action_ref: The reference the approval is sealed as.
-        approved_by: Who is approving.
+        approved_by: Who is approving, or ``None`` when a request leaves
+            the approver to be derived from whoever sealed the action.
 
     Raises:
         ValueError: A team or service principal is approving, or the
             reference addresses something other than a PendingAction.
     """
-    if approved_by.principal_kind != HUMAN_PRINCIPAL_KIND:
+    if approved_by is not None and approved_by.principal_kind != HUMAN_PRINCIPAL_KIND:
         raise ValueError(
             f"a plan approval requires a {HUMAN_PRINCIPAL_KIND} principal, "
             f"not {approved_by.principal_kind}"

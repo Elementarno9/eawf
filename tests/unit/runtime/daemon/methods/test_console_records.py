@@ -11,10 +11,18 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.runtime.certification import ConformanceStageRecord
-from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record
-from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.runtime.content import CONTENT_PAYLOAD_KIND
+from eawf.kernel.store.ledger import (
+    SNAPSHOT_DIRNAME,
+    LedgerRecord,
+    append_ledger_record,
+    render_ledger_line,
+    snapshot_name,
+)
+from eawf.kernel.store.paths import ledger_path, record_ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon import methods
+from eawf.runtime.daemon.host_calls import HOST_RECEIPT_PAYLOAD_KIND
 from eawf.runtime.daemon.methods.conformance import StoreStageJournal
 from eawf.runtime.daemon.methods.console_records import (
     MISSING_ENDING,
@@ -28,6 +36,7 @@ from eawf.runtime.daemon.methods.console_records import (
     resolve_target,
 )
 from eawf.runtime.daemon.methods.delivery import CLEARED_STATUS, CONFLICT_STATUS
+from eawf.runtime.daemon.semantic_gateway import RECEIPT_PAYLOAD_KIND
 from eawf.runtime.vcs import repository_read
 from eawf.runtime.vcs.repository_read import NOT_A_REPOSITORY, RepositoryAnswer
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
@@ -71,6 +80,51 @@ def test_a_key_only_a_ledger_line_names_is_not_missing(document: Path) -> None:
     )
     assert resolve_target(document, "RCP-0042").ending is None
     assert resolve_target(document, "RCP-0043").ending == MISSING_ENDING
+
+
+@pytest.mark.parametrize(
+    ("collection", "kind", "key"),
+    [
+        (Epoch2Collection.RECEIPT, HOST_RECEIPT_PAYLOAD_KIND, "call-host-1"),
+        (Epoch2Collection.RECEIPT, RECEIPT_PAYLOAD_KIND, "call-semantic-1"),
+        (Epoch2Collection.ARTIFACT, CONTENT_PAYLOAD_KIND, "artifact://content/abc"),
+    ],
+)
+def test_a_key_only_a_local_ledger_line_names_is_not_missing(
+    document: Path, collection: Epoch2Collection, kind: str, key: str
+) -> None:
+    line = LedgerRecord(
+        collection=collection,
+        record_key=key,
+        status="recorded",
+        recorded_at=AT,
+        payload={"payload_kind": kind},
+    )
+    local = record_ledger_path(document, collection, line.payload)
+    assert local != ledger_path(document, collection)
+    append_ledger_record(local, line)
+
+    assert resolve_target(document, key).ending is None
+    assert resolve_target(document, f"{key}-other").ending == MISSING_ENDING
+
+
+def test_a_key_only_a_sealed_ledger_snapshot_names_is_not_missing(document: Path) -> None:
+    path = ledger_path(document, Epoch2Collection.RECEIPT)
+    line = render_ledger_line(
+        LedgerRecord(
+            collection=Epoch2Collection.RECEIPT,
+            record_key="PRF-0000000000000000-EAWF-0002",
+            status="pass",
+            recorded_at=AT,
+            payload={"receipt": {"id": "RCP-0077"}},
+        )
+    )
+    sealed = f"{line}\n".encode()
+    snapshot = path.parent / SNAPSHOT_DIRNAME / snapshot_name(path.stem, sealed)
+    snapshot.parent.mkdir(parents=True)
+    snapshot.write_bytes(sealed)
+
+    assert resolve_target(document, "RCP-0077").ending is None
 
 
 def test_a_tree_with_no_ledger_yet_reads_empty_runs(document: Path) -> None:

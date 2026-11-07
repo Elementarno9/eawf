@@ -74,7 +74,10 @@ _PLAN_REVISION_HELP: Final = "Revision the plan revision was read at (compare-an
 _IDEMPOTENCY_KEY_HELP: Final = "Caller's name for this request; a retry replays its receipt."
 _ACTOR_HELP: Final = "Principal key the request is attributed to."
 _ACTION_REF_HELP: Final = "URN of the sealed PendingAction the approval is recorded against."
-_APPROVED_BY_HELP: Final = "Operator principal id approving; must be a human, not an agent."
+_APPROVED_BY_HELP: Final = (
+    "Operator principal id approving; must be the operator who sealed --action-ref. "
+    "Omit to record that operator."
+)
 
 
 plan_app = typer.Typer(
@@ -306,15 +309,18 @@ def plan_approve_cmd(
         typer.Option("--expected-revision", "--expected-plan-revision", help=_PLAN_REVISION_HELP),
     ],
     action_ref: Annotated[str, typer.Option("--action-ref", help=_ACTION_REF_HELP)],
-    approved_by: Annotated[str, typer.Option("--approved-by", help=_APPROVED_BY_HELP)],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_IDEMPOTENCY_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
+    approved_by: Annotated[
+        str | None, typer.Option("--approved-by", help=_APPROVED_BY_HELP)
+    ] = None,
 ) -> None:
     """Seal a human principal's approval onto a VALIDATED plan revision.
 
     ``--approved-by`` is always recorded as an operator principal: the
     daemon requires a plan approval's human to be one, so naming any other
-    kind here would only ever earn the daemon's own refusal.
+    kind here would only ever earn the daemon's own refusal. Left out, the
+    daemon records the operator who sealed ``--action-ref``.
     """
     flags: GlobalFlags = ctx.obj
     if expected_revision <= 0:
@@ -330,10 +336,11 @@ def plan_approve_cmd(
         "key": key,
         "expected_revision": expected_revision,
         "action_ref": action_ref,
-        "approved_by": {"principal_kind": "operator", "principal_id": approved_by},
         "actor": actor,
         "idempotency_key": idempotency_key,
     }
+    if approved_by is not None:
+        params["approved_by"] = {"principal_kind": "operator", "principal_id": approved_by}
     _run_plan_rpc(PLAN_APPROVE_METHOD, params, flags=flags, subject=key)
 
 

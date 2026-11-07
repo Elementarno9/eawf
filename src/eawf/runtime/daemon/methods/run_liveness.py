@@ -37,15 +37,17 @@ from pydantic import BaseModel, ConfigDict
 
 from eawf.kernel.identity import QualifiedUrn, parse_qualified_urn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.runtime.events import RunEventRecord
 from eawf.kernel.runtime.stall import RunStallFact, standing_stall
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.kernel.state.epoch2.pause import PauseStatus
+from eawf.kernel.state.epoch2.pause import OpenPause, PauseStatus
 from eawf.kernel.state.epoch2.run import Run, RunScope, RunStatus, TaskScope
 from eawf.kernel.state.epoch2.task import Task
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.run_index import indexed_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.budget.notices import (
     LOCAL_OPERATOR,
@@ -77,6 +79,7 @@ from eawf.runtime.daemon.run_events import (
     hello_facts_of,
     plan_stall,
     reduce_run_events,
+    run_events_by_run,
     run_events_of,
     stall_facts_of,
 )
@@ -139,10 +142,12 @@ def _still_running(records: tuple[LedgerRecord, ...], status: RunStatus, urn: Qu
 def detect_stalls(context: Epoch2RootContext, *, now: datetime) -> tuple[str, ...]:
     """Raise a stall fact for every running Run in the tree silent past its interval.
 
-    The document is read once without a lock to find the running Runs; each is then
-    decided under its own lock, which reads the ledger again, so an event that landed
-    in between keeps the Run live. A Run that cannot be read or decided is logged and
-    passed over, so one bad Run never withholds the others' stalls.
+    The document and the run ledger are read once without a lock and every running
+    Run is decided from that read, so a sweep over many Runs takes the document lock
+    only for a Run a stall is due on. That Run is decided again under its own lock,
+    which reads the ledger again, so an event that landed in between keeps it live. A
+    Run that cannot be read or decided is logged and passed over, so one bad Run never
+    withholds the others' stalls.
 
     Args:
         context: The tree swept.
@@ -152,10 +157,23 @@ def detect_stalls(context: Epoch2RootContext, *, now: datetime) -> tuple[str, ..
         The keys of the Runs this sweep raised a stall for.
     """
     settle_stall_pauses(context, now=now)
+    document = _document_path(context.require_selected_generation())
+    running = [
+        (key, row)
+        for key, row in sorted(document_rows(read_document(document), Epoch2Collection.RUN).items())
+        if row.get("status") == RunStatus.RUNNING.value
+    ]
+    if not running:
+        return ()
+    records = indexed_ledger_records(ledger_path(document, Epoch2Collection.RUN))
+    events = run_events_by_run(records, run_keys={key for key, _ in running})
     raised: list[str] = []
-    for key, ref in _running(_document_path(context.require_selected_generation())):
+    for key, row in running:
         try:
-            fact = _detect_stall(context, parse_qualified_urn(ref), now=now)
+            run = Run.model_validate(row)
+            if _planned_stall(context, records, events.get(run.urn, ()), run, now=now) is None:
+                continue
+            fact = _detect_stall(context, run.urn, now=now)
         except Exception:
             logger.exception(f"detect_stalls skipped run={key}")
             continue
@@ -169,6 +187,33 @@ def detect_stalls(context: Epoch2RootContext, *, now: datetime) -> tuple[str, ..
     return tuple(raised)
 
 
+def _planned_stall(
+    context: Epoch2RootContext,
+    records: tuple[LedgerRecord, ...],
+    events: tuple[RunEventRecord, ...],
+    run: Run,
+    *,
+    now: datetime,
+) -> RunStallFact | None:
+    """Return the stall the Run is due as the given read shows it, or ``None``.
+
+    Returns:
+        The stall to raise, or ``None`` when the Run is live, stopped or already stalled.
+    """
+    if not _still_running(records, run.status, run.urn):
+        return None
+    assert run.started_at is not None, "a running Run always carries its start stamp"
+    return plan_stall(
+        urn=run.urn,
+        state=reduce_run_events(events),
+        facts=stall_facts_of(records, run.urn),
+        now=now,
+        interval_seconds=run_stall_interval(context, hello_facts_of(records, run.urn), run),
+        resume_method=RUN_CONTROL_REQUEST_METHOD,
+        started_at=run.started_at,
+    )
+
+
 def _detect_stall(
     context: Epoch2RootContext, urn: QualifiedUrn, *, now: datetime
 ) -> RunStallFact | None:
@@ -180,18 +225,7 @@ def _detect_stall(
     with context.session([urn]) as session:
         records = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
         run = stored_run(session, records, urn)
-        if not _still_running(records, run.status, urn):
-            return None
-        assert run.started_at is not None, "a running Run always carries its start stamp"
-        fact = plan_stall(
-            urn=run.urn,
-            state=reduce_run_events(run_events_of(records, urn)),
-            facts=stall_facts_of(records, urn),
-            now=now,
-            interval_seconds=run_stall_interval(context, hello_facts_of(records, urn), run),
-            resume_method=RUN_CONTROL_REQUEST_METHOD,
-            started_at=run.started_at,
-        )
+        fact = _planned_stall(context, records, run_events_of(records, urn), run, now=now)
         if fact is None:
             return None
         key = stall_key(fact)
@@ -215,7 +249,8 @@ def settle_stall_pauses(context: Epoch2RootContext, *, now: datetime) -> tuple[s
 
     A pause over a quiet Run ends when the Run answers -- it is resolved -- or when the
     Run stops running -- cancelled with it when it was cancelled, else resolved. The run
-    ledger is read once without a lock to find the open stall pauses; each Run is then
+    ledger and the document are read once without a lock to find the Runs with a pause
+    to end, so a sweep over many quietly stalled Runs takes no lock; each such Run is then
     decided under its own lock, which reads the ledger again. A Run that cannot be read
     is logged and passed over, so its pauses stand until it can be, and the others end.
 
@@ -227,7 +262,8 @@ def settle_stall_pauses(context: Epoch2RootContext, *, now: datetime) -> tuple[s
         The keys of the pauses this sweep ended.
     """
     document = _document_path(context.require_selected_generation())
-    held = latest_pauses(read_ledger_records(ledger_path(document, Epoch2Collection.RUN)))
+    records = indexed_ledger_records(ledger_path(document, Epoch2Collection.RUN))
+    held = latest_pauses(records)
     runs = sorted(
         {
             pause.scope_ref
@@ -236,9 +272,18 @@ def settle_stall_pauses(context: Epoch2RootContext, *, now: datetime) -> tuple[s
         },
         key=str,
     )
+    if not runs:
+        return ()
+    rows = document_rows(read_document(document), Epoch2Collection.RUN)
     ended: list[str] = []
     for urn in runs:
         try:
+            row = rows.get(urn.entity_key)
+            # a Run compacted out of the document has ended, so its pauses always end
+            if row is not None and not _ending_pauses(
+                records, held, Run.model_validate(row).status, urn
+            ):
+                continue
             ended.extend(_settle_run(context, urn, now=now))
         except Exception:
             logger.exception(f"settle_stall_pauses skipped run={urn.entity_key}")
@@ -255,23 +300,44 @@ def _settle_run(context: Epoch2RootContext, urn: QualifiedUrn, *, now: datetime)
     with context.session([urn]) as session:
         records = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
         run = stored_run(session, records, urn)
-        status = reduce_run_control(status=run.status, facts=control_facts_of(records, urn))
-        state = reduce_run_events(run_events_of(records, urn))
-        standing = (
-            standing_stall(stall_facts_of(records, urn), state.last_activity_sequence)
-            if status.status is RunStatus.RUNNING
-            else None
-        )
-        stands = stall_key(standing) if standing else None
-        for pause in latest_pauses(records).values():
-            key = stall_of(pause)
-            if pause.status is not PauseStatus.OPEN or pause.scope_ref != urn or key is None:
-                continue
-            if key != stands:
-                cancelled = status.status is RunStatus.CANCELLED
-                end_stall_pause(session, pause, cancelled=cancelled, now=now)
-                ended.append(pause.key)
+        for pause, cancelled in _ending_pauses(records, latest_pauses(records), run.status, urn):
+            end_stall_pause(session, pause, cancelled=cancelled, now=now)
+            ended.append(pause.key)
     return ended
+
+
+def _ending_pauses(
+    records: tuple[LedgerRecord, ...],
+    held: dict[str, OpenPause],
+    stored: RunStatus,
+    urn: QualifiedUrn,
+) -> list[tuple[OpenPause, bool]]:
+    """Return the Run's open stall pauses whose stall no longer stands, each with its cancellation.
+
+    Args:
+        records: Every line the run ledger holds.
+        held: The latest revision of every pause on that ledger, by key.
+        stored: The Run's stored status, before its confirmed control effects.
+        urn: The Run.
+    """
+    status = reduce_run_control(status=stored, facts=control_facts_of(records, urn)).status
+    standing = (
+        standing_stall(
+            stall_facts_of(records, urn),
+            reduce_run_events(run_events_of(records, urn)).last_activity_sequence,
+        )
+        if status is RunStatus.RUNNING
+        else None
+    )
+    stands = stall_key(standing) if standing else None
+    return [
+        (pause, status is RunStatus.CANCELLED)
+        for pause in held.values()
+        if pause.status is PauseStatus.OPEN
+        and pause.scope_ref == urn
+        and (key := stall_of(pause)) is not None
+        and key != stands
+    ]
 
 
 def _notice_audience(document: dict[str, Any], scope: RunScope) -> tuple[str, ...]:
@@ -319,7 +385,7 @@ def detect_wall_ceiling_crossings(
     ]
     if not running:
         return ()
-    records = read_ledger_records(ledger_path(path, Epoch2Collection.RUN))
+    records = indexed_ledger_records(ledger_path(path, Epoch2Collection.RUN))
     opened: list[str] = []
     for run in running:
         binding = run_binding_of(records, run.urn)
@@ -382,7 +448,7 @@ def standing_stall_facts(document: Path) -> tuple[RunStallFact, ...]:
         document: The selected generation's document; the run ledger beside it is read.
     """
     running = _running(document)
-    records = read_ledger_records(ledger_path(document, Epoch2Collection.RUN)) if running else ()
+    records = indexed_ledger_records(ledger_path(document, Epoch2Collection.RUN)) if running else ()
     stalls: list[RunStallFact] = []
     for _key, ref in running:
         urn = parse_qualified_urn(ref)

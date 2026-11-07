@@ -59,8 +59,8 @@ test mode="fast" base="origin/main":
           cov_parallel=""
           cov_serial=""
         fi
-        uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --junitxml=pytest-junit.xml $cov_parallel
-        EAWF_SKIP_PERF=1 uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel $cov_serial
+        uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability --junitxml=pytest-junit.xml $cov_parallel
+        EAWF_SKIP_PERF=1 uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability $cov_serial
         ;;
       changed)
         scope="$(uv run python tools/changed_scope.py --base "{{base}}" --existing-only)"

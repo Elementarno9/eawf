@@ -35,16 +35,26 @@ import logging
 import os
 import time
 from collections.abc import Callable, Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from types import TracebackType
+from typing import Any, Final, cast
 
 import orjson
 from pydantic import BaseModel, ConfigDict
 
 from eawf.runtime.hooks.event import HookEvent, HookEventType
-from eawf.runtime.lock import portalock
+from eawf.runtime.hooks.health import DAEMON_CALL_FAILED, HOOK_RAISED, HookFailure
 
 logger = logging.getLogger(__name__)
+
+#: The names the lifecycle handlers report under, held here rather than read
+#: from their module so registering them does not import it.
+SESSION_INDEX_HOOK: Final = "session.transcript_index"
+SESSION_END_HOOK: Final = "session.end_stamp"
+
+#: The subagent events the lifecycle module adopts a Run for.
+HOST_SUBAGENT_EVENTS: Final = (HookEventType.SUBAGENT_START, HookEventType.SUBAGENT_STOP)
 
 
 class HookResult(BaseModel):
@@ -98,6 +108,13 @@ class HookRunner:
 
     def __init__(self) -> None:
         self._hooks: dict[HookEventType, list[tuple[str, HookCallable]]] = {}
+        #: Every handler failure of this runner's dispatches, oldest first.
+        self.failures: list[HookFailure] = []
+        # The event and handler being dispatched, so a failed daemon call
+        # made through :meth:`recording_factory` is attributed to them.
+        self._event_value = ""
+        self._hook_name = ""
+        self._last_error: BaseException | None = None
 
     def register(
         self,
@@ -150,16 +167,22 @@ class HookRunner:
         """
         bucket = self._hooks.get(event.event_type, [])
         results: list[HookResult] = []
+        self._event_value = event.event_type.value
         for name, hook in bucket:
+            self._hook_name = name
             started = time.perf_counter()
             try:
                 raw = hook(event)
             except Exception as exc:
                 duration_ms = (time.perf_counter() - started) * 1000.0
-                logger.exception(
+                # The caller reports each failure in one line; the traceback
+                # stays at debug so a hook process never floods the host's stderr.
+                logger.debug(
                     f"run_event hook={name!r} event={event.event_type.value!r} "
-                    f"status=raised; hook raised during event dispatch"
+                    f"status=raised; hook raised during event dispatch",
+                    exc_info=True,
                 )
+                self._note_failure(HOOK_RAISED, exc)
                 results.append(
                     HookResult(
                         name=name,
@@ -173,6 +196,70 @@ class HookRunner:
             duration_ms = (time.perf_counter() - started) * 1000.0
             results.append(_coerce_result(name, raw, duration_ms))
         return results
+
+    def recording_factory(self, base: DaemonClientFactory | None) -> DaemonClientFactory:
+        """Return a daemon client factory that notes each failed call on this runner.
+
+        The handlers catch a failed daemon call and answer with its text, so
+        without this the failure would never reach :attr:`failures`.
+
+        Args:
+            base: The factory the handlers would otherwise use; ``None`` for
+                the default daemon client, looked up when a client is opened.
+
+        Returns:
+            A factory whose clients behave as *base*'s and, when opening the
+            client or a call inside it raises, add a
+            :data:`~eawf.runtime.hooks.health.DAEMON_CALL_FAILED` failure.
+        """
+
+        def _open() -> _RecordingClient:
+            return _RecordingClient(self, base or _default_daemon_client_factory)
+
+        return _open
+
+    def _note_failure(self, code: str, error: BaseException) -> None:
+        # A handler that lets its failed daemon call propagate is one failure, not two.
+        if self._last_error is error:
+            return
+        self._last_error = error
+        self.failures.append(
+            HookFailure(
+                event=self._event_value,
+                hook=self._hook_name,
+                code=code,
+                error=type(error).__name__,
+                detail=repr(error),
+                at=datetime.now(UTC),
+            )
+        )
+
+
+class _RecordingClient:
+    """A daemon client context that notes a failure on its runner, then re-raises it."""
+
+    def __init__(self, runner: HookRunner, factory: DaemonClientFactory) -> None:
+        self._runner = runner
+        self._factory = factory
+        self._context: Any = None
+
+    def __enter__(self) -> Any:
+        try:
+            self._context = self._factory()
+            return self._context.__enter__()
+        except Exception as exc:
+            self._runner._note_failure(DAEMON_CALL_FAILED, exc)
+            raise
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> bool | None:
+        if isinstance(exc, Exception):
+            self._runner._note_failure(DAEMON_CALL_FAILED, exc)
+        return cast("bool | None", self._context.__exit__(exc_type, exc, tb))
 
 
 def _default_daemon_client_factory() -> Any:
@@ -197,7 +284,11 @@ def register_runtime_capture_hooks(
     daemon_client_factory: DaemonClientFactory | None = None,
     repo_root: Path | None = None,
 ) -> None:
-    """Register built-in runtime capture hooks on *runner*."""
+    """Register built-in runtime capture hooks on *runner*.
+
+    The lifecycle handlers load the state and store packages, so their module
+    is imported inside each handler: a tool event never pays for it.
+    """
     # the handler modules build on this one, so they are imported where they are wired
     from eawf.runtime.hooks.host_calls import (
         record_host_permission,
@@ -206,21 +297,17 @@ def register_runtime_capture_hooks(
         register_host_tool_hooks,
     )
     from eawf.runtime.hooks.host_lane import register_host_lane_hooks
-    from eawf.runtime.hooks.lifecycle_capture import (
-        HOST_SUBAGENT_METHODS,
-        SESSION_END_HOOK,
-        SESSION_INDEX_HOOK,
-        adopt_host_subagent,
-        answer_session_end,
-        index_host_session,
-    )
+
+    daemon_client_factory = runner.recording_factory(daemon_client_factory)
 
     def _host_subagent_hook(event: HookEvent) -> HookResult:
+        from eawf.runtime.hooks.lifecycle_capture import adopt_host_subagent
+
         return adopt_host_subagent(
             event, daemon_client_factory=daemon_client_factory, repo_root=repo_root
         )
 
-    for subagent_event_type in HOST_SUBAGENT_METHODS:
+    for subagent_event_type in HOST_SUBAGENT_EVENTS:
         runner.register(subagent_event_type, _host_subagent_hook, name="runtime.host_subagent")
 
     def _host_permission_hook(event: HookEvent) -> HookResult:
@@ -233,9 +320,13 @@ def register_runtime_capture_hooks(
     )
 
     def _session_index_hook(event: HookEvent) -> HookResult:
+        from eawf.runtime.hooks.lifecycle_capture import index_host_session
+
         return index_host_session(event, repo_root=repo_root)
 
     def _session_end_hook(event: HookEvent) -> HookResult:
+        from eawf.runtime.hooks.lifecycle_capture import answer_session_end
+
         return answer_session_end(event, repo_root=repo_root)
 
     # Both ends index the session's transcript, so a session that never exits
@@ -370,6 +461,10 @@ def append_event_idempotent(path: Path, event: HookEvent, *, timeout: float = 5.
         ``True`` when a new row was appended; ``False`` when the row
         was suppressed because the triple already existed.
     """
+    # The lock module pulls in portalocker and socket, which no hook
+    # dispatch otherwise needs on its per-call start-up path.
+    from eawf.runtime.lock import portalock
+
     path.parent.mkdir(parents=True, exist_ok=True)
     key = _event_idempotence_key(event)
     serialised = event.model_dump_json() + "\n"

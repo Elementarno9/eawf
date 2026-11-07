@@ -14,6 +14,8 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.observability.reflect import report as rp
+from eawf.observability.reflect.analysis import ANALYSIS_PREFIX, HISTORY_INDEX_FILENAME
+from eawf.observability.reflect.html.shared import FINDER_FILENAME, OVERVIEW_FILENAME
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.render.skills.render import render_skill_md_from_spec
 from eawf.workflow.skills.catalog import resolve_skill, shipped_skill_specs
@@ -30,7 +32,7 @@ def tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_out_keeps_every_file_beside_it(tree: Path, tmp_path: Path) -> None:
-    """r.txt, r.json and the manifest land in the --out directory; the collection stays absent."""
+    """The report, manifest, history index and its lock, analysis and pages land beside --out."""
     out_dir = tmp_path / "out"
     result = runner.invoke(
         app,
@@ -40,7 +42,18 @@ def test_out_keeps_every_file_beside_it(tree: Path, tmp_path: Path) -> None:
     names = {path.name for path in out_dir.iterdir()}
     manifests = {name for name in names if name.endswith(f"{rp.MANIFEST_STEM_SUFFIX}.json")}
     assert len(manifests) == 1
-    assert names == {"r.txt", "r.json", *manifests}
+    analyses = {name for name in names if name.startswith(ANALYSIS_PREFIX)}
+    assert len(analyses) == 1
+    assert names == {
+        "r.txt",
+        "r.json",
+        HISTORY_INDEX_FILENAME,
+        f"{HISTORY_INDEX_FILENAME}.lock",
+        OVERVIEW_FILENAME,
+        FINDER_FILENAME,
+        *manifests,
+        *analyses,
+    }
     assert not rp.reflect_root(tree).exists()
 
 

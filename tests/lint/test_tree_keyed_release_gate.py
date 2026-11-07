@@ -57,6 +57,9 @@ _GREEN_TREE_CONDITION = (
 )
 _TAG_PUSH_CONDITION = "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')"
 
+#: The conjunct of a job that runs on pull requests only.
+_PULL_REQUEST_ONLY = "github.event_name == 'pull_request'"
+
 _NEWEST_RUN = re.compile(r"per_page=1\b|workflow_runs\[0\]")
 _INLINE_RUNS_QUERY = re.compile(r"workflows/ci\.yaml/runs")
 
@@ -119,7 +122,9 @@ def green_tree_violations(workflow: dict[str, Any], *, heavy_jobs: Sequence[str]
     a job that does not need every other job records a tree while one of
     them is red, a job that runs on a pull request records a merge tree
     nobody tags, and a record tool that checks other jobs than the ones the
-    changes job skips can vouch for a tree the matrix never ran on.
+    changes job skips can vouch for a tree the matrix never ran on. A job
+    that runs on pull requests only never runs where a record is written,
+    so the record tool does not wait on it.
 
     Args:
         workflow: The parsed CI workflow.
@@ -158,6 +163,7 @@ def green_tree_violations(workflow: dict[str, Any], *, heavy_jobs: Sequence[str]
         name
         for name, other in jobs.items()
         if "needs.changes.outputs.code" in str(other.get("if", ""))
+        and _PULL_REQUEST_ONLY not in str(other.get("if", ""))
     )
     if gated != sorted(heavy_jobs):
         problems.append(
@@ -222,10 +228,8 @@ def test_green_tree_gate_reds_on_a_partial_needs_list(tool: ModuleType) -> None:
     workflow = _load(_CI)
     workflow["jobs"][_GREEN_TREE_JOB]["needs"] = ["changes", "test", "twice-green"]
     assert green_tree_violations(workflow, heavy_jobs=tool.HEAVY_JOBS) == [
-        "the green-tree job does not need lint, coverage, tool-install-smoke, snapshot-pairing, "
-        "commit-grammar, "
-        "requirement-trace, "
-        "skill-eval, linux-jail, prose-gate, windows, "
+        "the green-tree job does not need gates, e2e, test-macos, macos-affected, coverage, "
+        "linux-jail, windows, "
         "so a red run of one of them can still record the tree"
     ]
 
@@ -237,7 +241,7 @@ def test_green_tree_gate_reds_on_a_single_string_need(tool: ModuleType) -> None:
     problems = green_tree_violations(workflow, heavy_jobs=tool.HEAVY_JOBS)
     assert len(problems) == 1
     assert problems[0].startswith(
-        "the green-tree job does not need lint, test, coverage, tool-install-smoke"
+        "the green-tree job does not need gates, test, e2e, test-macos, macos-affected"
     )
 
 
@@ -286,7 +290,7 @@ def test_green_tree_gate_reds_on_an_unsound_record_job(tool: ModuleType) -> None
         "neither failed nor were cancelled",
         "the green-tree job cannot list the green run an inherited tree needs",
         "the jobs the changes job can skip (docs, test, twice-green) are not the heavy "
-        "jobs the record tool checks (test, twice-green)",
+        "jobs the record tool checks (e2e, test, test-macos, twice-green)",
         "the changes job does not export the green baseline a skipped run inherits",
         "the green-tree job checks out no history to read an inherited tree from",
         "the record step does not see the needed jobs' results",
@@ -331,6 +335,8 @@ def _needs(
     return {
         "changes": {"result": "success", "outputs": {"code": code, "green": green}},
         "test": {"result": test, "outputs": {}},
+        "e2e": {"result": test, "outputs": {}},
+        "test-macos": {"result": test, "outputs": {}},
         "twice-green": {"result": twice, "outputs": {}},
         "snapshot-pairing": {"result": "skipped", "outputs": {}},
         "windows": {"result": "success", "outputs": {}},
@@ -407,13 +413,14 @@ def _with_result(needs: dict[str, Any], name: str, result: object) -> dict[str, 
         pytest.param(
             _needs("true", test="skipped"),
             "push",
-            "did not all pass: test=skipped, twice-green=success",
+            "did not all pass: test=skipped, e2e=skipped, test-macos=skipped, twice-green=success",
             id="code-true-heavy-skipped",
         ),
         pytest.param(
             _needs("false", test="skipped", green=_BASELINE),
             "push",
-            "skipped the heavy jobs, yet test=skipped, twice-green=success",
+            "skipped the heavy jobs, yet test=skipped, e2e=skipped, test-macos=skipped, "
+            "twice-green=success",
             id="code-false-heavy-ran",
         ),
         pytest.param(

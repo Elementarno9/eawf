@@ -97,6 +97,13 @@ _REFLECT_INVOCATIONS: Final = ("/reflect", "/eawf:reflect")
 
 _DATED: Final = re.compile(r"^(\d{4}-\d{2}-\d{2})-reflect-")
 _WINDOW: Final = re.compile(r"^([1-9]\d{0,3})d$")
+_SCOPES: Final = "project, workspace, user, milestone:<KEY> or track:<KEY>"
+_UNKEYED_SCOPES: Final[dict[str, Literal["project", "workspace", "user"]]] = {
+    "project": "project",
+    "workspace": "workspace",
+    "user": "user",
+    "all_local": "user",
+}
 
 
 class CanonicalWriteRefusedError(ValueError):
@@ -150,14 +157,15 @@ class ReportScope(BaseModel):
     """The scope a report lists the sessions of.
 
     Attributes:
-        kind: ``project`` for every Run the tree holds, ``milestone`` or ``track``
-            for the Runs whose scope sits under that entity.
-        key: The Milestone or Track key, ``None`` for ``project``.
+        kind: ``project``, ``workspace`` or ``user`` for every Run the tree holds,
+            ``milestone`` or ``track`` for the Runs whose scope sits under that
+            entity. The first three differ in the local sessions they cover.
+        key: The Milestone or Track key, ``None`` for the other kinds.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    kind: Literal["project", "milestone", "track"] = "project"
+    kind: Literal["project", "workspace", "user", "milestone", "track"] = "project"
     key: str | None = None
 
     def text(self) -> str:
@@ -252,7 +260,8 @@ def parse_scope(text: str) -> ReportScope:
     """Return the scope a ``--scope`` value names.
 
     Args:
-        text: ``project``, ``milestone:<KEY>`` or ``track:<KEY>``.
+        text: ``project``, ``workspace``, ``user`` or its older spelling
+            ``all_local``, ``milestone:<KEY>`` or ``track:<KEY>``.
 
     Returns:
         The scope.
@@ -261,18 +270,17 @@ def parse_scope(text: str) -> ReportScope:
         ValueError: The value names another scope, or a key that is not a Milestone
             or Track key.
     """
-    if text == "project":
-        return ReportScope()
+    named = _UNKEYED_SCOPES.get(text)
+    if named is not None:
+        return ReportScope(kind=named)
     kind, _, key = text.partition(":")
     if kind not in ("milestone", "track") or not key:
-        raise ValueError(f"scope {text!r} is not one of project, milestone:<KEY> or track:<KEY>")
+        raise ValueError(f"scope {text!r} is not one of {_SCOPES}")
     entity = EntityKind.MILESTONE if kind == "milestone" else EntityKind.TRACK
     try:
         validate_entity_key(entity, key)
     except IdentityError as exc:
-        raise ValueError(
-            f"scope {text!r} is not one of project, milestone:<KEY> or track:<KEY>: {exc}"
-        ) from exc
+        raise ValueError(f"scope {text!r} is not one of {_SCOPES}: {exc}") from exc
     return ReportScope(kind="milestone" if kind == "milestone" else "track", key=key)
 
 

@@ -21,7 +21,7 @@ from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
-from eawf.kernel.identity import QualifiedUrn
+from eawf.kernel.identity import QualifiedUrn, parse_qualified_urn
 from eawf.kernel.runtime.compiled import canonical_digest
 from eawf.kernel.runtime.events import (
     ContextBoundaryPayload,
@@ -33,9 +33,9 @@ from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.store.ledger import read_ledger_records
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.host_calls import host_receipts
-from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.host_subagent import HARNESS_ACTORS
-from eawf.runtime.daemon.methods.permission import host_run
+from eawf.runtime.daemon.methods.permission import host_session_runs
 from eawf.runtime.daemon.methods.run import append_run_event_in_session
 from eawf.runtime.daemon.native_dispatch import run_binding_of, run_ledger
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
@@ -78,10 +78,26 @@ class HostContextBoundary(BaseModel):
     trigger: Literal["manual", "auto"] | None = None
 
 
-class HostContextAnswer(BaseModel):
-    """What the verb answers with.
+class HostContextNoRun(BaseModel):
+    """What the verb answers a host session that is on no live Run with.
+
+    An operator's own session is not a Run, so it has no anchors to snapshot and
+    nothing went wrong; the hook skips quietly on this answer.
 
     Attributes:
+        outcome: Always ``no_run``.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    outcome: Literal["no_run"] = "no_run"
+
+
+class HostContextAnswer(BaseModel):
+    """What the verb answers with when it stated the boundary.
+
+    Attributes:
+        outcome: Always ``stated``, telling this answer from :class:`HostContextNoRun`.
         run_ref: The Run the boundary was stated on.
         event_ref: The stream line it was stated as.
         anchors: The anchors as the store holds them.
@@ -91,6 +107,7 @@ class HostContextAnswer(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    outcome: Literal["stated"] = "stated"
     run_ref: str
     event_ref: str
     anchors: ContractAnchors
@@ -160,19 +177,53 @@ def restate(run: QualifiedUrn, anchors: ContractAnchors, drift: tuple[str, ...])
     return f"{held} The compaction changed none of them; the store, not the summary, holds them."
 
 
+def host_session_run(
+    authority: RootAuthority, host_session_id: str
+) -> QualifiedUrn | Literal["no_run"]:
+    """Return the one live Run on the host session, or ``no_run`` when it is on none.
+
+    Args:
+        authority: The fence-cleared tree.
+        host_session_id: The host's id of the session.
+
+    Returns:
+        The Run's URN, or ``no_run`` for a session that is not a Run's, such as
+        an operator's own.
+
+    Raises:
+        DaemonValidationError: Several live Runs are on the session, so the
+            boundary cannot be bound to one of them.
+    """
+    live = host_session_runs(authority, host_session_id)
+    if not live:
+        return "no_run"
+    if len(live) > 1:
+        raise DaemonValidationError(
+            f"validation_failed: identity_not_found: {len(live)} live Runs are on the "
+            "host session, so the boundary is bound to no one Run"
+        )
+    return parse_qualified_urn(live[0])
+
+
 def state_context_boundary(
     context: Epoch2RootContext,
     authority: RootAuthority,
     args: HostContextBoundary,
     *,
     now: datetime,
-) -> HostContextAnswer:
+) -> HostContextAnswer | HostContextNoRun:
     """Snapshot or re-verify the anchors of the Run on the host's session.
 
+    Returns:
+        The stated boundary, or :class:`HostContextNoRun` when the session is on
+        no live Run.
+
     Raises:
-        DaemonValidationError: The host session is on no one live Run.
+        DaemonValidationError: Several live Runs are on the host session.
     """
-    run = host_run(authority, args.host_session_id)
+    run = host_session_run(authority, args.host_session_id)
+    if run == "no_run":
+        return HostContextNoRun()
     with context.session([run]) as session:
         anchors = contract_anchors(session, run)
         drift: tuple[ContractAnchorName, ...] = ()
@@ -227,8 +278,10 @@ __all__ = [
     "HOST_CONTEXT_BOUNDARY_METHOD",
     "HostContextAnswer",
     "HostContextBoundary",
+    "HostContextNoRun",
     "anchor_drift",
     "contract_anchors",
+    "host_session_run",
     "restate",
     "state_context_boundary",
 ]

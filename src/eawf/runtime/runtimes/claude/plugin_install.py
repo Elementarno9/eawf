@@ -51,7 +51,11 @@ from eawf.runtime.harness.host_keys import require_recorded
 from eawf.runtime.hooks.event import HookEventType
 from eawf.runtime.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY
 from eawf.runtime.runtimes.claude.plugin_conflict import detect_marketplace_install
-from eawf.runtime.runtimes.claude.statusline_install import build_statusline_command
+from eawf.runtime.runtimes.claude.statusline_install import (
+    build_statusline_command,
+    global_settings_path,
+    read_settings,
+)
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.agents import (
     AGENT_REGISTRY,
@@ -268,6 +272,32 @@ _HOOK_COMMAND_MARKER: str = "/.claude/hooks/"
 #: The Claude Code settings key naming the statusline command.
 _STATUSLINE_KEY: str = "statusLine"
 
+#: The Claude Code settings key mapping ``"<plugin>@<marketplace>"`` to on/off.
+_ENABLED_PLUGINS_KEY: str = "enabledPlugins"
+
+#: The plugin name the eawf marketplace plugin is published under.
+_EAWF_PLUGIN_NAME: str = "eawf"
+
+
+def _eawf_plugin_enabled(*layers: Mapping[str, Any]) -> bool:
+    """Return whether the eawf plugin is switched on across settings *layers*.
+
+    Claude Code merges ``enabledPlugins`` from each settings file, a later
+    layer winning per key, so *layers* go from user to project. A plugin
+    with no ``true`` entry stays off, which keeps the project hooks: firing
+    no handler at all is worse than the doubled firing a stale flag would
+    risk.
+    """
+    enabled: dict[str, Any] = {}
+    for layer in layers:
+        flags = layer.get(_ENABLED_PLUGINS_KEY)
+        if isinstance(flags, dict):
+            enabled.update(flags)
+    return any(
+        key.partition("@")[0] == _EAWF_PLUGIN_NAME and value is True
+        for key, value in enabled.items()
+    )
+
 
 def _eawf_settings_hooks() -> dict[str, list[dict[str, Any]]]:
     """Return the ``settings.json`` ``hooks`` block wiring the Eä plugin hooks.
@@ -336,7 +366,12 @@ def _merge_settings_hooks(
 
 
 def _patch_settings_json(
-    target_path: Path, managed_body: dict[str, Any], *, governor: InFlightGovernor
+    target_path: Path,
+    managed_body: dict[str, Any],
+    *,
+    governor: InFlightGovernor,
+    plugin_installed: bool = False,
+    user_settings: Mapping[str, Any] | None = None,
 ) -> bytes:
     """Return the new ``settings.json`` bytes with the Eä keys patched in.
 
@@ -350,16 +385,28 @@ def _patch_settings_json(
       subscriptions there), preserving every user / other-plugin hook entry
       and replacing only Eä's own (idempotent). This is the wire that makes
       CC actually invoke the rendered ``.claude/hooks/*.sh`` wrappers -- e.g.
-      ``SessionEnd`` -> ``session_end`` -> ``session.end_stamp``.
+      ``SessionEnd`` -> ``session_end`` -> ``session.end_stamp``. When the
+      eawf plugin is installed and enabled its own ``hooks.json`` already
+      wires every event, so Eä's entries are only removed here: Claude Code
+      runs both sources, and each handler would fire twice.
     - Wire ``statusLine`` to ``eawf cc statusline`` so the project renders
-      the Eä statusline, unless the operator already set a statusline of
-      their own, which is kept.
+      the Eä statusline, unless the project or user settings already set a
+      statusline, which is kept: a project key would override the user's.
     - Write the fan-out keys into ``env``, so Claude Code's own scheduler
       holds the Run ceiling of *governor* and the contract's one level of
       delegation; every other ``env`` entry is kept.
     - Every other key is preserved verbatim.
     - Render the resulting object as deterministic JSON (sorted keys,
       2-space indent, trailing newline) so two installs are byte-stable.
+
+    Args:
+        target_path: The project ``settings.json`` to patch.
+        managed_body: The ``__eawf_managed`` namespace body.
+        governor: The Run ceiling the fan-out keys carry.
+        plugin_installed: Claude Code's plugin registry lists the eawf plugin
+            for the user; it serves hooks only when also enabled.
+        user_settings: The parsed user-level Claude settings; ``None`` reads
+            as an empty file.
 
     Raises:
         ValueError: The existing file is not a JSON object.
@@ -382,9 +429,11 @@ def _patch_settings_json(
                     f" {type(parsed_any).__name__}"
                 )
             parsed = dict(parsed_any)
-    eawf_hooks = _eawf_settings_hooks()
+    user = user_settings if user_settings is not None else {}
+    plugin_serves_hooks = plugin_installed and _eawf_plugin_enabled(user, parsed)
+    eawf_hooks = {} if plugin_serves_hooks else _eawf_settings_hooks()
     fan_out = fan_out_values("claude", governor=governor)
-    sets_statusline = _STATUSLINE_KEY not in parsed
+    sets_statusline = _STATUSLINE_KEY not in parsed and _STATUSLINE_KEY not in user
     require_recorded(
         "claude_settings",
         (
@@ -398,6 +447,9 @@ def _patch_settings_json(
     merged_hooks = _merge_settings_hooks(parsed.get("hooks"), eawf_hooks)
     if merged_hooks:
         parsed["hooks"] = merged_hooks
+    elif isinstance(parsed.get("hooks"), dict):
+        # Only Eä's own entries were left, and the plugin now serves them.
+        del parsed["hooks"]
     if sets_statusline:
         parsed[_STATUSLINE_KEY] = build_statusline_command()
     env = parsed.get("env")
@@ -416,6 +468,8 @@ def _build_manifest(
     base_manifest: Manifest,
     extra_tools: Mapping[str, Sequence[str]],
     agent_specs: Sequence[AgentSpec],
+    plugin_installed: bool,
+    user_settings: Mapping[str, Any],
 ) -> Manifest:
     """Build a manifest covering every file the installer writes.
 
@@ -434,6 +488,8 @@ def _build_manifest(
         base_manifest: The manifest on disk before this install.
         extra_tools: The tool grant the agents were rendered with.
         agent_specs: The agents this install rendered.
+        plugin_installed: The eawf plugin is in Claude Code's plugin registry.
+        user_settings: The parsed user-level Claude settings.
 
     Returns:
         The manifest to persist.
@@ -494,7 +550,11 @@ def _build_manifest(
     settings_path = _settings_target(target_dir)
     managed_body = _render_managed_block(timestamp)
     settings_bytes = _patch_settings_json(
-        settings_path, managed_body, governor=load_economics(target_dir).governor
+        settings_path,
+        managed_body,
+        governor=load_economics(target_dir).governor,
+        plugin_installed=plugin_installed,
+        user_settings=user_settings,
     )
     new_generated[f"{settings_path.as_posix()}::plugin.claude.settings"] = ManifestEntry(
         target=settings_path.as_posix(),
@@ -616,7 +676,11 @@ def install_plugin(
     No agent file is rendered while the eawf marketplace plugin is installed
     for the user: it ships every agent, and a project copy beside it makes
     Claude Code load each agent twice with undefined precedence. Agent
-    files an earlier install wrote are removed then, unless edited.
+    files an earlier install wrote are removed then, unless edited. Once the
+    plugin is also enabled it wires the hooks too, so ``settings.json`` gets
+    no Eä hook entry and loses any an earlier install wrote. The user-level
+    ``~/.claude/settings.json`` is read for that switch and for a statusline
+    the project must not override.
 
     Args:
         target_dir: Workspace root that hosts the ``.claude/`` directory.
@@ -652,8 +716,8 @@ def install_plugin(
         IntegrityViolation: A managed file already exists on disk and
             its body hash does not match the manifest's recorded hash
             (i.e., a hand-edit). Suppressed by ``force=True``.
-        ValueError: ``settings.json`` exists but is not valid JSON, or
-            its top-level body is not an object.
+        ValueError: The project or user ``settings.json`` exists but is not
+            valid JSON, or its top-level body is not an object.
     """
     target_dir = Path(target_dir).resolve()
     ts = timestamp or _DEFAULT_TIMESTAMP
@@ -661,6 +725,7 @@ def install_plugin(
 
     base_manifest = _load_existing_manifest(target_dir)
     plugin_serves_agents = detect_marketplace_install() is not None
+    user_settings = read_settings(global_settings_path())
     agent_specs = () if plugin_serves_agents else AGENT_REGISTRY
     _check_for_drift(target_dir, base_manifest, force=force, agent_specs=agent_specs)
 
@@ -707,7 +772,11 @@ def install_plugin(
     settings_path = _settings_target(target_dir)
     managed_body = _render_managed_block(ts)
     settings_bytes = _patch_settings_json(
-        settings_path, managed_body, governor=load_economics(target_dir).governor
+        settings_path,
+        managed_body,
+        governor=load_economics(target_dir).governor,
+        plugin_installed=plugin_serves_agents,
+        user_settings=user_settings,
     )
     settings_action = _classify(settings_path, settings_bytes)
     if not dry_run:
@@ -734,6 +803,8 @@ def install_plugin(
             base_manifest=base_manifest,
             extra_tools=tools_grant,
             agent_specs=agent_specs,
+            plugin_installed=plugin_serves_agents,
+            user_settings=user_settings,
         )
         manifest_path = target_dir / ".ea" / "indexes" / "generated.json"
         _ensure_dir(manifest_path.parent)

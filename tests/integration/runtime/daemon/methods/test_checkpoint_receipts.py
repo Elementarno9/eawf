@@ -548,7 +548,7 @@ def test_produce_receipts_refuses_a_checkpoint_with_no_stored_record(ctx: Method
 
 def test_produce_receipts_refuses_a_version_off_the_train(ctx: MethodContext) -> None:
     """A version the ladder does not declare is refused by name."""
-    assert "declares no checkpoint for '9.9.9'" in refused(ctx, version="9.9.9")
+    assert "no release train declares a checkpoint for '9.9.9'" in refused(ctx, version="9.9.9")
 
 
 def test_produce_receipts_refuses_a_rung_with_no_configuration(

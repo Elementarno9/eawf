@@ -26,6 +26,7 @@ from typing import Any, Final
 import pytest
 from typer.testing import CliRunner
 
+from eawf.runtime.hooks.health import HEALTH_RECORD
 from eawf.surfaces.cli.app import app as cli
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.seam import ProjectionSeam
@@ -85,7 +86,10 @@ def git_tree(live_tree: tuple[Path, _Daemon]) -> tuple[Path, _Daemon]:  # noqa: 
 
 
 def _hook(repo: Path, event: str, payload: dict[str, Any]) -> str:
-    """Run ``eawf hook run <event> --runtime claude`` and return the edit hook's output."""
+    """Run ``eawf hook run <event> --runtime claude`` and return the edit hook's output.
+
+    A skipped hook prints nothing, so a call the edit hook skipped returns ``""``.
+    """
     result = CliRunner().invoke(
         cli,
         ["--workspace", str(repo), "hook", "run", event, "--runtime", "claude"],
@@ -93,8 +97,9 @@ def _hook(repo: Path, event: str, payload: dict[str, Any]) -> str:
     )
     assert result.exit_code == 0, result.output
     assert result.stdout == "", "a tool observer hands Claude Code no decision"
-    (edit,) = [row for row in result.stderr.splitlines() if row.startswith(EDIT_HOOK)]
-    return edit
+    rows = [row for row in result.stderr.splitlines() if row.startswith(EDIT_HOOK)]
+    assert len(rows) <= 1, rows
+    return rows[0] if rows else ""
 
 
 def _tool_call(
@@ -199,7 +204,7 @@ def test_con_170_run_062_live_host_edits_render_as_file_blocks_that_unfold(
     repo, _daemon = git_tree
     # two Reads first, so the short frame still holds more rows than it can show
     for tool_use_id in ("toolu_01ReadModuleM4N5O6", "toolu_01ReadModuleP7Q8R9"):
-        assert "skipped: Read edits no file" in _read_module(repo, tool_use_id)
+        assert _read_module(repo, tool_use_id) == ""
     assert "event=EVT-" in _edit_module(repo)
 
     async def scenario(app: ConsoleApp, seam: ProjectionSeam, pilot: Any) -> None:
@@ -263,7 +268,7 @@ def test_run_062_edit_hooks_skip_other_tools_and_refuse_paths_outside_the_repo(
             "tool_use_id": "toolu_01ReadOnlyG7H8I9",
         },
     )
-    assert "skipped: Read edits no file" in read
+    assert read == ""
     outside = tmp_path / "elsewhere.txt"
     call = {
         "session_id": HOST_SESSION,
@@ -272,7 +277,11 @@ def test_run_062_edit_hooks_skip_other_tools_and_refuse_paths_outside_the_repo(
         "tool_use_id": "toolu_01OutsideJ1K2L3",
     }
     pre = _hook(repo, "pre_tool_use", {**call, "hook_event_name": "PreToolUse"})
-    assert "path_escape" in pre, pre
+    # The refused call is a failed hook: its one stderr line names the code, and
+    # the daemon's reason is kept in the hook health record.
+    assert pre == "", pre
+    record = (repo / ".ea" / HEALTH_RECORD).read_text(encoding="utf-8").splitlines()
+    assert "path_escape" in json.loads(record[-1])["detail"], record
     outside.write_text("x\n", encoding="utf-8")
     post = _hook(repo, "post_tool_use", {**call, "hook_event_name": "PostToolUse"})
     assert "event=None" in post, post

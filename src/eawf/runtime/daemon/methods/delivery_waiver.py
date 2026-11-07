@@ -9,7 +9,9 @@ as the planning layer already does for a waived row's gates.
 
 It is allowed from PLANNED through READY_TO_INTEGRATE and needs a reason, as a guarded
 edge recording ``reason_recorded`` would. Only an operator principal waives, so a worker
-cannot clear its own failing criterion, and the tree's ``verify.waiver_mode`` governs it:
+cannot clear its own failing criterion; another principal may send the waiver only by
+citing a pending action an operator sealed approving exactly this Task, criterion and
+reason. The tree's ``verify.waiver_mode`` governs every waiver:
 ``disabled`` refuses every waiver and ``C`` requires a standing decision behind it. A
 criterion graded accepted-risk is refused, since a waiver and an accepted risk are
 disjoint exits. A criterion graded measured only
@@ -36,9 +38,10 @@ from eawf.kernel.state.epoch2.base import (
     StrictPositiveInt,
 )
 from eawf.kernel.state.epoch2.decision import DecisionKey
+from eawf.kernel.state.epoch2.pending_action import OptionEffect, PendingActionStatus
 from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.kernel.state.epoch2.transitions import DenialCode
-from eawf.kernel.state.epoch2.urns import TaskUrn
+from eawf.kernel.state.epoch2.urns import PendingActionUrn, TaskUrn
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
@@ -56,7 +59,9 @@ from eawf.runtime.daemon.methods.delivery import (
     file_keyed_answer,
     keyed_answer,
 )
+from eawf.runtime.daemon.methods.delivery_approval import held_actions
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
+from eawf.workflow.decision_question import waiver_digest
 from eawf.workflow.verify.readiness import load_active_verify_block
 
 logger = logging.getLogger(__name__)
@@ -86,10 +91,13 @@ class WaiveCriterionParams(BaseModel):
         criterion_id: The criterion to waive.
         reason: Why the criterion no longer needs proving.
         expected_revision: The revision the caller read the Task at.
-        actor: Who asked; an operator principal.
+        actor: Who asked; an operator principal, or any principal citing an
+            ``action_ref``.
         idempotency_key: The client's name for this request.
         decision_ref: The standing decision the waiver leans on; required under waiver
             mode ``C``.
+        action_ref: The pending action an operator sealed approving exactly this
+            waiver, which lets a principal other than an operator send it.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -101,6 +109,9 @@ class WaiveCriterionParams(BaseModel):
     actor: PrincipalKey
     idempotency_key: IdempotencyKey
     decision_ref: DecisionKey | None = Field(default=None, exclude_if=lambda value: value is None)
+    action_ref: PendingActionUrn | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class WaiveCriterionAnswer(BaseModel):
@@ -166,7 +177,9 @@ def waive_criterion(
     Raises:
         TransactionRefusedError: The Task is not held, stands at another revision or in a
             status no criterion is waived in, the reason is blank, the actor is not an
-            operator, the waiver mode refuses the waiver, or the decision is not held.
+            operator and cites no action, the cited action is not an operator's sealed
+            consent to this waiver, the waiver mode refuses the waiver, or the decision
+            is not held.
         DaemonValidationError: The criterion is unknown or an accepted risk, or the key
             already answered other parameters.
     """
@@ -200,9 +213,13 @@ def _refused(urn: TaskUrn, code: str, detail: str, remediation: str) -> Transact
 def _admit(context: Epoch2RootContext, args: WaiveCriterionParams) -> None:
     """Refuse a waiver its actor or the tree's waiver mode does not admit.
 
+    An actor that is not an operator is admitted here only when it cites an
+    action, which :func:`_admit_action` then judges against the tree.
+
     Raises:
         TransactionRefusedError: The reason is blank, the actor is not an operator
-            principal, the mode is ``disabled``, or mode ``C`` sees no decision.
+            principal and cites no action, the mode is ``disabled``, or mode ``C``
+            sees no decision.
     """
     urn = args.urn
     if not args.reason.strip():
@@ -212,7 +229,7 @@ def _admit(context: Epoch2RootContext, args: WaiveCriterionParams) -> None:
             "a waiver needs a reason",
             "Say why the criterion no longer needs proving.",
         )
-    if not args.actor.startswith(OPERATOR_PRINCIPAL_PREFIX):
+    if args.action_ref is None and not args.actor.startswith(OPERATOR_PRINCIPAL_PREFIX):
         raise _refused(
             urn,
             "waiver_operator_required",
@@ -239,6 +256,73 @@ def _admit(context: Epoch2RootContext, args: WaiveCriterionParams) -> None:
         )
 
 
+def _admit_action(document: dict[str, Any], args: WaiveCriterionParams) -> None:
+    """Refuse a cited action that is not an operator's consent to exactly this waiver.
+
+    The action is bound to the Task, criterion and reason by its digest, so reusing
+    it can only repeat the identical waiver, which changes nothing; it is therefore
+    never marked spent.
+
+    Raises:
+        TransactionRefusedError: The tree holds no such action, it is not sealed, it
+            was not answered with its approving option, its resolver is not an
+            operator principal, it was asked about another record, or its digest
+            binds another waiver.
+    """
+    assert args.action_ref is not None, "only a request citing an action is judged here"
+    urn = args.urn
+    action_ref = args.action_ref
+    key = action_ref.entity_key
+    action = held_actions(document).get(key)
+    if action is None or not action.urn.same_entity(action_ref):
+        raise _refused(
+            urn,
+            "waiver_action_held",
+            f"the tree holds no pending action {action_ref}, so nobody was asked",
+            "Open the waiver decision, have the operator answer it, then retry.",
+        )
+    if action.status is not PendingActionStatus.SEALED:
+        raise _refused(
+            urn,
+            "waiver_action_unsealed",
+            f"{key} is {action.status.value}: nobody has answered it yet",
+            "Have the operator answer the waiver decision, then retry.",
+        )
+    chosen = action.selected_option
+    if chosen is None or chosen.effect is not OptionEffect.APPROVE:
+        answered = "nothing" if chosen is None else repr(chosen.option_id)
+        raise _refused(
+            urn,
+            "waiver_action_approves",
+            f"{key} was answered {answered}, which is not the approving option",
+            "Open a new waiver decision; an answer that declined cannot waive.",
+        )
+    resolver = action.resolution_actor
+    assert resolver is not None, "a sealed action always names its resolver"
+    if not resolver.principal_id.startswith(OPERATOR_PRINCIPAL_PREFIX):
+        raise _refused(
+            urn,
+            "waiver_action_operator",
+            f"{key} was answered by {resolver.principal_id}, who is not an operator principal",
+            "Have an operator (OP- followed by digits) answer a new waiver decision.",
+        )
+    if not action.subject_ref.same_entity(urn):
+        raise _refused(
+            urn,
+            "waiver_action_subject",
+            f"{key} was asked about {action.subject_ref}, not {urn}",
+            "Cite the waiver decision asked about this Task.",
+        )
+    if action.bundle_digest != waiver_digest(urn, args.criterion_id, args.reason):
+        raise _refused(
+            urn,
+            "waiver_action_digest",
+            f"{key} consents to another waiver than {args.criterion_id} for this reason",
+            "Send the criterion and reason the operator agreed to, spelling the Task as "
+            "the decision did, or open a new waiver decision.",
+        )
+
+
 def _waive(
     context: Epoch2RootContext, args: WaiveCriterionParams, *, now: datetime
 ) -> tuple[WaiveCriterionAnswer, Envelope | None]:
@@ -258,7 +342,10 @@ def _waive(
                 entity_ref=str(urn),
                 remediation="Name a decision the tree holds.",
             )
-        row = document_rows(session.read_document(), Epoch2Collection.TASK).get(urn.entity_key)
+        document = session.read_document()
+        if args.action_ref is not None:
+            _admit_action(document, args)
+        row = document_rows(document, Epoch2Collection.TASK).get(urn.entity_key)
         if row is None:
             raise TransactionRefusedError(
                 code=TransactionRefusalCode.IDENTITY_NOT_FOUND,
@@ -313,6 +400,7 @@ def _waive(
                 "criterion_id": args.criterion_id,
                 "reason": args.reason,
                 "decision_ref": args.decision_ref,
+                "action_ref": None if args.action_ref is None else str(args.action_ref),
             },
             compaction=None,
             now=now,

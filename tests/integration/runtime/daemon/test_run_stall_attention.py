@@ -13,7 +13,7 @@ Everything is driven through the real verbs and the real sweep, on a disposable 
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Final
 
 import pytest
@@ -55,7 +55,14 @@ from tests.integration.runtime.daemon.test_run_stall_interval import (
     announce_as,
     configure,
 )
-from tests.integration.runtime.daemon.test_run_stall_signal import act, call, canary, ctx, quiet
+from tests.integration.runtime.daemon.test_run_stall_signal import (
+    STARTED_AT,
+    act,
+    call,
+    canary,
+    ctx,
+    quiet,
+)
 
 __all__ = ["canary", "ctx"]
 
@@ -145,7 +152,8 @@ def test_ui_062_a_run_silent_since_it_started_is_listed_as_episode_zero(
 ) -> None:
     configure(canary, {"codex": {"stall_interval_s": 0}})
     announce_as(ctx, canary, "codex")
-    assert sweep_once(ctx, now=datetime.now(UTC)) == (RUN_KEY,)
+    # inside a day of its start: a Run silent longer than that is ended as abandoned
+    assert sweep_once(ctx, now=STARTED_AT + timedelta(hours=1)) == (RUN_KEY,)
 
     _projection, register = attention(ctx, canary)
 

@@ -10,7 +10,8 @@ The sweep reads the trees the daemon has attached, which is every tree a native 
 has reached since it started; a Run can only have been dispatched through such a request.
 
 The same pass ends every running Run that reached its sealed wall-clock ceiling: it opens
-the Run's one budget notice, fails the Run and stops its worker.
+the Run's one budget notice, fails the Run and stops its worker. It first fails every open
+Run that recorded nothing for a day and that nothing awaits, as ``stalled-abandoned``.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ SWEEP_SECONDS: Final = 15.0
 
 
 def sweep_once(ctx: MethodContext, *, now: datetime) -> tuple[str, ...]:
-    """Raise every due stall, and end every Run at its wall ceiling, in every attached tree, once.
+    """End abandoned Runs, raise due stalls and end Runs at their wall ceiling, in every tree, once.
 
     A tree that cannot be swept -- it left epoch 2, or its select is not whole -- is
     logged and passed over, so one broken tree never stops the others' stalls.
@@ -48,11 +49,24 @@ def sweep_once(ctx: MethodContext, *, now: datetime) -> tuple[str, ...]:
         return ()
     # imported on the first tree to sweep: the liveness reads pull in the Run and dispatch
     # stack, which would otherwise delay a cold daemon's first answer
+    from eawf.runtime.daemon import run_reaper
     from eawf.runtime.daemon.epoch2_recovery import publish_projection
     from eawf.runtime.daemon.methods import run_liveness
+    from eawf.runtime.daemon.methods.permission import DAEMON_ACTOR
+    from eawf.runtime.daemon.run_supervisor import supervisor_of
 
     raised: list[str] = []
     for root_id, context in roots:
+        # ended first, so a Run abandoned for a day is not also raised as stalled
+        try:
+            ended = run_reaper.end_abandoned_runs(
+                context, supervisor_of(context), actor=DAEMON_ACTOR, now=now
+            )
+        except Exception as exc:
+            logger.warning(f"abandoned run sweep skipped root={root_id} error={exc!r}")
+        else:
+            for envelope in ended:
+                publish_projection(ctx.bus, envelope)
         try:
             raised.extend(run_liveness.detect_stalls(context, now=now))
         except Exception as exc:

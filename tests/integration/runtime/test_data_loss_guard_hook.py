@@ -203,7 +203,7 @@ def test_surf_103_both_plugins_subscribe_the_pre_tool_guard() -> None:
 
     claude = build_plugin_hooks_json()["hooks"]["PreToolUse"]
     assert any(
-        entry["matcher"] == "" and entry["hooks"][0]["command"].endswith("/pre_tool_use.sh")
+        entry["matcher"] == "" and entry["hooks"][0]["command"].endswith('/pre_tool_use.sh"')
         for entry in claude
     )
     assert CODEX_HOOK_EVENT_NAMES[HookEventType.PRE_TOOL_USE] == "PreToolUse"

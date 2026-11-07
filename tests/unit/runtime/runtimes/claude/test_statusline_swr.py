@@ -27,6 +27,8 @@ _PAYLOAD = {"session_id": "ses-swr", "cost": {"api_duration_ms": 17000}}
 def cache_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "cache"
     monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(root))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("EAWF_STATUSLINE_THEME", "dark")
     return root
 
 
@@ -51,7 +53,7 @@ def _stdin(monkeypatch: pytest.MonkeyPatch, payload: dict[str, Any] | str) -> st
 def _seed(cache_root: Path, session_id: str, value: str, written_at: float) -> Path:
     path = cache_root / f"{session_id}.json"
     cache_root.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(orjson.dumps({"value": value, "written_at": written_at}))
+    path.write_bytes(orjson.dumps({"value": value, "written_at": written_at, "key": "dark"}))
     return path
 
 
@@ -79,7 +81,7 @@ def test_a_miss_renders_and_writes_the_entry(
     assert statusline.run_with_cache(workspace=None, theme_name=None) == "rendered"
     entry = StatuslineCache(cache_root / "ses-swr.json").read_entry()
     assert entry is not None
-    assert entry.value == "rendered"
+    assert (entry.value, entry.key) == ("rendered", "dark")
     assert (cache_root / "ses-swr.runtime-counters.json").exists()
     assert spawn.calls == []
 

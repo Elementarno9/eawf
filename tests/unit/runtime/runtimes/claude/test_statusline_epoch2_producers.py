@@ -244,4 +244,5 @@ def test_epoch2_producers_render_the_whole_line(tmp_path: Path) -> None:
 
     texts = {segment.module: segment.text for segment in segments}
     assert texts["budget"] == "budget:n/a(no-token-cap)"
-    assert texts["memory"].startswith("mem:1@")
+    # The memory segment stays a producer but is not part of the powerline layout.
+    assert "memory" not in texts

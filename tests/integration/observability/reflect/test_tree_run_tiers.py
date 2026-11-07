@@ -75,7 +75,7 @@ def test_reflect_lists_live_and_compacted_runs(two_tier_tree: Path) -> None:
         app, ["--json", "-w", str(two_tier_tree.parent), "reflect", "run", "--local-only"]
     )
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)["result"]
+    payload = json.loads(result.stdout)["result"]
     assert payload["manifest"]["sessions_listed"] == 5
     document = json.loads(Path(payload["document"]).read_text(encoding="utf-8"))
     assert len(document["sessions"]) == 5

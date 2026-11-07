@@ -383,6 +383,41 @@ STABLE_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
     template=V07_CONFIG_TEMPLATE,
 )
 
+#: Stable version of the first patch train after 0.7.0.
+V071_TARGET_VERSION: Final[str] = "0.7.1"
+
+#: The 0.7.1 patch train: one ``stable`` rung and no dev or candidate
+#: rungs. A patch carries fixes on top of a stable line whose ladder was
+#: already walked, so it is held to the full stable bar once rather than
+#: re-walking canary and candidate evidence. Its rung is the head of its
+#: own ladder, so it succeeds nothing: succession is a property of one
+#: train, and the 0.7.0 records stay where the 0.7.0 train put them.
+V071_TRAIN: Final[ReleaseTrain] = ReleaseTrain(
+    train_id=f"TRAIN-{V071_TARGET_VERSION}",
+    target_version=V071_TARGET_VERSION,
+    checkpoints=(
+        ReleaseCheckpoint(
+            release_key=release_key(V071_TARGET_VERSION),
+            authority_epoch=2,
+            gate_profile=ReleaseGateProfile.STABLE,
+            requires_membership=True,
+        ),
+    ),
+    current_checkpoint_index=0,
+)
+
+#: The ``0.7.1`` stable checkpoint configuration, rendered from the 0.7.0
+#: template so it declares the same targets, platform claims and runtime
+#: claims as the ``0.7.0`` stable rung.
+V071_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
+    rung=V071_TRAIN.checkpoint_for_version(V071_TARGET_VERSION),
+    template=V07_CONFIG_TEMPLATE,
+)
+
+#: Every declared train, oldest first. The last one is the train a
+#: version-less reader (the ladder view) describes.
+RELEASE_TRAINS: Final[tuple[ReleaseTrain, ...]] = (V07_TRAIN, V071_TRAIN)
+
 #: Checkpoint configurations by version. ``dev1`` is authored -- it was
 #: cut before the template existed and its file is the one the burned
 #: checkpoint was swept against -- and every later rung is rendered, so
@@ -398,6 +433,7 @@ CHECKPOINT_CONFIGS: Final[dict[str, str]] = {
     "0.7.0rc3": RC3_RELEASE_CONFIG_YAML,
     "0.7.0rc4": RC4_RELEASE_CONFIG_YAML,
     V07_TARGET_VERSION: STABLE_RELEASE_CONFIG_YAML,
+    V071_TARGET_VERSION: V071_RELEASE_CONFIG_YAML,
 }
 
 #: What each of the eight ``dev1`` gates reads.
@@ -768,6 +804,41 @@ def checkpoint_config_yaml(version: str) -> str:
         ) from exc
 
 
+def train_for_key(key: str) -> ReleaseTrain:
+    """Return the declared train whose ladder holds the rung *key*.
+
+    Args:
+        key: ``REL-<version>`` release key.
+
+    Returns:
+        The one train in :data:`RELEASE_TRAINS` declaring that rung.
+
+    Raises:
+        KeyError: When no declared train has a rung for *key*.
+    """
+    for train in RELEASE_TRAINS:
+        if any(rung.release_key == key for rung in train.checkpoints):
+            return train
+    declared = [train.train_id for train in RELEASE_TRAINS]
+    raise KeyError(f"no release train declares a checkpoint {key!r}; trains: {declared}")
+
+
+def train_for_version(version: str) -> ReleaseTrain:
+    """Return the declared train whose ladder holds the rung for *version*.
+
+    Args:
+        version: Checkpoint version, e.g. ``0.7.0rc4`` or ``0.7.1``.
+
+    Returns:
+        The one train in :data:`RELEASE_TRAINS` declaring that rung.
+
+    Raises:
+        KeyError: When no declared train has a rung for *version*.
+        ValueError: When *version* is not a train version.
+    """
+    return train_for_key(release_key(version))
+
+
 __all__ = [
     "CHECKPOINT_CONFIGS",
     "CROSS_PROVIDER_GATE_BINDINGS_YAML",
@@ -785,13 +856,19 @@ __all__ = [
     "RC1_RELEASE_CONFIG_YAML",
     "RC2_RELEASE_CONFIG_YAML",
     "RC3_RELEASE_CONFIG_YAML",
+    "RELEASE_TRAINS",
     "STABLE_GATE_BINDINGS_YAML",
     "STABLE_RELEASE_CONFIG_YAML",
     "V07_CHECKPOINTS",
     "V07_CONFIG_TEMPLATE",
     "V07_TARGET_VERSION",
     "V07_TRAIN",
+    "V071_RELEASE_CONFIG_YAML",
+    "V071_TARGET_VERSION",
+    "V071_TRAIN",
     "checkpoint_config_yaml",
     "gate_bindings_for",
     "gate_bindings_yaml",
+    "train_for_key",
+    "train_for_version",
 ]

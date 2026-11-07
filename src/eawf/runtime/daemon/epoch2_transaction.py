@@ -710,7 +710,7 @@ def commit_ledger_append(
             entity_ref=str(subject),
             remediation="Remove the flagged text from the ledger line and retry.",
         )
-    ledger = session.ledger_path(record.collection)
+    ledger, appends_to = session.ledger_target(record)
     allocator = CanonicalSequenceAllocator.recover(
         workspace_key=subject.workspace_key,
         high_water_mark=_high_water_mark(document),
@@ -735,7 +735,7 @@ def commit_ledger_append(
             state_path=str(session.document_path),
         )
         write_pending(context.wal_dir, wal_record)
-        session.write_document(new_document, appends_to=record.collection)
+        session.write_document(new_document, appends_to=appends_to)
         mark_applied(context.wal_dir, wal_record.record_id)
         append_ledger_record(ledger, record)
         append_json_line(_firehose_path(context), envelope.model_dump_json())
