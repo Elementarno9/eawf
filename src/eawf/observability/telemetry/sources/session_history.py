@@ -36,7 +36,7 @@ import os
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import IO, Any, Final, Literal
@@ -429,14 +429,19 @@ def _non_negative_int(raw: object) -> int:
 
 
 def _timestamp(record: Mapping[str, Any]) -> datetime | None:
-    """Return the record's ISO-8601 timestamp, or ``None``."""
+    """Return the record's ISO-8601 timestamp, or ``None``.
+
+    A timestamp without an offset is read as UTC, so every instant returned
+    compares with every other one.
+    """
     raw = record.get("timestamp")
     if not isinstance(raw, str) or not raw:
         return None
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except ValueError:
         return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 def _nonempty(raw: object) -> str | None:

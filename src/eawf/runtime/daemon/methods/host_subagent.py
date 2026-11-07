@@ -64,6 +64,7 @@ from eawf.kernel.state.epoch2.run import (
     RunStatus,
     TaskScope,
 )
+from eawf.kernel.state.epoch2.task_status import TERMINAL_TASK_STATUSES
 from eawf.kernel.state.epoch2.transitions import ObservedFact
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
@@ -251,9 +252,13 @@ def _parent_of(document: dict[str, Any], host_session_id: str | None) -> Qualifi
 def _scope(
     document: dict[str, Any], repository: QualifiedUrn, task_ref: str | None
 ) -> TaskScope | RepositoryScope:
-    """Return the scope the subagent is adopted under: its Task's when the tree holds it."""
+    """Return the scope the subagent is adopted under: its Task's when that Task is open.
+
+    A Task already completed, cancelled or failed takes no new work, so a
+    marker naming one adopts the Run repository-scoped instead.
+    """
     row = None if task_ref is None else document_rows(document, Epoch2Collection.TASK).get(task_ref)
-    if row is not None:
+    if row is not None and row.get("status") not in TERMINAL_TASK_STATUSES:
         return TaskScope(
             scope_kind="task", task_ref=parse_qualified_urn(row["urn"]), purpose=RunPurpose.OBSERVE
         )
@@ -345,7 +350,7 @@ def _create(
         and decided[-1].spec["scope"]["scope_kind"] != "task"
     ):
         logger.warning(
-            f"host subagent names task={task_ref} the tree does not hold; "
+            f"host subagent names task={task_ref} the tree holds no open Task for; "
             f"run={urn.entity_key} stays repository-scoped"
         )
     return urn

@@ -249,7 +249,8 @@ def plan_row_drop(
         live: The ledger's bytes now.
         record_key: The record key of the line to remove.
         elsewhere: Decoded JSON values beyond this ledger that may name the
-            row: the generation document and the other ledgers' records.
+            row: the generation document, the other ledgers' records and
+            the local artifact ledger's records.
 
     Returns:
         The plan.

@@ -157,8 +157,9 @@ HOST_SUBAGENT_METHODS: dict[HookEventType, str] = {
     HookEventType.SUBAGENT_STOP: "runtime.host.subagent.stop",
 }
 
-#: The marker a dispatching agent writes into a subagent's prompt to name the
-#: Task the subagent works for.
+#: The marker a dispatching agent opens a subagent's prompt with to name the
+#: Task the subagent works for. Only a leading marker counts, so a prompt that
+#: merely quotes one, such as a review of the marker itself, binds nothing.
 _TASK_MARKER: Final = re.compile(r"\[eawf task=([A-Z][A-Z0-9_-]{1,15}-\d{4,})\]")
 
 
@@ -179,7 +180,10 @@ def _first_prompt(transcript: Path) -> str | None:
 
 
 def _subagent_task_key(payload: Mapping[str, Any], harness: str, agent_id: str) -> str | None:
-    """Return the Task key the subagent's prompt names, when its prompt can be read.
+    """Return the Task key the subagent's prompt opens with, when its prompt can be read.
+
+    The marker binds only at the start of the prompt's first line, leading
+    whitespace stripped; a marker anywhere later names no Task.
 
     Claude's subagent events do not carry the prompt, so it is read off the
     first record of the subagent's own transcript: the stop event names that
@@ -193,7 +197,8 @@ def _subagent_task_key(payload: Mapping[str, Any], harness: str, agent_id: str) 
         if path is None and parent is not None:
             path = str(Path(parent).with_suffix("") / "subagents" / f"agent-{agent_id}.jsonl")
         prompt = None if path is None else _first_prompt(Path(path))
-    match = None if prompt is None else _TASK_MARKER.search(prompt)
+    first_line = None if prompt is None else prompt.partition("\n")[0].lstrip()
+    match = None if first_line is None else _TASK_MARKER.match(first_line)
     return None if match is None else match.group(1)
 
 
@@ -211,8 +216,8 @@ def adopt_host_subagent(
     Run, so every outcome is either that durable row or the daemon's typed
     refusal -- a tree still in epoch 1 answers ``native_authority_required``
     -- and the hook never blocks the host over it. A Task key the subagent's
-    prompt names in a ``[eawf task=KEY]`` marker is passed on, so the Run is
-    scoped to that Task.
+    prompt opens with in a ``[eawf task=KEY]`` marker is passed on, so the Run
+    is scoped to that Task.
 
     Args:
         event: The SUBAGENT_START or SUBAGENT_STOP event.

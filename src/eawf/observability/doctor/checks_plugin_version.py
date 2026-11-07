@@ -13,8 +13,9 @@ registries are read the way the hosts write them:
   itself the one Codex loads. ``codex plugin list --json`` names the enabled
   one, and the doctor check asks it. The session-start hook may not start a
   subprocess, and Codex's ``config.toml`` records that ``eawf@eawf`` is
-  enabled but not at which version, so the hook takes the cached version
-  whose manifest was written last: the one the latest install put there.
+  enabled but not at which version, so the hook counts a Codex install only
+  when that table enables it, and then takes the cached version whose
+  manifest was written last: the one the latest install put there.
 
 The session-start hook runs this on every session, so the module imports no
 pydantic model at load: :class:`CheckResult` is imported where it is built.
@@ -155,6 +156,32 @@ def _last_cached_codex_version(home: Path) -> list[str]:
     return [max(written)[1]] if written else []
 
 
+def _codex_config_enables_eawf(home: Path) -> bool:
+    """Return whether the user Codex ``config.toml`` enables the eawf plugin.
+
+    A cached manifest outlives Codex's uninstall or disable, so only the
+    ``[plugins."eawf@eawf"]`` table holding ``enabled = true`` counts.
+
+    Args:
+        home: The home directory Codex keeps its ``config.toml`` under.
+
+    Returns:
+        ``True`` only when the table sets ``enabled`` to the boolean ``true``;
+        ``False`` when the file is absent, unreadable or malformed.
+    """
+    # Imported here so the session-start hook pays for it only when it runs.
+    import tomllib
+
+    try:
+        with (home / ".codex" / "config.toml").open("rb") as handle:
+            config = tomllib.load(handle)
+    except OSError, UnicodeDecodeError, tomllib.TOMLDecodeError:
+        return False
+    plugins = config.get("plugins")
+    table = plugins.get(f"{_PLUGIN_NAME}@{_PLUGIN_NAME}") if isinstance(plugins, dict) else None
+    return isinstance(table, dict) and table.get("enabled") is True
+
+
 def _enabled_codex_version(home: Path) -> list[str]:
     """Return the version of the Codex eawf plugin ``codex plugin list`` reports enabled.
 
@@ -187,14 +214,19 @@ def _installed_plugins(workspace: Path | None, *, ask_codex: bool) -> list[_Inst
     Args:
         workspace: The workspace a project-scoped Claude Code install must name.
         ask_codex: Ask ``codex plugin list`` which Codex install is enabled;
-            otherwise take the cached version installed last, which starts no
-            subprocess.
+            otherwise, when ``config.toml`` enables eawf, take the cached
+            version installed last, which starts no subprocess.
 
     Returns:
         The Claude Code installs, then the Codex one.
     """
     home = _registry_home()
-    codex = _enabled_codex_version(home) if ask_codex else _last_cached_codex_version(home)
+    if ask_codex:
+        codex = _enabled_codex_version(home)
+    elif _codex_config_enables_eawf(home):
+        codex = _last_cached_codex_version(home)
+    else:
+        codex = []
     return [
         *(_InstalledPlugin("claude", version) for version in _claude_versions(home, workspace)),
         *(_InstalledPlugin("codex", version) for version in codex),

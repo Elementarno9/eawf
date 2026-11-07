@@ -34,7 +34,7 @@ import json
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -109,13 +109,18 @@ class CodexRequestUsage:
 
 
 def _parse_ts(raw: object) -> datetime | None:
-    """Return a parsed ISO-8601 timestamp, or ``None`` when absent / malformed."""
+    """Return a parsed ISO-8601 timestamp, or ``None`` when absent / malformed.
+
+    A timestamp without an offset is read as UTC, so every instant returned
+    compares with every other one.
+    """
     if not isinstance(raw, str) or not raw:
         return None
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except ValueError:
         return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 def _coerce_int(raw: object) -> int:

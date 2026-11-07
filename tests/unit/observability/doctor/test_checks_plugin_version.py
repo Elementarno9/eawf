@@ -93,6 +93,16 @@ def _install(home: Path, runtime: str, version: str) -> None:
     (_install_claude if runtime == "claude" else _install_codex)(home, version)
 
 
+#: The user ``config.toml`` table Codex records the eawf plugin's enablement in.
+_ENABLED_CONFIG: Final = b'[plugins."eawf@eawf"]\nenabled = true\n'
+
+
+def _write_codex_config(home: Path, body: bytes) -> None:
+    path = home / ".codex" / "config.toml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(body)
+
+
 # ---- CR-705: the doctor check ------------------------------------------------
 
 
@@ -403,6 +413,8 @@ def test_session_start_line(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _install(home, runtime, version)
+    if runtime == "codex":
+        _write_codex_config(home, _ENABLED_CONFIG)
     workspace = tmp_path / "repo"
     workspace.mkdir()
 
@@ -445,7 +457,61 @@ def test_session_start_line_takes_the_codex_version_installed_last(
 
     _install_codex(home, OLDER, written_at=older_at)
     _install_codex(home, __version__, written_at=current_at)
+    _write_codex_config(home, _ENABLED_CONFIG)
     monkeypatch.setattr(_CODEX_LIST, _no_subprocess)
+
+    line = plugin_version_mismatch_line(workspace=None)
+
+    if mismatched:
+        assert line == (
+            f"{MISMATCH_PREFIX} codex plugin {OLDER} installed, eawf package {__version__}; "
+            "update the plugin to match"
+        )
+    else:
+        assert line is None
+
+    asked: list[Path | None] = []
+
+    def _record(listed_home: Path | None) -> Path | None:
+        asked.append(listed_home)
+        return None
+
+    monkeypatch.setattr(_CODEX_LIST, _record)
+    check_plugin_version(workspace=None)
+    assert asked == [home]
+
+
+@pytest.mark.parametrize(
+    ("config", "mismatched"),
+    [
+        pytest.param(None, False, id="config-absent"),
+        pytest.param(b'model = "x"\n', False, id="table-absent"),
+        pytest.param(b'[plugins."other@eawf"]\nenabled = true\n', False, id="other-plugin"),
+        pytest.param(b'[plugins."eawf@eawf"]\n', False, id="enabled-missing"),
+        pytest.param(b'[plugins."eawf@eawf"]\nenabled = false\n', False, id="disabled"),
+        pytest.param(b'[plugins."eawf@eawf"]\nenabled = "true"\n', False, id="enabled-not-bool"),
+        pytest.param(b'plugins = "eawf@eawf"\n', False, id="plugins-not-table"),
+        pytest.param(b'[plugins]\n"eawf@eawf" = true\n', False, id="entry-not-table"),
+        pytest.param(b"[plugins.\n", False, id="malformed"),
+        pytest.param(b"\xff\xfe", False, id="not-utf8"),
+        pytest.param(_ENABLED_CONFIG, True, id="enabled"),
+    ],
+)
+def test_session_start_line_counts_codex_only_when_enabled(
+    config: bytes | None,
+    mismatched: bool,
+    home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _no_subprocess(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("the session-start line must not start a subprocess")
+
+    _install_codex(home, OLDER)
+    if config is not None:
+        _write_codex_config(home, config)
+    monkeypatch.setattr(_CODEX_LIST, _no_subprocess)
+    monkeypatch.setattr("subprocess.run", _no_subprocess)
+    monkeypatch.setattr("subprocess.Popen", _no_subprocess)
 
     line = plugin_version_mismatch_line(workspace=None)
 

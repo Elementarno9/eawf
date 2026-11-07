@@ -13,14 +13,23 @@ from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Final
+from uuid import uuid4
 
 import pytest
 
 from eawf.kernel.identity import parse_qualified_urn
 from eawf.kernel.runtime.events import RunEventKind
+from eawf.kernel.state.enums import OpenQuestionStatus
+from eawf.kernel.state.epoch2.question import (
+    OpenQuestion,
+    QuestionOption,
+    QuestionSituation,
+    project_question,
+)
 from eawf.kernel.state.epoch2.run import Run, RunStatus
 from eawf.kernel.state.epoch2.task import Task
 from eawf.kernel.state.epoch2.task_status import TaskStatus
+from eawf.kernel.state.epoch2.values import EntityOrigin
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
@@ -33,7 +42,9 @@ from eawf.runtime.daemon.epoch2_transaction import (
     TransactionRefusalCode,
     TransactionRefusedError,
 )
-from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods import MethodContext, host_question
+from eawf.runtime.daemon.methods.host_question import HostQuestionLine, append_host_question
+from eawf.runtime.daemon.methods.host_subagent import HARNESS_ACTORS
 from eawf.runtime.daemon.methods.permission import DAEMON_ACTOR
 from eawf.runtime.daemon.methods.run import append_run_event
 from eawf.runtime.daemon.run_events import RunEventAppend, run_events_of
@@ -392,6 +403,105 @@ def test_an_abandoned_run_states_one_error_line_bound_by_its_failure(
     for key, run in runs.items():
         assert_abandoned(canary, key)
         assert len(error_lines(canary, run)) == 1
+
+
+# ---------------------------------------------------------------------------
+# A Run waiting on its operator's answer is waiting, not abandoned
+# ---------------------------------------------------------------------------
+
+#: The harness principal a host question is answered under.
+HOST_ACTOR: Final = HARNESS_ACTORS["claude-code"]
+
+
+def ask(
+    context: Epoch2RootContext, run: dict[str, Any], situation: QuestionSituation, at: datetime
+) -> None:
+    """Record a host question scoped to *run* at *at*, standing in *situation*."""
+    run_urn = parse_qualified_urn(run["urn"])
+    fields: dict[str, Any] = {"blocking": True, "status": OpenQuestionStatus.BLOCKED}
+    if situation is QuestionSituation.OPEN:
+        fields = {"blocking": False, "status": OpenQuestionStatus.OPEN}
+    elif situation is QuestionSituation.OPEN_ESCALATED:
+        fields["escalated_by_deadline"] = at
+    elif situation is QuestionSituation.ANSWERED_BY_YOU:
+        fields = {
+            "blocking": True,
+            "status": OpenQuestionStatus.ANSWERED,
+            "chosen_option_key": "option_1",
+            "resolution_actor": HOST_ACTOR,
+            "resolved_at": at,
+        }
+    question = OpenQuestion(
+        uid=uuid4(),
+        key="QST-0001",
+        urn=host_question._question_urn(run_urn, "QST-0001"),
+        origin=EntityOrigin(kind="native", mapping_basis="native", confidence="exact"),
+        revision=1,
+        created_at=at,
+        updated_at=at,
+        scope_ref=run_urn,
+        question="Which way?",
+        options=(
+            QuestionOption(key="option_1", label="Left"),
+            QuestionOption(key="option_2", label="Right"),
+        ),
+        **fields,
+    )
+    projected = project_question(question, principal=HOST_ACTOR, asking_run_unreachable=False)
+    assert projected.situation is situation
+    line = HostQuestionLine(asked_by="call-0000000000000001", position=0, question=question)
+    with context.session([run_urn]) as session:
+        append_host_question(session, line, now=at)
+
+
+_WAITING: Final = (
+    QuestionSituation.OPEN,
+    QuestionSituation.OPEN_BLOCKING,
+    QuestionSituation.OPEN_ESCALATED,
+)
+
+
+@pytest.mark.parametrize(
+    "situation", [*_WAITING, QuestionSituation.ANSWERED_BY_YOU], ids=lambda s: s.value
+)
+def test_a_run_waiting_on_an_open_question_is_not_abandoned(
+    canary: CanaryProvision,
+    ctx: MethodContext,
+    context: Epoch2RootContext,
+    situation: QuestionSituation,
+) -> None:
+    run = open_run(RUN_KEY, "RUNNING", created=NOW - timedelta(hours=48))
+    seed(canary, {"run": {RUN_KEY: run}, "task": {TASK_KEY: running_task()}})
+    act(context, run, NOW - timedelta(hours=25))
+    ask(context, run, situation, NOW - timedelta(hours=25))
+
+    sweep_once(ctx, now=NOW)
+
+    if situation is QuestionSituation.ANSWERED_BY_YOU:
+        assert_abandoned(canary, RUN_KEY)
+        assert task_now(canary).status is TaskStatus.PLANNED
+        return
+    assert run_row(canary)["status"] == "RUNNING"
+    assert error_lines(canary, run) == []
+    task = task_now(canary)
+    assert task.status is TaskStatus.RUNNING
+    assert task.claimed_by == "OP-0001"
+
+
+@pytest.mark.parametrize("situation", [*_WAITING, None], ids=lambda s: s.value if s else "none")
+def test_the_locked_recheck_keeps_a_run_with_an_open_question(
+    canary: CanaryProvision, context: Epoch2RootContext, situation: QuestionSituation | None
+) -> None:
+    run = open_run(RUN_KEY, "RUNNING", created=NOW - timedelta(hours=48))
+    seed(canary, {"run": {RUN_KEY: run}})
+    if situation is not None:
+        ask(context, run, situation, NOW - timedelta(hours=25))
+    stored = Run.model_validate(run_row(canary))
+    silence = run_reaper._Silence(since=NOW - timedelta(hours=25), supervisor=RunSupervisor())
+
+    held = silence.holds(stored, read_ledger_records(run_ledger(canary)), revision=stored.revision)
+
+    assert held is (situation is None)
 
 
 # ---------------------------------------------------------------------------

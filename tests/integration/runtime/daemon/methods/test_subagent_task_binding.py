@@ -242,6 +242,50 @@ def test_marker_binds_task(
     assert all(f"run={key}" in r.getMessage() for r in warned)
 
 
+@pytest.mark.parametrize(
+    ("status", "scoped_to_task"),
+    [
+        pytest.param("PLANNED", True, id="planned"),
+        pytest.param("CLAIMED", True, id="claimed"),
+        pytest.param("RUNNING", True, id="running"),
+        pytest.param("READY_TO_INTEGRATE", True, id="ready-to-integrate"),
+        pytest.param("COMPLETED", False, id="completed"),
+        pytest.param("CANCELLED", False, id="cancelled"),
+        pytest.param("FAILED", False, id="failed"),
+    ],
+)
+def test_marker_binds_only_an_open_task(
+    canary: CanaryProvision, tmp_path: Path, status: str, scoped_to_task: bool
+) -> None:
+    """A marker naming a Task in a terminal state adopts the Run repository-scoped."""
+    seed(canary, {Epoch2Collection.TASK.value: {TASK_KEY: seed_row("task", status)}})
+    write_prompt(subagent_transcript(tmp_path), f"[eawf task={TASK_KEY}] Implement it.")
+    event = hook_event(
+        HookEventType.SUBAGENT_START,
+        agent_id=AGENT_ID,
+        session_id=HOST_SESSION,
+        transcript_path=str(session_transcript(tmp_path)),
+    )
+
+    result = adopt_host_subagent(
+        event,
+        daemon_client_factory=lambda: _DaemonClient(tmp_path / "runtime"),
+        repo_root=canary.root,
+    )
+
+    assert " ok run=" in result.output, result.output
+    ((_, row),) = runs(canary).items()
+    run = Run.model_validate(row)
+    assert run.scope.purpose is RunPurpose.OBSERVE
+    if scoped_to_task:
+        assert isinstance(run.scope, TaskScope)
+        assert str(run.scope.task_ref) == TASK_URN
+    else:
+        assert isinstance(run.scope, RepositoryScope)
+        assert str(run.scope.repository_ref) == REPOSITORY_URN
+        assert "task_ref" not in row["scope"]
+
+
 def test_marker_binds_task_on_a_stop_whose_start_was_lost(
     canary: CanaryProvision, tmp_path: Path
 ) -> None:
@@ -274,12 +318,21 @@ def test_marker_binds_task_on_a_stop_whose_start_was_lost(
     ("content", "expected"),
     [
         pytest.param(f"[eawf task={TASK_KEY}] x", TASK_KEY, id="string"),
+        pytest.param("[eawf task=EAWF-0007] go", "EAWF-0007", id="leading"),
+        pytest.param("  \t[eawf task=EAWF-0007] go", "EAWF-0007", id="leading-whitespace"),
         pytest.param(
-            [{"type": "text", "text": "go"}, {"type": "text", "text": "[eawf task=AB-0001]"}],
+            [{"type": "text", "text": "[eawf task=AB-0001]"}, {"type": "text", "text": "go"}],
             "AB-0001",
             id="blocks",
         ),
-        pytest.param("body [eawf task=EAWF-0007] later", "EAWF-0007", id="mid-prompt"),
+        pytest.param(
+            [{"type": "text", "text": "go"}, {"type": "text", "text": "[eawf task=AB-0001]"}],
+            None,
+            id="blocks-trailing",
+        ),
+        pytest.param("body [eawf task=EAWF-0007] later", None, id="mid-prompt"),
+        pytest.param("Implement it.\n[eawf task=EAWF-0007]", None, id="second-line"),
+        pytest.param("\n[eawf task=EAWF-0007] go", None, id="blank-first-line"),
         pytest.param("[eawf task=eawf-0042]", None, id="lower-case"),
         pytest.param("[eawf task=EAWF-42]", None, id="short-ordinal"),
         pytest.param("[eawf task=]", None, id="empty-key"),

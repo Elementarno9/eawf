@@ -18,7 +18,8 @@ the reap from racing that window.
 A host may also simply walk away from its Run, and a dispatched Run can outlive
 every daemon that would reap it. So any open Run that recorded no run event and
 took no transition for :data:`ABANDON_AFTER`, and that no supervisor awaits, is
-failed as ``stalled-abandoned`` the same way, Task and lease included. That
+failed as ``stalled-abandoned`` the same way, Task and lease included. A Run a
+host question still waits on is waiting on its operator, not abandoned. That
 sweep runs on start and on the stall loop's cadence; it decides every Run from
 one unlocked read, so a pass that ends nothing takes no lock at all. A Run it
 ends is read again under its lock before each write, so one that recorded an
@@ -34,8 +35,10 @@ from typing import Final
 
 from pydantic import ValidationError
 
+from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.runtime.events import ErrorPayload, RunEventKind, RunEventRecord
 from eawf.kernel.state.epoch2.base import PrincipalKey
+from eawf.kernel.state.epoch2.question import _LIVE as _LIVE_QUESTION
 from eawf.kernel.state.epoch2.run import Run, RunStatus
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
@@ -46,6 +49,7 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.control.reducer import reduce_run_control
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.epoch2_transaction import TransactionRefusedError
+from eawf.runtime.daemon.methods.host_question import host_question_lines
 from eawf.runtime.daemon.methods.projection import document_path
 from eawf.runtime.daemon.native_dispatch import (
     control_facts_of,
@@ -173,6 +177,7 @@ def end_abandoned_runs(
         return ()
     records = indexed_ledger_records(ledger_path(document, Epoch2Collection.RUN))
     events = run_events_by_run(records, run_keys=open_rows.keys())
+    waiting = _awaiting_an_answer(records)
     envelopes: list[Envelope] = []
     for key in sorted(open_rows):
         try:
@@ -181,7 +186,7 @@ def end_abandoned_runs(
             logger.warning(f"end_abandoned_runs skipped run={key!r} errors={error.error_count()}")
             continue
         run_events = events.get(run.urn, ())
-        if not _abandoned(run, records, run_events, supervisor, now=now):
+        if run.urn in waiting or not _abandoned(run, records, run_events, supervisor, now=now):
             continue
         try:
             envelopes.extend(
@@ -217,6 +222,26 @@ def _abandoned(
     return reduced.status in _OPEN_STATUSES
 
 
+def _awaiting_an_answer(records: tuple[LedgerRecord, ...]) -> frozenset[QualifiedUrn]:
+    """Return every Run a host question on the run ledger still waits on an answer for.
+
+    Raising a question leaves its Run ``RUNNING`` while the operator decides, and
+    an operator may take longer than :data:`ABANDON_AFTER` to answer, so such a Run
+    is waiting, not abandoned.
+
+    Args:
+        records: The run ledger's lines.
+
+    Returns:
+        The scopes of the questions still open or blocked; empty when none is.
+    """
+    return frozenset(
+        line.question.scope_ref
+        for line in host_question_lines(records).values()
+        if line.question.status in _LIVE_QUESTION
+    )
+
+
 def _last_activity(run: Run, events: tuple[RunEventRecord, ...]) -> datetime:
     """Return when the Run last recorded an event or took a transition, whichever is later."""
     return max((run.updated_at, *(event.recorded_at for event in events)))
@@ -247,6 +272,8 @@ class _Silence:
                 ending touched it.
         """
         if run.revision != revision or self.supervisor.busy(str(run.urn)):
+            return False
+        if run.urn in _awaiting_an_answer(records):
             return False
         if any(event.recorded_at > self.since for event in run_events_of(records, run.urn)):
             return False

@@ -4,7 +4,9 @@ Captured content is scrubbed when it is filed, so a stored row carries a leak
 only when the leak scan learned a shape after the row was written. This verb
 plans the correction with :func:`~eawf.kernel.runtime.content_redaction.plan_content_redaction`
 against the artifact ledger's bytes in the repository's ``HEAD`` commit, and
-replaces only the lines after them. Committed rows stay as they are.
+replaces only the lines after them. Committed rows stay as they are. The
+generation's local artifact ledger is never committed, so every one of its
+content rows is corrected the same way.
 
 A second call finds nothing left to withhold and writes nothing; a retry under
 the same idempotency key replays the first answer.
@@ -42,9 +44,10 @@ from eawf.kernel.store.ledger import (
     LedgerRecord,
     LedgerTornTailError,
     read_collection_records,
+    read_ledger_records,
     replace_unpublished_suffix,
 )
-from eawf.kernel.store.paths import record_ledger_path
+from eawf.kernel.store.paths import collection_ledger_paths, record_ledger_path
 from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, Epoch2Collection
 from eawf.observability.logging.state_leak import default_allowed_emails
 from eawf.platform.subprocess_detach import no_window_kwargs
@@ -129,10 +132,12 @@ class RedactContentAnswer(BaseModel):
 
     Attributes:
         ledger: The artifact ledger, relative to the repository root.
-        unpublished_rows: How many of its lines no commit holds.
-        rows: How many content rows were rewritten.
+        unpublished_rows: How many of its lines no commit holds, counting
+            every line of the local artifact ledger.
+        rows: How many content rows were rewritten, in either ledger.
         withheld_lines: How many kept lines were newly withheld.
-        record_keys: The record key of each rewritten row, in file order.
+        record_keys: The record key of each rewritten row, the committed
+            ledger's first, each ledger in file order.
         non_content_leak_keys: The record key of each unpublished row that is
             not captured content yet still leaks, in file order; the verb
             leaves those rows as they are.
@@ -284,6 +289,18 @@ def _rewritable_bytes(
         DaemonValidationError: The WAL holds an unfinished line of the
             ledger, or ``HEAD`` cannot be read.
     """
+    _refuse_unfinished(context, path, relative)
+    published = _published_bytes(repository, relative)
+    return published, path.read_bytes() if path.exists() else b""
+
+
+def _refuse_unfinished(context: Epoch2RootContext, path: Path, relative: str) -> None:
+    """Refuse a rewrite of *path* while the WAL still journals one of its lines.
+
+    Raises:
+        DaemonValidationError: A pending or applied WAL record journals a
+            line of *path*, which its replay would append again.
+    """
     unfinished = _unfinished_ledger_records(context.wal_dir, path)
     if unfinished:
         raise _refused(
@@ -291,14 +308,21 @@ def _rewritable_bytes(
             f"WAL records {', '.join(unfinished)} still journal lines of {relative}; "
             "restart the daemon so recovery finishes them, then retry",
         )
-    published = _published_bytes(repository, relative)
-    return published, path.read_bytes() if path.exists() else b""
+
+
+def _local_artifact_ledger(session: RootSession) -> Path:
+    """Return the generation's local artifact ledger, which no commit publishes."""
+    _, local = collection_ledger_paths(session.document_path, Epoch2Collection.ARTIFACT)
+    return local
 
 
 def redact_content(
     context: Epoch2RootContext, args: RedactContentParams, *, now: datetime
 ) -> RedactContentAnswer:
-    """Withhold every flagged line in the artifact ledger's unpublished content rows.
+    """Withhold every flagged line in the artifact ledgers' unpublished content rows.
+
+    Those are the rows of the committed artifact ledger past its ``HEAD``
+    bytes and every row of the local artifact ledger.
 
     Args:
         context: The native context of the tree whose ledger is redacted.
@@ -311,7 +335,8 @@ def redact_content(
     Raises:
         DaemonValidationError: The key already answered other parameters,
             ``HEAD`` cannot be read, the WAL holds an unfinished line of the
-            artifact ledger, or the plan is refused because the
+            committed artifact ledger or of a local one the plan rewrites,
+            or the plan is refused because the
             ledger moved off its commit, a line is not canonical or is torn,
             or a line supersedes a row the plan would change. Nothing was written.
     """
@@ -326,11 +351,23 @@ def redact_content(
         path = session.ledger_path(Epoch2Collection.ARTIFACT)
         relative = path.relative_to(repository).as_posix()
         published, live = _rewritable_bytes(context, repository, path, relative)
+        local = context.declared_path(_local_artifact_ledger(session))
+        local_live = local.read_bytes() if local.exists() else b""
+        allowed = default_allowed_emails()
         try:
-            plan = plan_content_redaction(published, live, allowed_emails=default_allowed_emails())
+            plan = plan_content_redaction(published, live, allowed_emails=allowed)
+            # Only content_artifact lines are filed locally, so the local plan
+            # has no non-content leak to answer.
+            local_plan = plan_content_redaction(b"", local_live, allowed_emails=allowed)
+            if local_plan.record_keys:
+                _refuse_unfinished(context, local, local.relative_to(repository).as_posix())
             if plan.record_keys:
                 replace_unpublished_suffix(
                     path, published=published, expected=live, content=plan.content
+                )
+            if local_plan.record_keys:
+                replace_unpublished_suffix(
+                    local, published=b"", expected=local_live, content=local_plan.content
                 )
         except ContentRedactionError as error:
             raise _refused(error.code, str(error)) from error
@@ -342,10 +379,10 @@ def redact_content(
             raise _refused("redaction_ledger_refused", str(error)) from error
     answer = RedactContentAnswer(
         ledger=relative,
-        unpublished_rows=plan.unpublished_rows,
-        rows=len(plan.record_keys),
-        withheld_lines=plan.withheld_lines,
-        record_keys=list(plan.record_keys),
+        unpublished_rows=plan.unpublished_rows + local_plan.unpublished_rows,
+        rows=len(plan.record_keys) + len(local_plan.record_keys),
+        withheld_lines=plan.withheld_lines + local_plan.withheld_lines,
+        record_keys=[*plan.record_keys, *local_plan.record_keys],
         non_content_leak_keys=[leak.record_key for leak in plan.non_content_leaks],
         remediations=[
             LeakRemediation(
@@ -418,8 +455,8 @@ def _drop_refusals(
 def _elsewhere(session: RootSession) -> list[object]:
     """Return what beyond the artifact ledger may name one of its rows.
 
-    That is the generation document and every record of the other ledgers,
-    each as decoded JSON.
+    That is the generation document, every record of the other ledgers and
+    every record of the local artifact ledger, each as decoded JSON.
 
     Raises:
         LedgerError: Another ledger is torn or its snapshot does not match.
@@ -431,6 +468,8 @@ def _elsewhere(session: RootSession) -> list[object]:
             continue
         records = read_collection_records(session.document_path, collection)
         found.extend(record.model_dump(mode="json") for record in records)
+    local = read_ledger_records(_local_artifact_ledger(session))
+    found.extend(record.model_dump(mode="json") for record in local)
     return found
 
 
