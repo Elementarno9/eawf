@@ -6,9 +6,13 @@ configuration -- the ``preferences.auto_choose`` policy and, when the
 question is about a configuration leaf, that leaf's value -- builds the
 waiting ``operator_decision`` pending action from it, and presents it as
 the host will before anything is written, so a question an operator could
-not answer as shown is refused and never filed. Asking again under the
+not answer as shown is refused and never filed. A decision consenting to a
+criterion waiver is filed bound to that waiver's digest, which the waiver
+verb checks before an agent may send it; one asking to approve a plan
+revision is filed bound to that revision's content digest, which the plan
+approve verb checks. Asking again under the
 same idempotency key finds the question already filed and writes nothing;
-the same key naming a different question is refused.
+the same key naming a different question, waiver or revision is refused.
 
 The answer is sealed through ``runtime.delivery.seal_acceptance_approval``,
 which seals any waiting pending action by its URN, so a decision has no
@@ -75,10 +79,12 @@ from eawf.workflow.decision_question import (
     ConfigAxis,
     DecisionRefusedError,
     DecisionRequest,
+    bound_digest,
     decision_question,
 )
 from eawf.workflow.delivery.acceptance_approval import next_action_key
 from eawf.workflow.host_question import QuestionPresentationError, numbered_option
+from eawf.workflow.planning.materialise import _stored_revision
 
 logger = logging.getLogger(__name__)
 
@@ -168,19 +174,30 @@ def resolved_preferences(tree_root: Path, axis: ConfigAxis | None) -> tuple[Auto
         return policy, None
 
 
-def _standing(held: dict[str, PendingAction], args: DecisionOpenParams) -> PendingAction | None:
+def _standing(
+    held: dict[str, PendingAction], args: DecisionOpenParams, *, bound: str | None
+) -> PendingAction | None:
     """Return the decision already filed under the request's key, if one was.
 
+    Args:
+        held: Every pending action the tree holds, by key.
+        args: The validated request.
+        bound: The digest the request is bound to, or ``None``.
+
     Raises:
-        TransactionRefusedError: The key names a different question.
+        TransactionRefusedError: The key names a different question, waiver or
+            plan revision.
     """
     standing = next(
         (item for item in held.values() if item.idempotency_key == args.idempotency_key), None
     )
     if standing is None:
         return None
-    asked = (str(args.urn), args.question, tuple(o.option_id for o in args.options))
-    if (str(standing.subject_ref), standing.question, standing.option_ids) != asked:
+    # what the decision consents to is compared by its digest, so the key cannot hand
+    # back consent to another waiver or another revision
+    asked = (str(args.urn), args.question, tuple(o.option_id for o in args.options), bound)
+    filed = (str(standing.subject_ref), standing.question, standing.option_ids)
+    if (*filed, standing.bundle_digest) != asked:
         raise TransactionRefusedError(
             code=TransactionRefusalCode.IDEMPOTENCY_CONFLICT,
             detail=f"{args.idempotency_key} already filed {standing.id}, a different question",
@@ -209,12 +226,23 @@ def open_decision(
         TransactionRefusedError: The key already names a different
             question, or the question carries free text with a leak shape.
         DaemonValidationError: The configuration axis cannot be honoured,
+            a waiver is asked about a subject that is not a Task, a plan
+            revision the tree does not hold or of another Milestone is named,
             or the question is not presentable as it stands.
     """
     policy, configured = resolved_preferences(context.identity.tree_root, args.config_axis)
     with context.session([str(args.urn)]) as session:
         document = session.read_document()
-        standing = _standing(held_actions(document), args)
+        plan = (
+            None
+            if args.plan_revision is None
+            else _stored_revision(document, key=args.plan_revision)
+        )
+        try:
+            bound = bound_digest(args, plan=plan)
+        except DecisionRefusedError as error:
+            raise DaemonValidationError(f"validation_failed: {error}") from error
+        standing = _standing(held_actions(document), args, bound=bound)
         if standing is not None:
             logger.info(f"open_decision standing action={standing.id}")
             return ApprovalCommit(
@@ -231,7 +259,13 @@ def open_decision(
         urn = action_urn(args.urn, key)
         try:
             action = decision_question(
-                args, key=key, urn=urn, configured=configured, auto_choose=policy, at=now
+                args,
+                key=key,
+                urn=urn,
+                configured=configured,
+                auto_choose=policy,
+                at=now,
+                plan=plan,
             )
         except DecisionRefusedError as error:
             raise DaemonValidationError(f"validation_failed: {error}") from error

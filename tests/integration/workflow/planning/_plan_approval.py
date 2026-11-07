@@ -56,7 +56,9 @@ def _call(repo_root: Path, runtime: Path, method: str, **params: Any) -> dict[st
     return asyncio.run(methods.dispatch(method, ctx, {"repo_root": str(repo_root), **params}))
 
 
-def open_plan_approval(repo_root: Path, runtime: Path, *, subject: str, tag: str) -> str:
+def open_plan_approval(
+    repo_root: Path, runtime: Path, *, subject: str, tag: str, plan_revision: str | None = None
+) -> str:
     """File the waiting approval question about *subject* and return its URN.
 
     Args:
@@ -64,7 +66,10 @@ def open_plan_approval(repo_root: Path, runtime: Path, *, subject: str, tag: str
         runtime: The daemon runtime directory the verbs run under.
         subject: The Milestone the plan lands.
         tag: Distinguishes this question's idempotency keys from another's.
+        plan_revision: The revision the question asks to approve, which binds the
+            answer to its content; ``None`` files a decision bound to no revision.
     """
+    bound = {} if plan_revision is None else {"plan_revision": plan_revision}
     opened = _call(
         repo_root,
         runtime,
@@ -77,6 +82,7 @@ def open_plan_approval(repo_root: Path, runtime: Path, *, subject: str, tag: str
         options=_options(),
         recommended_option_id=APPROVE,
         recommendation_rationale="The plan passed every check it was submitted against.",
+        **bound,
     )
     return str(opened["action_ref"])
 
@@ -109,8 +115,12 @@ def answer_plan_approval(
     )
 
 
-def seal_plan_approval(repo_root: Path, runtime: Path, *, subject: str, tag: str) -> str:
+def seal_plan_approval(
+    repo_root: Path, runtime: Path, *, subject: str, tag: str, plan_revision: str | None = None
+) -> str:
     """File the approval question about *subject*, answer it approve, and return its URN."""
-    action_ref = open_plan_approval(repo_root, runtime, subject=subject, tag=tag)
+    action_ref = open_plan_approval(
+        repo_root, runtime, subject=subject, tag=tag, plan_revision=plan_revision
+    )
     answer_plan_approval(repo_root, runtime, action_ref=action_ref, option_id=APPROVE, tag=tag)
     return action_ref

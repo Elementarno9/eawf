@@ -486,8 +486,46 @@ def _asked_questions(tool_input: object) -> list[dict[str, Any]]:
             for option in (options if isinstance(options, list) else [])
             if isinstance(option, dict) and isinstance(option.get("label"), str) and option["label"]
         ]
-        asked.append({"question": words, "options": labels})
+        question: dict[str, Any] = {"question": words, "options": labels}
+        # Sent only when set, so a single-select call reads as it always has.
+        if item.get("multiSelect") is True:
+            question["multi_select"] = True
+        asked.append(question)
     return asked
+
+
+def _seal_facts(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return what the daemon checks before it seals an action from the answer.
+
+    A question asked with its answers already in the tool input was never put to
+    anyone. The questions as the tool input carried them are what the daemon compares
+    with the words the marked action presents as, so they are sent whenever the input
+    holds a list of them; the transcript lets the daemon check the report against the
+    harness's own record of the call. Each is sent only when present.
+    """
+    facts: dict[str, Any] = {}
+    tool_input = payload.get("tool_input")
+    if isinstance(tool_input, dict) and "answers" in tool_input:
+        facts["preanswered"] = True
+    raw = tool_input.get("questions") if isinstance(tool_input, dict) else None
+    if not isinstance(raw, list):
+        return facts
+    facts["tool_input_questions"] = raw
+    transcript = payload.get("transcript_path")
+    if isinstance(transcript, str) and transcript:
+        facts["transcript_path"] = transcript
+    return facts
+
+
+def _seal_summary(answer: dict[str, Any]) -> str:
+    """Return the seals and refused seals an answer reports, as hook output words."""
+    words = [f" sealed={ref.rsplit('/', 1)[-1]}" for ref in answer.get("sealed_action_refs", ())]
+    words += [
+        f" refused={item.get('action_ref', '').rsplit('/', 1)[-1]}:{item.get('code')}"
+        for item in answer.get("seal_refusals", ())
+        if isinstance(item, dict)
+    ]
+    return "".join(words)
 
 
 def _host_answers(tool_response: object) -> dict[str, str]:
@@ -522,8 +560,9 @@ def record_host_question(
             when ``None``.
 
     Returns:
-        A non-blocking :class:`HookResult` naming the recorded questions, or why
-        none was recorded.
+        A non-blocking :class:`HookResult` naming the recorded questions, each pending
+        action the answer sealed and each seal refused with its code, or why nothing
+        was recorded.
     """
     name = "runtime.host_question"
     harness = HOST_HARNESSES.get(event.runtime)
@@ -541,6 +580,7 @@ def record_host_question(
         "tool_use_id": tool_use_id,
         "questions": questions,
         "repo_root": str(repo_root if repo_root is not None else Path.cwd()),
+        **_seal_facts(payload),
     }
     if event.event_type is HookEventType.POST_TOOL_USE:
         params["answers"] = _host_answers(payload.get("tool_response"))
@@ -553,7 +593,7 @@ def record_host_question(
     if no_run.skipped:
         return _no_run_skip(name)
     refs = " ".join(ref.rsplit("/", 1)[-1] for ref in answer.get("question_refs", ()))
-    return HookResult(name=name, output=f"{name} ok questions={refs}")
+    return HookResult(name=name, output=f"{name} ok questions={refs}{_seal_summary(answer)}")
 
 
 def record_host_tool_error(

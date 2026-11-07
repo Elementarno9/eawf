@@ -195,9 +195,14 @@ def _consent(subject: str, milestone: str) -> Any:
         status=PendingActionStatus.SEALED,
         selected_option=SimpleNamespace(effect=OptionEffect.APPROVE, option_id="approve"),
         subject_ref=parse_qualified_urn(subject),
+        resolution_actor=SimpleNamespace(principal_id="OP-0001"),
     )
     return approval_action_refusal(
-        cast(Any, revision), action_key="ACT-0001", action=cast(Any, action), spent_by=None
+        cast(Any, revision),
+        action_key="ACT-0001",
+        action=cast(Any, action),
+        approved_by=None,
+        spent_by=None,
     )
 
 

@@ -15,9 +15,11 @@ from pydantic import ValidationError
 
 from eawf.kernel.state.epoch2.pending_action import PendingAction
 from eawf.workflow.host_question import (
+    ACTION_MARKER,
     MAX_SENTENCE_WORDS,
     PresentationRefusal,
     QuestionPresentationError,
+    action_marker,
     numbered_option,
     numbered_prompt,
     present_pending_action,
@@ -92,6 +94,13 @@ def _refusal(action: PendingAction) -> PresentationRefusal:
     with pytest.raises(QuestionPresentationError) as caught:
         present_pending_action(action)
     return caught.value.code
+
+
+def _body(question: UserQuestion) -> str:
+    """Return the words of a presented question below its action marker line."""
+    marker, body = question.question.split("\n", 1)
+    assert action_marker(marker) is not None
+    return body
 
 
 def _option_with(index: int, **fields: Any) -> list[dict[str, Any]]:
@@ -310,7 +319,7 @@ def test_surf_035_ordinary_capitalised_words_are_not_terms() -> None:
     """Boundary: a sentence-initial word or a lone capital is prose, not a code."""
     action = _action(question="I ask: Where should the Milestone panel go?")
 
-    assert present_pending_action(action).question.startswith("I ask:")
+    assert _body(present_pending_action(action)).startswith("I ask:")
 
 
 # ---------- SURF-036: plain prose, consequence in the option ----------
@@ -341,7 +350,7 @@ def test_surf_036_a_sentence_at_the_limit_presents() -> None:
     """Boundary: exactly the maximum sentence length is plain enough."""
     action = _action(question=_sentence(MAX_SENTENCE_WORDS))
 
-    assert present_pending_action(action).question == _sentence(MAX_SENTENCE_WORDS)
+    assert _body(present_pending_action(action)) == _sentence(MAX_SENTENCE_WORDS)
 
 
 def test_surf_036_a_sentence_one_word_over_the_limit_is_refused() -> None:
@@ -485,3 +494,80 @@ def test_surf_073_a_reply_that_is_not_an_option_number_is_not_consent(reply: str
         numbered_option(_action(), reply)
 
     assert caught.value.code is PresentationRefusal.REPLY_NOT_AN_OPTION
+
+
+# ---------- The action marker a harness seal reads back ----------
+
+
+def test_the_presented_question_opens_with_its_action_marker() -> None:
+    """The first line names the action and the revision read; the rest is as before."""
+    action = _action(
+        question="Where should the side panel go for MLS-0030?",
+        terms=[{"term": "MLS-0030", "expansion": "the Milestone this layout ships in"}],
+    )
+
+    question = present_pending_action(action)
+
+    first, body = question.question.split("\n", 1)
+    assert first == "[eawf act=ACT-0001 rev=3]"
+    assert ACTION_MARKER.match(first) is not None
+    assert action_marker(question.question) == ("ACT-0001", 3)
+    assert body == (
+        "Where should the side panel go for MLS-0030?\n\n"
+        "Terms: MLS-0030 is the Milestone this layout ships in."
+    )
+    assert [(o.option_id, o.label) for o in question.options] == [
+        (o["option_id"], o["label"]) for o in _options()
+    ]
+    assert question.options[0].description == (
+        "Nothing moves. The panel stays on the left. Cost: The narrow view stays cramped."
+    )
+
+
+def test_the_marker_names_the_revision_the_action_was_read_at() -> None:
+    """Off-by-one: revision one and the last four-digit key read back exactly."""
+    action = _action(id="ACT-9999", urn=ACTION_URN.replace("ACT-0001", "ACT-9999"), revision=1)
+
+    assert action_marker(present_pending_action(action).question) == ("ACT-9999", 1)
+
+
+def test_the_marker_is_added_after_the_presentation_checks() -> None:
+    """The marker's own key is not held to the term rule; the question's words still are."""
+    assert (
+        _refusal(_action(question="Ship it for MLS-0030?")) is PresentationRefusal.TERM_UNEXPANDED
+    )
+    assert present_pending_action(_action()).question.startswith("[eawf act=ACT-0001 rev=3]\n")
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "",
+        "Where should the side panel go?",
+        "Where?\n[eawf act=ACT-0001 rev=3]",
+        " [eawf act=ACT-0001 rev=3]\nWhere?",
+        "[eawf act=ACT-0001 rev=3] Where?",
+        "[eawf act=ACT-001 rev=3]\nWhere?",
+        "[eawf act=ACT-0001 rev=]\nWhere?",
+        "[eawf act=ACT-0001 rev=3]x\nWhere?",
+        "[eawf task=EAWF-0001]\nWhere?",
+    ],
+    ids=[
+        "empty",
+        "unmarked",
+        "marker-not-first",
+        "leading-space",
+        "same-line",
+        "short-key",
+        "no-revision",
+        "trailing-text",
+        "task-marker",
+    ],
+)
+def test_a_first_line_that_is_not_the_whole_marker_is_never_read_as_one(words: str) -> None:
+    assert action_marker(words) is None
+
+
+def test_a_marker_alone_is_read() -> None:
+    """Single boundary: a question of one line that is the marker still parses."""
+    assert action_marker("[eawf act=ACT-0007 rev=12]") == ("ACT-0007", 12)

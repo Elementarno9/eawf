@@ -152,7 +152,11 @@ def approve(
     PendingAction the tree holds.
     """
     action_ref = seal_plan_approval(
-        repo_root, runtime, subject=proposal["body"]["milestone_urn"], tag=proposal["key"]
+        repo_root,
+        runtime,
+        subject=proposal["body"]["milestone_urn"],
+        tag=proposal["key"],
+        plan_revision=proposal["key"],
     )
     params = approve_params(proposal, approved_by, action_ref=action_ref)
     return dispatch(PLAN_APPROVE_METHOD, repo_root, runtime, params)

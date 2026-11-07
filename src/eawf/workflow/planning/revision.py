@@ -45,9 +45,11 @@ from typing import Final
 
 from eawf.kernel.spec.common import CriterionGrounding
 from eawf.kernel.spec.remote_proof import criteria_needing_remote_ci, remote_proof_reason
+from eawf.kernel.state.epoch2.base import OPERATOR_PRINCIPAL_PREFIX
 from eawf.kernel.state.epoch2.pending_action import (
     OptionEffect,
     PendingAction,
+    PendingActionKind,
     PendingActionStatus,
 )
 from eawf.kernel.state.epoch2.plan_revision import (
@@ -61,6 +63,7 @@ from eawf.kernel.state.epoch2.plan_revision import (
 )
 from eawf.kernel.state.epoch2.track import TrackStatus
 from eawf.kernel.state.epoch2.transitions import MESSAGE_WIDTH
+from eawf.kernel.state.epoch2.values import OwnerPrincipal
 
 logger = logging.getLogger(__name__)
 
@@ -402,40 +405,93 @@ def approval_binds_content(revision: PlanRevision, approval: PlanApproval) -> Pl
     return None
 
 
+def _binding_failure(
+    revision: PlanRevision, action: PendingAction, *, action_key: str, spent_by: str | None
+) -> tuple[str, str, str] | None:
+    """Return the guard, detail and remediation of a sealed answer not bound to *revision*.
+
+    Args:
+        revision: The revision the approval is offered for.
+        action: The sealed approving answer the approval cites.
+        action_key: Its ``ACT-####`` key.
+        spent_by: The key of another revision whose approval already cites it, or
+            ``None``.
+
+    Returns:
+        The failure, or ``None`` when the answer was asked about this plan's
+        Milestone, is unspent, and was filed bound to this revision's content.
+    """
+    milestone = revision.body.milestone_urn
+    if not action.subject_ref.same_entity(milestone):
+        return (
+            "approval_action_subject",
+            f"{action_key} was asked about {action.subject_ref}, not {milestone}",
+            "Approve with the question asked about this plan's Milestone.",
+        )
+    if spent_by is not None and spent_by != revision.key:
+        return (
+            "approval_action_unspent",
+            f"{action_key} already approved {spent_by}, so it cannot also approve {revision.key}",
+            "Open a new approval question for this revision.",
+        )
+    if action.bundle_digest != plan_content_digest(revision.body):
+        bound = "no plan revision" if action.bundle_digest is None else action.bundle_digest
+        return (
+            "approval_action_digest",
+            f"{action_key} was filed bound to {bound}, not to the content of {revision.key}",
+            f"Open a new approval question with plan_revision {revision.key}, then retry.",
+        )
+    return None
+
+
 def approval_action_refusal(
     revision: PlanRevision,
     *,
     action_key: str,
     action: PendingAction | None,
+    approved_by: OwnerPrincipal | None,
     spent_by: str | None,
 ) -> PlanRefusal | None:
     """Return why the PendingAction an approval cites does not consent to *revision*.
 
     An approval reference is only consent when the tree holds the action,
-    a person answered it, the answer was the approving option, the
-    question was asked about this plan's Milestone, and no other revision
-    already spent that answer. Each failure is its own guard so a client
-    can tell which step of the operator's answer is missing.
+    it is an operator decision, a person answered it, the answer was the
+    approving option, an operator principal sealed it, any approver the
+    request names is that operator, the question was asked about this
+    plan's Milestone, no other revision already spent that answer, and the
+    decision was filed bound to this revision's plan content digest. Each
+    failure is its own guard so a client can tell which step of the
+    operator's answer is missing. The checks run when an approval is
+    sealed; an approval already recorded is never re-checked.
 
     Args:
         revision: The revision the approval is offered for.
         action_key: The ``ACT-####`` key the approval cites.
         action: The action the tree holds under that key, or ``None`` when
             it holds none or the row does not read as an action.
+        approved_by: The approver the request names, or ``None`` when the
+            approver is derived from the action's resolver.
         spent_by: The key of another revision whose approval already cites
             the action, or ``None``.
 
     Returns:
         The refusal, or ``None`` when the action is a sealed approving
-        answer about this revision's Milestone.
+        answer an operator gave to the decision filed for this revision.
     """
     failure: tuple[str, str, str] | None = None
-    milestone = revision.body.milestone_urn
     if action is None:
         failure = (
             "approval_action_held",
             f"the tree holds no pending action {action_key}, so nobody was asked",
             "Open the approval question, have the operator answer it, then retry.",
+        )
+    elif action.kind is not PendingActionKind.OPERATOR_DECISION:
+        failure = (
+            "approval_action_kind",
+            f"{action_key} is a {action.kind.value}, not the operator decision a plan "
+            "approval is asked as",
+            f"Open the approval question with question open-decision and plan_revision "
+            f"{revision.key}, then retry.",
         )
     elif action.status is not PendingActionStatus.SEALED:
         failure = (
@@ -450,18 +506,24 @@ def approval_action_refusal(
             f"{action_key} was answered {answered}, which is not the approving option",
             "Open a new approval question; an answer that declined cannot approve.",
         )
-    elif not action.subject_ref.same_entity(milestone):
+    elif (resolver := action.resolution_actor) is None or not resolver.principal_id.startswith(
+        OPERATOR_PRINCIPAL_PREFIX
+    ):
+        sealer = "nobody" if resolver is None else resolver.principal_id
         failure = (
-            "approval_action_subject",
-            f"{action_key} was asked about {action.subject_ref}, not {milestone}",
-            "Approve with the question asked about this plan's Milestone.",
+            "approval_action_operator",
+            f"{action_key} was sealed by {sealer}, not an {OPERATOR_PRINCIPAL_PREFIX} operator",
+            "Have the operator answer a new approval question, then retry.",
         )
-    elif spent_by is not None and spent_by != revision.key:
+    elif approved_by is not None and approved_by.principal_id != resolver.principal_id:
         failure = (
-            "approval_action_unspent",
-            f"{action_key} already approved {spent_by}, so it cannot also approve {revision.key}",
-            "Open a new approval question for this revision.",
+            "approval_action_approver",
+            f"{action_key} was sealed by {resolver.principal_id}, so "
+            f"{approved_by.principal_id} cannot approve on it",
+            "Omit the approver to record the sealing operator, or name that operator.",
         )
+    else:
+        failure = _binding_failure(revision, action, action_key=action_key, spent_by=spent_by)
     if failure is None:
         return None
     guard, detail, remediation = failure

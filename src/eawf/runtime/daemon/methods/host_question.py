@@ -22,6 +22,13 @@ Run waits on a person: ``raise`` opens a pause over the Run naming the question,
 answer resolves that pause in the same transaction. Both verbs are idempotent on the
 host's call: a retried hook finds the questions that call raised, and an answer to a
 question already answered writes nothing.
+
+A question that presents a pending action opens with the action's marker line. Its
+answer also seals that action, through
+:func:`~eawf.runtime.daemon.methods.harness_seal.seal_from_host_answer`, once the
+answer is recorded. An operator's own session is on no Run, so a marked call there is
+recorded scoped to the action it is marked with, and holds no Run; an unmarked call
+there is refused as before.
 """
 
 from __future__ import annotations
@@ -33,7 +40,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, Final, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictBool, StringConstraints
 
 from eawf.kernel.identity import (
     EntityKind,
@@ -54,15 +61,22 @@ from eawf.kernel.state.epoch2.question import (
 )
 from eawf.kernel.state.epoch2.values import EntityOrigin
 from eawf.kernel.store.compaction import document_rows
+from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods.delivery_approval import publish_commits
+from eawf.runtime.daemon.methods.harness_seal import (
+    SealRefusal,
+    marked_action,
+    seal_from_host_answer,
+)
 from eawf.runtime.daemon.methods.host_subagent import HARNESS_ACTORS
 from eawf.runtime.daemon.methods.pause import open_person_pause, resolve_person_pauses
-from eawf.runtime.daemon.methods.permission import host_run
+from eawf.runtime.daemon.methods.permission import host_run, host_session_runs
 from eawf.runtime.daemon.methods.run import append_run_event
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.daemon.run_events import RunEventAppend, ledger_receipt
@@ -90,6 +104,7 @@ _NATIVE_ORIGIN: Final = EntityOrigin(kind="native", mapping_basis="native", conf
 
 _HostText = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=256)]
 _Words = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=4000)]
+_Path = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=4096)]
 
 
 class HostAskedQuestion(BaseModel):
@@ -98,12 +113,14 @@ class HostAskedQuestion(BaseModel):
     Attributes:
         question: The question in the host's words.
         options: The labels of the answers it offers.
+        multi_select: Whether the operator may choose several of them.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     question: _Words
     options: tuple[_Words, ...] = Field(default=(), max_length=MAX_OPTIONS)
+    multi_select: StrictBool = False
 
 
 class HostQuestionCall(BaseModel):
@@ -116,6 +133,12 @@ class HostQuestionCall(BaseModel):
         questions: What the call asks, in order.
         answers: The operator's answer to each question, by its words; empty until
             the call returns.
+        preanswered: Whether the call carried its answers in its own input, so the
+            host never asked anyone.
+        transcript_path: The host's transcript of the session, as its hook named it.
+        tool_input_questions: The questions as the call's input carried them, which
+            a seal compares with the words its action presents as and the transcript
+            is checked against; without them a marked question seals nothing.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -125,6 +148,11 @@ class HostQuestionCall(BaseModel):
     tool_use_id: _HostText
     questions: tuple[HostAskedQuestion, ...] = Field(min_length=1, max_length=MAX_OPTIONS)
     answers: dict[_Words, _Words] = Field(default_factory=dict)
+    preanswered: StrictBool = False
+    transcript_path: _Path | None = None
+    tool_input_questions: tuple[dict[str, JsonValue], ...] | None = Field(
+        default=None, max_length=MAX_OPTIONS
+    )
 
 
 class HostQuestionLine(BaseModel):
@@ -149,16 +177,22 @@ class HostQuestionAnswer(BaseModel):
     """What both verbs answer with.
 
     Attributes:
-        run_ref: The Run the questions are bound to.
+        run_ref: The Run the questions are bound to; ``None`` for a marked call on
+            a host session that is on no live Run.
         question_refs: The questions the call asked, in order.
         answered: How many of them this call answered.
+        sealed_action_refs: The pending actions the answers sealed.
+        seal_refusals: The marked pending actions the answers did not seal, each
+            with the code of the check that refused it.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    run_ref: str
+    run_ref: str | None
     question_refs: tuple[str, ...]
     answered: int = 0
+    sealed_action_refs: tuple[str, ...] = ()
+    seal_refusals: tuple[SealRefusal, ...] = ()
 
 
 def _call_digest(args: HostQuestionCall) -> str:
@@ -276,10 +310,48 @@ def append_host_question(
     return record
 
 
+def _scope(
+    authority: RootAuthority, args: HostQuestionCall
+) -> tuple[QualifiedUrn, QualifiedUrn | None]:
+    """Return what the call's questions are scoped to, and the Run they hold, if any.
+
+    A call on the one live Run of its host session is scoped to that Run. An
+    operator's own session is on no Run, yet a question marked with a pending
+    action is still the operator answering it, so such a call is scoped to the
+    first action it is marked with that the tree holds, and holds no Run.
+
+    Raises:
+        DaemonValidationError: The host session is on several live Runs, or on
+            none and no question is marked with an action the tree holds.
+    """
+    if not host_session_runs(authority, args.host_session_id):
+        action = marked_action(authority, args)
+        if action is not None:
+            return action.urn, None
+    run = host_run(authority, args.host_session_id)
+    return run, run
+
+
+def _standing(session: RootSession, args: HostQuestionCall) -> dict[int, HostQuestionLine]:
+    """Return the questions of the call already recorded, by their position in it."""
+    asked_by = _call_digest(args)
+    latest = host_question_lines(read_ledger_records(session.ledger_path(Epoch2Collection.RUN)))
+    return {line.position: line for line in latest.values() if line.asked_by == asked_by}
+
+
 def _raise_questions(
-    session: RootSession, run: QualifiedUrn, args: HostQuestionCall, *, now: datetime
+    session: RootSession,
+    scope: QualifiedUrn,
+    args: HostQuestionCall,
+    *,
+    run: QualifiedUrn | None,
+    now: datetime,
 ) -> tuple[HostQuestionLine, ...]:
-    """Record every question of the call not already recorded, and return them all."""
+    """Record every question of the call not already recorded, and return them all.
+
+    A question held over a Run makes the Run wait on a person; one scoped to a
+    pending action holds no Run, so it opens no pause.
+    """
     asked_by = _call_digest(args)
     records = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
     latest = host_question_lines(records)
@@ -298,12 +370,12 @@ def _raise_questions(
                 question=OpenQuestion(
                     uid=uuid4(),
                     key=key,
-                    urn=_question_urn(run, key),
+                    urn=_question_urn(scope, key),
                     origin=_NATIVE_ORIGIN,
                     revision=1,
                     created_at=now,
                     updated_at=now,
-                    scope_ref=run,
+                    scope_ref=scope,
                     question=scrubbed_words(asked.question) or "a question with no words",
                     options=_options(asked),
                     blocking=True,
@@ -311,7 +383,8 @@ def _raise_questions(
                 ),
             )
             append_host_question(session, line, now=now)
-            open_person_pause(session, scope_ref=run, waiting_on_ref=line.question.urn, now=now)
+            if run is not None:
+                open_person_pause(session, scope_ref=run, waiting_on_ref=line.question.urn, now=now)
         lines.append(line)
     return tuple(lines)
 
@@ -385,38 +458,55 @@ def raise_host_questions(
 ) -> HostQuestionAnswer:
     """Record the questions a host call asks and state each on its Run's stream.
 
+    A call marked with a pending action on a session that is on no live Run is
+    recorded scoped to that action, and states nothing on any stream.
+
     Raises:
-        DaemonValidationError: The host session is on no one live Run.
+        DaemonValidationError: The host session is on no one live Run, and no
+            question of the call is marked with a pending action the tree holds.
     """
-    run = host_run(authority, args.host_session_id)
+    scope, run = _scope(authority, args)
     actor = HARNESS_ACTORS[args.harness]
-    with context.session([run]) as session:
-        lines = _raise_questions(session, run, args, now=now)
-    for line in lines:
-        _state(context, run, line, actor=actor, receipt=None, now=now)
-    logger.info(f"raise_host_questions run={run.entity_key} questions={len(lines)}")
+    with context.session([scope]) as session:
+        lines = _raise_questions(session, scope, args, run=run, now=now)
+    if run is not None:
+        for line in lines:
+            _state(context, run, line, actor=actor, receipt=None, now=now)
+    logger.info(f"raise_host_questions scope={scope.entity_key} questions={len(lines)}")
     return HostQuestionAnswer(
-        run_ref=str(run), question_refs=tuple(str(line.question.urn) for line in lines)
+        run_ref=None if run is None else str(run),
+        question_refs=tuple(str(line.question.urn) for line in lines),
     )
 
 
 def answer_host_questions(
     context: Epoch2RootContext, authority: RootAuthority, args: HostQuestionCall, *, now: datetime
-) -> HostQuestionAnswer:
+) -> tuple[HostQuestionAnswer, tuple[Envelope, ...]]:
     """Record the operator's answers to a host call's questions.
 
     A call whose raise never arrived is raised first, so its answer still has a
     question to resolve. A question the operator left unanswered stays waiting.
+    Once the answers are recorded, each answered question marked with a pending
+    action seals that action, or reports why it did not; a refused seal leaves
+    the recorded answer standing.
+
+    Returns:
+        The answer, and the firehose rows the seals appended, to publish once the
+        locks are released.
 
     Raises:
-        DaemonValidationError: The host session is on no one live Run.
+        DaemonValidationError: The host session is on no one live Run, and no
+            question of the call is marked with a pending action the tree holds.
     """
-    run = host_run(authority, args.host_session_id)
+    scope, run = _scope(authority, args)
     actor = HARNESS_ACTORS[args.harness]
     raised: list[HostQuestionLine] = []
     answered: list[tuple[HostQuestionLine, LedgerRecord]] = []
-    with context.session([run]) as session:
-        lines = _raise_questions(session, run, args, now=now)
+    with context.session([scope]) as session:
+        # Read before this report raises anything, so a report whose raise never
+        # arrived is told from one whose raise did.
+        standing = _standing(session, args)
+        lines = _raise_questions(session, scope, args, run=run, now=now)
         for line, asked in zip(lines, args.questions, strict=True):
             words = args.answers.get(asked.question)
             if line.question.status is OpenQuestionStatus.ANSWERED or words is None:
@@ -427,17 +517,35 @@ def answer_host_questions(
             )
             raised.append(line)
             answered.append((moved, append_host_question(session, moved, now=now)))
-        resolve_person_pauses(session, (line.question.urn for line, _ in answered), now=now)
-    for line in raised:
-        _state(context, run, line, actor=actor, receipt=None, now=now)
-    for line, record in answered:
-        _state(context, run, line, actor=actor, receipt=ledger_receipt(record), now=now)
-    logger.info(f"answer_host_questions run={run.entity_key} answered={len(answered)}")
-    return HostQuestionAnswer(
-        run_ref=str(run),
+        if run is not None:
+            resolve_person_pauses(session, (line.question.urn for line, _ in answered), now=now)
+    if run is not None:
+        for line in raised:
+            _state(context, run, line, actor=actor, receipt=None, now=now)
+        for line, record in answered:
+            _state(context, run, line, actor=actor, receipt=ledger_receipt(record), now=now)
+    seal = seal_from_host_answer(
+        context,
+        authority,
+        args,
+        answered=tuple(line for line, _ in answered),
+        raised=standing,
+        scope=scope,
+        run=run,
+        now=now,
+    )
+    logger.info(
+        f"answer_host_questions scope={scope.entity_key} answered={len(answered)} "
+        f"sealed={len(seal.sealed_action_refs)} refused={len(seal.seal_refusals)}"
+    )
+    answer = HostQuestionAnswer(
+        run_ref=None if run is None else str(run),
         question_refs=tuple(str(line.question.urn) for line in lines),
         answered=len(answered),
+        sealed_action_refs=seal.sealed_action_refs,
+        seal_refusals=seal.seal_refusals,
     )
+    return answer, seal.envelopes
 
 
 @native_mutator(HOST_QUESTION_RAISE_METHOD)
@@ -460,9 +568,10 @@ async def _answer_host_questions(
     """Record the host operator's answers to the questions a call asked."""
     args = native_params(HostQuestionCall, params)
     context = ctx.native_root_context(authority.root)
-    answer = await asyncio.to_thread(
+    answer, envelopes = await asyncio.to_thread(
         answer_host_questions, context, authority, args, now=datetime.now(UTC)
     )
+    publish_commits(ctx, envelopes)
     return answer.model_dump(mode="json")
 
 

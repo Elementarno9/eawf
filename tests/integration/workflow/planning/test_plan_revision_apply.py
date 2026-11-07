@@ -318,11 +318,19 @@ def with_criterion_grounding(**overrides: Any) -> dict[str, Any]:
 
 
 def approve(
-    canary: CanaryProvision, tmp_path: Path, *, expected_revision: int = 2
+    canary: CanaryProvision,
+    tmp_path: Path,
+    *,
+    expected_revision: int = 2,
+    plan_revision: str | None = REVISION_KEY,
 ) -> dict[str, Any]:
-    """Seal the operator approval and return the envelope."""
+    """Seal the operator approval, bound to *plan_revision*, and return the envelope."""
     action_ref = seal_plan_approval(
-        canary.root, tmp_path / "runtime", subject=MILESTONE_URN, tag=REVISION_KEY
+        canary.root,
+        tmp_path / "runtime",
+        subject=MILESTONE_URN,
+        tag=REVISION_KEY,
+        plan_revision=plan_revision,
     )
     return dispatch(
         PLAN_APPROVE_METHOD,
@@ -732,7 +740,8 @@ def test_approving_a_revision_nobody_submitted_is_refused(tmp_path: Path) -> Non
     """An absent revision is the empty boundary of every verb that reads one."""
     canary = planned_canary(tmp_path, code="ABSENT")
 
-    answer = approve(canary, tmp_path, expected_revision=1)
+    # with no revision held, the decision cannot be bound to one
+    answer = approve(canary, tmp_path, expected_revision=1, plan_revision=None)
 
     assert answer["errors"][0]["code"] == "identity_not_found"
     assert answer["errors"][0]["guard"] == "plan_revision_resolved"
@@ -745,7 +754,13 @@ def test_approval_refuses_an_acceptance_criterion_still_graded_assumed(tmp_path:
     """The daemon's own approve verb refuses a plan resting on an assumed claim."""
     canary = planned_canary(tmp_path, code="ASSUMED")
     assert submit_body(canary, tmp_path, body=with_criterion_grounding())["status"] == "ok"
-    seal_plan_approval(canary.root, tmp_path / "runtime", subject=MILESTONE_URN, tag=REVISION_KEY)
+    seal_plan_approval(
+        canary.root,
+        tmp_path / "runtime",
+        subject=MILESTONE_URN,
+        tag=REVISION_KEY,
+        plan_revision=REVISION_KEY,
+    )
     before = document_path(canary).read_bytes()
 
     answer = approve(canary, tmp_path)
@@ -950,7 +965,7 @@ def drive(
     )
     assert submitted["status"] == "ok", submitted["errors"]
     action_ref = seal_plan_approval(
-        canary.root, tmp_path / "runtime", subject=body["milestone_urn"], tag=key
+        canary.root, tmp_path / "runtime", subject=body["milestone_urn"], tag=key, plan_revision=key
     )
     approved_answer = dispatch(
         PLAN_APPROVE_METHOD,

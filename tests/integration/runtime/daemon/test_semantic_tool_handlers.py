@@ -1516,7 +1516,11 @@ def submit_and_approve(
                 "key": key,
                 "expected_revision": 2,
                 "action_ref": seal_plan_approval(
-                    canary.root, ctx.wal_dir.parent, subject=body["milestone_urn"], tag=key
+                    canary.root,
+                    ctx.wal_dir.parent,
+                    subject=body["milestone_urn"],
+                    tag=key,
+                    plan_revision=key,
                 ),
                 "approved_by": operator,
                 "idempotency_key": f"approve-{key}",

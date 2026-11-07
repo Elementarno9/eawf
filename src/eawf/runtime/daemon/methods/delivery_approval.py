@@ -79,6 +79,7 @@ from eawf.kernel.state.epoch2.pending_action import (
     ActionPrincipal,
     AnswerOutcome,
     AnswerResult,
+    HarnessAttestation,
     HumanPrincipal,
     OptionId,
     PendingAction,
@@ -784,7 +785,29 @@ def _seal_request(args: ApprovalSealParams) -> ActionCommitRequest:
     )
 
 
-def _sealed(action: PendingAction, *, args: ApprovalSealParams, now: datetime) -> PendingAction:
+@dataclass(frozen=True, slots=True)
+class _SealAnswer:
+    """One answer a seal is made with, whichever surface the operator gave it at.
+
+    Attributes:
+        urn: The pending action being answered.
+        expected_revision: The revision the answer was given against.
+        resolver: The person who answered.
+        option_id: The answer they chose.
+        receipt_ref: The evidence row recording the answer.
+        harness_attestation: How a host harness reported the answer, when the
+            operator gave it inside one; ``None`` for an eawf surface.
+    """
+
+    urn: QualifiedUrn
+    expected_revision: int
+    resolver: HumanPrincipal
+    option_id: str
+    receipt_ref: QualifiedUrn
+    harness_attestation: HarnessAttestation | None = None
+
+
+def _sealed(action: PendingAction, *, args: _SealAnswer, now: datetime) -> PendingAction:
     """Return *action* sealed with the answer *args* carries, or refuse.
 
     Raises:
@@ -799,6 +822,7 @@ def _sealed(action: PendingAction, *, args: ApprovalSealParams, now: datetime) -
             option_id=args.option_id,
             receipt_ref=args.receipt_ref,
             at=now,
+            harness_attestation=args.harness_attestation,
         )
     except ApprovalRefusedError as error:
         raise TransactionRefusedError(
@@ -820,7 +844,7 @@ def _sealed(action: PendingAction, *, args: ApprovalSealParams, now: datetime) -
 
 
 def _answered_after_seal(
-    action: PendingAction, *, args: ApprovalSealParams, now: datetime
+    action: PendingAction, *, args: _SealAnswer, now: datetime
 ) -> AnswerResult:
     """Return the result of an answer that reaches an action the tree already sealed.
 
@@ -882,7 +906,40 @@ def seal_acceptance_approval(
             tree holds, or the idempotency key already committed
             different parameters. Nothing was written.
     """
-    request = _seal_request(args)
+    answer = _SealAnswer(
+        urn=args.urn,
+        expected_revision=args.expected_revision,
+        resolver=args.resolver,
+        option_id=args.option_id,
+        receipt_ref=args.receipt_ref,
+    )
+    return _commit_seal(context, request=_seal_request(args), args=answer, now=now)
+
+
+def _commit_seal(
+    context: Epoch2RootContext,
+    *,
+    request: ActionCommitRequest,
+    args: _SealAnswer,
+    now: datetime,
+) -> ApprovalCommit:
+    """Seal a waiting question with one answer, under the actor *request* names.
+
+    The seal verb and the harness seal share this core; each decides for
+    itself who may name which resolver before it is reached.
+
+    Args:
+        context: The native context of the tree the question lives in.
+        request: What the commit is filed and replayed under.
+        args: The answer.
+        now: When the answer was given.
+
+    Returns:
+        As :func:`seal_acceptance_approval`.
+
+    Raises:
+        TransactionRefusedError: As :func:`seal_acceptance_approval`.
+    """
     with context.session([str(args.urn)]) as session:
         replayed = _replayed_receipt(context, request=request)
         action = action_at(session.read_document(), args.urn)

@@ -284,11 +284,17 @@ def _authority(entry: SkillCatalogEntry) -> str:
             " operator"
         )
         lines.append(
-            f"{lead} files it with `eawf question open-decision` (`{DECISION_RPC}`), shows the"
-            " bound question the answer carries, and stops; it never chooses the recommended"
-            " option itself. In Codex the bound question is the answer's `numbered_prompt`,"
-            " printed verbatim, and the operator's reply is relayed with `eawf question answer`"
-            f" (`{ANSWER_RPC}`); the console answers the same record, and the first answer wins."
+            f"{lead} files it with `eawf question open-decision` (`{DECISION_RPC}`) and never"
+            " chooses the recommended option itself. In Claude Code, present the bound question"
+            " the answer carries with AskUserQuestion verbatim, the action marker on its first"
+            " line included: the operator's answer to that marked question is the"
+            " approval, or the choice, and that answer seals it. Then complete the act under"
+            " your own principal,"
+            " citing the sealed action; an agent still cannot name an `OP-` key. Codex sessions"
+            " have no AskUserQuestion, so their operator acts stay terminal-only: print the"
+            " answer's `numbered_prompt` verbatim and stop; the operator relays the reply with"
+            f" `eawf question answer` (`{ANSWER_RPC}`) from their own terminal, the console"
+            " answers the same record, and the first answer wins."
         )
     lines.append(f"- Effects: {effects.summary}")
     if effects.rpcs:

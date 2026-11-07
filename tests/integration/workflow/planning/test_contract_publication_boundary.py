@@ -178,7 +178,11 @@ def _submit_and_approve(canary: CanaryProvision, tmp_path: Path) -> dict[str, An
             "key": REVISION_KEY,
             "expected_revision": 2,
             "action_ref": seal_plan_approval(
-                canary.root, tmp_path / "runtime", subject=MILESTONE_URN, tag=REVISION_KEY
+                canary.root,
+                tmp_path / "runtime",
+                subject=MILESTONE_URN,
+                tag=REVISION_KEY,
+                plan_revision=REVISION_KEY,
             ),
             "approved_by": OPERATOR,
             "actor": ACTOR,

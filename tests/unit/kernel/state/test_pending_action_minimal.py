@@ -31,6 +31,7 @@ from typing import Any, Final
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.delivery.receipts import canonical_digest
 from eawf.kernel.identity import IdentityError
 from eawf.kernel.state.epoch2.batch import DeliveryBatch
 from eawf.kernel.state.epoch2.milestone import Milestone
@@ -40,6 +41,7 @@ from eawf.kernel.state.epoch2.pending_action import (
     PENDING_ACTION_EDGES,
     AgentPrincipal,
     AnswerOutcome,
+    HarnessAttestation,
     HumanPrincipal,
     OptionEffect,
     PendingAction,
@@ -461,6 +463,138 @@ def test_advance_and_seal_each_move_the_revision_on_by_one() -> None:
         at=LATER,
     )
     assert (created.revision, waiting.revision, sealed.revision) == (1, 2, 3)
+
+
+# ---------- how the harness reported a seal ----------
+
+QUESTION: Final = "eawf://WSP-MAIN/PRJ-EAWF/_/question/QST-0001"
+
+#: The digests of :func:`row` and :func:`sealed_row` as dumped before the
+#: attestation existed, so a stored row's bytes are pinned, not re-derived.
+WAITING_ROW_DIGEST: Final = (
+    "sha256:6e3a14bd13a0703a2347795832f381d725bd3ddf2c1c1fdbfb0f47213ef67b0b"
+)
+SEALED_ROW_DIGEST: Final = "sha256:70536cca3147bfc47be9bd439fcc00c0219728c5be9ff9f0920837bb90d9226e"
+
+
+def attestation(**overrides: Any) -> dict[str, Any]:
+    """Return one harness attestation payload, with *overrides* applied."""
+    payload: dict[str, Any] = {
+        "harness": "claude-code",
+        "host_session_digest": f"sha256:{'b' * 64}",
+        "tool_use_id": "toolu_01ABCDEF",
+        "question_ref": QUESTION,
+        "run_ref": RUN,
+        "payload_digest": f"sha256:{'c' * 64}",
+        "transcript_check": "matched",
+        "raise_gap_ms": 2500,
+        "permission_mode": "default",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_a_harness_attestation_rides_only_a_sealed_action() -> None:
+    """SEALED carries one, WAITING refuses one, and an absent one leaves no key behind."""
+    sealed = PendingAction.model_validate(sealed_row(harness_attestation=attestation()))
+    assert isinstance(sealed.harness_attestation, HarnessAttestation)
+    assert sealed.model_dump(mode="json")["harness_attestation"] == attestation()
+
+    with pytest.raises(ValueError, match="harness_attestation"):
+        PendingAction.model_validate(row(harness_attestation=attestation()))
+
+    plain = PendingAction.model_validate(sealed_row())
+    assert plain.harness_attestation is None
+    assert "harness_attestation" not in plain.model_dump()
+    assert "harness_attestation" not in plain.model_dump(mode="json")
+
+
+def test_a_row_without_an_attestation_keeps_its_stored_digest() -> None:
+    """A stored row read and dumped again is byte-identical to what was filed."""
+    for payload, digest in ((row(), WAITING_ROW_DIGEST), (sealed_row(), SEALED_ROW_DIGEST)):
+        dumped = PendingAction.model_validate(payload).model_dump(mode="json")
+        assert canonical_digest(dumped) == digest
+
+
+def test_seal_records_the_attestation_it_is_given() -> None:
+    waiting = PendingAction.model_validate(row())
+    given = HarnessAttestation.model_validate(attestation())
+    sealed = waiting.seal(
+        resolver=HumanPrincipal.model_validate(OPERATOR),
+        option_id="approve",
+        receipt_ref=RECEIPT,
+        at=LATER,
+        harness_attestation=given,
+    )
+    assert sealed.harness_attestation == given
+    recorded = sealed.with_disposition(
+        principal_id="OP-0001", outcome=AnswerOutcome.SEALED, option_id="approve"
+    )
+    assert recorded.harness_attestation == given
+
+
+def test_seal_without_an_attestation_files_none() -> None:
+    sealed = PendingAction.model_validate(row()).seal(
+        resolver=HumanPrincipal.model_validate(OPERATOR),
+        option_id="approve",
+        receipt_ref=RECEIPT,
+        at=LATER,
+    )
+    assert sealed.harness_attestation is None
+    assert "harness_attestation" not in sealed.model_dump(mode="json")
+
+
+@pytest.mark.parametrize("check", ["matched", "tool_use_only", "absent"])
+def test_an_attestation_admits_each_sealing_transcript_check(check: str) -> None:
+    admitted = HarnessAttestation.model_validate(attestation(transcript_check=check))
+    assert admitted.transcript_check == check
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("harness", "codex"),
+        ("transcript_check", "mismatch"),
+        ("raise_gap_ms", -1),
+        ("raise_gap_ms", 1.5),
+        ("raise_gap_ms", "2500"),
+        ("host_session_digest", "b" * 64),
+        ("payload_digest", f"sha256:{'c' * 63}"),
+        ("question_ref", RECEIPT),
+        ("run_ref", RECEIPT),
+        ("tool_use_id", ""),
+        ("tool_use_id", "x" * 2001),
+        ("permission_mode", ""),
+    ],
+)
+def test_an_attestation_refuses_a_field_out_of_shape(field: str, value: object) -> None:
+    with pytest.raises(ValidationError, match=field):
+        HarnessAttestation.model_validate(attestation(**{field: value}))
+
+
+@pytest.mark.parametrize("missing", ["harness", "tool_use_id", "question_ref", "raise_gap_ms"])
+def test_an_attestation_refuses_a_missing_field(missing: str) -> None:
+    payload = attestation()
+    del payload[missing]
+    with pytest.raises(ValidationError, match=missing):
+        HarnessAttestation.model_validate(payload)
+
+
+def test_an_attestation_admits_the_boundary_values() -> None:
+    edge = HarnessAttestation.model_validate(
+        attestation(raise_gap_ms=0, run_ref=None, permission_mode=None, tool_use_id="x")
+    )
+    assert (edge.raise_gap_ms, edge.run_ref, edge.permission_mode) == (0, None, None)
+
+
+def test_an_attestation_refuses_an_unknown_key() -> None:
+    with pytest.raises(ValidationError, match=r"extra_forbidden|Extra inputs"):
+        HarnessAttestation.model_validate(attestation(answers={"q": "a"}))
+
+
+def test_an_attestation_refuses_a_non_mapping() -> None:
+    with pytest.raises(ValidationError):
+        PendingAction.model_validate(sealed_row(harness_attestation="matched"))
 
 
 # ---------- the producer's rules, held directly ----------

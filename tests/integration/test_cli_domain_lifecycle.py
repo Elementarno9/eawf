@@ -1178,6 +1178,70 @@ def test_seal_approval_unreachable_daemon_is_a_daemon_unreachable_error(
     assert "daemon unavailable" in result.output
 
 
+# ---- task waive-criterion -----------------------------------------------------
+
+_WAIVER_ACTION = "eawf://EAWF/pending-action/ACT-0001"
+
+
+def _waive_args(tmp_path: Path, *extra: str) -> list[str]:
+    """Return a full ``task waive-criterion`` command line sent by an agent."""
+    return [
+        "--workspace",
+        str(tmp_path),
+        "task",
+        "waive-criterion",
+        _TASK_URN,
+        "CR-0001-2",
+        "--reason",
+        "its test file was deleted with the check",
+        "--expected-revision",
+        "3",
+        "--idempotency-key",
+        "waive-0001",
+        "--actor",
+        "EAWF-PLANNER",
+        *extra,
+    ]
+
+
+def test_waive_criterion_forwards_the_action_ref(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """--action-ref rides the wire as action_ref; without it no action_ref key is sent."""
+    from eawf.runtime.daemon.methods.delivery_waiver import WaiveCriterionAnswer
+    from eawf.surfaces.cli.commands.domain_integration import task_waive_criterion_cmd
+
+    answer = WaiveCriterionAnswer(
+        task_ref=_TASK_URN, criterion_id="CR-0001-2", waived=True, revision=4
+    ).model_dump(mode="json")
+    _install(monkeypatch, result=answer)
+
+    cited = runner.invoke(app, _waive_args(tmp_path, "--action-ref", _WAIVER_ACTION))
+    plain = runner.invoke(app, _waive_args(tmp_path))
+
+    assert cited.exit_code == exit_codes.OK, cited.output
+    assert plain.exit_code == exit_codes.OK, plain.output
+    [(method, sent), (_, unsent)] = _FakeClient.calls
+    assert method == "runtime.delivery.waive_criterion"
+    assert sent["action_ref"] == _WAIVER_ACTION
+    assert "action_ref" not in unsent
+    assert {key: value for key, value in sent.items() if key != "action_ref"} == unsent
+    doc = task_waive_criterion_cmd.__doc__
+    assert doc is not None
+    assert doc.splitlines()[0] == (
+        "Waive one criterion of a promoted Task, so its Batch closes without proving it."
+    )
+
+
+def test_waive_criterion_help_names_the_action_ref(tmp_path: Path) -> None:
+    """The help names the option an agent cites the operator's sealed answer by."""
+    result = runner.invoke(app, ["task", "waive-criterion", "--help"], terminal_width=200)
+
+    assert result.exit_code == exit_codes.OK, result.output
+    assert "--action-ref" in result.output
+    assert "waiver_operator_required" in result.output
+
+
 def test_task_submit_forwards_the_changed_paths(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -495,14 +495,15 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " and parent_key; the actor is your own principal key, never an `OP-` operator key."
             " The daemon validates and either rejects with findings or records the revision as"
             " VALIDATED.",
-            "Approval and apply are the operator's acts, not yours. File the approval as a typed"
-            " question with `eawf question open-decision --from-spec <decision.json> --actor"
-            " <your-principal>`, show the bound question it returns, and stop. The operator"
-            " answers it and then runs `eawf plan approve <PRV-KEY> --expected-revision <N>"
-            " --action-ref <action-urn> --approved-by <operator> --idempotency-key <key> --actor"
-            " <operator>` and `eawf plan apply <PRV-KEY> --expected-revision <N>"
-            " --idempotency-key <key> --actor <operator>`. Never run either yourself: the daemon"
-            " refuses an operator key named from an agent session.",
+            "Approval is the operator's decision, not yours. File it as a typed question with"
+            " `eawf question open-decision --from-spec <decision.json> --actor <your-principal>`"
+            " and present the bound question it returns. Once the operator's answer seals it,"
+            " run `eawf plan approve <PRV-KEY> --expected-revision <N> --action-ref <action-urn>"
+            " --idempotency-key <key> --actor <your-principal>`; the daemon records the operator"
+            " who sealed the action as the approver. Then run `eawf plan apply <PRV-KEY>"
+            " --expected-revision <N> --idempotency-key <key> --actor <your-principal>`. Never"
+            " name an `OP-` key yourself: the daemon refuses an operator key named from an agent"
+            " session.",
         ),
         constraints=(
             "An acceptance-mapped criterion still at assumed blocks APPROVE. There are exactly"

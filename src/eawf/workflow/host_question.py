@@ -59,6 +59,10 @@ _TERM: Final = re.compile(
 #: Where one sentence ends and the next begins.
 _SENTENCE_END: Final = re.compile(r"(?<=[.!?])\s+")
 
+#: The first line of a presented question: the action it is bound to and the
+#: revision it was read at, so the harness's report of the answer names both.
+ACTION_MARKER: Final = re.compile(r"^\[eawf act=(ACT-\d{4,}) rev=(\d+)\]$")
+
 
 class PresentationRefusal(StrEnum):
     """Why a pending action was not presented."""
@@ -214,7 +218,9 @@ def present_pending_action(action: PendingAction) -> UserQuestion:
         and its option id, the recommendation stated on the recommended
         option, and the term expansions and any timeout default with its
         override window shown with the question. Bound to
-        the action's URN and the revision it was read at.
+        the action's URN and the revision it was read at, and opening with
+        the line ``[eawf act=<key> rev=<revision>]`` that names both to a
+        harness reporting the answer.
 
     Raises:
         QuestionPresentationError: The action is not a filed waiting
@@ -239,6 +245,9 @@ def present_pending_action(action: PendingAction) -> UserQuestion:
             f"{question}\n\nIf nobody answers by {until}, {default.label!r} stands, as "
             f"{action.default_policy} allows. Until then an answer overrides it."
         )
+    # The marker is added after every check: it is an address for the seal,
+    # not prose the operator is asked to read.
+    question = f"[eawf act={action.id} rev={action.revision}]\n{question}"
     options = [
         UserQuestionOption(
             label=option.label,
@@ -258,6 +267,25 @@ def present_pending_action(action: PendingAction) -> UserQuestion:
         action_ref=render_qualified_urn(action.urn),
         action_revision=action.revision,
     )
+
+
+def action_marker(words: str) -> tuple[str, int] | None:
+    """Return the action and revision a question's first line is marked with, if any.
+
+    Only a first line that is the whole marker counts, so a question that
+    merely mentions an action somewhere in its words is not read as bound.
+
+    Args:
+        words: The question in the words the host asked it.
+
+    Returns:
+        The action key and the revision it was presented at; ``None`` when
+        the first line is not a marker.
+    """
+    match = ACTION_MARKER.match(words.split("\n", 1)[0])
+    if match is None:
+        return None
+    return match.group(1), int(match.group(2))
 
 
 def numbered_prompt(question: UserQuestion) -> str:
@@ -314,9 +342,11 @@ def numbered_option(action: PendingAction, reply: str) -> str:
 
 
 __all__ = [
+    "ACTION_MARKER",
     "MAX_SENTENCE_WORDS",
     "PresentationRefusal",
     "QuestionPresentationError",
+    "action_marker",
     "numbered_option",
     "numbered_prompt",
     "present_pending_action",

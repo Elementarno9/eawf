@@ -10,6 +10,7 @@ This patch release makes the Claude Code hooks start fast and fail visibly, bind
 
 ### Added
 
+- **In-session approvals.** An operator answers a marked AskUserQuestion in the session and the hook seals the pending approval for the operator the user config claims as `operator.principal`, only when the question is asked in the words the approval presents, so plan approval, criterion waivers and Milestone acceptance need no terminal step. `eawf plan approve` records the sealing operator when `--approved-by` is left out, and `eawf task waive-criterion` takes `--action-ref`. Codex sessions have no AskUserQuestion, so their operator acts stay terminal-only.
 - **Plugin version check.** A `plugin_version` doctor check compares the installed plugin with the package, and SessionStart prints one line when they differ.
 - **Powerline status line.** The status line renders as powerline segments with a light and a dark palette, chosen from the flag, then the environment, then the Claude Code theme settings, then `COLORFGBG`; a segment that cannot be sourced is left out instead of showing n/a.
 - **Reflect pages and baselines.** `eawf reflect` builds personal baselines and findings from your own history and writes offline HTML pages: an overview, a session finder and one page per session. `--scope project|workspace|user` widens the view without showing rows from projects outside the chosen scope.
@@ -36,6 +37,13 @@ This patch release makes the Claude Code hooks start fast and fail visibly, bind
 - **Codex plugin version.** The doctor check counts only the Codex plugin install Codex loads, not every cached version.
 - **Local ledger lines are found.** Console lookups and the redaction guard read transcript and call-receipt lines kept in the machine-local ledger.
 - **Release train per version.** Release commands resolve the train from the version, so 0.7.1 has its own one-rung train beside 0.7.0.
+- **A seal needs an operator.** Sealing a pending action, by `eawf milestone seal-approval`, `eawf question answer` or an in-session answer, refuses a resolver that is not an `OP-` operator, and a plan approval refuses an action an operator did not seal or one not filed for that plan revision, which `eawf question open-decision` binds through `plan_revision`.
+- **Timezone-less timestamps.** `eawf reflect` reads a history timestamp without a timezone as UTC instead of ending the sweep.
+- **Subagent Task binding.** A subagent binds to a Task only by a first-line `[eawf task=KEY]` marker and only to an open Task.
+- **Runs waiting on a question.** The stalled-Run sweep leaves a Run that waits on an open question.
+- **Cached Codex plugin at session start.** The session-start plugin line counts a cached Codex plugin only when Codex enables it.
+- **Artifact ledger redaction.** Redaction and its reference check cover the machine-local artifact ledger.
+- **Hook start-up budget.** The hook start-up budget is measured as the warm minimum of 7 samples.
 
 ## [0.7.0]
 
