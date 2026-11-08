@@ -40,3 +40,31 @@ def _watch() -> None:
 if os.environ.get("PYTEST_XDIST_WORKER"):
     signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
     threading.Thread(target=_watch, name="sigint-probe", daemon=True).start()
+
+
+def _dump_stuck_feed_tests() -> None:
+    """Dump every thread's stack once a console-feed test runs past 8 s."""
+    import faulthandler
+    import time
+
+    dumped: set[str] = set()
+    started: dict[str, float] = {}
+    while True:
+        time.sleep(0.5)
+        test = os.environ.get("PYTEST_CURRENT_TEST", "")
+        if "test_console_feed_continuity" not in test:
+            continue
+        started.setdefault(test, time.monotonic())
+        if test not in dumped and time.monotonic() - started[test] > 8:
+            dumped.add(test)
+            sys.__stderr__.write(f"\nFEED-PROBE stacks worker={os.getpid()} test={test}\n")
+            faulthandler.dump_traceback(file=sys.__stderr__, all_threads=True)
+            sys.__stderr__.flush()
+
+
+if os.environ.get("PYTEST_XDIST_WORKER"):
+    import logging
+
+    for name in ("eawf.surfaces.tui.chassis.state_binding", "eawf.runtime.daemon.server"):
+        logging.getLogger(name).setLevel(logging.DEBUG)
+    threading.Thread(target=_dump_stuck_feed_tests, name="feed-probe", daemon=True).start()
