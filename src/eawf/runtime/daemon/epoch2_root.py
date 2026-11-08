@@ -50,10 +50,14 @@ import dataclasses
 import hashlib
 import logging
 import re
+import sys
+import time
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from pathlib import Path
+from types import FrameType
 from typing import Annotated, Any, Final, Self
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -97,6 +101,13 @@ LOCK_LOCATOR: Final = "locks/epoch2"
 
 #: The lock that serialises every read and rewrite of one root's document.
 DOCUMENT_LOCK_NAME: Final = "document"
+
+#: The daemon method whose call opened the session, for the lock-hold log.
+#: Work the daemon starts on its own (sweeps, attachment) has none.
+DOCUMENT_LOCK_METHOD: ContextVar[str | None] = ContextVar("document_lock_method", default=None)
+
+#: How many frames of the session's opener the lock-hold log names.
+_HOLDER_FRAMES: Final = 3
 
 #: The file name of a per-entity lock an earlier release took: the sha256
 #: hex digest of the entity URN plus the sibling lock suffix.
@@ -367,17 +378,21 @@ class Epoch2RootContext:
         subjects = session_subjects(urns)
         target = self._lock_target(DOCUMENT_LOCK_NAME)
         self.declared_path(sibling.lock_path(target))
+        requested = time.monotonic()
         with portalock.acquire(target):
+            acquired = time.monotonic()
             session = RootSession(context=self, authority=authority, locked_urns=subjects)
-            logger.debug(
-                f"session root={self.identity.root_id} generation={authority.generation_id} "
-                f"subjects={len(subjects)}"
-            )
             try:
                 yield session
             finally:
                 session.closed = True
                 fault = self._seal_activation(authority)
+                logger.info(
+                    f"document_lock root={self.identity.root_id} "
+                    f"method={DOCUMENT_LOCK_METHOD.get() or '-'} holder={_session_holder()} "
+                    f"wait_ms={(acquired - requested) * 1000:.0f} "
+                    f"hold_ms={(time.monotonic() - acquired) * 1000:.0f}"
+                )
             # Reached only when the block finished; a block that raised keeps
             # its own error, and the fault is still on disk for the operator.
             if fault is not None:
@@ -431,6 +446,27 @@ class Epoch2RootContext:
             return fault
         fault_path.unlink(missing_ok=True)
         return None
+
+
+def _session_holder() -> str:
+    """Return the frames that opened the current session, innermost first.
+
+    Called inside :meth:`Epoch2RootContext.session`, so the frames of this
+    module and of ``contextlib`` are skipped and the next few name the
+    daemon code that holds the lock.
+
+    Returns:
+        Up to :data:`_HOLDER_FRAMES` ``module.function:line`` entries joined
+        by ``<``.
+    """
+    frames: list[str] = []
+    frame: FrameType | None = sys._getframe(1)
+    while frame is not None and len(frames) < _HOLDER_FRAMES:
+        module = frame.f_globals.get("__name__", "?")
+        if module not in (__name__, "contextlib"):
+            frames.append(f"{module.removeprefix('eawf.')}.{frame.f_code.co_name}:{frame.f_lineno}")
+        frame = frame.f_back
+    return "<".join(frames)
 
 
 class RootSession:
@@ -600,6 +636,7 @@ def attach_root_context(
 
 
 __all__ = [
+    "DOCUMENT_LOCK_METHOD",
     "DOCUMENT_LOCK_NAME",
     "ENTITY_LOCK_FILE_PATTERN",
     "LOCK_LOCATOR",

@@ -65,6 +65,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Final
 
+import orjson
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.epoch2.task_status import TERMINAL_TASK_STATUSES, TaskStatus
@@ -285,7 +286,9 @@ def write_document(
     old_committed = {} if old_raw is None else _decode_object(old_raw, state_path)
     committed_append = appends_to is not None and appends_to not in STATUS_PROJECTION_COLLECTIONS
     committed, status = _split(document, old_committed, committed_append=committed_append)
-    payload = _render(committed)
+    # A status-only write leaves the committed half as it was; comparing the
+    # decoded halves spares rendering several megabytes to learn the same.
+    payload = old_raw if old_raw is not None and committed == old_committed else _render(committed)
     projection = status_projection_path(state_path)
     projection.parent.mkdir(parents=True, exist_ok=True)
     if payload == old_raw:
@@ -552,10 +555,14 @@ def _digest(raw: bytes) -> str:
 def _decode_object(raw: bytes, path: Path) -> dict[str, Any]:
     """Return the JSON object *raw*, read from *path*, holds.
 
+    The document is decoded on every locked read and write, and orjson
+    takes half the time ``json`` does on a document of several megabytes.
+
     Raises:
-        ValueError: The bytes hold something other than a JSON object.
+        ValueError: The bytes are not UTF-8 JSON, or hold something other
+            than a JSON object.
     """
-    decoded = json.loads(raw.decode("utf-8"))
+    decoded = orjson.loads(raw)
     if not isinstance(decoded, dict):
         raise ValueError(f"{path} holds a {type(decoded).__name__}, not a JSON object")
     return decoded

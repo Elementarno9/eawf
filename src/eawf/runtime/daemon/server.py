@@ -46,6 +46,7 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.auth import UnauthorizedError, verify_peer_credential
 from eawf.runtime.daemon.bus import CatchUpTooLargeError, EventBus, Subscriber
+from eawf.runtime.daemon.epoch2_root import DOCUMENT_LOCK_METHOD
 from eawf.runtime.daemon.methods import (
     VALIDATION_FAILED,
     DaemonValidationError,
@@ -289,6 +290,7 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
         return _error(req_id, DAEMON_SHUTTING_DOWN, "daemon shutting down")
     if method not in SUBSCRIBE_METHODS:
         ctx.touch_activity()
+    DOCUMENT_LOCK_METHOD.set(method)
     try:
         params = admit_operator_identity(method, params)
         result = await dispatch(method, ctx, params)

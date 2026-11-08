@@ -55,7 +55,7 @@ from eawf.runtime.daemon.limits import (
     configured_juror_wall_clock,
     mutation_hard_limit_for,
 )
-from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods import MethodContext, ensure_all_methods_registered
 from eawf.runtime.daemon.native_guard import EA_DIRNAME
 from eawf.runtime.daemon.permission_expiry import run_expiry_loop as run_permission_expiry_loop
 from eawf.runtime.daemon.runtime_dir import (
@@ -875,6 +875,9 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
     permission_expiry_task = _schedule_permission_expiry_sweep(ctx)
     stall_task = _schedule_stall_sweep(ctx)
     batch_close_task = _schedule_batch_close_sweep(ctx)
+    # The first lazily registered call would otherwise import every method
+    # module on the event loop and stall every other call for seconds.
+    await asyncio.to_thread(ensure_all_methods_registered)
     await _attach_bound_tree(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
@@ -956,6 +959,9 @@ async def _run_windows_server(ctx: MethodContext, rt_dir: Path) -> None:
     permission_expiry_task = _schedule_permission_expiry_sweep(ctx)
     stall_task = _schedule_stall_sweep(ctx)
     batch_close_task = _schedule_batch_close_sweep(ctx)
+    # The first lazily registered call would otherwise import every method
+    # module on the event loop and stall every other call for seconds.
+    await asyncio.to_thread(ensure_all_methods_registered)
     await _attach_bound_tree(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
