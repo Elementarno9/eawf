@@ -76,10 +76,11 @@ SUBAGENT_HOOK: Final = "runtime.host_subagent"
 #: How long the tool sender may take to stop before the test stops waiting for it.
 TEST_BUDGET_SECONDS: Final = 60.0
 
-#: The real deadline measures the host, so a parallel suite's own load moves it.
+#: The real deadline measures the host, so a parallel suite's own load moves it;
+#: an xdist worker shares the host with its sibling workers, so only a serial run counts.
 _skip_perf = pytest.mark.skipif(
-    os.environ.get("EAWF_SKIP_PERF") == "1",
-    reason="EAWF_SKIP_PERF=1 - perf gate skipped",
+    os.environ.get("EAWF_SKIP_PERF") == "1" or "PYTEST_XDIST_WORKER" in os.environ,
+    reason="EAWF_SKIP_PERF=1 or an xdist worker - perf gate runs only serially",
 )
 
 #: How many lines the synthetic run ledger holds, about the live one's 29,687.
