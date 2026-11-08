@@ -1091,120 +1091,8 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 53792,
-  "milestone": {
-    "MLS-0107": {
-      "acceptance_bundle_revision": null,
-      "acceptance_journey": [
-        {
-          "action": "install the 0.7.1 Claude plugin and work one session in this repository",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "each hook event runs once with no exit 126, no identity_not_found noise, and the status line renders powerline rows and shows no scope or budget outside a Run",
-          "required": true,
-          "step_id": "AS-01"
-        },
-        {
-          "action": "start a session with an older plugin installed, then run eawf doctor",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "session start prints the plugin version mismatch line and eawf doctor fails plugin_version naming both versions",
-          "required": true,
-          "step_id": "AS-02"
-        },
-        {
-          "action": "spawn five subagents at once whose prompts carry [eawf task=KEY], then restart the daemon",
-          "actor": "operator",
-          "evidence_kinds": [
-            "store_record"
-          ],
-          "expected_observation": "eawf run list shows five Runs scoped to that Task, and no QUEUED or RUNNING Run is silent past 24 hours",
-          "required": true,
-          "step_id": "AS-03"
-        },
-        {
-          "action": "run eawf reflect run on this repository at project, workspace and user scope",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "progress lines appear on stderr, each run finishes in under one minute, and overview, finder and session HTML pages are written for each scope",
-          "required": true,
-          "step_id": "AS-04"
-        },
-        {
-          "action": "run eawf release preflight 0.7.1",
-          "actor": "system",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "the preflight passes with the 0.7.1 version and changelog section",
-          "required": true,
-          "step_id": "AS-05"
-        },
-        {
-          "action": "switch the Claude Code theme setting between light and dark during a session",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "the status line palette follows the setting on the next redraw",
-          "required": true,
-          "step_id": "AS-06"
-        }
-      ],
-      "accepted_binding": null,
-      "appetite": "L",
-      "contributing_track_refs": [],
-      "created_at": "2026-11-06T00:59:01.824833Z",
-      "description": "Replaces PRV-0335, which was validated and never applied. Patch release from the 2026-11-04 and 2026-11-05 research and the operator revision of 2026-11-06: hooks start without model imports, run once and report failures; plugin version drift is caught; subagent Runs bind to Tasks and stalled Runs end; the powerline status line returns with light and dark palettes; reflect runs fast and gains a session index, analysis and offline HTML pages at project, workspace and user scope; exhaust stops being committed; CI gets a fast PR lane and the dev branch cadence.",
-      "exclusions": [
-        "Rust, TypeScript and the v0.8 hub, console and thin client",
-        "machine registry cleanup, which is machine-local and operational",
-        "deleting exhaust already committed, which needs a path-by-path list and operator approval",
-        "the Rust async hub reflect job, recorded in decision D98 for v0.8",
-        "release tooling for dev pre-release tags, built with the v0.8 cutover"
-      ],
-      "key": "MLS-0107",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "outcome": "0.7.1 is released with plugin hooks that run once per event without exit 126 and report their failures, hook start-up without model imports, subagent Runs bound to their Task and no open Run silent past 24 hours, a powerline status line that follows the light or dark theme, eawf reflect finishing in under a minute with progress and writing offline overview, finder and session pages for project, workspace and user scopes, no new exhaust committed, and a pull-request CI lane with the dev branch cadence in the rules.",
-      "primary_track_ref": "eawf://EAWF/track/TRK-EAWF-CORE",
-      "required_batch_refs": [
-        "eawf://EAWF/batch/BAT-0378",
-        "eawf://EAWF/batch/BAT-0379",
-        "eawf://EAWF/batch/BAT-0380",
-        "eawf://EAWF/batch/BAT-0381",
-        "eawf://EAWF/batch/BAT-0382",
-        "eawf://EAWF/batch/BAT-0383",
-        "eawf://EAWF/batch/BAT-0384",
-        "eawf://EAWF/batch/BAT-0385",
-        "eawf://EAWF/batch/BAT-0386",
-        "eawf://EAWF/batch/BAT-0387",
-        "eawf://EAWF/batch/BAT-0388",
-        "eawf://EAWF/batch/BAT-0389"
-      ],
-      "revision": 10,
-      "status": "ACTIVE",
-      "target_date": null,
-      "title": "Ship 0.7.1: fast hooks, bound subagents, reflect pages, status line",
-      "uid": "4bc3aa97-6e86-5016-9bf8-92ae88d200a7",
-      "updated_at": "2026-11-08T16:59:33.623219Z",
-      "urn": "eawf://EAWF/milestone/MLS-0107"
-    }
-  },
+  "canonical_sequence": 53803,
+  "milestone": {},
   "open_question": {
     "QST-0001": {
       "answer_refs": [],
@@ -10905,6 +10793,88 @@
       ],
       "updated_at": "2026-11-08T16:59:11.305708Z",
       "urn": "eawf://EAWF/pending-action/ACT-0054"
+    },
+    "ACT-0055": {
+      "assignee_ref": null,
+      "bundle_digest": "sha256:acd3b65dcba1669b7268022e415d4bd0c6015bb412886ec2abe7040fc942c61c",
+      "created_at": "2026-11-08T17:27:03.814543Z",
+      "default_on_timeout": null,
+      "default_policy": null,
+      "dispositions": [
+        {
+          "acted_at": "2026-11-08T17:27:34.616373Z",
+          "option_id": "approve",
+          "outcome": "sealed",
+          "principal_id": "OP-0001",
+          "snoozed_until": null
+        }
+      ],
+      "harness_attestation": {
+        "harness": "claude-code",
+        "host_session_digest": "sha256:ea6976885ff0962a0b098a13fe7b2a23c05240e61933bb4baf845797802ba305",
+        "payload_digest": "sha256:f18ed757c8dab79ef6d502fc1c2d655981df30c670cf12ba63d1106606471f8e",
+        "permission_mode": null,
+        "question_ref": "eawf://EAWF/question/QST-0100",
+        "raise_gap_ms": 12716,
+        "run_ref": null,
+        "tool_use_id": "toolu_01M3bZhe8xsvmDv3URY6ua3v",
+        "transcript_check": "tool_use_only"
+      },
+      "id": "ACT-0055",
+      "idempotency_key": "accept-MLS-0107-acd3b65dcba1669b",
+      "kind": "protected_approval",
+      "options": [
+        {
+          "consequence": "The Milestone is recorded as accepted on exactly this bundle. A later change needs a new acceptance.",
+          "cost": "Any change after acceptance needs a new bundle and a new acceptance.",
+          "effect": "approve",
+          "label": "Accept the Milestone",
+          "option_id": "approve",
+          "preview": "Milestone MLS-0107\n  before: in acceptance review\n  after:  accepted on bundle revision 1"
+        },
+        {
+          "consequence": "The Milestone stays in review and is not accepted. Nothing else changes.",
+          "cost": "Verified work waits unaccepted, and nothing says what would make it acceptable.",
+          "effect": "decline",
+          "label": "Do not accept it",
+          "option_id": "decline",
+          "preview": "Milestone MLS-0107\n  before: in acceptance review\n  after:  in acceptance review, not accepted"
+        },
+        {
+          "consequence": "The Milestone stays in review and a repair is requested. The next bundle revision is verified and asked about again.",
+          "cost": "Delivery waits for another verified revision and another question.",
+          "effect": "request_repair",
+          "label": "Ask for changes",
+          "option_id": "repair",
+          "preview": "Milestone MLS-0107\n  before: bundle revision 1 awaits acceptance\n  after:  repair requested; bundle revision 2 is verified next"
+        }
+      ],
+      "override_until": null,
+      "question": "Accept MLS-0107 on revision 1 of its acceptance bundle?",
+      "receipt_ref": "eawf://EAWF/evidence/EVD-0344",
+      "recommendation_rationale": "Every Batch stands on a verified head and the journey passed, so accepting records what the evidence already shows.",
+      "recommended_option_id": "approve",
+      "requested_by": {
+        "principal_id": "EAWF-PLANNER",
+        "principal_kind": "agent",
+        "run_ref": "eawf://EAWF/run/RUN-00002135"
+      },
+      "resolution_actor": {
+        "principal_id": "OP-0001",
+        "principal_kind": "human"
+      },
+      "revision": 2,
+      "selected_option_id": "approve",
+      "status": "SEALED",
+      "subject_ref": "eawf://EAWF/milestone/MLS-0107",
+      "terms": [
+        {
+          "expansion": "the Milestone, a planned delivery goal, you are asked to accept",
+          "term": "MLS-0107"
+        }
+      ],
+      "updated_at": "2026-11-08T17:27:34.616373Z",
+      "urn": "eawf://EAWF/pending-action/ACT-0055"
     }
   },
   "plan_revision": {
