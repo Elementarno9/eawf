@@ -561,6 +561,10 @@ def smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Smoke]:
     # VIRTUAL_ENV names eawf's own venv; the proof checkout's ``uv run`` must use its own
     for key in ("EA_STATE", "EAWF_DAEMONLESS", "EAWF_VERBOSE", "VIRTUAL_ENV"):
         monkeypatch.delenv(key, raising=False)
+    if PROVIDER != "stub":
+        # the suite points CODEX_HOME at an empty history dir; a live codex must
+        # find the operator's own login, or its canary turn goes out with no token
+        monkeypatch.delenv("CODEX_HOME", raising=False)
     env = dict(os.environ)
     world = Smoke(
         root=tmp_path, repo=repo, runtime_dir=runtime_dir, env=env, operator_files=operator_files
