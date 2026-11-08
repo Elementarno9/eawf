@@ -869,7 +869,3 @@ def tmp_repo(tmp_path: Path) -> Path:
     eawf.platform.install. For now it returns a bare temp directory.
     """
     return tmp_path
-
-
-# CI probe: report who sends SIGINT to a worker (throwaway branch only).
-import tests._sigint_probe  # noqa: E402, F401
