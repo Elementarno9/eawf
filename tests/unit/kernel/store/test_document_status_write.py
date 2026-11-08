@@ -121,3 +121,23 @@ def test_a_document_that_is_no_json_object_is_refused(
 
     with pytest.raises(ValueError, match=message):
         compaction.read_document(state)
+
+
+def test_a_non_canonical_document_is_rendered_canonically(tmp_path: Path) -> None:
+    state = tmp_path / "state.json"
+    compaction.write_document(state, {"tasks": {}, "zeta": 1, "alpha": "é"})
+    canonical = state.read_bytes()
+    state.write_bytes(b'{"zeta": 1, "alpha": "\\u00e9", "tasks": {}}')
+
+    assert compaction.migrate_status_projection(state) is True
+    assert state.read_bytes() == canonical
+    assert compaction.migrate_status_projection(state) is False
+
+
+def test_a_non_finite_value_is_refused_on_write(tmp_path: Path) -> None:
+    state = tmp_path / "state.json"
+
+    with pytest.raises(ValueError):
+        compaction.write_document(state, {"milestones": {}, "ratio": float("nan")})
+
+    assert not state.exists()

@@ -259,6 +259,7 @@ def write_document(
     document: dict[str, Any],
     *,
     appends_to: Epoch2Collection | None = None,
+    canonical: bool = False,
 ) -> None:
     """Replace the tree's document atomically, committed and local parts apart.
 
@@ -275,9 +276,13 @@ def write_document(
             committed ledger changes a tracked file, so the committed
             sequence advances with it even when no committed row changes;
             a line in a local ledger leaves the committed file as it is.
+        canonical: Render the committed half even when it is unchanged, so
+            a committed file not in canonical form is rewritten in it.
+            Otherwise an unchanged committed half keeps its bytes as they are.
 
     Raises:
         TypeError: The document holds a value ``json`` cannot encode.
+        ValueError: The document holds a float that is not finite.
         LedgerAppendOnlyError: The tree's local Task ledger is not an
             extension of its committed one.
     """
@@ -288,7 +293,10 @@ def write_document(
     committed, status = _split(document, old_committed, committed_append=committed_append)
     # A status-only write leaves the committed half as it was; comparing the
     # decoded halves spares rendering several megabytes to learn the same.
-    payload = old_raw if old_raw is not None and committed == old_committed else _render(committed)
+    if old_raw is not None and not canonical and committed == old_committed:
+        payload = old_raw
+    else:
+        payload = _render(committed)
     projection = status_projection_path(state_path)
     projection.parent.mkdir(parents=True, exist_ok=True)
     if payload == old_raw:
@@ -379,7 +387,7 @@ def migrate_status_projection(state_path: Path) -> bool:
     committed, _ = _split(document, _decode_object(raw, state_path))
     if not isinstance(projection, dict) and _render(committed) == raw:
         return False
-    write_document(state_path, document)
+    write_document(state_path, document, canonical=True)
     logger.info(f"migrate_status_projection state_path={state_path}")
     return True
 
@@ -580,7 +588,9 @@ def _read_object(path: Path) -> dict[str, Any]:
 
 def _render(document: dict[str, Any]) -> bytes:
     """Return the canonical bytes of *document*."""
-    return f"{json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True)}\n".encode()
+    # NaN and Infinity are refused because the orjson reader refuses them.
+    rendered = json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False)
+    return f"{rendered}\n".encode()
 
 
 def _write_object(path: Path, payload: bytes) -> None:

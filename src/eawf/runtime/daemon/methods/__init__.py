@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import logging
+import threading
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -465,6 +466,10 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
 
 _lazy_modules_loaded = False
 
+#: Held while the deferred modules import, so the boot warm-up and a first
+#: call that misses the registry never import them in two threads at once.
+_LAZY_IMPORT_LOCK: Final = threading.Lock()
+
 
 def ensure_all_methods_registered() -> None:
     """Import every deferred method module, at most once per process.
@@ -476,9 +481,12 @@ def ensure_all_methods_registered() -> None:
     global _lazy_modules_loaded
     if _lazy_modules_loaded:
         return
-    for suffix in _METHOD_MODULES:
-        importlib.import_module(f"{__name__}.{suffix}")
-    _lazy_modules_loaded = True
+    with _LAZY_IMPORT_LOCK:
+        if _lazy_modules_loaded:
+            return
+        for suffix in _METHOD_MODULES:
+            importlib.import_module(f"{__name__}.{suffix}")
+        _lazy_modules_loaded = True
     logger.debug(f"ensure_all_methods_registered modules={len(_METHOD_MODULES)}")
 
 
@@ -502,7 +510,8 @@ async def dispatch(name: str, ctx: MethodContext, params: dict[str, Any]) -> dic
     """
     handler = _REGISTRY.get(name)
     if handler is None:
-        ensure_all_methods_registered()
+        # Off the event loop: importing the deferred surface takes seconds.
+        await asyncio.to_thread(ensure_all_methods_registered)
         try:
             handler = _REGISTRY[name]
         except KeyError as exc:

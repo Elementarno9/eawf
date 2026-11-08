@@ -49,12 +49,14 @@ import sys
 import tempfile
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 import pytest
+
+from tests.conftest import OPERATOR_CODEX_HOME
 
 if TYPE_CHECKING:
     from eawf.workflow.release.canary_receipts import DispatchSmokeReceiptSet
@@ -519,6 +521,34 @@ def _short_runtime_dir() -> Path:
     return Path(tempfile.gettempdir()) / f"eawf-smk-{uuid.uuid4().hex[:8]}"
 
 
+def smoke_daemon_env(
+    environ: Mapping[str, str], *, provider: str, operator_codex_home: str | None
+) -> dict[str, str]:
+    """Return the environment the smoke's daemon and CLI calls run with.
+
+    The suite points ``CODEX_HOME`` at an empty history directory. A live
+    provider gets the operator's own codex home back, or none, so codex finds
+    the operator's login; without it the canary turn goes out with no token.
+    Only the spawned processes see it, so the suite's in-process history
+    isolation stays in place.
+
+    Args:
+        environ: The test process's environment.
+        provider: The smoke provider, ``stub`` or a live one.
+        operator_codex_home: The operator's ``CODEX_HOME`` before the suite
+            isolated it, or ``None`` when it was unset.
+
+    Returns:
+        A copy of *environ*, with ``CODEX_HOME`` restored for a live provider.
+    """
+    env = dict(environ)
+    if provider != "stub":
+        env.pop("CODEX_HOME", None)
+        if operator_codex_home is not None:
+            env["CODEX_HOME"] = operator_codex_home
+    return env
+
+
 def _operator_files() -> dict[Path, bytes | None]:
     """Read the operator's eawf registry and user config, which no smoke may change."""
     from eawf.kernel.config.layered import global_config_path
@@ -561,11 +591,7 @@ def smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Smoke]:
     # VIRTUAL_ENV names eawf's own venv; the proof checkout's ``uv run`` must use its own
     for key in ("EA_STATE", "EAWF_DAEMONLESS", "EAWF_VERBOSE", "VIRTUAL_ENV"):
         monkeypatch.delenv(key, raising=False)
-    if PROVIDER != "stub":
-        # the suite points CODEX_HOME at an empty history dir; a live codex must
-        # find the operator's own login, or its canary turn goes out with no token
-        monkeypatch.delenv("CODEX_HOME", raising=False)
-    env = dict(os.environ)
+    env = smoke_daemon_env(os.environ, provider=PROVIDER, operator_codex_home=OPERATOR_CODEX_HOME)
     world = Smoke(
         root=tmp_path, repo=repo, runtime_dir=runtime_dir, env=env, operator_files=operator_files
     )

@@ -8,9 +8,13 @@ host receipts, so a receipt read validates only the asked Run's lines.
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -18,9 +22,11 @@ from pydantic import ValidationError
 from eawf.kernel.store.ledger import LedgerRecord
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
+from eawf.runtime.daemon import server
 from eawf.runtime.daemon.epoch2_root import DOCUMENT_LOCK_METHOD, Epoch2RootContext
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.host_calls import HOST_RECEIPT_PAYLOAD_KIND, host_receipts
+from eawf.runtime.daemon.methods import MethodContext
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     AT,
     MILESTONE_URN,
@@ -133,3 +139,25 @@ def test_a_receipt_without_a_run_string_is_refused(context: Epoch2RootContext) -
 def test_an_empty_receipt_ledger_reads_as_no_receipts(context: Epoch2RootContext) -> None:
     with context.session([MILESTONE_URN]) as session:
         assert host_receipts(session, _WANTED) == ()
+
+
+def test_a_frame_names_its_method_and_resets_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[str | None] = []
+
+    async def recording(method: str, ctx: object, params: dict[str, object]) -> dict[str, object]:
+        seen.append(DOCUMENT_LOCK_METHOD.get())
+        return {}
+
+    monkeypatch.setattr(server, "dispatch", recording)
+    ctx = cast("MethodContext", SimpleNamespace(stopping=False, touch_activity=lambda: None))
+    frame = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "probe.method"}).encode()
+
+    async def drive() -> tuple[dict[str, object], str | None]:
+        answer = await server._process_frame(frame, ctx)
+        return answer, DOCUMENT_LOCK_METHOD.get()
+
+    answer, after = asyncio.run(drive())
+
+    assert "result" in answer
+    assert seen == ["probe.method"]
+    assert after is None

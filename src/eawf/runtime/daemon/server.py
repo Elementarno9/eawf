@@ -290,7 +290,9 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
         return _error(req_id, DAEMON_SHUTTING_DOWN, "daemon shutting down")
     if method not in SUBSCRIBE_METHODS:
         ctx.touch_activity()
-    DOCUMENT_LOCK_METHOD.set(method)
+    # Reset after the call, so a connection's next frame or a long-lived
+    # dispatch task does not carry this method's name into its own holds.
+    token = DOCUMENT_LOCK_METHOD.set(method)
     try:
         params = admit_operator_identity(method, params)
         result = await dispatch(method, ctx, params)
@@ -313,6 +315,8 @@ async def _process_frame(line: bytes, ctx: MethodContext) -> dict[str, Any]:
     except Exception as exc:
         logger.exception(f"_process_frame method={method!r} unhandled")
         return _error(req_id, INTERNAL_ERROR, f"internal error: {exc}")
+    finally:
+        DOCUMENT_LOCK_METHOD.reset(token)
     return _success(req_id, result)
 
 

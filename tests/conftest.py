@@ -103,6 +103,11 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 # reports how many failed and exits clean whatever they did, so a known
 # flake never reds a blocking lane and never stops being run.
 
+#: The operator's own codex home as the suite found it, before
+#: ``session_history_isolation`` points ``CODEX_HOME`` at an empty history
+#: directory; a live smoke hands it to the daemon it starts.
+OPERATOR_CODEX_HOME: str | None = os.environ.get("CODEX_HOME")
+
 _QUARANTINE_REGISTRY = Path(__file__).parent / "quarantine.json"
 _QUARANTINE_LANE_OPTION = "--quarantine-lane"
 

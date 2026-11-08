@@ -112,14 +112,17 @@ def host_call_id(run_ref: QualifiedUrn, host_call_key: str) -> str:
 def host_receipts(session: RootSession, run_ref: str | QualifiedUrn) -> tuple[HostCallReceipt, ...]:
     """Return one Run's host call receipts, in ledger order.
 
+    Only the lines naming the asked Run, or naming no Run as a string, are
+    validated, so a corrupt receipt of another Run is not reported here.
+
     Raises:
-        ValidationError: A line claims to be a host call receipt and does not
-            validate as one, which means the ledger is corrupt.
+        ValidationError: A host call receipt of the asked Run, or one with no
+            string ``run_ref``, does not validate, so the ledger is corrupt.
         IdentityError: A receipt's ``run_ref`` is not a qualified URN.
     """
     wanted = canonical_entity_urn(run_ref)
-    # Only the asked Run's lines are validated: the ledger holds every Run's
-    # receipts, and validating them all held the document lock for most of a second.
+    # The ledger holds every Run's receipts and is read under the document
+    # lock, so validating the other Runs' lines would hold it for each of them.
     return tuple(
         HostCallReceipt.model_validate(item.payload)
         for item in read_collection_records(session.document_path, Epoch2Collection.RECEIPT)

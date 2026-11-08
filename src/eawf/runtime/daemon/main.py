@@ -848,6 +848,20 @@ async def _close_server(server: asyncio.Server) -> None:
         server.abort_clients()
 
 
+async def _warm_method_surface() -> None:
+    """Import the deferred method modules in a worker thread at boot.
+
+    The first lazily registered call would otherwise wait on the import.
+    A module that fails to import is logged and left to the first call
+    that needs it, which reports the failure; the daemon still serves
+    every other method.
+    """
+    try:
+        await asyncio.to_thread(ensure_all_methods_registered)
+    except Exception:
+        logger.exception("_warm_method_surface import_failed")
+
+
 async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | None) -> None:
     """Start the JSON-RPC server and wait for shutdown (POSIX).
 
@@ -875,9 +889,7 @@ async def _run_server(sock_path: Path, ctx: MethodContext, expected_uid: int | N
     permission_expiry_task = _schedule_permission_expiry_sweep(ctx)
     stall_task = _schedule_stall_sweep(ctx)
     batch_close_task = _schedule_batch_close_sweep(ctx)
-    # The first lazily registered call would otherwise import every method
-    # module on the event loop and stall every other call for seconds.
-    await asyncio.to_thread(ensure_all_methods_registered)
+    await _warm_method_surface()
     await _attach_bound_tree(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
@@ -959,9 +971,7 @@ async def _run_windows_server(ctx: MethodContext, rt_dir: Path) -> None:
     permission_expiry_task = _schedule_permission_expiry_sweep(ctx)
     stall_task = _schedule_stall_sweep(ctx)
     batch_close_task = _schedule_batch_close_sweep(ctx)
-    # The first lazily registered call would otherwise import every method
-    # module on the event loop and stall every other call for seconds.
-    await asyncio.to_thread(ensure_all_methods_registered)
+    await _warm_method_surface()
     await _attach_bound_tree(ctx)
     wal_gc_task = _schedule_wal_gc_sweep(ctx)
     mutation_watchdog_task = _schedule_mutation_watchdog(ctx)
