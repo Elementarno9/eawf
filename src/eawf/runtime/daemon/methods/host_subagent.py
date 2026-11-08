@@ -82,8 +82,8 @@ from eawf.kernel.state.epoch2.task_status import TERMINAL_TASK_STATUSES
 from eawf.kernel.state.epoch2.transitions import ObservedFact
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.ledger import read_ledger_records
 from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.run_index import indexed_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_create import CreateRequest, run_create
 from eawf.runtime.daemon.epoch2_recovery import (
@@ -250,7 +250,7 @@ def _repository_urn(document: dict[str, Any]) -> QualifiedUrn:
 def _next_run_key(document: dict[str, Any], ledger: Path) -> str:
     """Return the Run key one past every key the document and the run ledger hold."""
     held = set(document_rows(document, Epoch2Collection.RUN))
-    held.update(record.record_key for record in read_ledger_records(ledger))
+    held.update(record.record_key for record in indexed_ledger_records(ledger))
     ordinals = [int(match.group(1)) for key in held if (match := _RUN_KEY.match(key))]
     return format_entity_key(EntityKind.RUN, max(ordinals, default=0) + 1)
 
@@ -431,7 +431,7 @@ def _move(
 def _read_run(context: Epoch2RootContext, urn: QualifiedUrn) -> Run:
     """Return the Run as whichever tier holds it."""
     with context.session([urn]) as session:
-        return stored_run(session, read_ledger_records(run_ledger(session)), urn)
+        return stored_run(session, indexed_ledger_records(run_ledger(session)), urn)
 
 
 def _adopt(

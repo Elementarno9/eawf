@@ -13,11 +13,11 @@ import logging
 from datetime import datetime
 from typing import Final
 
-from eawf.kernel.identity import QualifiedUrn
+from eawf.kernel.identity import QualifiedUrn, parse_qualified_urn
 from eawf.kernel.runtime.content import CONTENT_PAYLOAD_KIND, StoredContent, bound_content
 from eawf.kernel.store.ledger import LedgerRecord, read_collection_records
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.runtime.daemon.epoch2_root import RootSession, canonical_entity_urn
+from eawf.runtime.daemon.epoch2_root import RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 
 logger = logging.getLogger(__name__)
@@ -29,19 +29,37 @@ CONTENT_REF_PREFIX: Final = "artifact://content/"
 def stored_contents(session: RootSession, run_ref: str | QualifiedUrn) -> dict[str, StoredContent]:
     """Return one Run's stored contents by reference.
 
+    Only lines named under the Run's own reference prefix are validated, so a line of
+    another Run never refuses this Run's read or filing.
+
+    Args:
+        session: The open session the artifact ledger is read under.
+        run_ref: The Run whose contents are asked for.
+
+    Returns:
+        The Run's stored contents, keyed by artifact reference.
+
     Raises:
-        ValidationError: A line claims to be stored content and does not validate as
-            one, which means the ledger is corrupt rather than merely unfamiliar.
+        ValidationError: A line of this Run claims to be stored content and does not
+            validate as one, which means the ledger is corrupt rather than merely
+            unfamiliar.
     """
-    wanted = canonical_entity_urn(run_ref)
+    prefix = _run_prefix(run_ref)
     held: dict[str, StoredContent] = {}
     for item in read_collection_records(session.document_path, Epoch2Collection.ARTIFACT):
         if item.payload.get("payload_kind") != CONTENT_PAYLOAD_KIND:
             continue
+        if not item.record_key.startswith(prefix):
+            continue
         content = StoredContent.model_validate(item.payload)
-        if canonical_entity_urn(content.run_ref) == wanted:
-            held[content.artifact_ref] = content
+        held[content.artifact_ref] = content
     return held
+
+
+def _run_prefix(run_ref: str | QualifiedUrn) -> str:
+    """Return the reference prefix every content of *run_ref* is named under."""
+    parsed = parse_qualified_urn(run_ref) if isinstance(run_ref, str) else run_ref
+    return f"{CONTENT_REF_PREFIX}{parsed.entity_key.lower()}/"
 
 
 def file_content(session: RootSession, *, run_ref: QualifiedUrn, text: str, now: datetime) -> str:
@@ -58,7 +76,7 @@ def file_content(session: RootSession, *, run_ref: QualifiedUrn, text: str, now:
         same reference, and a second filing appends nothing.
     """
     bounded = bound_content(text)
-    ref = f"{CONTENT_REF_PREFIX}{run_ref.entity_key.lower()}/{bounded.digest}"
+    ref = f"{_run_prefix(run_ref)}{bounded.digest}"
     if ref in stored_contents(session, run_ref):
         return ref
     content = StoredContent(

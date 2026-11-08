@@ -93,6 +93,7 @@ from eawf.kernel.store.paths import (
     seed_ledger_path,
     status_projection_path,
 )
+from eawf.kernel.store.run_index import indexed_ledger_records
 from eawf.kernel.store.tiers import (
     LEDGER_COLLECTIONS,
     STATUS_PROJECTION_COLLECTIONS,
@@ -646,9 +647,13 @@ def locate_record(
         LedgerTornTailError: The ledger ends mid-line.
     """
     in_document = record_key in document_rows(read_document(state_path), collection)
+    records = indexed_ledger_records(ledger_path(state_path, collection))
+    # The answer is effective_records' answer for this key, but only this key's lines are
+    # rendered to be digested: rendering every line is most of a full read's cost again.
+    superseded = {item.supersedes for item in records if item.supersedes is not None}
     in_ledger = any(
-        item.record_key == record_key
-        for item in effective_records(read_ledger_records(ledger_path(state_path, collection)))
+        item.record_key == record_key and line_digest(render_ledger_line(item)) not in superseded
+        for item in records
     )
     if in_document and in_ledger:
         raise RecordInTwoPlacesError(

@@ -19,8 +19,10 @@ from eawf.kernel.migration.epoch2.urn_rekey import plan_urn_rekey, spells_single
 from eawf.kernel.state.epoch2.pending_action import (
     OptionEffect,
     PendingAction,
+    PendingActionKind,
     PendingActionStatus,
 )
+from eawf.kernel.state.epoch2.plan_revision import plan_content_digest
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     LedgerSnapshotError,
@@ -186,12 +188,16 @@ def test_a_stored_approval_with_a_broken_ref_fails_loudly() -> None:
 
 
 def _consent(subject: str, milestone: str) -> Any:
-    revision = SimpleNamespace(
-        key="PLR-0002",
-        revision=2,
-        body=SimpleNamespace(milestone_urn=parse_qualified_urn(milestone)),
+    # The stand-in body serialises like a plan body, so the decision below is
+    # bound to its real content digest and only the subject can refuse.
+    body = SimpleNamespace(
+        milestone_urn=parse_qualified_urn(milestone),
+        model_dump=lambda mode: {"milestone_urn": milestone},
     )
+    revision = SimpleNamespace(key="PLR-0002", revision=2, body=body)
     action = SimpleNamespace(
+        kind=PendingActionKind.OPERATOR_DECISION,
+        bundle_digest=plan_content_digest(cast(Any, body)),
         status=PendingActionStatus.SEALED,
         selected_option=SimpleNamespace(effect=OptionEffect.APPROVE, option_id="approve"),
         subject_ref=parse_qualified_urn(subject),

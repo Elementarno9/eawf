@@ -22,6 +22,7 @@ from eawf.kernel.state.epoch2.base import StrictNonNegativeInt
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.state.types import UtcDatetime
 from eawf.observability.logging.state_leak import default_allowed_emails, scan_state_leaks
+from eawf.platform.lint.ledger_history import UNREACHABLE_KEY
 
 #: The discriminator of a stored content line in the artifact ledger.
 CONTENT_PAYLOAD_KIND: Final = "content_artifact"
@@ -126,6 +127,27 @@ class StoredContent(RuntimeRecord):
     total_lines: StrictNonNegativeInt
     withheld_lines: StrictNonNegativeInt
     recorded_at: UtcDatetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _without_unreachable_declaration(cls, data: object) -> object:
+        """Drop the ``unreachable_shas`` declaration a superseding ledger line may carry.
+
+        The ledger-history repair re-files a content line whose text cites a commit off
+        the integration branch and declares beside its fields the archive ref that keeps
+        the commit alive. Such lines stay committed and say nothing about the content,
+        so the reader drops the declaration and still refuses any other unknown key.
+
+        Args:
+            data: The payload as the ledger holds it.
+
+        Returns:
+            A copy of *data* without the declaration, or *data* unchanged when it is not
+            a mapping or carries none.
+        """
+        if isinstance(data, dict) and UNREACHABLE_KEY in data:
+            return {key: value for key, value in data.items() if key != UNREACHABLE_KEY}
+        return data
 
     @model_validator(mode="after")
     def _counts_cover_the_kept_lines(self) -> Self:

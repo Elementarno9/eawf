@@ -38,11 +38,11 @@ anything since has moved past the fact and the next silence earns its own.
 from __future__ import annotations
 
 import logging
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Final, Literal
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
@@ -253,16 +253,39 @@ def run_events_of(records: Sequence[LedgerRecord], urn: QualifiedUrn) -> tuple[R
         carry a sequence another line already holds.
 
     Raises:
-        pydantic.ValidationError: A line claims to be a run event and
-            does not validate as one, which means the ledger is corrupt
-            rather than merely unfamiliar.
+        pydantic.ValidationError: A line that is read claims to be a run
+            event and does not validate as one, which means the ledger is
+            corrupt rather than merely unfamiliar. A line whose reference
+            names another Run's key is not read, so its corruption surfaces
+            on a read of that Run instead.
     """
     events = [
         RunEventRecord.model_validate(item.payload)
         for item in records
         if item.payload.get("payload_kind") == "run_event"
+        and not names_another_run(item.payload, {urn.entity_key})
     ]
     return tuple(event for event in events if event.run_ref == urn)
+
+
+def names_another_run(payload: Mapping[str, Any], run_keys: Collection[str]) -> bool:
+    """Return whether a ledger line's stored Run reference names none of *run_keys*.
+
+    A Run URN ends in its Run key, so a line whose reference ends otherwise
+    cannot belong to an asked Run and need not be validated to be passed over.
+
+    Args:
+        payload: The ledger line's payload, unvalidated.
+        run_keys: The Run keys being read.
+
+    Returns:
+        ``True`` only for a string reference whose last segment is not one
+        of *run_keys*. A missing or non-string reference is malformed, and
+        answers ``False`` so that validating the line raises rather than
+        the filter skipping a corrupt line silently.
+    """
+    raw_ref = payload.get("run_ref")
+    return isinstance(raw_ref, str) and raw_ref.rsplit("/", 1)[-1] not in run_keys
 
 
 def run_events_by_run(
@@ -290,14 +313,7 @@ def run_events_by_run(
     for item in records:
         if item.payload.get("payload_kind") != "run_event":
             continue
-        raw_ref = item.payload.get("run_ref")
-        # A reference that is not a string is malformed; validating it raises
-        # rather than letting the filter skip a corrupt line silently.
-        if (
-            run_keys is not None
-            and isinstance(raw_ref, str)
-            and raw_ref.rsplit("/", 1)[-1] not in run_keys
-        ):
+        if run_keys is not None and names_another_run(item.payload, run_keys):
             continue
         event = RunEventRecord.model_validate(item.payload)
         grouped.setdefault(event.run_ref, []).append(event)
@@ -787,6 +803,7 @@ __all__ = [
     "assess_stall",
     "hello_facts_of",
     "ledger_receipt",
+    "names_another_run",
     "next_hello_sequence",
     "plan_event_append",
     "plan_stall",

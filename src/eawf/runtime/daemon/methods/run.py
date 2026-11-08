@@ -91,10 +91,8 @@ from eawf.kernel.state.epoch2.run import Run, RunStatus
 from eawf.kernel.state.epoch2.transitions import LifecycleEntity, ambiguity_label
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.ledger import (
-    LedgerRecord,
-    read_ledger_records,
-)
+from eawf.kernel.store.ledger import LedgerRecord
+from eawf.kernel.store.run_index import indexed_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.control.reducer import (
     RunContract,
@@ -137,6 +135,7 @@ from eawf.runtime.daemon.run_events import (
     RunLiveness,
     assess_stall,
     hello_facts_of,
+    names_another_run,
     next_hello_sequence,
     plan_event_append,
     reduce_run_events,
@@ -390,14 +389,16 @@ def _control_facts(records: tuple[LedgerRecord, ...], urn: QualifiedUrn) -> tupl
         The Run's control facts, ordered by their own sequence.
 
     Raises:
-        ValidationError: A line claims to be a control fact and does not
-            validate as one, which means the ledger is corrupt rather
-            than merely unfamiliar.
+        ValidationError: A line that is read claims to be a control fact
+            and does not validate as one, which means the ledger is
+            corrupt rather than merely unfamiliar. A line whose reference
+            names another Run's key is not read.
     """
     facts = [
         ControlFact.model_validate(item.payload)
         for item in records
         if item.payload.get("payload_kind") == "control"
+        and not names_another_run(item.payload, {urn.entity_key})
     ]
     selected = (fact for fact in facts if fact.run_ref == urn)
     return tuple(sorted(selected, key=lambda fact: fact.sequence))
@@ -499,7 +500,7 @@ def _requested_control(facts: tuple[ControlFact, ...], ref: ControlRequestId) ->
 def _bind(context: Epoch2RootContext, args: _BindParams, *, now: datetime) -> dict[str, Any]:
     """Append one Run's contract binding, or answer the one it already has."""
     with context.session([args.urn]) as session:
-        records = read_ledger_records(_ledger(session))
+        records = indexed_ledger_records(_ledger(session))
         existing = _binding_of(records, args.urn)
         if existing is not None:
             return existing.model_dump(mode="json")
@@ -577,7 +578,7 @@ def _request(context: Epoch2RootContext, args: _RequestParams, *, now: datetime)
             control asked.
     """
     with context.session([args.urn]) as session:
-        records = read_ledger_records(_ledger(session))
+        records = indexed_ledger_records(_ledger(session))
         facts = _control_facts(records, args.urn)
         run = _stored_run(session, records, args.urn)
         standing = _existing_fact(facts, ref=args.control_request_ref, phase=ControlPhase.REQUESTED)
@@ -613,7 +614,7 @@ def _acknowledge(
             already been acknowledged.
     """
     with context.session([args.urn]) as session:
-        records = read_ledger_records(_ledger(session))
+        records = indexed_ledger_records(_ledger(session))
         facts = _control_facts(records, args.urn)
         run = _stored_run(session, records, args.urn)
         standing = _existing_fact(
@@ -671,7 +672,7 @@ def _effect(context: Epoch2RootContext, args: _EffectParams, *, now: datetime) -
         TransactionRefusedError: The canonical transition was refused.
     """
     with context.session([args.urn]) as session:
-        records = read_ledger_records(_ledger(session))
+        records = indexed_ledger_records(_ledger(session))
         facts = _control_facts(records, args.urn)
         run = _stored_run(session, records, args.urn)
         standing = _existing_fact(facts, ref=args.control_request_ref, phase=ControlPhase.EFFECTED)
@@ -871,7 +872,7 @@ def _hello(context: Epoch2RootContext, args: _HelloParams, *, now: datetime) -> 
             overwrite a newer decision.
     """
     with context.session([args.urn]) as session:
-        records = read_ledger_records(_ledger(session))
+        records = indexed_ledger_records(_ledger(session))
         binding = _binding_of(records, args.urn)
         if binding is None:
             raise DaemonValidationError(
@@ -947,7 +948,7 @@ def _hello_answer(fact: WorkerHelloFact, *, reason: str | None = None) -> Worker
 def _grant(context: Epoch2RootContext, args: _ToolGrantParams) -> ToolGrantAnswer:
     """Decide which semantic tools this Run's handshake has earned."""
     with context.session([args.urn]) as session:
-        records = read_ledger_records(_ledger(session))
+        records = indexed_ledger_records(_ledger(session))
         facts = hello_facts_of(records, args.urn)
     decision = decide_tool_grant(requested=args.tools, facts=facts)
     return ToolGrantAnswer(
@@ -998,7 +999,7 @@ def append_run_event_in_session(
     Raises:
         DaemonValidationError: As :func:`append_run_event` raises it.
     """
-    records = read_ledger_records(_ledger(session))
+    records = indexed_ledger_records(_ledger(session))
     run = _stored_run(session, records, args.urn)
     status = reduce_run_control(status=run.status, facts=_control_facts(records, args.urn)).status
     events = run_events_of(records, args.urn)
@@ -1050,7 +1051,7 @@ def _read_events(
     stall are facts of the whole stream, so they are reported whole.
     """
     with context.session([args.urn]) as session:
-        records = read_ledger_records(_ledger(session))
+        records = indexed_ledger_records(_ledger(session))
         run = _stored_run(session, records, args.urn)
         status = reduce_run_control(
             status=run.status, facts=_control_facts(records, args.urn)
@@ -1123,7 +1124,7 @@ def _contract(context: Epoch2RootContext, args: _RunParams) -> RunContract:
             would be a fabrication.
     """
     with context.session([args.urn]) as session:
-        records = read_ledger_records(_ledger(session))
+        records = indexed_ledger_records(_ledger(session))
         binding = _binding_of(records, args.urn)
         if binding is None:
             raise DaemonValidationError(
