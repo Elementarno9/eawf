@@ -186,9 +186,10 @@ def _subagent_task_key(payload: Mapping[str, Any], harness: str, agent_id: str) 
     whitespace stripped; a marker anywhere later names no Task.
 
     Claude's subagent events do not carry the prompt, so it is read off the
-    first record of the subagent's own transcript: the stop event names that
-    file, and the start event finds it where the host keeps it, beside the
-    spawning session's transcript. A prompt the payload carries is read first.
+    first record of the subagent's own transcript, which the stop event names.
+    Claude writes that file only after the start hook returns, so the start
+    looks beside the spawning session's transcript and finds nothing; the stop
+    is where the marker is read. A prompt the payload carries is read first.
     """
     prompt = _nonempty(payload, "prompt")
     if prompt is None and harness == "claude-code":

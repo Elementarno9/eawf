@@ -9,12 +9,12 @@ the question was asked rather than at their terminal.
 The harness's report is the only witness, and the same user who runs the harness can
 write it, so this is a habit guard and not a security boundary. Every check below
 refuses a report that does not look like a person answering the question the action
-asks: no raise before the answer, answers supplied in the tool input, a multi-select
-call, option labels that are not the action's in its order, a question asked in other
-words than the action presents as, an answer that is not one of the labels, one
-action marked twice, an action not held or not waiting at the marked revision, no
-operator claim, an action addressed to another principal, or a transcript that
-contradicts the report.
+asks: no raise before the answer, answers supplied in the tool input it was raised
+with, a multi-select call, option labels that are not the action's in its order, a
+question asked in other words than the action presents as, an answer that is not one
+of the labels, one action marked twice, an action not held or not waiting at the
+marked revision, no operator claim, an action addressed to another principal, or a
+transcript that contradicts the report.
 
 The words are those :func:`~eawf.workflow.host_question.present_pending_action`
 renders for the action at the marked revision: the question with its marker line,
@@ -240,10 +240,12 @@ def _require_asked_once(
             HarnessSealRefusal.RAISE_MISSING,
             "the question was never reported before it was answered",
         )
-    if call.preanswered:
+    # The answer report's own input holds the operator's answers, so only the raise
+    # tells a question put to nobody from one the operator answered.
+    if raised.preanswered:
         raise _SealRefusedError(
             HarnessSealRefusal.PREANSWERED,
-            "the call carried its answers in its input, so nobody was asked",
+            "the call carried its answers in its input before it was asked, so nobody was asked",
         )
     if asked.multi_select:
         raise _SealRefusedError(

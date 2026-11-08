@@ -71,7 +71,10 @@ def canary(tmp_path: Path) -> CanaryProvision:
 def event(
     event_type: HookEventType, tool: dict[str, Any], answers: dict[str, str] | None
 ) -> HookEvent:
-    """Return the question hook's event for the call *tool* asks, as Claude Code sends it."""
+    """Return the question hook's event for the call *tool* asks, as Claude Code sends it.
+
+    The returned call carries the operator's answers in its input as well as its response.
+    """
     payload: dict[str, Any] = {
         "session_id": OPERATOR_SESSION,
         "tool_name": "AskUserQuestion",
@@ -79,6 +82,7 @@ def event(
         "tool_input": tool,
     }
     if answers is not None:
+        payload["tool_input"] = {**tool, "answers": answers}
         payload["tool_response"] = {"questions": tool["questions"], "answers": answers}
     return HookEvent(
         event_type=event_type,

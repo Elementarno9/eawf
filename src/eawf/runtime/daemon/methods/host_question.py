@@ -133,8 +133,9 @@ class HostQuestionCall(BaseModel):
         questions: What the call asks, in order.
         answers: The operator's answer to each question, by its words; empty until
             the call returns.
-        preanswered: Whether the call carried its answers in its own input, so the
-            host never asked anyone.
+        preanswered: Whether the call carried its answers in its own input before
+            the host asked, so the host never asked anyone; read from the raise
+            only, since a returned call's input holds the operator's answers too.
         transcript_path: The host's transcript of the session, as its hook named it.
         tool_input_questions: The questions as the call's input carried them, which
             a seal compares with the words its action presents as and the transcript
@@ -163,6 +164,8 @@ class HostQuestionLine(BaseModel):
         asked_by: The digest of the host call that asked it.
         position: Its position among the questions that call asked.
         question: The question record itself.
+        preanswered: Whether the call that raised it carried its answers in its
+            input before the host asked; a line stored without it was asked.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -171,6 +174,7 @@ class HostQuestionLine(BaseModel):
     asked_by: _HostText
     position: Annotated[int, Field(strict=True, ge=0)]
     question: OpenQuestion
+    preanswered: StrictBool = False
 
 
 class HostQuestionAnswer(BaseModel):
@@ -381,6 +385,7 @@ def _raise_questions(
                     blocking=True,
                     status=OpenQuestionStatus.BLOCKED,
                 ),
+                preanswered=args.preanswered,
             )
             append_host_question(session, line, now=now)
             if run is not None:

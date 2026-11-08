@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
+from pydantic import ValidationError
 
 from eawf.kernel.config import layered
 from eawf.kernel.delivery.acceptance import MilestoneAcceptanceBundle
@@ -669,20 +670,33 @@ def test_a_marker_naming_no_held_action_on_no_run_is_the_quiet_skip(
 class HookClient(AbstractContextManager["HookClient"]):
     """A daemon client that dispatches each call to the real verbs in process."""
 
-    def __init__(self, ctx: MethodContext) -> None:
+    def __init__(
+        self, ctx: MethodContext, sent: list[tuple[str, dict[str, Any]]] | None = None
+    ) -> None:
         self._ctx = ctx
+        self._sent = sent
 
     def __exit__(self, *_exc: object) -> None:
         return None
 
     def call(self, method: str, params: dict[str, Any]) -> Any:
+        if self._sent is not None:
+            self._sent.append((method, params))
         return asyncio.run(methods.dispatch(method, self._ctx, params))
 
 
 def hook_event(
-    event_type: HookEventType, tool: dict[str, Any], *, answers: dict[str, str] | None = None
+    event_type: HookEventType,
+    tool: dict[str, Any],
+    *,
+    answers: dict[str, str] | None = None,
+    transcript: Path | None = None,
 ) -> HookEvent:
-    """Return the question hook's event for the call *tool* asks, as Claude Code sends it."""
+    """Return the question hook's event for the call *tool* asks, as Claude Code sends it.
+
+    Claude Code reports the returned call with the operator's answers both in its
+    response and in its own tool input, so the answered event carries them in both.
+    """
     payload: dict[str, Any] = {
         "session_id": SESSION,
         "tool_name": "AskUserQuestion",
@@ -690,7 +704,10 @@ def hook_event(
         "tool_input": tool,
     }
     if answers is not None:
+        payload["tool_input"] = {**tool, "answers": answers}
         payload["tool_response"] = {"questions": tool["questions"], "answers": answers}
+    if transcript is not None:
+        payload["transcript_path"] = str(transcript)
     return HookEvent(
         event_type=event_type,
         runtime="claude",
@@ -700,7 +717,13 @@ def hook_event(
 
 
 def ask_through_the_hook(
-    ctx: MethodContext, canary: CanaryProvision, tool: dict[str, Any], answers: dict[str, str]
+    ctx: MethodContext,
+    canary: CanaryProvision,
+    tool: dict[str, Any],
+    answers: dict[str, str],
+    *,
+    transcript: Path | None = None,
+    sent: list[tuple[str, dict[str, Any]]] | None = None,
 ) -> Iterator[str]:
     """Report the call before and after it runs through the question hook; yield its output."""
     for event_type, said in (
@@ -708,8 +731,8 @@ def ask_through_the_hook(
         (HookEventType.POST_TOOL_USE, answers),
     ):
         result = record_host_question(
-            hook_event(event_type, tool, answers=said),
-            daemon_client_factory=lambda: HookClient(ctx),
+            hook_event(event_type, tool, answers=said, transcript=transcript),
+            daemon_client_factory=lambda: HookClient(ctx, sent),
             repo_root=canary.root,
         )
         assert not result.block
@@ -786,3 +809,92 @@ def test_a_harness_sealed_acceptance_approval_is_accepted(
     assert approval.resolved_by.principal_id == OPERATOR_ID
     assert action.harness_attestation is not None
     assert action.harness_attestation.run_ref is not None
+
+
+# ---------- CR-792 and CR-793: pre-answered is judged from the raise alone ----------
+
+
+def test_answers_in_the_post_tool_use_input_still_seal(
+    canary: CanaryProvision, ctx: MethodContext, tmp_path: Path
+) -> None:
+    opened = open_plan_decision(ctx, canary)
+    tool = tool_input(opened["host_question"])
+    answers = {tool["questions"][0]["question"]: APPROVE_LABEL}
+    transcript = transcript_file(tmp_path, tool, answers)
+    sent: list[tuple[str, dict[str, Any]]] = []
+    answered = hook_event(HookEventType.POST_TOOL_USE, tool, answers=answers)
+    assert answered.payloads[HookEventType.POST_TOOL_USE.value]["tool_input"]["answers"] == answers
+
+    outputs = list(
+        ask_through_the_hook(ctx, canary, tool, answers, transcript=transcript, sent=sent)
+    )
+
+    assert outputs[1].endswith("sealed=ACT-0001")
+    assert all("preanswered" not in params for _, params in sent)
+    row = action_row(canary)
+    assert (row["status"], row["resolution_actor"]) == ("SEALED", HUMAN)
+    attestation = row["harness_attestation"]
+    assert (attestation["harness"], attestation["tool_use_id"]) == ("claude-code", CALL)
+    assert attestation["transcript_check"] == "matched"
+    assert host_questions(canary, tmp_path)["QST-0001"].preanswered is False
+    assert len(sealed_events(canary)) == 1
+
+
+def test_an_answer_report_flagged_preanswered_still_seals(
+    canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    """Only the raise says whether anyone was asked; the answer report's flag is not read."""
+    opened = open_plan_decision(ctx, canary)
+    tool = tool_input(opened["host_question"])
+    params = reported(tool)
+    dispatch(ctx, canary, HOST_QUESTION_RAISE_METHOD, **params)
+
+    answer = dispatch(
+        ctx,
+        canary,
+        HOST_QUESTION_ANSWER_METHOD,
+        **params,
+        preanswered=True,
+        answers={tool["questions"][0]["question"]: APPROVE_LABEL},
+    )
+
+    assert answer["sealed_action_refs"] == [opened["action_ref"]]
+    assert action_row(canary)["status"] == "SEALED"
+
+
+def test_answers_supplied_before_asking_are_refused(
+    canary: CanaryProvision, ctx: MethodContext, tmp_path: Path
+) -> None:
+    opened = open_plan_decision(ctx, canary)
+    tool = tool_input(opened["host_question"])
+    answers = {tool["questions"][0]["question"]: APPROVE_LABEL}
+    tool["answers"] = answers
+    sent: list[tuple[str, dict[str, Any]]] = []
+
+    outputs = list(ask_through_the_hook(ctx, canary, tool, answers, sent=sent))
+
+    assert outputs[1].endswith("refused=ACT-0001:harness_preanswered")
+    (raise_method, raise_params), (answer_method, answer_params) = sent
+    assert (raise_method, raise_params["preanswered"]) == (HOST_QUESTION_RAISE_METHOD, True)
+    assert answer_method == HOST_QUESTION_ANSWER_METHOD
+    assert "preanswered" not in answer_params
+    row = action_row(canary)
+    assert (row["status"], row["revision"]) == ("WAITING", 1)
+    assert sealed_events(canary) == []
+    line = host_questions(canary, tmp_path)["QST-0001"]
+    assert (line.preanswered, line.question.status) == (True, OpenQuestionStatus.ANSWERED)
+
+
+def test_a_raise_recorded_before_the_flag_reads_as_asked(
+    canary: CanaryProvision, ctx: MethodContext, tmp_path: Path
+) -> None:
+    """Boundary: a stored line with no flag loads, and is read as not pre-answered."""
+    opened = open_plan_decision(ctx, canary)
+    tool = tool_input(opened["host_question"])
+    dispatch(ctx, canary, HOST_QUESTION_RAISE_METHOD, **reported(tool))
+    stored = host_questions(canary, tmp_path)["QST-0001"].model_dump(mode="json")
+    del stored["preanswered"]
+
+    assert HostQuestionLine.model_validate(stored).preanswered is False
+    with pytest.raises(ValidationError, match="preanswered"):
+        HostQuestionLine.model_validate({**stored, "preanswered": "yes"})

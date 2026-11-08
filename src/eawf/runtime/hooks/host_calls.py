@@ -494,18 +494,25 @@ def _asked_questions(tool_input: object) -> list[dict[str, Any]]:
     return asked
 
 
-def _seal_facts(payload: dict[str, Any]) -> dict[str, Any]:
+def _seal_facts(event_type: HookEventType, payload: dict[str, Any]) -> dict[str, Any]:
     """Return what the daemon checks before it seals an action from the answer.
 
     A question asked with its answers already in the tool input was never put to
-    anyone. The questions as the tool input carried them are what the daemon compares
-    with the words the marked action presents as, so they are sent whenever the input
-    holds a list of them; the transcript lets the daemon check the report against the
-    harness's own record of the call. Each is sent only when present.
+    anyone. Only the input reported before the host asks shows that: once the call
+    returns, Claude Code reports the operator's own answers in the input too, so the
+    flag is sent with the PRE_TOOL_USE report alone. The questions as the tool input
+    carried them are what the daemon compares with the words the marked action
+    presents as, so they are sent whenever the input holds a list of them; the
+    transcript lets the daemon check the report against the harness's own record of
+    the call. Each is sent only when present.
     """
     facts: dict[str, Any] = {}
     tool_input = payload.get("tool_input")
-    if isinstance(tool_input, dict) and "answers" in tool_input:
+    if (
+        event_type is HookEventType.PRE_TOOL_USE
+        and isinstance(tool_input, dict)
+        and "answers" in tool_input
+    ):
         facts["preanswered"] = True
     raw = tool_input.get("questions") if isinstance(tool_input, dict) else None
     if not isinstance(raw, list):
@@ -580,7 +587,7 @@ def record_host_question(
         "tool_use_id": tool_use_id,
         "questions": questions,
         "repo_root": str(repo_root if repo_root is not None else Path.cwd()),
-        **_seal_facts(payload),
+        **_seal_facts(event.event_type, payload),
     }
     if event.event_type is HookEventType.POST_TOOL_USE:
         params["answers"] = _host_answers(payload.get("tool_response"))

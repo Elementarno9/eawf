@@ -180,7 +180,11 @@ SEAL_INPUT: Final[dict[str, Any]] = {
 
 
 def test_the_hook_forwards_the_seal_facts(tmp_path: Path) -> None:
-    """Transcript, raw questions, multi-select and pre-answered reach the daemon."""
+    """Transcript, raw questions and multi-select reach the daemon with the answer.
+
+    Claude Code reports the operator's answers in the returned call's input, so the
+    answer report never says the call was pre-answered.
+    """
     sink, factory = recording()
     transcript = str(tmp_path / "session.jsonl")
 
@@ -205,10 +209,25 @@ def test_the_hook_forwards_the_seal_facts(tmp_path: Path) -> None:
         },
         {"question": ASKED, "options": ["SQLite"]},
     ]
-    assert params["preanswered"] is True
+    assert "preanswered" not in params
     assert params["transcript_path"] == transcript
     assert params["tool_input_questions"] == SEAL_INPUT["questions"]
     assert params["answers"] == {MARKED: "Apply the plan"}
+
+
+def test_only_the_raise_report_marks_the_call_preanswered() -> None:
+    """Answers in the input before the host asks are flagged with the raise alone."""
+    sink, factory = recording()
+
+    for event_type in (HookEventType.PRE_TOOL_USE, HookEventType.POST_TOOL_USE):
+        record_host_question(
+            asking(event_type, tool_input=SEAL_INPUT), daemon_client_factory=factory
+        )
+
+    (raise_method, raise_params), (answer_method, answer_params) = sink
+    assert (raise_method, raise_params["preanswered"]) == ("runtime.host.question.raise", True)
+    assert answer_method == "runtime.host.question.answer"
+    assert "preanswered" not in answer_params
 
 
 def test_a_call_without_seal_facts_sends_none(tmp_path: Path) -> None:

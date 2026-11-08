@@ -33,16 +33,30 @@ bound report the edge requires.
 Both verbs are idempotent on the subagent's id. The create, the start and the stop
 each carry a key derived from it, a retried hook replays the receipt it already
 earned, and a stop whose start never arrived adopts the subagent first.
+
+That idempotency is what lets a verb that lost a lock be run again whole: the retry
+replays every write that landed and finishes the rest, so a stop whose create
+committed and whose edge timed out still leaves its Run completed. Subagents spawned
+side by side would otherwise poll the one document lock against each other, so this
+daemon runs their deliveries one at a time, and each verb retries a lock timeout until
+:data:`ADOPTION_RETRY_DEADLINE_SECONDS` has passed.
+
+The host writes a subagent's transcript only after its start hook answers, so a live
+start never sees the Task marker on the prompt. The stop does: a Run adopted
+repository-scoped whose stop names an open Task is scoped to it on its completion edge.
 """
 
 from __future__ import annotations
 
 import asyncio
 import dataclasses
+import functools
 import hashlib
 import logging
 import re
-from collections.abc import Mapping
+import threading
+import time
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal
@@ -91,6 +105,7 @@ from eawf.runtime.daemon.native_dispatch import run_ledger, stored_run
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.daemon.run_capture_updates import bind_run_capture
 from eawf.runtime.daemon.run_events import RunEventAppend
+from eawf.runtime.lock.portalock import LockTimeout
 from eawf.runtime.runtimes.host_transcript import HostHarness, read_host_transcript
 from eawf.runtime.session.vendor_id import hash_vendor_session_id
 
@@ -107,6 +122,16 @@ HARNESS_ACTORS: Final[Mapping[str, str]] = {
     "claude-code": "HARNESS-CLAUDE-CODE",
     "codex": "HARNESS-CODEX",
 }
+
+#: How long one adoption verb waits, queued behind this daemon's other adoptions and
+#: retrying held locks, before it gives up. The hook's daemon call gives up after 30 s
+#: and a start holds the subagent until it answers, so the last retry begins with one
+#: default lock wait (5 s) still to spare, and the verb's own failure reaches the hook.
+ADOPTION_RETRY_DEADLINE_SECONDS: Final = 25.0
+
+#: Runs this daemon's adoption deliveries one at a time, so side-by-side subagents
+#: queue for the document lock here instead of polling it against each other.
+_ADOPTIONS: Final = threading.Lock()
 
 _RUN_KEY: Final = re.compile(r"^RUN-(\d{8})$")
 
@@ -555,19 +580,67 @@ def _stop(
         if params.transcript_path is None
         else _bridge(context, run, adoption, Path(params.transcript_path))
     )
+    updates: dict[str, Any] = {"ended_at": datetime.now(UTC).isoformat()}
+    # The start could not read the marker, so the stop is the first to know the Task.
+    if isinstance(run.scope, RepositoryScope) and params.task_ref is not None:
+        document = read_document(_document_path(authority))
+        scope = _scope(document, run.scope.repository_ref, params.task_ref)
+        if isinstance(scope, TaskScope):
+            updates["scope"] = scope.model_dump(mode="json")
     _move(
         context,
         run,
         adoption,
         to_status=RunStatus.COMPLETED,
         step="stop",
-        updates={"ended_at": datetime.now(UTC).isoformat()},
+        updates=updates,
         observations=(ObservedFact.RUN_REPORT_BOUND,),
         envelopes=envelopes,
     )
     run = _read_run(context, run.urn)
     _state_delegation(context, run, adoption, phase="terminal")
     return _answer(run, bridged=bridged, reason=f"{run.key} completed with {bridged} bridged")
+
+
+def _lock_lost(agent_id: str, began: float) -> LockTimeout:
+    waited = time.monotonic() - began
+    return LockTimeout(
+        f"host subagent agent_id={agent_id} was not adopted: a lock stayed held "
+        f"after it waited {waited:.1f}s"
+    )
+
+
+def _retried(agent_id: str, verb: Callable[[], HostSubagentAnswer]) -> HostSubagentAnswer:
+    """Run one adoption verb after this daemon's others, again on each lock timeout.
+
+    Every write of an adoption is keyed by the subagent's id, so a verb run again
+    replays what an earlier attempt committed and finishes the rest.
+
+    Args:
+        agent_id: The subagent being adopted, named in the failure.
+        verb: The whole verb, run once per attempt.
+
+    Returns:
+        The verb's answer.
+
+    Raises:
+        LockTimeout: The adoption queue or a lock stayed held past
+            :data:`ADOPTION_RETRY_DEADLINE_SECONDS`; the message names the
+            subagent and the seconds waited.
+    """
+    began = time.monotonic()
+    if not _ADOPTIONS.acquire(timeout=ADOPTION_RETRY_DEADLINE_SECONDS):
+        raise _lock_lost(agent_id, began)
+    try:
+        while True:
+            try:
+                return verb()
+            except LockTimeout as exc:
+                if time.monotonic() - began >= ADOPTION_RETRY_DEADLINE_SECONDS:
+                    raise _lock_lost(agent_id, began) from exc
+                logger.info(f"host subagent retry agent_id={agent_id} error={exc!r}")
+    finally:
+        _ADOPTIONS.release()
 
 
 def _published(
@@ -589,7 +662,8 @@ async def _start_host_subagent(
     args = native_params(HostSubagentStart, params)
     context = ctx.native_root_context(authority.root)
     envelopes: list[Envelope] = []
-    answer = await asyncio.to_thread(_start, context, authority, args, envelopes=envelopes)
+    verb = functools.partial(_start, context, authority, args, envelopes=envelopes)
+    answer = await asyncio.to_thread(_retried, args.agent_id, verb)
     return _published(ctx, envelopes, answer)
 
 
@@ -601,7 +675,8 @@ async def _stop_host_subagent(
     args = native_params(HostSubagentStop, params)
     context = ctx.native_root_context(authority.root)
     envelopes: list[Envelope] = []
-    answer = await asyncio.to_thread(_stop, context, authority, args, envelopes=envelopes)
+    verb = functools.partial(_stop, context, authority, args, envelopes=envelopes)
+    answer = await asyncio.to_thread(_retried, args.agent_id, verb)
     return _published(ctx, envelopes, answer)
 
 
