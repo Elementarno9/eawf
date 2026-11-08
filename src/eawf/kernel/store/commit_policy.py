@@ -203,6 +203,7 @@ PROMOTED_ARTIFACTS: Final[tuple[PathClass, ...]] = tuple(
                 "2026-10-24-rc3-native-linux",
                 "2026-10-29-rc4-native-linux",
                 "2026-10-30-stable-native-linux",
+                "2026-11-08-stable-native-linux",
             )
         ),
         (
@@ -237,6 +238,18 @@ PROMOTED_ARTIFACTS: Final[tuple[PathClass, ...]] = tuple(
         ),
         (
             ".ea/artifacts/evidence/2026-10-30-stable-native-linux/packet-run-receipts.jsonl",
+            "src/eawf/workflow/release/packet_run.py",
+        ),
+        (
+            ".ea/artifacts/evidence/2026-11-08-stable-native-linux/dispatch-smoke-receipts.json",
+            "src/eawf/workflow/release/canary_receipts.py",
+        ),
+        (
+            ".ea/artifacts/evidence/2026-11-08-stable-native-linux/dispatch-check-*.json",
+            "src/eawf/workflow/release/canary_receipts.py",
+        ),
+        (
+            ".ea/artifacts/evidence/2026-11-08-stable-native-linux/packet-run-receipts.jsonl",
             "src/eawf/workflow/release/packet_run.py",
         ),
         (

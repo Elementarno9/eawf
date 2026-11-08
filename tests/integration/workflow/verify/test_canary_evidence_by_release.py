@@ -20,6 +20,7 @@ import pytest
 
 from eawf.kernel.release.signals import ReleaseSignalName, ReleaseSignalStatus
 from eawf.kernel.state.epoch2.milestone import MilestoneStatus
+from eawf.workflow.evidence.canary_export import prior_canary_evidence
 from eawf.workflow.evidence.provider_certification import (
     CANARY_EVIDENCE_DIRS,
     canary_evidence_path,
@@ -272,3 +273,42 @@ def test_the_provider_and_membership_rows_pass_for_dev4(tmp_path: Path) -> None:
 
     assert provider.status is ReleaseSignalStatus.PASS, provider.remediation
     assert membership.status is ReleaseSignalStatus.PASS, membership.remediation
+
+
+#: The 0.7.1 patch rung, whose export the 0.7.1 canary walk recorded into.
+PATCH_VERSION: Final = "0.7.1"
+PATCH_KEY: Final = f"REL-{PATCH_VERSION}"
+
+
+def patch_walk_reference() -> str:
+    """Return the membership reference the 0.7.1 walk recorded."""
+    walk_path = (
+        REPO_ROOT
+        / "tests"
+        / "fixtures"
+        / "artifacts"
+        / CANARY_EVIDENCE_DIRS[PATCH_KEY][-1]
+        / "canary-acceptance-walk.json"
+    )
+    walk: dict[str, Any] = json.loads(walk_path.read_text(encoding="utf-8"))
+    reference: str = walk["milestone"]["reference"]
+    return reference
+
+
+def test_the_patch_membership_refs_are_the_patch_walk_reference() -> None:
+    reference = patch_walk_reference()
+
+    config = checkpoint_release_config(PATCH_VERSION, repo_root=REPO_ROOT)
+
+    assert config.membership_refs == (reference,)
+    assert committed_membership_refs(REPO_ROOT, PATCH_KEY) == (reference,)
+
+
+def test_the_patch_export_is_its_own_prior() -> None:
+    evidence = prior_canary_evidence(REPO_ROOT, PATCH_KEY)
+
+    assert evidence.release_key == PATCH_KEY
+    assert {item.runtime_id: tuple(item.os_classes) for item in evidence.advertised} == {
+        "claude-code": ("linux",),
+        "codex": ("linux",),
+    }
