@@ -22,6 +22,7 @@ does not produce.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ClassVar
@@ -54,6 +55,11 @@ from eawf.surfaces.cli.commands import domain as domain_cmd
 pytestmark = pytest.mark.integration
 
 runner = CliRunner()
+
+#: A fixed wide, colourless render, so an option name never wraps or splits on ANSI codes.
+_PLAIN_TERMINAL = {"COLUMNS": "200", "TERM": "dumb", "NO_COLOR": "1"}
+#: Typer forces a terminal under GITHUB_ACTIONS at import, so bold codes survive NO_COLOR.
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 _ROOT = "eawf://WS-CANARY/PRJ-CANARY/REP-CANARY"
 _MILESTONE_URN = f"{_ROOT}/milestone/MLS-0001"
@@ -1235,11 +1241,12 @@ def test_waive_criterion_forwards_the_action_ref(
 
 def test_waive_criterion_help_names_the_action_ref(tmp_path: Path) -> None:
     """The help names the option an agent cites the operator's sealed answer by."""
-    result = runner.invoke(app, ["task", "waive-criterion", "--help"], terminal_width=200)
+    result = runner.invoke(app, ["task", "waive-criterion", "--help"], env=_PLAIN_TERMINAL)
 
     assert result.exit_code == exit_codes.OK, result.output
-    assert "--action-ref" in result.output
-    assert "waiver_operator_required" in result.output
+    help_text = _ANSI.sub("", result.output)
+    assert "--action-ref" in help_text
+    assert "waiver_operator_required" in help_text
 
 
 def test_task_submit_forwards_the_changed_paths(

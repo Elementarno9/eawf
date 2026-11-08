@@ -16,6 +16,7 @@ unnoticed.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -43,6 +44,11 @@ from eawf.surfaces.cli.commands import plan as plan_cmd
 pytestmark = pytest.mark.integration
 
 runner = CliRunner()
+
+#: A fixed wide, colourless render, so an option name never wraps or splits on ANSI codes.
+_PLAIN_TERMINAL = {"COLUMNS": "200", "TERM": "dumb", "NO_COLOR": "1"}
+#: Typer forces a terminal under GITHUB_ACTIONS at import, so bold codes survive NO_COLOR.
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 _ROOT = "eawf://WS-CANARY/PRJ-CANARY/REP-CANARY"
 _TRACK_URN = f"{_ROOT}/track/TRK-CANARY"
@@ -698,10 +704,10 @@ def test_plan_approve_still_requires_an_action_ref(
     """Error path: an approval with no sealed action to cite never reaches the wire."""
     _install(monkeypatch, result=_plan_receipt_envelope(plan_cmd.PLAN_APPROVE_METHOD, "PRV-0001"))
 
-    result = runner.invoke(app, _approve_args(tmp_path))
+    result = runner.invoke(app, _approve_args(tmp_path), env=_PLAIN_TERMINAL)
 
     assert result.exit_code != exit_codes.OK
-    assert "--action-ref" in result.output
+    assert "--action-ref" in _ANSI.sub("", result.output)
     assert _FakeClient.calls == []
 
 
