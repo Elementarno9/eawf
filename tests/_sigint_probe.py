@@ -68,3 +68,34 @@ if os.environ.get("PYTEST_XDIST_WORKER"):
     for name in ("eawf.surfaces.tui.chassis.state_binding", "eawf.runtime.daemon.server"):
         logging.getLogger(name).setLevel(logging.DEBUG)
     threading.Thread(target=_dump_stuck_feed_tests, name="feed-probe", daemon=True).start()
+
+
+def _watch_slow_subscribe() -> None:
+    """Dump every thread's stack while a subscribe call waits past 0.5 s."""
+    import faulthandler
+
+    from eawf.surfaces.cli import _daemon_client
+
+    real = _daemon_client.DaemonClient._call_over_socket
+
+    def timed(self: _daemon_client.DaemonClient, line: bytes, *, method: str) -> bytes:
+        def dump() -> None:
+            sys.__stderr__.write(
+                f"\nSLOW-CALL-PROBE method={method} worker={os.getpid()} still waiting at 0.5 s\n"
+            )
+            faulthandler.dump_traceback(file=sys.__stderr__, all_threads=True)
+            sys.__stderr__.flush()
+
+        timer = threading.Timer(0.5, dump)
+        timer.daemon = True
+        timer.start()
+        try:
+            return real(self, line, method=method)
+        finally:
+            timer.cancel()
+
+    _daemon_client.DaemonClient._call_over_socket = timed  # type: ignore[method-assign]
+
+
+if os.environ.get("PYTEST_XDIST_WORKER"):
+    _watch_slow_subscribe()
