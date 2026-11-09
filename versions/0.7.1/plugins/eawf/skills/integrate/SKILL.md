@@ -1,0 +1,72 @@
+---
+name: integrate
+description: "Prepare or execute one daemon-owned integration action on a Delivery Batch."
+argument-hint: "<seal|select|apply|retry|show> <batch-or-candidate-ref> [--candidate <ref>...] [--strategy <declared-strategy>] [--expected-head <sha>] [--verify-after] [--reason <text>] [--base <revision-binding>] [--exit <kind>=<ref>...] [--diagnostic <evidence-ref>] [--dry-run] [--run <run-ref>] [--report-schema-ref <ref>] [--report-digest <digest>] [--verdict <verdict>] [--resulting-tree-digest <digest>] [--expected-revision <N>] [--idempotency-key <key>] [--output <human|json|markdown>]"
+user-invocable: true
+disable-model-invocation: false
+---
+
+# /integrate
+
+Prepare or execute one daemon-owned integration action on a Delivery Batch.
+
+## 1. Authority
+
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Operates on: Batch, through `projection.batch.detail.read`, `projection.merge.conflict.read`, `eawf task seal`, `eawf batch integrate`.
+- Operator-only actions: `apply`, `retry`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`) and never chooses the recommended option itself. In Claude Code, present the bound question the answer carries with AskUserQuestion verbatim, the action marker on its first line included: the operator's answer to that marked question is the approval, or the choice, and that answer seals it. Then complete the act under your own principal, citing the sealed action; an agent still cannot name an `OP-` key. Codex sessions have no AskUserQuestion, so their operator acts stay terminal-only: print the answer's `numbered_prompt` verbatim and stop; the operator relays the reply with `eawf question answer` (`runtime.question.answer_numbered`) from their own terminal, the console answers the same record, and the first answer wins.
+- Effects: Batch and conflict reads plus the candidate-report, delivery-assembly and delivery-integration verbs.
+- Allowed RPCs: `projection.batch.detail.read`, `projection.merge.conflict.read`, `eawf task seal` (`runtime.candidate.report.bind`), `eawf batch integrate` (`runtime.delivery.assemble`), `eawf batch integrate` (`runtime.delivery.integrate`), `eawf question answer` (`runtime.question.answer_numbered`), `eawf question open-decision` (`runtime.question.open_decision`). Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
+- Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
+- Local write root: none.
+- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
+
+## 2. Context
+
+One Delivery Batch or candidate, named by `<batch-or-candidate-ref>`, with its exact Batch base and current integration generation.
+
+Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
+
+## 3. Task
+
+You prepare or execute one daemon-owned integration action. You never author product changes and never choose a candidate by intuition.
+
+```text
+/integrate <seal|select|apply|retry|show> <batch-or-candidate-ref> [--candidate <ref>...] [--strategy <declared-strategy>] [--expected-head <sha>] [--verify-after] [--reason <text>] [--base <revision-binding>] [--exit <kind>=<ref>...] [--diagnostic <evidence-ref>] [--dry-run] [--run <run-ref>] [--report-schema-ref <ref>] [--report-digest <digest>] [--verdict <verdict>] [--resulting-tree-digest <digest>] [--expected-revision <N>] [--idempotency-key <key>] [--output <human|json|markdown>]
+```
+
+Select exactly one action: `seal`, `select`, `apply`, `retry`, `show`. An option the selected action does not declare is refused before you start.
+
+## 4. Method
+
+1. Resolve the Delivery Batch, exact Batch base, candidate set, seals, provenance manifests, ownership claims, and current integration generation.
+2. For show, render candidate and generation truth without mutation. For seal, recompute candidate digest and reject dirty, incomplete, unattributed, or contract-stale content.
+3. For select, apply the declared deterministic policy and explain every inclusion and rejection. If policy cannot decide, raise a typed operator choice; do not invent an order.
+4. Before apply or retry, prove expected head and Batch base still match. Create a fresh hidden generation, apply sealed candidates, record conflicts, and leave canonical history untouched until verification succeeds.
+5. When `--verify-after` is set, request the declared exact-revision gates and bind their receipts. A successful apply without fresh verification remains integrated-but-unproven, never complete.
+6. Submit only the requested candidate or integration RPC and return the durable attempt/generation reference.
+
+## 4b. Applicable rules
+
+The obligations the effective rule graph holds for activities `integrate`. They bind what you do; they grant no capability.
+
+- must: **Record the goal before the first mutating action.** Before the first mutating action, record the task as a typed goal bound to the declared success criteria of the entity it serves.
+- must: **Render an unresolved view reference as a command.** Render an unresolved detailed-view reference as an actionable message naming the command that generates the view, never as a dangling path.
+
+## 5. Constraints
+
+- Stop on stale base, invalid seal, ambiguous selection, conflict, moved head, missing receipt, or authority failure.
+- Never resolve conflicts by editing a candidate inside this skill.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
+
+## 6. Output
+
+Output one IntegrationSkillReport. Its `summary` states the candidates considered, selection reasons, exact bindings, generation, conflicts, and verification receipts.
+
+The report validates against `IntegrationSkillReport`, and its terminal outcome is exactly one of `shown`, `sealed`, `selected`, `integrated`, `conflicted`, `stale`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /integrate` before returning it. It carries these fields and no other; a nested field is written under its parent.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skill_id` | `"integrate"` | yes | The id of the skill that produced the report. |
+| `outcome` | one of `"shown"`, `"sealed"`, `"selected"`, `"integrated"`, `"conflicted"`, `"stale"`, `"blocked"` | yes | How the invocation ended; the result. |
+| `summary` | string | no | Explanation of the outcome and what supports it; never the result. |
