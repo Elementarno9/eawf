@@ -89,7 +89,9 @@ class _SocketClient(DaemonClient):
 class _Feed:
     """One daemon, one console binder, and everything the binder delivered."""
 
-    def __init__(self, root: Path, runtime: Path) -> None:
+    def __init__(
+        self, root: Path, runtime: Path, *, call_timeout: float = CALL_TIMEOUT_SECONDS
+    ) -> None:
         self.ctx = method_context(root / "runtime")
         self.bus = _RecordingBus()
         self.ctx.bus = self.bus
@@ -108,7 +110,7 @@ class _Feed:
             ),
             daemon_probe_interval_s=3600.0,
             daemon_client_factory=lambda: _SocketClient(
-                runtime_dir=runtime, call_timeout_seconds=CALL_TIMEOUT_SECONDS
+                runtime_dir=runtime, call_timeout_seconds=call_timeout
             ),
             subscribe_method=PROJECTION_SUBSCRIBE_METHOD,
         )
@@ -196,12 +198,18 @@ def _runtime_dir() -> Iterator[Path]:
             path.rmdir()
 
 
-def _run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: Callable[[_Feed], Any]) -> None:
+def _run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    body: Callable[[_Feed], Any],
+    *,
+    call_timeout: float = CALL_TIMEOUT_SECONDS,
+) -> None:
     """Serve one daemon socket, connect the console binder to it and run *body*."""
     monkeypatch.setattr(StateBinding, "_daemon_socket_available", lambda _self: True)
 
     async def main(runtime: Path) -> None:
-        feed = _Feed(tmp_path, runtime)
+        feed = _Feed(tmp_path, runtime, call_timeout=call_timeout)
         server = await asyncio.start_unix_server(
             lambda r, w: server_mod.handle_connection(r, w, feed.ctx),
             path=str(runtime / "eawfd.sock"),
@@ -217,6 +225,68 @@ def _run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: Callable[[_Feed]
 
     with _runtime_dir() as runtime:
         asyncio.run(main(runtime))
+
+
+async def _nothing(feed: _Feed) -> None:
+    """Leave the feed as it connected."""
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _first_subscribe_paid(tmp_path_factory: pytest.TempPathFactory) -> None:
+    """Run the subscribe path once before any test here times it.
+
+    Daemon and binder share one event loop in this harness, so the first
+    subscribe of a process pays its one-off costs inside the binder's
+    one-second call: imports, and under coverage a parse of each source file
+    on its first branch, which outlasted that second on CI runners.
+    """
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        _run(
+            tmp_path_factory.mktemp("first-subscribe"),
+            monkeypatch,
+            _nothing,
+            call_timeout=DELIVERY_TIMEOUT_SECONDS,
+        )
+
+
+def _slow_first_subscribe(monkeypatch: pytest.MonkeyPatch, seconds: float) -> None:
+    """Block the event loop for *seconds* inside the next subscribe the daemon handles."""
+    real = server_mod._handle_subscribe
+    pending = [seconds]
+
+    async def slow(*args: Any, **kwargs: Any) -> Any:
+        if pending:
+            time.sleep(pending.pop())
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(server_mod, "_handle_subscribe", slow)
+
+
+async def _still_subscribed(feed: _Feed) -> None:
+    """Assert the binder's stream is still the one it opened, after the stall has passed."""
+    await asyncio.sleep(IDLE_SECONDS)
+    task = feed.binding._subscribe_task
+    assert task is not None
+    assert not task.done()
+
+
+def test_a_slow_first_subscribe_outlasts_the_production_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Error path: a one-off stall past the call timeout loses the binder's first subscribe."""
+    _slow_first_subscribe(monkeypatch, CALL_TIMEOUT_SECONDS + 0.5)
+
+    with pytest.raises(AssertionError):
+        _run(tmp_path, monkeypatch, _still_subscribed)
+
+
+def test_a_slow_first_subscribe_fits_the_warm_up_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Boundary: the same stall is absorbed by the budget the module's first subscribe gets."""
+    _slow_first_subscribe(monkeypatch, CALL_TIMEOUT_SECONDS + 0.5)
+
+    _run(tmp_path, monkeypatch, _still_subscribed, call_timeout=DELIVERY_TIMEOUT_SECONDS)
 
 
 def test_an_idle_stream_delivers_every_later_commit_in_order(
