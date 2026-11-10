@@ -28,7 +28,7 @@ from eawf.surfaces.render.agents_md import (
 )
 from eawf.surfaces.render.regions import RegionParseError
 
-pytestmark = pytest.mark.usefixtures("isolated_host_homes")
+pytestmark = [pytest.mark.usefixtures("isolated_host_homes"), pytest.mark.repo_state]
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 

@@ -381,7 +381,8 @@ def linux_real_host_violations(workflow: dict[str, Any]) -> list[str]:
 
     if job.get("runs-on") != "ubuntu-24.04":
         problems.append("the linux-jail job does not run on ubuntu-24.04")
-    if job.get("if") is not None:
+    # The changes gate skips it only on a tree a green run already launched.
+    if job.get("if") not in (None, _CHANGES_CONDITION):
         problems.append("the linux-jail job is conditional, so the launch can go unproven")
 
     install = _find_step(job, "bubblewrap")
@@ -462,14 +463,16 @@ _CLASSIFIER_SAYS_RUN = "(needs.changes.result != 'success' || needs.changes.outp
 #: instead of auto-skipping when the changes job itself failed.
 _CHANGES_CONDITION = f"!cancelled() && {_CLASSIFIER_SAYS_RUN}"
 
-#: The pull-request lane's macOS job runs on pull requests alone; the
-#: whole-suite macOS shards run on every other event. Both keep the
-#: fail-open changes gate.
+#: The draft lane's macOS job runs on draft pull requests alone; the
+#: whole-suite macOS shards run on every other event and on a pull request
+#: ready for review. Both keep the fail-open changes gate.
 _PULL_REQUEST_CONDITION = (
-    f"!cancelled() && github.event_name == 'pull_request' && {_CLASSIFIER_SAYS_RUN}"
+    "!cancelled() && github.event_name == 'pull_request' && github.event.pull_request.draft"
+    f" && {_CLASSIFIER_SAYS_RUN}"
 )
 _OFF_PULL_REQUEST_CONDITION = (
-    f"!cancelled() && github.event_name != 'pull_request' && {_CLASSIFIER_SAYS_RUN}"
+    "!cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)"
+    f" && {_CLASSIFIER_SAYS_RUN}"
 )
 
 #: The one job-level condition twice-green carries: a release push runs it
@@ -885,12 +888,14 @@ _HEAVY_JOBS: dict[str, str] = {
     "test-macos": _OFF_PULL_REQUEST_CONDITION,
     "macos-affected": _PULL_REQUEST_CONDITION,
     "twice-green": _TWICE_GREEN_CONDITION,
+    "linux-jail": _CHANGES_CONDITION,
+    "windows": _CHANGES_CONDITION,
 }
 
-#: Jobs that run whatever the classifier says: linux-jail is a release-train
-#: receipt, windows covers what the matrix cannot, and the combined small
-#: gates are cheap enough that skipping them saves nothing.
-_CHEAP_JOBS = ("linux-jail", "windows", "gates")
+#: Jobs that run whatever the classifier says: the combined small gates run
+#: the detect-secrets hook over .secrets.baseline, a path the classifier
+#: counts as bookkeeping.
+_CHEAP_JOBS = ("gates",)
 
 
 def _needs(job: dict[str, Any]) -> list[str]:
@@ -978,8 +983,9 @@ def test_changes_gate_reds_on_an_open_gate() -> None:
 
     The synthetic classifier is conditional, swallows its own crash, diffs
     a shallow clone and exports another step's output; the matrix is not
-    gated at all, twice-green carries a near-miss condition, and two cheap
-    jobs were pulled behind the classifier.
+    gated at all, twice-green carries a near-miss condition, the jail and
+    Windows jobs run tests without the gate, and the cheap gates job was
+    pulled behind the classifier.
     """
     defective = yaml.safe_load(
         """
@@ -1030,7 +1036,9 @@ def test_changes_gate_reds_on_an_open_gate() -> None:
         f"the test-macos job is not gated on exactly {_OFF_PULL_REQUEST_CONDITION!r}",
         f"the macos-affected job is not gated on exactly {_PULL_REQUEST_CONDITION!r}",
         f"the twice-green job is not gated on exactly {_TWICE_GREEN_CONDITION!r}",
-        "the windows job depends on the changes job, so it can be skipped",
+        "the linux-jail job does not need the changes job",
+        f"the linux-jail job is not gated on exactly {_CHANGES_CONDITION!r}",
+        f"the windows job is not gated on exactly {_CHANGES_CONDITION!r}",
         "the gates job depends on the changes job, so it can be skipped",
     ]
 
@@ -1065,8 +1073,8 @@ def test_changes_gate_reds_on_a_classifierless_job() -> None:
 def test_changes_gate_reds_on_a_missing_cheap_job() -> None:
     """A renamed cheap job would otherwise make its unconditional check vacuous."""
     workflow = _load_ci()
-    del workflow["jobs"]["windows"]
-    assert changes_gate_violations(workflow) == ["ci.yaml declares no 'windows' job"]
+    del workflow["jobs"]["gates"]
+    assert changes_gate_violations(workflow) == ["ci.yaml declares no 'gates' job"]
 
 
 def test_changes_gate_reds_on_a_missing_job() -> None:

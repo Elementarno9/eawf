@@ -51,6 +51,8 @@ from eawf.observability.telemetry.turn_cost import TurnCostRecord
 from eawf.surfaces.cli.app import app
 from eawf.workflow.release.train import CHECKPOINT_CONFIGS, gate_bindings_for, train_for_version
 
+pytestmark = pytest.mark.repo_state
+
 runner = CliRunner()
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]

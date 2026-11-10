@@ -31,6 +31,8 @@ from eawf.workflow.evidence.provider_certification import load_canary_evidence
 from eawf.workflow.release.admission import assert_membership_resolves
 from eawf.workflow.release.train import V07_TRAIN
 
+pytestmark = pytest.mark.repo_state
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
 DEV3_VERSION = "0.7.0.dev3"

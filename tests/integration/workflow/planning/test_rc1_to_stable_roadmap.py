@@ -47,7 +47,7 @@ from tools.requirement_trace import (
     main,
 )
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.repo_state]
 
 #: A requirement id as Task text cites it.
 _ID_RE = re.compile(r"\b[A-Z]+-\d{3}\b")

@@ -22,6 +22,8 @@ from eawf.workflow.release.train_store import read_checkpoint_receipts
 from tests._release_helpers import SOURCE_SHA
 from tests.conftest import REPO_ROOT
 
+pytestmark = pytest.mark.repo_state
+
 #: The committed receipt store of this repository.
 _RECEIPTS = REPO_ROOT / ".ea" / "store" / "release_checkpoint_receipt.jsonl"
 

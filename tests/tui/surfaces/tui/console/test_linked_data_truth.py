@@ -68,6 +68,8 @@ from .test_console_live_smoke import (
 )
 from .test_enter_opened_cards import AT, DOCUMENT, SCOPE, _approval, _bundle
 
+pytestmark = pytest.mark.repo_state
+
 #: The Milestone of this repository that was accepted on a sealed approval, and what
 #: that approval bound: the head the bundle was sealed over, as the frame abbreviates it,
 #: and the operator who gave it.

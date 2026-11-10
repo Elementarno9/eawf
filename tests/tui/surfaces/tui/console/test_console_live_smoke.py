@@ -73,6 +73,8 @@ from eawf.surfaces.tui.launch import project_name
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import method_context
 from tests.integration.workflow.release._canary_acceptance_walk import CanaryWalk, walk_canary
 
+pytestmark = pytest.mark.repo_state
+
 #: The five journeys the brief names, in the console's own route-id spelling.
 JOURNEYS: tuple[str, ...] = ("scope.home", "activity", "attention", "run.detail", "settings")
 

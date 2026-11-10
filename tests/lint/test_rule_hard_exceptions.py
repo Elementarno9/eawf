@@ -21,6 +21,8 @@ from eawf.platform.rules import load_rule_source
 from eawf.platform.rules.modules import select_rule_modules
 from eawf.platform.rules.render import POLICY_TARGET, plan_rule_projections
 
+pytestmark = pytest.mark.repo_state
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: Each hard exception and the rule it must open.

@@ -72,7 +72,7 @@ from eawf.workflow.verify.release_readiness import (
 )
 from tests._release_helpers import all_passing, dev1_config
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.repo_state]
 
 #: This checkout, whose committed export is the real evidence.
 REPO_ROOT = Path(__file__).resolve().parents[4]

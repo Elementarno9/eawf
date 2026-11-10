@@ -43,6 +43,8 @@ from tests.conftest import REPO_EA_DIR, REPO_ROOT, RepoStateAccessError, guard_r
 # module reads as a hook declaration rather than a symbol under test.
 from tests.conftest import pytest_collection_modifyitems as apply_kind_markers
 
+pytestmark = pytest.mark.repo_state
+
 
 def test_check_source_flags_plain_subprocess_import() -> None:
     findings = check_source("import subprocess\n")

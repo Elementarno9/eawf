@@ -37,7 +37,7 @@ from eawf.workflow.release.train import CHECKPOINT_CONFIGS, V07_TRAIN
 from eawf.workflow.verify.release_readiness import ReleaseSignalContext
 from tests.integration.workflow.verify.test_provider_os_class import certified_on, smoke_filed
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.repo_state]
 
 #: This checkout, whose committed exports are the real evidence.
 REPO_ROOT: Final = Path(__file__).resolve().parents[4]

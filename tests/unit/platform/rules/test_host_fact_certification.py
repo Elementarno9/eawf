@@ -56,6 +56,8 @@ from eawf.surfaces.cli.commands import sync
 from eawf.workflow.evidence.provider_certification import CanaryEvidence
 from tests import _provider_helpers as fx
 
+pytestmark = pytest.mark.repo_state
+
 _CONSTITUTION = "Keep the release notes in the changelog under the version heading."
 
 

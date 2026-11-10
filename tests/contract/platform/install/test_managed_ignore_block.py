@@ -30,6 +30,8 @@ from eawf.platform.rules.render import (
     render_rule_projections,
 )
 
+pytestmark = pytest.mark.repo_state
+
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _PROMOTED = tuple(row.pattern for row in PROMOTED_ARTIFACTS)
 _LOCAL_ARTIFACTS = (

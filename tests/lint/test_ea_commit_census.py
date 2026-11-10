@@ -55,6 +55,8 @@ from eawf.workflow.release.canary_receipts import (
 from eawf.workflow.release.packet_run import PACKET_RECEIPTS_EXPORT_FILENAME
 from tools.ea_commit_census import GIT_UNAVAILABLE_EXIT
 
+pytestmark = pytest.mark.repo_state
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CENSUS_TOOL = _REPO_ROOT / "tools" / "ea_commit_census.py"
 

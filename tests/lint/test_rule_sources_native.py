@@ -22,7 +22,7 @@ from eawf.surfaces.render.agents_md import render_agents_md
 from eawf.surfaces.render.manifest import Manifest
 from eawf.workflow.skills.census import retired_nouns
 
-pytestmark = pytest.mark.usefixtures("isolated_host_homes")
+pytestmark = [pytest.mark.usefixtures("isolated_host_homes"), pytest.mark.repo_state]
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PLATFORM = _REPO_ROOT / "src" / "eawf" / "platform"

@@ -8,9 +8,9 @@ twice-green on the release train, nightly and manual runs only; one
 combined gates job instead of a lint pass inside every test leg; four
 ubuntu pytest-split shards selecting the same tests on a pull request as
 on a push, beside one serial lane for the end-to-end and perf tiers;
-three whole-suite macOS shards off pull requests and one affected-tests
-macOS job on them; a coverage gate judging the combined ubuntu data off
-pull requests; a green-tree record that lands on a main or dev push
+three whole-suite macOS shards off draft pull requests and one
+affected-tests macOS job on them; a coverage gate judging the combined
+ubuntu data off draft pull requests; a green-tree record that lands on a main or dev push
 without twice-green; and a resvg build restored from a cache keyed on its
 pinned version.
 """
@@ -64,13 +64,13 @@ def _starts_with(value: object, prefix: object) -> bool:
     return str(value).lower().startswith(str(prefix).lower())
 
 
-def _evaluate(expression: str, context: Mapping[str, str]) -> Any:
+def _evaluate(expression: str, context: Mapping[str, object]) -> Any:
     """Evaluate one Actions expression against *context*.
 
     Covers the subset ci.yaml uses: string literals, context references,
     ``true``/``false``, ``==``/``!=``, ``&&``/``||`` (which return an operand, as Python's
-    ``and``/``or`` do), ``!``, ``startsWith``, ``format`` and ``cancelled()``,
-    read as a run nobody cancelled.
+    ``and``/``or`` do), ``!``, ``startsWith``, ``format``, ``cancelled()``,
+    read as a run nobody cancelled, and ``always()``.
 
     Raises:
         KeyError: The expression names a context the caller did not supply.
@@ -87,6 +87,7 @@ def _evaluate(expression: str, context: Mapping[str, str]) -> Any:
         "starts_with": _starts_with,
         "format_": _format,
         "cancelled": lambda: False,
+        "always": lambda: True,
         "true": True,
         "false": False,
     }
@@ -100,7 +101,7 @@ def _translate(code: str) -> str:
     return _CONTEXT.sub(lambda match: f"ctx[{match.group(0)!r}]", code)
 
 
-def _render(text: str, context: Mapping[str, str]) -> str:
+def _render(text: str, context: Mapping[str, object]) -> str:
     """Substitute every ``${{ }}`` in *text* the way the runner does."""
     return _EMBEDDED.sub(lambda match: str(_evaluate(match.group(1), context)), text)
 
@@ -113,10 +114,13 @@ def _context(
     code: str = "true",
     os: str = "ubuntu-24.04",
     shard: str = "1",
-) -> dict[str, str]:
+    draft: bool = True,
+) -> dict[str, object]:
+    """Return the context of an *event* run; a pull request is a draft unless *draft* is false."""
     return {
         "github.event_name": event,
         "github.ref": ref,
+        "github.event.pull_request.draft": draft,
         "needs.changes.result": changes,
         "needs.changes.outputs.code": code,
         "matrix.os": os,
@@ -227,6 +231,9 @@ _TEST_JOB = {_UBUNTU: "test", _MACOS: "test-macos"}
 _SERIAL_PREFIX = "Pytest (serial "
 _EXCLUDE_FLAGS = ("--exclude", "--omit", "--ignore", "--deselect", "-m")
 _COV_FLAGS = ("--cov=eawf", "--cov-report=", "--cov-fail-under=0")
+#: The ini default ``not eval`` plus the repository-state deselection; a
+#: command-line ``-m`` replaces the ini one, so CI spells both.
+_CI_MARKERS = "not eval and not repo_state"
 
 
 def _bare(step: Mapping[str, Any]) -> str:
@@ -274,7 +281,7 @@ def test_pull_request_and_push_select_the_same_parallel_tests(shard: str) -> Non
     pull_request = _parallel_argv("pull_request", shard=shard)
     push = _parallel_argv("push", shard=shard)
     assert pull_request == [arg for arg in push if arg not in _COV_FLAGS]
-    assert _option(pull_request, "-m") == []
+    assert _option(pull_request, "-m") == [_CI_MARKERS]
     assert _option(pull_request, "--ignore-glob") == []
     assert "tests/eval" not in _option(pull_request, "--ignore")
 
@@ -288,7 +295,7 @@ def test_macos_shards_select_the_ubuntu_tests(os: str, shard: str) -> None:
 
 @pytest.mark.parametrize("event", _EVENTS)
 def test_every_event_keeps_the_default_marker_selection(event: str) -> None:
-    assert _option(_parallel_argv(event), "-m") == []
+    assert _option(_parallel_argv(event), "-m") == [_CI_MARKERS]
 
 
 @pytest.mark.parametrize("event", _EVENTS)
@@ -350,7 +357,7 @@ def test_end_to_end_suite_runs_serially_in_its_own_job(event: str) -> None:
             assert _option(_parallel_argv(event, os, shard), "--ignore").count("tests/e2e") == 1
     step = _step("e2e", "Pytest (serial e2e timing)")
     argv = shlex.split(_render(str(step["run"]), _context(event)))
-    expected = ["uv", "run", "pytest", "-n0", "tests/e2e"]
+    expected = ["uv", "run", "pytest", "-m", _CI_MARKERS, "-n0", "tests/e2e"]
     if event != "pull_request":
         expected.extend(_COV_FLAGS)
     assert argv == expected
@@ -388,7 +395,7 @@ def test_affected_macos_run_ignores_every_perf_lane_path() -> None:
 def test_blocking_perf_step_runs_the_lane_with_its_budgets_skipped(event: str, os: str) -> None:
     step = _step(_SERIAL_JOB[os], _PERF_STRUCTURE)
     argv = shlex.split(_render(str(step["run"]), _context(event, os=os)))
-    expected = ["uv", "run", "pytest", "-n0", *PERF_LANE]
+    expected = ["uv", "run", "pytest", "-m", _CI_MARKERS, "-n0", *PERF_LANE]
     if os == _UBUNTU and event != "pull_request":
         expected.extend(["--cov=eawf", "--cov-append", "--cov-report=", "--cov-fail-under=0"])
     assert argv == expected
@@ -412,7 +419,7 @@ def test_perf_lane_with_budgets_runs_nightly_once_per_os_and_never_blocks(
     assert step["continue-on-error"] is True
     assert "env" not in step
     argv = shlex.split(_render(str(step["run"]), _context("schedule", os=os)))
-    assert argv == ["uv", "run", "pytest", "-n0", *PERF_LANE]
+    assert argv == ["uv", "run", "pytest", "-m", _CI_MARKERS, "-n0", *PERF_LANE]
 
 
 def test_perf_lane_steps_finish_before_coverage_is_uploaded() -> None:
@@ -442,6 +449,8 @@ def _needs(*, test: str = "success", twice: str = "skipped") -> dict[str, Any]:
         "test": {"result": test, "outputs": {}},
         "e2e": {"result": test, "outputs": {}},
         "test-macos": {"result": test, "outputs": {}},
+        "linux-jail": {"result": test, "outputs": {}},
+        "windows": {"result": test, "outputs": {}},
         "twice-green": {"result": twice, "outputs": {}},
     }
 
@@ -483,7 +492,8 @@ def test_green_tree_records_a_release_push_with_twice_green(tool: ModuleType) ->
 def test_green_tree_still_refuses_a_main_push_whose_matrix_skipped(tool: ModuleType) -> None:
     with pytest.raises(
         tool.RecordRefusedError,
-        match=r"did not all pass: test=skipped, e2e=skipped, test-macos=skipped$",
+        match=r"did not all pass: test=skipped, e2e=skipped, test-macos=skipped, "
+        r"linux-jail=skipped, windows=skipped$",
     ):
         tool.plan_record(_needs(test="skipped"), event="push", ref="refs/heads/main")
 
@@ -610,7 +620,7 @@ _RESVG_RESTORE = "Restore resvg (cached by pinned version)"
 _RESVG_INSTALL = "Install resvg (pinned, T5 SVG pixel-diff oracle)"
 
 
-def _resvg_context(shard: str, cache_hit: str) -> dict[str, str]:
+def _resvg_context(shard: str, cache_hit: str) -> dict[str, object]:
     return {
         **_context("push", shard=shard),
         "env.RESVG_VERSION": str(_jobs()["test"]["env"]["RESVG_VERSION"]),
@@ -659,7 +669,7 @@ def test_no_shard_judges_a_coverage_floor() -> None:
 def test_coverage_job_combines_the_shards_then_runs_the_gate_once() -> None:
     job = _jobs()["coverage"]
     assert job["needs"] == ["test", "e2e"]
-    assert job["if"] == "github.event_name != 'pull_request'"
+    assert job["if"] == "github.event_name != 'pull_request' || !github.event.pull_request.draft"
     download = next(step for step in job["steps"] if "download-artifact" in str(step.get("uses")))
     assert download["with"]["pattern"] == "coverage-data-*"
     commands = [

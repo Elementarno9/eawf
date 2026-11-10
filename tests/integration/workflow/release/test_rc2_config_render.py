@@ -66,7 +66,7 @@ from eawf.workflow.release.train import (
 )
 from eawf.workflow.verify.release_readiness import compute_readiness
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.repo_state]
 
 #: This checkout, whose committed export is the real evidence.
 REPO_ROOT: Final = Path(__file__).resolve().parents[4]

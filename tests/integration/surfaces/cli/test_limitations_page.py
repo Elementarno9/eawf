@@ -20,7 +20,7 @@ from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import help as help_cmd
 from eawf.workflow.release.train import STABLE_RELEASE_CONFIG_YAML
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.repo_state]
 
 _REPO_ROOT: Final = Path(__file__).resolve().parents[4]
 _PAGE: Final = _REPO_ROOT / "docs" / "help" / "limitations.md"

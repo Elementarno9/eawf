@@ -45,6 +45,8 @@ from eawf.workflow.verify.release_readiness import (
 )
 from tests.integration.workflow.verify.test_packet_run_gate import file_all_four
 
+pytestmark = pytest.mark.repo_state
+
 _NOW = datetime(2027, 2, 1, 12, 0, tzinfo=UTC)
 
 #: The version every sweep here tags.

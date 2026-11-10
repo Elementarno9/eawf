@@ -17,12 +17,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from eawf.kernel.spec.release import Release, ReleaseStatus
 from eawf.kernel.spec.release_config import ReleaseGateName, load_release_config
 from eawf.workflow.release.advance import TrainAdvanceRecord, derive_train
 from eawf.workflow.release.records import read_release_record, read_release_records
 from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
 from eawf.workflow.release.train_store import read_checkpoint_receipts, read_train_advances
+
+pytestmark = pytest.mark.repo_state
 
 DEV2_KEY = "REL-0.7.0.dev2"
 DEV3_KEY = "REL-0.7.0.dev3"

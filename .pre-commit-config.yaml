@@ -136,6 +136,15 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
+      - id: repo-state-tests
+        name: repo-state-tests
+        # CI deselects the tests that read this repository's committed .ea,
+        # so a state-only change cannot red the product suite; they run here.
+        entry: uv run pytest -m repo_state -n 2 -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
       - id: eawf-doc-verify-strict
         name: eawf-doc-verify-strict
         entry: uv run eawf doc verify --strict

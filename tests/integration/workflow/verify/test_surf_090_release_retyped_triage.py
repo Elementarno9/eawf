@@ -38,6 +38,8 @@ from eawf.workflow.verify.release_readiness import (
 )
 from tests.contract.surfaces.cli._reflect_tree import event, native_tree, run_row
 
+pytestmark = pytest.mark.repo_state
+
 _NOW: Final = datetime(2027, 2, 1, 12, 0, tzinfo=UTC)
 T0: Final = datetime(2026, 9, 20, 9, 0, tzinfo=UTC)
 INSTRUCTION: Final = "Dispatch the waves with parallel worktree subagents."

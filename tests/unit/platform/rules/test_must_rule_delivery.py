@@ -36,7 +36,7 @@ from eawf.platform.rules.render import (
 )
 from eawf.surfaces.render.agents import AGENT_REGISTRY
 
-pytestmark = pytest.mark.usefixtures("isolated_host_homes")
+pytestmark = [pytest.mark.usefixtures("isolated_host_homes"), pytest.mark.repo_state]
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 

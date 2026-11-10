@@ -21,7 +21,7 @@ from eawf.platform.rules.carriers import (
 from eawf.platform.rules.modules import builtin_rule_modules
 from eawf.platform.rules.render import CARD_TARGET, POLICY_TARGET, plan_rule_projections
 
-pytestmark = pytest.mark.usefixtures("isolated_host_homes")
+pytestmark = [pytest.mark.usefixtures("isolated_host_homes"), pytest.mark.repo_state]
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 

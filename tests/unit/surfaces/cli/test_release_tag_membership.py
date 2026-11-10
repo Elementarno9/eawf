@@ -44,7 +44,7 @@ from eawf.workflow.release.signal_probes import membership_probe
 from eawf.workflow.verify.release_readiness import ReleaseSignalContext, compute_readiness
 from tests._release_helpers import all_passing
 
-pytestmark = pytest.mark.unit
+pytestmark = [pytest.mark.unit, pytest.mark.repo_state]
 
 #: This checkout, whose committed export backs the resolvable ref below.
 REPO_ROOT = Path(__file__).resolve().parents[4]

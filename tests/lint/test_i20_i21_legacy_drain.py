@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-pytestmark = pytest.mark.unit
+pytestmark = [pytest.mark.unit, pytest.mark.repo_state]
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CONFIG_PATH = _REPO_ROOT / ".ea" / "config.yaml"

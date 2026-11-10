@@ -1,12 +1,13 @@
-"""The pull-request CI lane is the fast one; dev pushes run the full matrix.
+"""A draft pull request runs the fast CI lane; a ready one runs the full configuration.
 
-A pull request runs four ubuntu shards, one serial lane for the end-to-end
-and perf tiers, one combined job for the small gates and one macOS job over
-the affected tests; the whole-suite macOS shards and the coverage gate run
-on pushes to main and dev. The job conditions are Actions expressions, so
-the lane is read by evaluating each job's condition against a pull-request
-event, not by matching text. The workflow files the fast lane retired stay
-gone, and the green-tree record treats a dev push as it treats a main push.
+A draft runs four ubuntu shards, one serial lane for the end-to-end and perf
+tiers, one combined job for the small gates and one macOS job over the
+affected tests. A pull request ready for review runs what a push to main or
+dev runs, the whole-suite macOS shards and the coverage gate included, plus
+the console replay ci.yaml calls. The job conditions are Actions expressions,
+so each lane is read by evaluating each job's condition against an event,
+not by matching text. The workflow files the fast lane retired stay gone,
+and the green-tree record treats a dev push as it treats a main push.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ _SMALL_GATES = (
     "uv run mypy src/",
     "uv build --wheel",
     "tools/requirement_trace.py check --require-owned",
-    "tests/eval/test_skill_eval.py -m eval",
+    'tests/eval/test_skill_eval.py -m "eval and not repo_state"',
     "tools/snapshot_pairing_gate.py",
     "tools/commit_prefix_lint.py --check-history",
     "eawf hook ledger-history",
@@ -71,8 +72,12 @@ def _triggers(workflow: dict[Any, Any]) -> dict[str, Any]:
     return raw if isinstance(raw, dict) else {}
 
 
-def _runs_on_event(job: dict[str, Any], event: str) -> bool:
-    """Evaluate *job*'s condition for an *event* run whose changes job said code=true."""
+def _runs_on_event(job: dict[str, Any], event: str, *, draft: bool = True) -> bool:
+    """Evaluate *job*'s condition for an *event* run whose changes job said code=true.
+
+    A pull request is a draft unless *draft* is false; other events carry no pull
+    request, and every condition reads the draft flag only behind an event check.
+    """
     condition = str(job.get("if", "true")).strip()
     embedded = _EMBEDDED.fullmatch(condition)
     if embedded is not None:
@@ -83,6 +88,7 @@ def _runs_on_event(job: dict[str, Any], event: str) -> bool:
     context = {
         "github.event_name": event,
         "github.ref": "refs/pull/1/merge",
+        "github.event.pull_request.draft": draft,
         "needs.changes.result": "success",
         "needs.changes.outputs.code": "true",
     }
@@ -101,12 +107,14 @@ def _legs(job: dict[str, Any]) -> list[str]:
     return legs
 
 
-def _pull_request_jobs() -> dict[str, dict[str, Any]]:
+def _pull_request_jobs(*, draft: bool = True) -> dict[str, dict[str, Any]]:
     jobs: dict[str, dict[str, Any]] = _workflow()["jobs"]
-    return {name: job for name, job in jobs.items() if _runs_on_event(job, "pull_request")}
+    return {
+        name: job for name, job in jobs.items() if _runs_on_event(job, "pull_request", draft=draft)
+    }
 
 
-def _runs(job: dict[str, Any], event: str = "pull_request") -> str:
+def _runs(job: dict[str, Any], event: str = "pull_request", *, draft: bool = True) -> str:
     """Return the run scripts of the steps of *job* that an *event* run starts."""
     scripts = []
     for step in job.get("steps", []):
@@ -115,6 +123,7 @@ def _runs(job: dict[str, Any], event: str = "pull_request") -> str:
         condition = embedded.group(1) if embedded else condition
         context = {
             "github.event_name": event,
+            "github.event.pull_request.draft": draft,
             "steps.sync.outcome": "success",
             "steps.wheel.outcome": "success",
             "matrix.shard": "1",
@@ -133,15 +142,14 @@ def _option(argv: list[str], flag: str) -> list[str]:
 
 
 def test_pr_lane() -> None:
-    """A pull request runs the fast lane and a dev push runs the full matrix."""
+    """A draft pull request runs the fast lane and a dev push runs the full matrix."""
     triggers = _triggers(_workflow())
-    pull_request = triggers["pull_request"] or {}
-    assert pull_request.get("paths-ignore") or pull_request.get("paths")
     assert {"main", "dev"} <= set(triggers["push"]["branches"])
 
     jobs = _pull_request_jobs()
     assert sorted(jobs) == [
         "changes",
+        "ci-ok",
         "e2e",
         "gates",
         "linux-jail",
@@ -162,7 +170,11 @@ def test_pr_lane() -> None:
         assert [name for name, runs in gate_runs.items() if command in runs] == ["gates"], command
     assert not [name for name in _RETIRED_GATE_JOBS if name in _workflow()["jobs"]]
 
-    e2e = [name for name, runs in gate_runs.items() if "pytest -n0 tests/e2e" in runs]
+    e2e = [
+        name
+        for name, runs in gate_runs.items()
+        if 'pytest -m "not eval and not repo_state" -n0 tests/e2e' in runs
+    ]
     assert e2e == ["e2e"]
 
     macos = [label for job in jobs.values() for label in _legs(job) if label.startswith("macos")]
@@ -196,6 +208,192 @@ def test_pr_lane_expands_every_matrix_leg() -> None:
     assert _legs({"runs-on": "macos-26"}) == ["macos-26"]
 
 
+def test_full_configuration_at_ready() -> None:
+    """A ready pull request runs what a push runs; a draft runs the fast lane only."""
+    jobs: dict[str, dict[str, Any]] = _workflow()["jobs"]
+    ready = set(_pull_request_jobs(draft=False))
+    draft = set(_pull_request_jobs(draft=True))
+    push = {name for name, job in jobs.items() if _runs_on_event(job, "push")}
+
+    # The record job stays push-only: a pull request run tests a merge tree nobody tags.
+    assert ready == (push - {"green-tree"}) | {"console-replay"}
+    assert {"coverage", "e2e", "test-macos", "console-replay"} <= ready
+    assert "macos-affected" not in ready
+    assert _legs(jobs["test-macos"]) == ["macos-26"] * 3
+    assert "--cov=eawf" in _runs(jobs["test"], draft=False)
+    assert "--cov=eawf" in _runs(jobs["e2e"], draft=False)
+
+    assert draft & {"coverage", "test-macos", "console-replay"} == set()
+    assert "macos-affected" in draft
+    assert "--cov" not in _runs(jobs["test"]) + _runs(jobs["e2e"])
+
+
+@pytest.mark.parametrize("draft", [True, False])
+def test_full_configuration_at_ready_skips_no_job_on_a_non_pull_request_event(
+    draft: bool,
+) -> None:
+    """A push carries no pull request, so the draft flag never changes what it runs."""
+    jobs: dict[str, dict[str, Any]] = _workflow()["jobs"]
+    for event in ("push", "schedule", "workflow_dispatch"):
+        running = {name for name, job in jobs.items() if _runs_on_event(job, event, draft=draft)}
+        assert running == {name for name, job in jobs.items() if _runs_on_event(job, event)}
+
+
+def test_console_replay_folded() -> None:
+    """The replay runs inside ci.yaml at ready, under the ci-ok verdict, and nowhere else."""
+    replay_file = _WORKFLOWS / "console-replay.yaml"
+    assert "pull_request" not in _triggers(_workflow(replay_file))
+
+    jobs: dict[str, dict[str, Any]] = _workflow()["jobs"]
+    replay = jobs["console-replay"]
+    assert replay["uses"] == "./.github/workflows/console-replay.yaml"
+    assert _runs_on_event(replay, "pull_request", draft=False)
+    assert not _runs_on_event(replay, "pull_request", draft=True)
+    assert not [e for e in ("push", "schedule", "workflow_dispatch") if _runs_on_event(replay, e)]
+    assert "console-replay" in jobs["ci-ok"]["needs"]
+    assert "console-replay" in jobs["green-tree"]["needs"]
+
+    callers = [
+        path.name
+        for path in sorted(_WORKFLOWS.iterdir())
+        if path != replay_file and "console-replay.yaml" in path.read_text(encoding="utf-8")
+    ]
+    assert callers == ["ci.yaml"]
+
+
+def test_pull_request_types_unfiltered() -> None:
+    """Every pull request runs the workflow, so a required check never stays pending."""
+    pull_request = _triggers(_workflow())["pull_request"]
+    assert pull_request == {"types": ["opened", "synchronize", "reopened", "ready_for_review"]}
+    assert "paths-ignore" not in pull_request
+    assert "paths" not in pull_request
+
+
+#: The result string GitHub hands the verdict step, one result per needed job.
+_RESULTS_EXPRESSION = "${{ join(needs.*.result, ' ') }}"
+
+
+#: The verdict script's one passing ``case`` arm and its failing catch-all.
+_PASS_ARM = re.compile(r"^\s*([a-z| ]+)\)\s*;;\s*$", re.MULTILINE)
+_FAIL_ARM = re.compile(r"^\s*\*\)\s*$(?:\n(?!\s*;;).*)*\n\s*exit 1\s*$", re.MULTILINE)
+
+
+def _verdict(results: list[str]) -> int:
+    """Return the exit status the ci-ok verdict step's script gives *results*.
+
+    The script loops over the space-separated results and runs one ``case``:
+    the results it lists in its passing arm continue, and its catch-all exits 1.
+    """
+    step = _workflow()["jobs"]["ci-ok"]["steps"][-1]
+    assert step["env"] == {"RESULTS": _RESULTS_EXPRESSION}
+    script = str(step["run"])
+    assert 'for result in ${RESULTS}; do\n  case "${result}" in' in script
+    assert _FAIL_ARM.search(script) is not None
+    arms = _PASS_ARM.findall(script)
+    assert len(arms) == 1
+    passing = {pattern.strip() for pattern in arms[0].split("|")}
+    return 0 if all(result in passing for result in results) else 1
+
+
+#: Status functions that replace the implicit ``success()`` a job condition
+#: otherwise carries.
+_STATUS_FUNCTIONS = ("always()", "cancelled()", "success()", "failure()")
+
+
+def _simulate(
+    jobs: dict[str, dict[str, Any]], names: list[str], context: dict[str, object]
+) -> dict[str, str]:
+    """Return ``success`` or ``skipped`` per job of *names*, in workflow order.
+
+    A job runs when its condition holds and, unless the condition names a
+    status function, every job it needs succeeded: GitHub skips a job whose
+    need was skipped under the implicit ``success()``.
+    """
+    results: dict[str, str] = {}
+    for name in (job for job in jobs if job in names):
+        job = jobs[name]
+        condition = str(job.get("if", "true"))
+        needs = job.get("needs", [])
+        needs = [needs] if isinstance(needs, str) else list(needs)
+        implicit = not any(status in condition for status in _STATUS_FUNCTIONS)
+        blocked = implicit and any(results.get(need) != "success" for need in needs)
+        results[name] = "success" if not blocked and _evaluate(condition, context) else "skipped"
+    return results
+
+
+def test_simulate_skips_a_job_whose_need_skipped() -> None:
+    jobs: dict[str, dict[str, Any]] = {
+        "a": {"if": "false"},
+        "b": {"needs": "a"},
+        "c": {"needs": ["a"], "if": "always()"},
+    }
+    assert _simulate(jobs, ["a", "b", "c"], {}) == {"a": "skipped", "b": "skipped", "c": "success"}
+
+
+def test_ci_ok_result_job() -> None:
+    """ci-ok always runs, needs every other job but the record, and passes on success or skip."""
+    jobs: dict[str, dict[str, Any]] = _workflow()["jobs"]
+    ci_ok = jobs["ci-ok"]
+    assert ci_ok["if"] == "always()"
+    assert set(ci_ok["needs"]) == set(jobs) - {"ci-ok", "green-tree"}
+    assert len(ci_ok["needs"]) == len(set(ci_ok["needs"]))
+    assert _runs_on_event(ci_ok, "pull_request")
+
+    # A code=false change set on a draft and on pushes: every job that runs
+    # tests skips, only the classifier and the small gates run, and ci-ok passes.
+    for event, ref, draft in (
+        ("pull_request", "refs/pull/1/merge", True),
+        ("pull_request", "refs/pull/1/merge", False),
+        ("push", "refs/heads/dev", False),
+        ("push", "refs/heads/main", False),
+        ("push", "refs/heads/release/0.7", False),
+    ):
+        proven = {
+            "github.event_name": event,
+            "github.ref": ref,
+            "github.event.pull_request.draft": draft,
+            "needs.changes.result": "success",
+            "needs.changes.outputs.code": "false",
+        }
+        results = _simulate(jobs, ci_ok["needs"], proven)
+        assert [name for name, result in results.items() if result == "success"] == [
+            "changes",
+            "gates",
+        ], (event, ref, draft)
+        assert _verdict(list(results.values())) == 0
+
+    assert _verdict(["success"] * len(ci_ok["needs"])) == 0
+    assert _verdict(["skipped"]) == 0
+    assert _verdict(["success", "failure"]) == 1
+    assert _verdict(["cancelled", "success"]) == 1
+    assert _verdict(["success", "skipped", "failure"]) == 1
+
+
+def test_concurrency_cancels_superseded_runs() -> None:
+    """Two pushes to one pull request share a group, so the later run cancels the earlier."""
+    concurrency = _workflow()["concurrency"]
+    group = (
+        "ci-${{ github.event.pull_request.number"
+        " || format('{0}-{1}', github.event_name, github.ref) }}"
+    )
+    assert concurrency == {"group": group, "cancel-in-progress": True}
+
+    def rendered(event: str, number: str, ref: str) -> str:
+        context = {
+            "github.event_name": event,
+            "github.event.pull_request.number": number,
+            "github.ref": ref,
+        }
+        return _render(group, context)
+
+    first = rendered("pull_request", "7", "refs/pull/7/merge")
+    assert first == rendered("pull_request", "7", "refs/pull/7/merge") == "ci-7"
+    assert rendered("pull_request", "8", "refs/pull/8/merge") != first
+    push = rendered("push", "", "refs/heads/main")
+    assert push == "ci-push-refs/heads/main"
+    assert rendered("schedule", "", "refs/heads/main") != push
+
+
 def test_workflow_files() -> None:
     """The retired workflows are gone and the release workflows keep their names."""
     present = {path.name for path in _WORKFLOWS.iterdir()}
@@ -204,8 +402,7 @@ def test_workflow_files() -> None:
     assert {"release.yaml", "plugin-release.yaml", "console-replay.yaml"} <= present
 
     replay = _triggers(_workflow(_WORKFLOWS / "console-replay.yaml"))
-    assert "push" not in replay
-    assert "pull_request" in replay
+    assert replay == {"workflow_call": None}
 
 
 def test_workflow_files_read_the_on_key_under_either_spelling() -> None:
@@ -230,7 +427,7 @@ def _needs(**results: str) -> dict[str, Any]:
     needs: dict[str, Any] = {
         "changes": {"result": "success", "outputs": {"code": "true", "green": ""}},
     }
-    for job in ("gates", "test", "e2e", "test-macos", "coverage", "windows"):
+    for job in ("gates", "test", "e2e", "test-macos", "coverage", "linux-jail", "windows"):
         needs[job] = {"result": results.get(job.replace("-", "_"), "success"), "outputs": {}}
     for job in ("macos-affected", "twice-green"):
         needs[job] = {"result": "skipped", "outputs": {}}

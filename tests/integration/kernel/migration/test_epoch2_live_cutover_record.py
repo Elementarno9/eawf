@@ -20,6 +20,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.kernel.state.epoch2.authority import resolve_authority
 
+pytestmark = pytest.mark.repo_state
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 RECORD_PATH = (
     REPO_ROOT

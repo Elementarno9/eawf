@@ -13,6 +13,7 @@ never reads as a test of a real packet id when the live trace scans it.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 from pathlib import Path
@@ -38,7 +39,7 @@ from tools.requirement_trace import (
     render,
 )
 
-pytestmark = pytest.mark.unit
+pytestmark = [pytest.mark.unit, pytest.mark.repo_state]
 
 _TITLES = {
     "ABC-001": "Owned thing",
@@ -48,10 +49,23 @@ _TITLES = {
 }
 _UNKNOWN_SHA = "0" * 40
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-#: The committed catalog's first satisfaction: a commit this repository's
-#: history holds, and the phase that commit names.
-_BUILT = load_catalog(_REPO_ROOT / CATALOG_PATH).satisfactions[0]
-_OTHER_CLOSED_PHASE = "P01" if _BUILT.phase != "P01" else "P02"
+
+
+@functools.cache
+def _built() -> Satisfaction:
+    """Return the committed catalog's first satisfaction.
+
+    It names a commit this repository's history holds, and the phase that
+    commit names. Read on first use, not at import, so collection with the
+    committed state hidden still imports the module.
+    """
+    return load_catalog(_REPO_ROOT / CATALOG_PATH).satisfactions[0]
+
+
+def _other_closed_phase() -> str:
+    return "P01" if _built().phase != "P01" else "P02"
+
+
 _BUILT_TEST = "tests/test_built.py"
 
 
@@ -65,8 +79,8 @@ def _state(*, phase_status: str = "closed", decision_status: str = "active") -> 
             "D02": {"id": "D02", "status": decision_status},
         },
         "phases": {
-            _BUILT.phase: {"status": phase_status},
-            _OTHER_CLOSED_PHASE: {"status": "closed"},
+            _built().phase: {"status": phase_status},
+            _other_closed_phase(): {"status": "closed"},
             "P99": {"status": "active"},
         },
     }
@@ -85,7 +99,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def _head(_repo: Path) -> str:
     """Return a commit this repository's history holds: the committed catalog's first."""
-    return _BUILT.commit
+    return _built().commit
 
 
 def _blob_sha(path: Path) -> str:
@@ -98,7 +112,7 @@ def _satisfaction(repo: Path, **overrides: Any) -> Satisfaction:
     fields: dict[str, Any] = {
         "decision": "D02",
         "ids": ("ABC-002", "ABC-003"),
-        "phase": _BUILT.phase,
+        "phase": _built().phase,
         "commit": _head(repo),
         "tests": (_BUILT_TEST,),
     }
@@ -161,9 +175,9 @@ def test_a_commit_naming_another_phase_raises(repo: Path) -> None:
     """Gate-fire: a closed phase cited for a commit whose carriers name another."""
     with pytest.raises(
         TraceInputError,
-        match=f"cites {_OTHER_CLOSED_PHASE}, but the commit names {_BUILT.phase}",
+        match=f"cites {_other_closed_phase()}, but the commit names {_built().phase}",
     ):
-        _trace(repo, (_satisfaction(repo, phase=_OTHER_CLOSED_PHASE),))
+        _trace(repo, (_satisfaction(repo, phase=_other_closed_phase()),))
 
 
 def test_a_listed_test_that_does_not_exist_raises(repo: Path) -> None:
@@ -242,7 +256,7 @@ def test_check_require_owned_passes_on_satisfied_ids_and_reds_on_a_planted_sha(
 ) -> None:
     catalog = _trace(repo, (_satisfaction(repo),))
     (repo / CATALOG_PATH).write_text(render(catalog), encoding="utf-8")
-    assert load_state(repo / STATE_PATH).phases[_BUILT.phase].closed
+    assert load_state(repo / STATE_PATH).phases[_built().phase].closed
 
     assert main(["--repo-root", str(repo), "check", "--require-owned"]) == 0
 

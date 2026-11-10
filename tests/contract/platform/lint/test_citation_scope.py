@@ -36,6 +36,8 @@ from eawf.platform.lint.eawf027_citation_scope import (
 )
 from eawf.surfaces.cli.app import app
 
+pytestmark = pytest.mark.repo_state
+
 runner = CliRunner()
 
 _HEAD = "session R-0042 succeeded claude opus wall 1.5h steps 40 tools 12 subagents 2"

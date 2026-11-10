@@ -38,6 +38,8 @@ from eawf.workflow.release.canary_receipts import (
     load_canary_receipts,
 )
 
+pytestmark = pytest.mark.repo_state
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
 

@@ -34,6 +34,8 @@ from eawf.workflow.evidence.run_certification import (
 )
 from tests.conftest import REPO_ROOT
 
+pytestmark = pytest.mark.repo_state
+
 PROBED_AT: Final = datetime(2026, 10, 2, 9, 0, tzinfo=UTC)
 NOW: Final = datetime(2026, 10, 3, tzinfo=UTC)
 DIGEST: Final = f"sha256:{'a' * 64}"

@@ -24,7 +24,7 @@ from eawf.workflow.release.packet_run import (
     packet_receipts_export_path,
 )
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.repo_state]
 
 #: This checkout, whose committed evidence is the real 0.7.1 evidence.
 REPO_ROOT: Final = Path(__file__).resolve().parents[4]

@@ -64,13 +64,15 @@ class TestKind(StrEnum):
 #: Registered pytest markers that are NOT kinds. ``slow`` is a runtime
 #: modifier a test of any kind may wear; ``acceptance`` and
 #: ``golden_scenarios`` are scenario-scope labels; ``eval`` is an opt-in
-#: suite deselected by the default ``addopts`` expression.
+#: suite deselected by the default ``addopts`` expression; ``repo_state``
+#: labels a test that reads the repository's own committed ``.ea``.
 NON_KIND_MARKERS: frozenset[str] = frozenset(
     {
         "slow",
         "acceptance",
         "eval",
         "golden_scenarios",
+        "repo_state",
     }
 )
 

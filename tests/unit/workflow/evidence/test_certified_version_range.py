@@ -43,6 +43,8 @@ from tests.integration.workflow.evidence.test_canary_export import (
     stored,
 )
 
+pytestmark = pytest.mark.repo_state
+
 INSIDE: Final = "2.1.314"
 RANGE: Final = CertifiedVersionRange(min_version=VERSION, max_version="2.1.320")
 

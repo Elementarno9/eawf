@@ -229,7 +229,7 @@ def test_green_tree_gate_reds_on_a_partial_needs_list(tool: ModuleType) -> None:
     workflow["jobs"][_GREEN_TREE_JOB]["needs"] = ["changes", "test", "twice-green"]
     assert green_tree_violations(workflow, heavy_jobs=tool.HEAVY_JOBS) == [
         "the green-tree job does not need gates, e2e, test-macos, macos-affected, coverage, "
-        "linux-jail, windows, "
+        "linux-jail, windows, console-replay, ci-ok, "
         "so a red run of one of them can still record the tree"
     ]
 
@@ -290,7 +290,7 @@ def test_green_tree_gate_reds_on_an_unsound_record_job(tool: ModuleType) -> None
         "neither failed nor were cancelled",
         "the green-tree job cannot list the green run an inherited tree needs",
         "the jobs the changes job can skip (docs, test, twice-green) are not the heavy "
-        "jobs the record tool checks (e2e, test, test-macos, twice-green)",
+        "jobs the record tool checks (e2e, linux-jail, test, test-macos, twice-green, windows)",
         "the changes job does not export the green baseline a skipped run inherits",
         "the green-tree job checks out no history to read an inherited tree from",
         "the record step does not see the needed jobs' results",
@@ -337,9 +337,10 @@ def _needs(
         "test": {"result": test, "outputs": {}},
         "e2e": {"result": test, "outputs": {}},
         "test-macos": {"result": test, "outputs": {}},
+        "linux-jail": {"result": test, "outputs": {}},
+        "windows": {"result": test, "outputs": {}},
         "twice-green": {"result": twice, "outputs": {}},
         "snapshot-pairing": {"result": "skipped", "outputs": {}},
-        "windows": {"result": "success", "outputs": {}},
     }
 
 
@@ -413,14 +414,15 @@ def _with_result(needs: dict[str, Any], name: str, result: object) -> dict[str, 
         pytest.param(
             _needs("true", test="skipped"),
             "push",
-            "did not all pass: test=skipped, e2e=skipped, test-macos=skipped, twice-green=success",
+            "did not all pass: test=skipped, e2e=skipped, test-macos=skipped, "
+            "linux-jail=skipped, windows=skipped, twice-green=success",
             id="code-true-heavy-skipped",
         ),
         pytest.param(
             _needs("false", test="skipped", green=_BASELINE),
             "push",
             "skipped the heavy jobs, yet test=skipped, e2e=skipped, test-macos=skipped, "
-            "twice-green=success",
+            "linux-jail=skipped, windows=skipped, twice-green=success",
             id="code-false-heavy-ran",
         ),
         pytest.param(

@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from eawf.kernel.release.checkpoint_template import with_membership_refs
 from eawf.kernel.spec.release import Release, ReleaseStatus
 from eawf.kernel.spec.release_config import ReleaseGateName, load_release_config
@@ -28,6 +30,8 @@ from eawf.workflow.release.advance import CheckpointGateReceipt, TrainAdvanceRec
 from eawf.workflow.release.records import read_release_record
 from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
 from eawf.workflow.release.train_store import read_checkpoint_receipts, read_train_advances
+
+pytestmark = pytest.mark.repo_state
 
 DEV3 = "0.7.0.dev3"
 DEV3_KEY = "REL-0.7.0.dev3"

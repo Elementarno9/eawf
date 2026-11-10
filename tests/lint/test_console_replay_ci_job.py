@@ -1,9 +1,11 @@
-"""The console golden contract is replayed by CI on every pull request.
+"""The console golden contract is replayed by a workflow CI calls.
 
 The 261-frame / 25-journey contract is only evidence for as long as something runs
 it. The failure mode this guards is not a red replay but a replay nobody notices has
-stopped existing: the job deleted, the trigger narrowed to some branches or paths, or
-the step quietly reduced to one of the three test files.
+stopped existing: the job deleted, the workflow made uncallable so ci.yaml cannot run
+it, a trigger of its own that reports outside the ci-ok verdict, or the step quietly
+reduced to one of the three test files. When ci.yaml calls the replay is pinned by
+tests/unit/test_ci_workflow_structure.py.
 
 The checker takes a parsed workflow rather than reading the file, so each case can feed
 it a synthetic defective workflow and prove the gate reds on a real defect instead of
@@ -25,9 +27,6 @@ _CONSOLE_REPLAY = _REPO_ROOT / ".github" / "workflows" / "console-replay.yaml"
 
 #: The job that must own the replay.
 JOB_ID = "console-replay"
-
-#: Trigger keys that let a pull request skip the replay.
-_NARROWING_FILTERS = frozenset({"branches", "branches-ignore", "paths", "paths-ignore"})
 
 #: Every test file the replay job has to invoke. Dropping one silently narrows the
 #: contract: without the journeys the reset is unproven, without the map the residual
@@ -53,26 +52,22 @@ def triggers(workflow: dict[Any, Any]) -> dict[str, Any]:
 
 
 def console_replay_violations(workflow: dict[Any, Any]) -> list[str]:
-    """Return every reason ``workflow`` fails to replay the contract on every pull request.
+    """Return every reason ``workflow`` fails to replay the contract when CI calls it.
 
     Args:
         workflow: A parsed workflow document.
 
     Returns:
-        One finding per defect, in a stable order; empty when the workflow declares
-        the replay job under an unfiltered pull_request trigger and the job's steps
-        invoke every required test file.
+        One finding per defect, in a stable order; empty when the workflow is callable,
+        carries no pull_request trigger of its own and its replay job invokes every
+        required test file.
     """
     violations: list[str] = []
     on = triggers(workflow)
-    if "pull_request" not in on:
-        violations.append("no pull_request trigger: the replay must run on every pull request")
-    else:
-        filters = on["pull_request"] or {}
-        if isinstance(filters, dict) and set(filters) & _NARROWING_FILTERS:
-            violations.append(
-                "the pull_request trigger is filtered; the replay must run on every pull request"
-            )
+    if "workflow_call" not in on:
+        violations.append("no workflow_call trigger: ci.yaml cannot call the replay")
+    if "pull_request" in on:
+        violations.append("a pull_request trigger reports the replay outside the ci-ok verdict")
     job = (workflow.get("jobs") or {}).get(JOB_ID)
     if job is None:
         violations.append(f"no {JOB_ID} job")
@@ -90,7 +85,7 @@ def console_replay_violations(workflow: dict[Any, Any]) -> list[str]:
     return violations
 
 
-def test_console_replay_workflow_replays_the_contract_on_every_pull_request() -> None:
+def test_console_replay_workflow_replays_the_contract_when_called() -> None:
     workflow: dict[Any, Any] = yaml.safe_load(_CONSOLE_REPLAY.read_text(encoding="utf-8"))
     assert console_replay_violations(workflow) == []
 
@@ -104,50 +99,40 @@ def test_console_replay_job_runs_the_contract_single_process() -> None:
     assert "-p no:xdist" in commands
 
 
+def _replay(trigger: str, run: str = "uv run pytest " + " ".join(REQUIRED_TESTS)) -> Any:
+    return yaml.safe_load(
+        f"on:\n  {trigger}:\njobs:\n  {JOB_ID}:\n    steps:\n      - run: {run}\n"
+    )
+
+
 def test_console_replay_violations_reds_on_a_missing_job() -> None:
-    defective = yaml.safe_load("on:\n  pull_request:\njobs:\n  other: {}\n")
+    defective = yaml.safe_load("on:\n  workflow_call:\njobs:\n  other: {}\n")
     assert console_replay_violations(defective) == [f"no {JOB_ID} job"]
 
 
-@pytest.mark.parametrize("narrowing", sorted(_NARROWING_FILTERS))
-def test_console_replay_violations_reds_on_a_filtered_pull_request(narrowing: str) -> None:
+def test_console_replay_violations_reds_on_a_pull_request_trigger() -> None:
     defective = yaml.safe_load(
         "on:\n"
+        "  workflow_call:\n"
         "  pull_request:\n"
-        f"    {narrowing}: [main]\n"
         "jobs:\n"
         f"  {JOB_ID}:\n"
         "    steps:\n"
         "      - run: uv run pytest " + " ".join(REQUIRED_TESTS) + "\n"
     )
     assert console_replay_violations(defective) == [
-        "the pull_request trigger is filtered; the replay must run on every pull request"
+        "a pull_request trigger reports the replay outside the ci-ok verdict"
     ]
 
 
-def test_console_replay_violations_reds_on_a_push_only_workflow() -> None:
-    defective = yaml.safe_load(
-        "on:\n"
-        "  push:\n"
-        "jobs:\n"
-        f"  {JOB_ID}:\n"
-        "    steps:\n"
-        "      - run: uv run pytest " + " ".join(REQUIRED_TESTS) + "\n"
-    )
-    assert console_replay_violations(defective) == [
-        "no pull_request trigger: the replay must run on every pull request"
+def test_console_replay_violations_reds_on_an_uncallable_workflow() -> None:
+    assert console_replay_violations(_replay("push")) == [
+        "no workflow_call trigger: ci.yaml cannot call the replay"
     ]
 
 
 def test_console_replay_violations_reds_on_a_dropped_test_file() -> None:
-    defective = yaml.safe_load(
-        "on:\n"
-        "  pull_request:\n"
-        "jobs:\n"
-        f"  {JOB_ID}:\n"
-        "    steps:\n"
-        "      - run: uv run pytest " + REQUIRED_TESTS[0] + "\n"
-    )
+    defective = _replay("workflow_call", run=f"uv run pytest {REQUIRED_TESTS[0]}")
     assert console_replay_violations(defective) == [
         f"the {JOB_ID} job does not invoke {REQUIRED_TESTS[1]}",
         f"the {JOB_ID} job does not invoke {REQUIRED_TESTS[2]}",
@@ -155,15 +140,13 @@ def test_console_replay_violations_reds_on_a_dropped_test_file() -> None:
 
 
 def test_console_replay_violations_reds_on_a_job_with_no_pytest_step() -> None:
-    defective = yaml.safe_load(
-        f"on:\n  pull_request:\njobs:\n  {JOB_ID}:\n    steps:\n      - run: echo skipped\n"
-    )
+    defective = _replay("workflow_call", run="echo skipped")
     assert console_replay_violations(defective)[0] == f"the {JOB_ID} job runs no pytest step"
 
 
 def test_console_replay_violations_reds_on_an_empty_workflow() -> None:
     assert console_replay_violations({}) == [
-        "no pull_request trigger: the replay must run on every pull request",
+        "no workflow_call trigger: ci.yaml cannot call the replay",
         f"no {JOB_ID} job",
     ]
 

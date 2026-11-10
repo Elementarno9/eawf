@@ -21,7 +21,7 @@ from eawf.workflow.release.train import (
 )
 from tests.integration.workflow.release.test_dev3_canary_rehearsal_record import WalkRecord
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.repo_state]
 
 
 def test_rc4_follows_rc3_before_stable() -> None:

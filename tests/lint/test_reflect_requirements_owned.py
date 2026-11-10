@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-pytestmark = pytest.mark.unit
+pytestmark = [pytest.mark.unit, pytest.mark.repo_state]
 
 _ROOT = Path(__file__).resolve().parents[2]
 _CATALOG = _ROOT / ".ea" / "requirements.json"

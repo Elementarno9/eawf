@@ -20,7 +20,7 @@ from eawf.kernel.config.defaults import BUILT_IN_DEFAULTS
 from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS, LEAF_KEY_REGISTRY
 from eawf.observability.doctor import checks
 
-pytestmark = pytest.mark.unit
+pytestmark = [pytest.mark.unit, pytest.mark.repo_state]
 
 REPO: Final = Path(__file__).resolve().parents[2]
 

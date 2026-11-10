@@ -76,7 +76,7 @@ CHANGES_JOB = "changes"
 #: to have passed, or all of them to have been skipped against a recorded
 #: green tree. The whole-suite macOS shards run on every push, so a push to
 #: main and one to dev stand on the same set.
-HEAVY_JOBS: tuple[str, ...] = ("test", "e2e", "test-macos", "twice-green")
+HEAVY_JOBS: tuple[str, ...] = ("test", "e2e", "test-macos", "linux-jail", "windows", "twice-green")
 
 #: The heavy job a push runs only on the release train. A push elsewhere
 #: skips it by its own condition, so the record there stands on the rest.

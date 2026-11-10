@@ -49,7 +49,7 @@ from tests.integration.workflow.verify.test_provider_os_class import (
     staged,
 )
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.repo_state]
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[4]
 DEV4_VERSION: Final = "0.7.0.dev4"

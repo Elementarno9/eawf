@@ -27,6 +27,8 @@ from eawf.workflow.evidence.run_certification import (
 from tests.conftest import REPO_ROOT
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import seed_row
 
+pytestmark = pytest.mark.repo_state
+
 BEFORE_EXPIRY: Final = datetime(2026, 10, 2, tzinfo=UTC)
 AFTER_EXPIRY: Final = datetime(2026, 12, 18, tzinfo=UTC)
 CERTIFIED: Final = RunRuntimeTuple(harness="claude-code", harness_version="2.1.274")

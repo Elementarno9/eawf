@@ -21,7 +21,7 @@ from eawf.platform.rules.loader import load_rule_source
 from eawf.platform.rules.modules import select_rule_modules
 from eawf.platform.rules.render import builtin_rule_provider
 
-pytestmark = pytest.mark.unit
+pytestmark = [pytest.mark.unit, pytest.mark.repo_state]
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CHANGELOG = _REPO_ROOT / "CHANGELOG.md"

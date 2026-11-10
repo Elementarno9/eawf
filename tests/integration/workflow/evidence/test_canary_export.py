@@ -42,7 +42,7 @@ from eawf.workflow.evidence.provider_certification import (
 )
 from tests.conftest import REPO_ROOT
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.repo_state]
 
 VERSION: Final = "2.1.310"
 PRIOR_KEY: Final = "REL-0.7.0.dev3"

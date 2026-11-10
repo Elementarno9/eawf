@@ -2,9 +2,7 @@
 
 The classifier decides whether a run may skip the test matrix and the
 twice-green job: only when every change since the last green ``ci.yaml``
-tree is ``.secrets.baseline`` or an in-place edit of ``.ea/state.json`` or a
-``.ea/store/`` ledger -- the ``.ea/`` commit-policy census reads which
-paths are tracked, so only an added or removed path there must run it.
+tree is ``.secrets.baseline`` or any path under ``.ea/``.
 Git and the GitHub API are both injected, so no test spawns git or
 touches the network; the two default adapters are exercised through
 patched ``subprocess.run`` / ``urlopen``.
@@ -13,6 +11,7 @@ patched ``subprocess.run`` / ``urlopen``.
 
 from __future__ import annotations
 
+import http.client
 import importlib.util
 import io
 import json
@@ -77,8 +76,59 @@ class FakeFetch:
         return self._body
 
 
-def _run(sha: str, *, repo: str = _REPO, conclusion: str = "success") -> dict[str, Any]:
-    return {"head_sha": sha, "conclusion": conclusion, "head_repository": {"full_name": repo}}
+class RoutedFetch:
+    """An API fetcher answering the runs list and each run's jobs list."""
+
+    def __init__(
+        self, mod: ModuleType, runs: object, jobs: dict[int, object] | None = None
+    ) -> None:
+        self._mod = mod
+        self._runs = runs
+        self._jobs = jobs or {}
+        self.urls: list[str] = []
+
+    def __call__(self, url: str) -> object:
+        self.urls.append(url)
+        if "/actions/workflows/" in url:
+            return self._runs
+        for run_id, body in self._jobs.items():
+            if url == _jobs_url(run_id):
+                return body
+        raise self._mod.BaselineError(f"HTTP Error 404 for {url}")
+
+
+def _run(
+    sha: str,
+    *,
+    repo: str = _REPO,
+    conclusion: str = "success",
+    event: str = "push",
+    branch: str = "main",
+    run_id: int = 1,
+) -> dict[str, Any]:
+    return {
+        "id": run_id,
+        "head_sha": sha,
+        "conclusion": conclusion,
+        "event": event,
+        "head_branch": branch,
+        "head_repository": {"full_name": repo},
+    }
+
+
+def _jobs_url(run_id: int) -> str:
+    return f"{_API}/repos/{_REPO}/actions/runs/{run_id}/jobs?per_page=100"
+
+
+_COVERAGE_JOB = "Coverage gate over the combined shards"
+
+
+def _jobs(coverage: str | None = "success") -> dict[str, Any]:
+    """Render a jobs response; ``None`` leaves the coverage job out."""
+    jobs: list[dict[str, Any]] = [{"name": "ci-ok", "conclusion": "success"}]
+    if coverage is not None:
+        jobs.append({"name": _COVERAGE_JOB, "conclusion": coverage})
+    return {"total_count": len(jobs), "jobs": jobs}
 
 
 def _runs(*runs: dict[str, Any]) -> dict[str, Any]:
@@ -93,6 +143,10 @@ def _log_key(green: str, base: str) -> tuple[str, ...]:
     return ("log", "--format=", "--name-status", "--no-renames", "-m", "-z", f"{green}..{base}")
 
 
+def _ancestor_key(green: str) -> tuple[str, ...]:
+    return ("merge-base", "--is-ancestor", green, "HEAD")
+
+
 def _rev_key(revision: str) -> tuple[str, ...]:
     return ("rev-parse", "--verify", f"{revision}^{{commit}}")
 
@@ -100,6 +154,11 @@ def _rev_key(revision: str) -> tuple[str, ...]:
 def _z(*paths: str, status: str = "M") -> str:
     """Render ``--name-status -z`` output listing every path under one status."""
     return "".join(f"{status}\0{path}\0" for path in paths)
+
+
+def _push_git(mod: ModuleType, diff: str, *, green: str = _GREEN) -> FakeGit:
+    """Prime a push checkout that contains *green* and differs from it by *diff*."""
+    return FakeGit(mod, {_ancestor_key(green): "", _diff_key(green, "HEAD"): diff})
 
 
 def _push_env(tmp_path: Path) -> dict[str, str]:
@@ -112,9 +171,13 @@ def _push_env(tmp_path: Path) -> dict[str, str]:
     }
 
 
-def _pr_env(tmp_path: Path, *, head_repo: str = _REPO) -> dict[str, str]:
+def _pr_env(tmp_path: Path, *, head_repo: str = _REPO, draft: object = True) -> dict[str, str]:
+    """Return a pull request environment; the payload is a draft by default."""
     event_path = tmp_path / "event.json"
-    payload = {"pull_request": {"head": {"repo": {"full_name": head_repo}}}}
+    pull_request: dict[str, Any] = {"head": {"repo": {"full_name": head_repo}}}
+    if draft is not None:
+        pull_request["draft"] = draft
+    payload = {"action": "synchronize", "pull_request": pull_request}
     event_path.write_text(json.dumps(payload), encoding="utf-8")
     return {
         "GITHUB_EVENT_NAME": "pull_request",
@@ -142,37 +205,40 @@ def _pr_git(mod: ModuleType, *, head_diff: str, base_log: str) -> FakeGit:
 # --- bookkeeping paths -------------------------------------------------------
 
 
-def test_is_bookkeeping_accepts_only_the_secrets_baseline(mod: ModuleType) -> None:
-    assert mod.is_bookkeeping(".secrets.baseline") is True
-
-
 @pytest.mark.parametrize(
     "path",
-    [".ea/state.json", ".ea/store/evidence.jsonl", ".ea/store/nested/row.jsonl"],
+    [
+        ".secrets.baseline",
+        ".ea/a",
+        ".ea/state.json",
+        ".ea/store/evidence.jsonl",
+        ".ea/generations/gen-ca819f3245bf71a8/history/change.jsonl",
+        ".ea/config.yaml",
+        ".ea/profile.yaml",
+        ".ea/state.json.bak",
+        ".ea/" + "x/" * 200 + "row.jsonl",
+    ],
 )
-def test_is_bookkeeping_rejects_the_paths_the_census_reads(mod: ModuleType, path: str) -> None:
-    """The ``.ea/`` commit-policy census inspects these on every run, so a
-    push that only touches them still has to run the suite that carries it.
-    """
-    assert mod.is_bookkeeping(path) is False
+def test_is_bookkeeping_accepts_the_baseline_and_every_ea_path(mod: ModuleType, path: str) -> None:
+    assert mod.is_bookkeeping(path) is True
 
 
 @pytest.mark.parametrize(
     "path",
     [
         "",
-        ".ea/config.yaml",
-        ".ea/profile.yaml",
-        ".ea/artifacts/audits/report.md",
-        ".ea/state.json.bak",
-        ".ea/store",
-        ".ea/storefront/row.jsonl",
+        ".ea",
+        ".ea.yaml",
+        ".eap/row.jsonl",
+        "ea/state.json",
         "docs/.ea/state.json",
+        "./.ea/state.json",
+        ".secrets.baseline.bak",
         "src/eawf/kernel/state/models.py",
         ".github/workflows/ci.yaml",
     ],
 )
-def test_is_bookkeeping_rejects_code_and_other_ea_paths(mod: ModuleType, path: str) -> None:
+def test_is_bookkeeping_rejects_paths_outside_ea(mod: ModuleType, path: str) -> None:
     assert mod.is_bookkeeping(path) is False
 
 
@@ -182,7 +248,7 @@ def test_is_bookkeeping_rejects_code_and_other_ea_paths(mod: ModuleType, path: s
 def test_classify_push_secrets_baseline_only_diff_reports_no_code(
     mod: ModuleType, tmp_path: Path
 ) -> None:
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".secrets.baseline")})
+    git = _push_git(mod, _z(".secrets.baseline"))
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is False
     assert "only state bookkeeping" in verdict.reason
@@ -190,97 +256,61 @@ def test_classify_push_secrets_baseline_only_diff_reports_no_code(
     assert verdict.green == _GREEN
 
 
-@pytest.mark.parametrize("status", ["A", "D", "T"])
-def test_classify_push_added_or_removed_state_paths_report_code(
+@pytest.mark.parametrize("status", ["A", "M", "D", "T"])
+def test_classify_push_ea_paths_report_no_code_under_every_status(
     mod: ModuleType, tmp_path: Path, status: str
 ) -> None:
-    """An added, removed or retyped ``.ea/`` path changes what the census
-    sees, so the push runs the suite that carries it even with no code change.
-    """
-    diff = _z(".ea/state.json", ".ea/store/gate.jsonl", status=status) + _z(".secrets.baseline")
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): diff})
-    verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
-    assert verdict.code is True
-    assert ".ea/state.json" in verdict.reason
-    assert ".ea/store/gate.jsonl" in verdict.reason
-    assert ".secrets.baseline" not in verdict.reason
-
-
-def test_classify_push_pure_state_content_edit_reports_no_code(
-    mod: ModuleType, tmp_path: Path
-) -> None:
-    """A ``state:`` push only rewrites tracked state files, which the census
-    cannot tell apart, so it keeps the skip instead of the full matrix.
-    """
-    diff = _z(".ea/state.json", ".ea/store/gate.jsonl", ".ea/store/nested/row.jsonl")
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): diff})
+    diff = _z(".ea/state.json", ".ea/generations/g/state.json", status=status)
+    git = _push_git(mod, diff + _z(".secrets.baseline"))
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is False
     assert "only state bookkeeping" in verdict.reason
 
 
-def test_classify_push_single_added_store_path_reports_code(
+def test_classify_push_single_added_ea_path_reports_no_code(
     mod: ModuleType, tmp_path: Path
 ) -> None:
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".ea/store/new.jsonl", status="A")})
+    git = _push_git(mod, _z(".ea/store/new.jsonl", status="A"))
+    verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
+    assert verdict.code is False
+
+
+def test_classify_push_code_file_moved_into_ea_reports_code(
+    mod: ModuleType, tmp_path: Path
+) -> None:
+    """``--no-renames`` keeps the source-side deletion of the moved file."""
+    diff = _z("src/eawf/app.py", status="D") + _z(".ea/app.py", status="A")
+    git = _push_git(mod, diff)
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is True
-    assert ".ea/store/new.jsonl" in verdict.reason
+    assert "src/eawf/app.py" in verdict.reason
 
 
 def test_classify_push_malformed_name_status_reports_code(mod: ModuleType, tmp_path: Path) -> None:
     """An odd field count cannot be paired, so the classifier fails open."""
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): "M\0.ea/state.json\0A\0"})
+    git = _push_git(mod, "M\0.ea/state.json\0A\0")
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is True
     assert "not pairs" in verdict.reason
 
 
-@pytest.mark.parametrize(
-    ("status", "path", "expected"),
-    [
-        ("M", ".ea/state.json", True),
-        ("M", ".ea/store/evidence.jsonl", True),
-        ("A", ".ea/store/evidence.jsonl", False),
-        ("D", ".ea/state.json", False),
-        ("T", ".ea/state.json", False),
-        ("M", ".ea/store", False),
-        ("M", ".ea/storefront/row.jsonl", False),
-        ("M", ".ea/state.json.bak", False),
-        ("M", ".ea/config.yaml", False),
-        ("M", "docs/.ea/state.json", False),
-        ("M", "", False),
-    ],
-)
-def test_is_state_content_edit_matches_only_in_place_state_edits(
-    mod: ModuleType, status: str, path: str, expected: bool
-) -> None:
-    assert mod.is_state_content_edit(status, path) is expected
-
-
 def test_classify_push_identical_tree_reports_no_code(mod: ModuleType, tmp_path: Path) -> None:
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): ""})
+    git = _push_git(mod, "")
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is False
 
 
 def test_classify_push_code_diff_reports_code(mod: ModuleType, tmp_path: Path) -> None:
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".ea/state.json", "src/eawf/cli.py")})
+    git = _push_git(mod, _z(".ea/state.json", "src/eawf/cli.py"))
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is True
     assert "src/eawf/cli.py" in verdict.reason
     assert ".ea/state.json" not in verdict.reason
 
 
-def test_classify_push_non_state_ea_path_reports_code(mod: ModuleType, tmp_path: Path) -> None:
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".ea/config.yaml")})
-    verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
-    assert verdict.code is True
-
-
 def test_classify_push_many_code_paths_are_summarised(mod: ModuleType, tmp_path: Path) -> None:
     paths = [f"src/m{index}.py" for index in range(7)]
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(*paths)})
+    git = _push_git(mod, _z(*paths))
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is True
     assert "src/m4.py" in verdict.reason
@@ -309,22 +339,31 @@ def test_classify_push_red_and_foreign_runs_are_no_baseline(
 
 def test_classify_push_uses_the_newest_green_run(mod: ModuleType, tmp_path: Path) -> None:
     runs = _runs(_run(_GREEN), _run(_BASE))
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".secrets.baseline")})
+    git = _push_git(mod, _z(".secrets.baseline"))
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(runs))
     assert verdict.code is False
-    assert git.calls == [_diff_key(_GREEN, "HEAD")]
+    assert git.calls == [_ancestor_key(_GREEN), _diff_key(_GREEN, "HEAD")]
 
 
-def test_classify_push_queries_the_green_push_runs_of_the_branch(
-    mod: ModuleType, tmp_path: Path
-) -> None:
+def test_classify_push_queries_the_green_runs_of_every_ref(mod: ModuleType, tmp_path: Path) -> None:
     fetch = FakeFetch(_runs(_run(_GREEN)))
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): ""})
+    git = _push_git(mod, "")
     mod.classify(_push_env(tmp_path), git=git, fetch=fetch)
     assert fetch.urls == [
-        f"{_API}/repos/{_REPO}/actions/workflows/ci.yaml/runs"
-        "?branch=main&event=push&status=success&per_page=30"
+        f"{_API}/repos/{_REPO}/actions/workflows/ci.yaml/runs?status=success&per_page=100"
     ]
+
+
+def test_classify_push_no_green_head_in_history_reports_code(
+    mod: ModuleType, tmp_path: Path
+) -> None:
+    """Green runs on unrelated branches never anchor the push."""
+    runs = _runs(_run(_HEAD, branch="feature/x"), _run(_BASE, event="pull_request"))
+    git = FakeGit(mod, {_diff_key(_HEAD, "HEAD"): "", _diff_key(_BASE, "HEAD"): ""})
+    verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(runs))
+    assert verdict.code is True
+    assert "with a head the push contains" in verdict.reason
+    assert git.calls == [_ancestor_key(_HEAD), _ancestor_key(_BASE)]
 
 
 def test_classify_api_failure_reports_code(mod: ModuleType, tmp_path: Path) -> None:
@@ -361,7 +400,7 @@ def test_classify_malformed_green_sha_never_reaches_git(
 
 def test_classify_accepts_a_sha256_green_sha(mod: ModuleType, tmp_path: Path) -> None:
     sha = "d" * 64
-    git = FakeGit(mod, {_diff_key(sha, "HEAD"): ""})
+    git = _push_git(mod, "", green=sha)
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(sha))))
     assert verdict.code is False
 
@@ -371,7 +410,7 @@ def test_classify_unreachable_green_commit_reports_code(mod: ModuleType, tmp_pat
         _push_env(tmp_path), git=FakeGit(mod, {}), fetch=FakeFetch(_runs(_run(_GREEN)))
     )
     assert verdict.code is True
-    assert "bad object" in verdict.reason
+    assert "with a head the push contains" in verdict.reason
 
 
 @pytest.mark.parametrize("missing", ["GITHUB_REPOSITORY", "GITHUB_REF_NAME"])
@@ -381,7 +420,7 @@ def test_classify_push_missing_env_reports_code(
     env = _push_env(tmp_path)
     del env[missing]
     fetch = FakeFetch(_runs(_run(_GREEN)))
-    verdict = mod.classify(env, git=FakeGit(mod, {_diff_key(_GREEN, "HEAD"): ""}), fetch=fetch)
+    verdict = mod.classify(env, git=_push_git(mod, ""), fetch=fetch)
     assert verdict.code is True
     assert f"{missing} is unset" in verdict.reason
 
@@ -389,7 +428,7 @@ def test_classify_push_missing_env_reports_code(
 @pytest.mark.parametrize("event", ["schedule", "workflow_dispatch"])
 def test_classify_scheduled_and_dispatched_runs_report_code(mod: ModuleType, event: str) -> None:
     fetch = FakeFetch(_runs(_run(_GREEN)))
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): ""})
+    git = _push_git(mod, "")
     verdict = mod.classify({"GITHUB_EVENT_NAME": event}, git=git, fetch=fetch)
     assert verdict.code is True
     assert verdict.reason == f"a {event} run re-proves the whole tree"
@@ -402,7 +441,7 @@ def test_classify_other_event_reports_code(mod: ModuleType, tmp_path: Path, even
     env = _push_env(tmp_path)
     env["GITHUB_EVENT_NAME"] = event
     fetch = FakeFetch(_runs(_run(_GREEN)))
-    verdict = mod.classify(env, git=FakeGit(mod, {_diff_key(_GREEN, "HEAD"): ""}), fetch=fetch)
+    verdict = mod.classify(env, git=_push_git(mod, ""), fetch=fetch)
     assert verdict.code is True
     assert "no green baseline" in verdict.reason
     assert fetch.urls == []
@@ -412,7 +451,7 @@ def test_classify_default_api_url_when_unset(mod: ModuleType, tmp_path: Path) ->
     env = _push_env(tmp_path)
     del env["GITHUB_API_URL"]
     fetch = FakeFetch(_runs(_run(_GREEN)))
-    mod.classify(env, git=FakeGit(mod, {_diff_key(_GREEN, "HEAD"): ""}), fetch=fetch)
+    mod.classify(env, git=_push_git(mod, ""), fetch=fetch)
     assert fetch.urls[0].startswith("https://api.github.com/repos/")
 
 
@@ -422,8 +461,59 @@ def test_runs_url_encodes_a_slashed_branch(mod: ModuleType) -> None:
     )
     assert url == (
         f"{_API}/repos/{_REPO}/actions/workflows/ci.yaml/runs"
-        "?branch=feature%2Fabc-v0.7&event=pull_request&status=success&per_page=30"
+        "?branch=feature%2Fabc-v0.7&event=pull_request&status=success&per_page=100"
     )
+
+
+def test_runs_url_without_branch_or_event_lists_every_ref(mod: ModuleType) -> None:
+    url = mod.runs_url(api_url=_API, repository=_REPO, branch="", event=None)
+    assert url == f"{_API}/repos/{_REPO}/actions/workflows/ci.yaml/runs?status=success&per_page=100"
+
+
+def test_green_runs_keeps_every_qualifying_run_newest_first(mod: ModuleType) -> None:
+    runs = _runs(
+        _run(_GREEN, run_id=3),
+        _run(_HEAD, conclusion="failure"),
+        _run(_BASE, event="pull_request", run_id=2),
+    )
+    assert mod.green_runs(runs, repository=_REPO) == [
+        mod.GreenRun(run_id=3, head_sha=_GREEN, event="push"),
+        mod.GreenRun(run_id=2, head_sha=_BASE, event="pull_request"),
+    ]
+    assert mod.green_runs(_runs(), repository=_REPO) == []
+    with pytest.raises(mod.BaselineError, match="no 'workflow_runs' list"):
+        mod.green_runs({"workflow_runs": {}}, repository=_REPO)
+
+
+@pytest.mark.parametrize(("raw", "expected"), [(None, 0), (True, 0), ("5", 0), (-4, 0), (9, 9)])
+def test_green_runs_keeps_only_a_positive_integer_run_id(
+    mod: ModuleType, raw: object, expected: int
+) -> None:
+    run = _run(_GREEN)
+    run["id"] = raw
+    run["event"] = 7
+    assert mod.green_runs(_runs(run), repository=_REPO) == [
+        mod.GreenRun(run_id=expected, head_sha=_GREEN, event="")
+    ]
+
+
+def test_ran_full_configuration_reads_the_coverage_job(mod: ModuleType) -> None:
+    assert mod.ran_full_configuration(_jobs("success")) is True
+    assert mod.ran_full_configuration(_jobs("skipped")) is False
+    assert mod.ran_full_configuration({"jobs": []}) is False
+    assert mod.ran_full_configuration({"jobs": ["x", {"name": _COVERAGE_JOB}]}) is False
+    with pytest.raises(mod.BaselineError, match="no 'jobs' list"):
+        mod.ran_full_configuration({"jobs": {}})
+
+
+def test_jobs_url_names_the_run(mod: ModuleType) -> None:
+    assert mod.jobs_url(api_url=f"{_API}/", repository=_REPO, run_id=42) == _jobs_url(42)
+
+
+def test_full_configuration_job_names_the_ci_coverage_job(mod: ModuleType) -> None:
+    """The proof reads the job by its display name, so it must match ci.yaml."""
+    workflow = (_REPO_ROOT / ".github" / "workflows" / "ci.yaml").read_text(encoding="utf-8")
+    assert f"    name: {mod.FULL_CONFIGURATION_JOB}\n" in workflow.split("\n  coverage:\n")[1]
 
 
 # --- pull request runs -------------------------------------------------------
@@ -439,15 +529,13 @@ def test_classify_pull_request_state_only_head_and_base_reports_no_code(
     assert verdict.green == _GREEN
 
 
-def test_classify_pull_request_base_state_path_added_then_edited_reports_code(
+def test_classify_pull_request_ea_only_head_and_base_reports_no_code(
     mod: ModuleType, tmp_path: Path
 ) -> None:
-    """The base log lists every commit, so a later edit cannot hide the add."""
-    base_log = _z(".ea/store/new.jsonl", status="A") + _z(".ea/store/new.jsonl")
-    git = _pr_git(mod, head_diff=_z(".ea/state.json"), base_log=base_log)
+    base_log = _z(".ea/store/new.jsonl", status="A") + _z(".ea/generations/g/state.json")
+    git = _pr_git(mod, head_diff=_z(".ea/state.json", status="D"), base_log=base_log)
     verdict = mod.classify(_pr_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
-    assert verdict.code is True
-    assert ".ea/store/new.jsonl" in verdict.reason
+    assert verdict.code is False
 
 
 def test_classify_pull_request_unchanged_head_and_base_reports_no_code(
@@ -490,7 +578,7 @@ def test_classify_pull_request_queries_the_green_runs_of_the_head_branch(
     mod.classify(_pr_env(tmp_path), git=_pr_git(mod, head_diff="", base_log=""), fetch=fetch)
     assert fetch.urls == [
         f"{_API}/repos/{_REPO}/actions/workflows/ci.yaml/runs"
-        "?branch=feature%2Fabc&event=pull_request&status=success&per_page=30"
+        "?branch=feature%2Fabc&event=pull_request&status=success&per_page=100"
     ]
 
 
@@ -555,6 +643,252 @@ def test_classify_pull_request_without_head_ref_reports_code(
     assert "GITHUB_HEAD_REF is unset" in verdict.reason
 
 
+# --- full-configuration baselines ---------------------------------------------
+
+
+def test_classify_ready_pull_request_repro_draft_baseline(mod: ModuleType, tmp_path: Path) -> None:
+    """A draft goes green on the head, then is marked ready with no new
+    commit: the draft's fast-lane run never ran coverage, e2e or the macOS
+    shards, so the ready run must not inherit it.
+    """
+    env = _pr_env(tmp_path, draft=False)
+    fetch = RoutedFetch(mod, _runs(_run(_GREEN, event="pull_request")), {1: _jobs(None)})
+    git = _pr_git(mod, head_diff="", base_log="")
+    verdict = mod.classify(env, git=git, fetch=fetch)
+    assert verdict.code is True
+    assert "full configuration" in verdict.reason
+    assert verdict.green == ""
+
+
+@pytest.mark.parametrize("coverage", [None, "skipped", "failure", "cancelled", "Success"])
+def test_classify_ready_pull_request_refuses_runs_without_coverage_success(
+    mod: ModuleType, tmp_path: Path, coverage: str | None
+) -> None:
+    fetch = RoutedFetch(mod, _runs(_run(_GREEN, event="pull_request")), {1: _jobs(coverage)})
+    git = _pr_git(mod, head_diff="", base_log="")
+    verdict = mod.classify(_pr_env(tmp_path, draft=False), git=git, fetch=fetch)
+    assert verdict.code is True
+
+
+def test_classify_ready_pull_request_skips_draft_runs_for_an_older_full_run(
+    mod: ModuleType, tmp_path: Path
+) -> None:
+    newer = "e" * 40
+    runs = _runs(
+        _run(newer, event="pull_request", run_id=2), _run(_GREEN, event="pull_request", run_id=1)
+    )
+    fetch = RoutedFetch(mod, runs, {2: _jobs("skipped"), 1: _jobs("success")})
+    git = _pr_git(mod, head_diff=_z(".ea/state.json"), base_log="")
+    verdict = mod.classify(_pr_env(tmp_path, draft=False), git=git, fetch=fetch)
+    assert verdict.code is False
+    assert verdict.green == _GREEN
+    assert fetch.urls[1:] == [_jobs_url(2), _jobs_url(1)]
+
+
+@pytest.mark.parametrize("draft", [None, "true", 1])
+def test_classify_pull_request_without_a_boolean_draft_flag_needs_a_full_run(
+    mod: ModuleType, tmp_path: Path, draft: object
+) -> None:
+    """A payload that does not say draft is read as ready: the stricter rule."""
+    fetch = RoutedFetch(mod, _runs(_run(_GREEN, event="pull_request")), {1: _jobs(None)})
+    git = _pr_git(mod, head_diff="", base_log="")
+    verdict = mod.classify(_pr_env(tmp_path, draft=draft), git=git, fetch=fetch)
+    assert verdict.code is True
+
+
+def test_classify_draft_pull_request_keeps_draft_baselines(mod: ModuleType, tmp_path: Path) -> None:
+    fetch = RoutedFetch(mod, _runs(_run(_GREEN, event="pull_request")))
+    git = _pr_git(mod, head_diff="", base_log="")
+    verdict = mod.classify(_pr_env(tmp_path, draft=True), git=git, fetch=fetch)
+    assert verdict.code is False
+    assert len(fetch.urls) == 1
+
+
+@pytest.mark.parametrize("body", [{}, [], {"jobs": None}, {"jobs": "x"}])
+def test_classify_ready_pull_request_malformed_jobs_reports_code(
+    mod: ModuleType, tmp_path: Path, body: object
+) -> None:
+    fetch = RoutedFetch(mod, _runs(_run(_GREEN, event="pull_request")), {1: body})
+    git = _pr_git(mod, head_diff="", base_log="")
+    verdict = mod.classify(_pr_env(tmp_path, draft=False), git=git, fetch=fetch)
+    assert verdict.code is True
+
+
+def test_classify_ready_pull_request_jobs_api_failure_reports_code(
+    mod: ModuleType, tmp_path: Path
+) -> None:
+    fetch = RoutedFetch(mod, _runs(_run(_GREEN, event="pull_request")))
+    git = _pr_git(mod, head_diff="", base_log="")
+    verdict = mod.classify(_pr_env(tmp_path, draft=False), git=git, fetch=fetch)
+    assert verdict.code is True
+    assert "HTTP Error 404" in verdict.reason
+
+
+@pytest.mark.parametrize("run_id", [None, "7", True])
+def test_classify_ready_pull_request_run_without_an_id_is_no_baseline(
+    mod: ModuleType, tmp_path: Path, run_id: object
+) -> None:
+    run = _run(_GREEN, event="pull_request")
+    run["id"] = run_id
+    fetch = RoutedFetch(mod, _runs(run), {1: _jobs()})
+    git = _pr_git(mod, head_diff="", base_log="")
+    verdict = mod.classify(_pr_env(tmp_path, draft=False), git=git, fetch=fetch)
+    assert verdict.code is True
+    assert len(fetch.urls) == 1
+
+
+def test_classify_ready_pull_request_bounds_the_jobs_lookups(
+    mod: ModuleType, tmp_path: Path
+) -> None:
+    limit = mod.PROOF_LOOKUPS
+    ids = range(1, limit + 2)
+    runs = _runs(*(_run(f"{i:040x}", event="pull_request", run_id=i) for i in ids))
+    jobs = {i: _jobs(None) for i in ids[:-1]} | {ids[-1]: _jobs()}
+    fetch = RoutedFetch(mod, runs, jobs)
+    git = _pr_git(mod, head_diff="", base_log="")
+    verdict = mod.classify(_pr_env(tmp_path, draft=False), git=git, fetch=fetch)
+    assert verdict.code is True
+    assert len(fetch.urls) == 1 + limit
+
+
+def test_classify_dev_push_repro_draft_baseline(mod: ModuleType, tmp_path: Path) -> None:
+    """dev fast-forwarded to a head whose only green run is a draft's fast
+    lane (its ready run went red) must run the full configuration.
+    """
+    env = _push_env(tmp_path)
+    env["GITHUB_REF_NAME"] = "dev"
+    fetch = RoutedFetch(mod, _runs(_run(_HEAD, event="pull_request")), {1: _jobs(None)})
+    git = FakeGit(mod, {_ancestor_key(_HEAD): "", _diff_key(_HEAD, "HEAD"): ""})
+    verdict = mod.classify(env, git=git, fetch=fetch)
+    assert verdict.code is True
+    assert _diff_key(_HEAD, "HEAD") not in git.calls
+
+
+@pytest.mark.parametrize("event", ["schedule", "workflow_dispatch", "merge_group", None])
+def test_classify_dev_push_ignores_runs_of_other_events(
+    mod: ModuleType, tmp_path: Path, event: str | None
+) -> None:
+    run = _run(_HEAD)
+    run["event"] = event
+    git = FakeGit(mod, {_ancestor_key(_HEAD): "", _diff_key(_HEAD, "HEAD"): ""})
+    verdict = mod.classify(_push_env(tmp_path), git=git, fetch=RoutedFetch(mod, _runs(run)))
+    assert verdict.code is True
+    assert git.calls == []
+
+
+def test_classify_dev_push_takes_a_push_run_without_a_jobs_lookup(
+    mod: ModuleType, tmp_path: Path
+) -> None:
+    fetch = RoutedFetch(mod, _runs(_run(_GREEN, branch="dev")))
+    verdict = mod.classify(_push_env(tmp_path), git=_push_git(mod, ""), fetch=fetch)
+    assert verdict.code is False
+    assert len(fetch.urls) == 1
+
+
+@pytest.mark.parametrize("ref", ["release", "release/0.7", "release/0.7/rc"])
+def test_classify_release_push_repro_other_ref_baseline(
+    mod: ModuleType, tmp_path: Path, ref: str
+) -> None:
+    """A release push compares with the newest green push of its own ref,
+    never with a dev run on the same commit, so twice-green still runs.
+    """
+    env = _push_env(tmp_path)
+    env["GITHUB_REF_NAME"] = ref
+    fetch = RoutedFetch(mod, _runs())
+    git = FakeGit(mod, {_ancestor_key(_HEAD): "", _diff_key(_HEAD, "HEAD"): ""})
+    verdict = mod.classify(env, git=git, fetch=fetch)
+    assert verdict.code is True
+    assert fetch.urls == [mod.runs_url(api_url=_API, repository=_REPO, branch=ref, event="push")]
+
+
+def test_classify_release_push_takes_its_own_ref_baseline(mod: ModuleType, tmp_path: Path) -> None:
+    env = _push_env(tmp_path)
+    env["GITHUB_REF_NAME"] = "release/0.7"
+    fetch = RoutedFetch(mod, _runs(_run(_GREEN, branch="release/0.7")))
+    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".ea/state.json")})
+    verdict = mod.classify(env, git=git, fetch=fetch)
+    assert verdict.code is False
+    assert verdict.green == _GREEN
+    assert git.calls == [_diff_key(_GREEN, "HEAD")]
+
+
+@pytest.mark.parametrize("ref", ["releases", "release-0.7", "dev/release", "main"])
+def test_classify_push_off_the_release_train_lists_every_ref(
+    mod: ModuleType, tmp_path: Path, ref: str
+) -> None:
+    env = _push_env(tmp_path)
+    env["GITHUB_REF_NAME"] = ref
+    fetch = RoutedFetch(mod, _runs(_run(_GREEN)))
+    mod.classify(env, git=_push_git(mod, ""), fetch=fetch)
+    assert fetch.urls == [mod.runs_url(api_url=_API, repository=_REPO)]
+
+
+# --- criteria gates ----------------------------------------------------------
+
+
+def test_ea_only_diff_is_bookkeeping(mod: ModuleType, tmp_path: Path) -> None:
+    """Every added, edited, deleted or renamed path under ``.ea/`` is
+    bookkeeping; one path outside it turns the verdict back to code.
+    """
+    ea_only = (
+        _z(".ea/generations/gen-1/state.json", ".ea/state.json")
+        + _z(".ea/generations/gen-1/history/change.jsonl", status="A")
+        + _z(".ea/store/old.jsonl", status="D")
+        # --no-renames lists a rename as a deletion plus an addition.
+        + _z(".ea/generations/gen-1/tasks/a.yaml", status="D")
+        + _z(".ea/generations/gen-2/tasks/a.yaml", status="A")
+        + _z(".ea/profile.yaml", status="T")
+    )
+    env = _push_env(tmp_path)
+    git = FakeGit(mod, {_ancestor_key(_GREEN): "", _diff_key(_GREEN, "HEAD"): ea_only})
+    assert mod.main(env, git=git, fetch=FakeFetch(_runs(_run(_GREEN)))) == 0
+    assert Path(env["GITHUB_OUTPUT"]).read_text(encoding="utf-8") == (
+        f"code=false\ngreen={_GREEN}\n"
+    )
+
+    mixed = ea_only + _z("src/eawf/cli.py")
+    git = FakeGit(mod, {_ancestor_key(_GREEN): "", _diff_key(_GREEN, "HEAD"): mixed})
+    verdict = mod.classify(env, git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
+    assert verdict.code_line == "code=true"
+    assert "src/eawf/cli.py" in verdict.reason
+    assert ".ea/" not in verdict.reason
+
+
+def test_green_tree_from_any_ref(
+    mod: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A ``dev`` push fast-forwarded to a pull request head whose tree went
+    green in a full-configuration pull request run inherits that run and
+    skips the matrix.
+    """
+    other = "e" * 40
+    runs = _runs(
+        _run(other, event="pull_request", branch="feature/other", run_id=2),
+        _run(_HEAD, event="pull_request", branch="feature/abc", run_id=1),
+    )
+    env = _push_env(tmp_path)
+    env["GITHUB_REF_NAME"] = "dev"
+    fetch = RoutedFetch(mod, runs, {1: _jobs("success")})
+    # The unrelated branch's head is not in the pushed history, so its git
+    # probe fails and the classifier moves on to the next green run.
+    git = FakeGit(mod, {_ancestor_key(_HEAD): "", _diff_key(_HEAD, "HEAD"): ""})
+    assert mod.main(env, git=git, fetch=fetch) == 0
+    assert Path(env["GITHUB_OUTPUT"]).read_text(encoding="utf-8") == f"code=false\ngreen={_HEAD}\n"
+    assert capsys.readouterr().out.startswith("code=false: ")
+    assert fetch.urls == [
+        f"{_API}/repos/{_REPO}/actions/workflows/ci.yaml/runs?status=success&per_page=100",
+        _jobs_url(1),
+    ]
+    assert git.calls == [_ancestor_key(other), _ancestor_key(_HEAD), _diff_key(_HEAD, "HEAD")]
+
+    scheduled = {"GITHUB_EVENT_NAME": "schedule", "GITHUB_OUTPUT": env["GITHUB_OUTPUT"]}
+    assert mod.main(scheduled, git=git, fetch=fetch) == 0
+    assert Path(env["GITHUB_OUTPUT"]).read_text(encoding="utf-8").endswith("code=true\ngreen=\n")
+
+    del env["GITHUB_OUTPUT"]
+    assert mod.main(env, git=git, fetch=fetch) == 2
+
+
 # --- main --------------------------------------------------------------------
 
 
@@ -564,7 +898,7 @@ def test_main_appends_code_false_to_github_output(
     env = _push_env(tmp_path)
     output = Path(env["GITHUB_OUTPUT"])
     output.write_text("earlier=1\n", encoding="utf-8")
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".secrets.baseline")})
+    git = _push_git(mod, _z(".secrets.baseline"))
     assert mod.main(env, git=git, fetch=FakeFetch(_runs(_run(_GREEN)))) == 0
     assert output.read_text(encoding="utf-8") == f"earlier=1\ncode=false\ngreen={_GREEN}\n"
     assert capsys.readouterr().out.startswith("code=false: ")
@@ -678,6 +1012,27 @@ def test_github_fetcher_bad_json_raises_baseline_error(
     _capture_urlopen(mod, monkeypatch, b"<html>")
     with pytest.raises(mod.BaselineError, match="runs lookup failed"):
         mod.github_fetcher("token-value")(f"{_API}/runs")
+
+
+class _TruncatedBody(io.BytesIO):
+    def read(self, size: int | None = -1) -> bytes:
+        raise http.client.IncompleteRead(b'{"workflow_runs": [', 512)
+
+
+def test_github_fetcher_truncated_body_raises_baseline_error(
+    mod: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A body cut short mid-read is an HTTPException, not an OSError."""
+
+    def truncated(request: Any, timeout: float) -> io.BytesIO:
+        return _TruncatedBody()
+
+    monkeypatch.setattr(mod.urllib.request, "urlopen", truncated)
+    with pytest.raises(mod.BaselineError, match="IncompleteRead"):
+        mod.github_fetcher("token-value")(f"{_API}/runs")
+    env = _push_env(tmp_path)
+    assert mod.main(env, git=FakeGit(mod, {}), fetch=mod.github_fetcher("")) == 0
+    assert Path(env["GITHUB_OUTPUT"]).read_text(encoding="utf-8") == "code=true\ngreen=\n"
 
 
 def test_github_fetcher_transport_error_raises_baseline_error(

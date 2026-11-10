@@ -40,7 +40,7 @@ from eawf.workflow.release.canary_receipts import DISPATCH_SMOKE_RECEIPTS_FILENA
 from eawf.workflow.release.signal_probes import provider_probe
 from eawf.workflow.verify.release_readiness import ReleaseSignalContext
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.repo_state]
 
 #: This checkout, whose committed export carries one macOS certification.
 REPO_ROOT: Final = Path(__file__).resolve().parents[4]

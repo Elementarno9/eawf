@@ -78,6 +78,8 @@ from eawf.workflow.release.train_store import record_checkpoint_receipt
 from eawf.workflow.verify.release_readiness import compute_readiness
 from tests._release_helpers import MANIFEST_DIGEST, SOURCE_SHA, TREE_SHA, all_passing
 
+pytestmark = pytest.mark.repo_state
+
 #: The profile under test.
 PROFILE = ReleaseGateProfile.NATIVE_CANARY
 

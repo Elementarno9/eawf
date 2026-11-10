@@ -25,6 +25,8 @@ from eawf.workflow.release.records import (
     release_records_path,
 )
 
+pytestmark = pytest.mark.repo_state
+
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _COMMITTED_RECORDS = _REPO_ROOT / ".ea" / "store" / "release_record.jsonl"
 _CHANGELOG = _REPO_ROOT / "CHANGELOG.md"

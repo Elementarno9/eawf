@@ -17,8 +17,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from eawf.kernel.spec.release import ReleaseStatus
 from eawf.workflow.release.records import read_release_record
+
+pytestmark = pytest.mark.repo_state
 
 RELEASE_KEY = "REL-0.7.0.dev2"
 STATE_PATH = Path(__file__).resolve().parents[4] / ".ea" / "state.json"

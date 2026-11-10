@@ -44,7 +44,7 @@ from tools.requirement_trace import (
     render,
 )
 
-pytestmark = pytest.mark.unit
+pytestmark = [pytest.mark.unit, pytest.mark.repo_state]
 
 _TITLES = {f"REQ-{number:03d}": f"Requirement {number}" for number in range(1, 11)}
 _DEFERRAL = Deferral(decision="D01", release="v0.8", ids=("REQ-007",))

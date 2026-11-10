@@ -6,16 +6,17 @@ on:
   # releases, and the release train carries the twice-green proof.
   push:
     branches: [main, dev, release, "release/**"]
-  # The pull-request lane is the fast one: four ubuntu shards, the serial
-  # lane, the small gates and one macOS job over the affected tests. The
-  # ignored paths are editor and machine-local files no job reads, so a pull
-  # request that touches nothing else has nothing for CI to prove.
+  # A draft pull request runs the fast lane: four ubuntu shards, the serial
+  # lane, the small gates and one macOS job over the affected tests. A
+  # pull request ready for review runs the full configuration a push runs,
+  # coverage and the whole-suite macOS shards included, plus the console
+  # replay. It carries no path filter: a filtered-out workflow never
+  # reports, which leaves a required check pending and blocks the merge,
+  # so every pull request runs it and the ci-ok job carries the verdict.
+  # The listed types add ready_for_review, so a draft marked ready runs
+  # the full configuration.
   pull_request:
-    paths-ignore:
-      - ".ea/local/**"
-      - ".vscode/**"
-      - ".idea/**"
-      - "**/.DS_Store"
+    types: [opened, synchronize, reopened, ready_for_review]
   # The nightly and hand-started runs carry the twice-green proof between
   # pushes. GitHub fires a schedule on the default branch only.
   schedule:
@@ -23,24 +24,30 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # The event name keeps a nightly or dispatched run on main out of the push
-  # group, so a merge to main and the nightly run never cancel each other.
-  group: ci-${{ github.event_name }}-${{ github.ref }}
+  # One group per pull request, so a push that supersedes a running head
+  # cancels its run. A run without a pull request groups by event and ref,
+  # so a merge to main and the nightly run never cancel each other.
+  group: ci-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.ref) }}
   cancel-in-progress: true
 
 jobs:
   changes:
     name: Classify changes since the last green tree
-    # A push that only edits .secrets.baseline leaves the code tree exactly
-    # as it was when CI last went green, and re-running the matrix and
-    # twice-green on it costs about half an hour proving nothing new. This
-    # job compares the checkout with the last green ci.yaml run on the same
-    # ref and exposes code=false only for that one bookkeeping path; every
-    # other path, including .ea/state.json and the .ea/store/ ledgers,
-    # writes code=true, because the .ea/ commit-policy census reads exactly
-    # those paths and needs the suite that carries it to run whenever they
-    # change. The green output names the green commit it compared against,
-    # which the green-tree job records as the tree a skipped run inherits.
+    # A push that only edits project state under .ea/ or .secrets.baseline
+    # leaves the code tree exactly as it was when CI last went green, and
+    # re-running the matrix and twice-green on it costs about half an hour
+    # proving nothing new. This job compares the checkout with the newest
+    # green ci.yaml run that may anchor it, and exposes code=false only
+    # when every changed path is bookkeeping: anything under .ea/ and that
+    # one file. A run owing the full configuration (a push, a pull request
+    # off draft) inherits only from a run that executed it, proven by a
+    # successful coverage job; a release push only from its own ref's last
+    # green push. So dev fast-forwarded to a ready pull request head
+    # inherits that head's green run. The .ea/
+    # commit-policy census runs before push, not in these test jobs. Every
+    # other path writes code=true. The green output names the green commit
+    # it compared against, which the green-tree job records as the tree a
+    # skipped run inherits.
     # It must stay unconditional: every lookup failure fails open to
     # code=true inside the tool, and a scheduled or dispatched run, which
     # has no diff to classify, always reports code=true. The heavy jobs
@@ -76,8 +83,8 @@ jobs:
     # succeeded, even after an earlier gate failed, so one red run reports
     # every finding. The hooks and the type check read the tree, not the
     # host, so one ubuntu run proves them. It does not need the changes job:
-    # the one bookkeeping path that job lets the matrix skip,
-    # .secrets.baseline, is exactly what the detect-secrets hook reads. The
+    # the bookkeeping paths that job lets the matrix skip include
+    # .secrets.baseline, exactly what the detect-secrets hook reads. The
     # snapshot-pairing, commit-grammar and prose steps read the pull
     # request's range and run on pull requests only.
     runs-on: ubuntu-24.04
@@ -153,7 +160,7 @@ jobs:
         # The cases compare envelope structure against committed goldens and
         # call no model, so the step is deterministic and cheap.
         if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
-        run: uv run pytest tests/eval/test_skill_eval.py -m eval -q
+        run: uv run pytest tests/eval/test_skill_eval.py -m "eval and not repo_state" -q
 
       - name: Snapshot pairing gate
         if: ${{ !cancelled() && steps.sync.outcome == 'success' && github.event_name == 'pull_request' }}
@@ -268,13 +275,13 @@ jobs:
         run: uv run python tools/duration_budget_gate.py split tests/duration-baseline.json split-durations.json
 
       - name: Pytest (parallel)
-        # Coverage is collected off pull requests only: the ${{ }} expression
-        # appends the --cov flags on a push, nightly or manual run and an
-        # empty string on a pull request, which has no coverage job to feed.
-        # The test selection is the same on every event. The end-to-end
-        # suite and the perf lane run in the serial job to avoid worker
-        # contention.
-        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability --junitxml=pytest-junit.xml --splits 4 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json ${{ github.event_name != 'pull_request' && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
+        # Coverage is collected off draft pull requests only: the ${{ }}
+        # expression appends the --cov flags on a push, nightly or manual
+        # run and on a pull request ready for review, and an empty string on
+        # a draft, which has no coverage job to feed. The test selection is
+        # the same on every event. The end-to-end suite and the perf lane
+        # run in the serial job to avoid worker contention.
+        run: uv run pytest -m "not eval and not repo_state" -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability --junitxml=pytest-junit.xml --splits 4 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft) && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
 
       - name: Duration budget (advisory)
         # Diffs every test's wall time in the parallel leg against the
@@ -295,7 +302,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload coverage data
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || !github.event.pull_request.draft
         uses: actions/upload-artifact@v4
         with:
           name: coverage-data-shard-${{ matrix.shard }}
@@ -330,7 +337,7 @@ jobs:
 
       - name: Pytest (serial e2e timing)
         # Console latency must be measured without competing pytest workers.
-        run: uv run pytest -n0 tests/e2e ${{ github.event_name != 'pull_request' && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
+        run: uv run pytest -m "not eval and not repo_state" -n0 tests/e2e ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft) && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
 
       - name: Pytest (serial perf structure)
         # The perf lane's import-graph and harness checks block on every
@@ -338,7 +345,7 @@ jobs:
         # runner can red with nothing broken.
         env:
           EAWF_SKIP_PERF: "1"
-        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability ${{ github.event_name != 'pull_request' && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
+        run: uv run pytest -m "not eval and not repo_state" -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft) && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
 
       - name: Perf lane (nightly, reports, never blocks)
         # The same lane with its wall-clock budgets, serial and on the
@@ -346,7 +353,7 @@ jobs:
         # on an otherwise green job, so it reports without blocking.
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         continue-on-error: true
-        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
+        run: uv run pytest -m "not eval and not repo_state" -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
 
       - name: Telemetry sync (REL-009)
         # Telemetry ingestion is on by default, so CI must prove the sync
@@ -363,10 +370,10 @@ jobs:
         # Its fire proof is tests/integration/test_metrics_cli.py, which reds
         # on an ingestion path that writes no rows. Reviewed and kept; the
         # companion review row is tests/lint/test_gate_sunset_review.py.
-        run: uv run pytest -n0 tests/integration/test_metrics_cli.py
+        run: uv run pytest -m "not eval and not repo_state" -n0 tests/integration/test_metrics_cli.py
 
       - name: Upload coverage data
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || !github.event.pull_request.draft
         uses: actions/upload-artifact@v4
         with:
           name: coverage-data-serial
@@ -377,11 +384,12 @@ jobs:
   test-macos:
     name: ${{ matrix.os }} / py${{ matrix.python }} / shard ${{ matrix.shard }}
     needs: changes
-    # The whole suite on macOS runs on pushes, nightly and manual runs; a
-    # pull request runs the affected tests only, in macos-affected. Gated on
-    # the changes job like the ubuntu shards.
+    # The whole suite on macOS runs on pushes, nightly and manual runs and
+    # on a pull request ready for review; a draft runs the affected tests
+    # only, in macos-affected. Gated on the changes job like the ubuntu
+    # shards.
     if: >-
-      !cancelled() && github.event_name != 'pull_request'
+      !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
       && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -413,7 +421,7 @@ jobs:
 
       - name: Pytest (parallel)
         # The ubuntu shards' selection without coverage.
-        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability --junitxml=pytest-junit.xml --splits 3 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json
+        run: uv run pytest -m "not eval and not repo_state" -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability --junitxml=pytest-junit.xml --splits 3 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json
 
       - name: Upload JUnit report
         if: ${{ !cancelled() }}
@@ -425,33 +433,34 @@ jobs:
 
       - name: Pytest (serial e2e timing)
         if: matrix.shard == '1'
-        run: uv run pytest -n0 tests/e2e
+        run: uv run pytest -m "not eval and not repo_state" -n0 tests/e2e
 
       - name: Pytest (serial perf structure)
         if: matrix.shard == '1'
         env:
           EAWF_SKIP_PERF: "1"
-        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
+        run: uv run pytest -m "not eval and not repo_state" -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
 
       - name: Perf lane (nightly, reports, never blocks)
         if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && matrix.shard == '1'
         continue-on-error: true
-        run: uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
+        run: uv run pytest -m "not eval and not repo_state" -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
 
       - name: Telemetry sync (REL-009)
         if: matrix.shard == '1'
-        run: uv run pytest -n0 tests/integration/test_metrics_cli.py
+        run: uv run pytest -m "not eval and not repo_state" -n0 tests/integration/test_metrics_cli.py
 
   macos-affected:
     name: macos-26 / affected tests
     needs: changes
-    # The one macOS job of a pull request: the tests tools/changed_scope.py
-    # maps the pull request's diff to, in parallel with the ubuntu shards'
-    # ignores and the perf budgets skipped. It catches a macOS-only failure
-    # in what the pull request touched without the whole-suite macOS wall;
-    # the next push runs the whole suite there.
+    # The one macOS job of a draft pull request: the tests
+    # tools/changed_scope.py maps the pull request's diff to, in parallel
+    # with the ubuntu shards' ignores and the perf budgets skipped. It
+    # catches a macOS-only failure in what the draft touched without the
+    # whole-suite macOS wall; marking the pull request ready runs the whole
+    # suite there.
     if: >-
-      !cancelled() && github.event_name == 'pull_request'
+      !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.draft
       && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
     runs-on: macos-26
     timeout-minutes: 30
@@ -490,7 +499,7 @@ jobs:
         run: |
           set +e
           # shellcheck disable=SC2086 # the scope is a space-separated path list
-          uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability $SCOPE
+          uv run pytest -m "not eval and not repo_state" -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability $SCOPE
           status=$?
           if [ "${status}" -eq 5 ]; then
             echo "no affected test outside the serial tiers"
@@ -501,11 +510,12 @@ jobs:
   coverage:
     name: Coverage gate over the combined shards
     # Each ubuntu shard and the serial lane measure a part of the suite, so
-    # none alone can judge a floor. A pull request collects no coverage;
-    # every push, nightly and manual run merges the parts once every one of
-    # them passed (the default needs condition) and judges once.
+    # none alone can judge a floor. A draft pull request collects no
+    # coverage; every push, nightly and manual run and every pull request
+    # ready for review merges the parts once every one of them passed (the
+    # default needs condition) and judges once.
     needs: [test, e2e]
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -553,7 +563,12 @@ jobs:
     # shape. That is how a prefix that bwrap refuses to launch (a tmpfs mask
     # over an absent cred dir, a $TMPDIR pinned to a macOS-only path) stayed
     # green while the jail was dead on Linux. This job installs real
-    # bubblewrap so the launch tests EXECUTE against the kernel.
+    # bubblewrap so the launch tests EXECUTE against the kernel. Gated on
+    # the changes job like the shards: a bookkeeping-only tree is one a
+    # green run already launched the jail on.
+    needs: changes
+    if: >-
+      !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -590,7 +605,7 @@ jobs:
         # executes the real launch. The containment cases skip without bwrap,
         # so this is the only host where they run at all.
         run: >
-          uv run pytest -n0 --no-cov
+          uv run pytest -m "not eval and not repo_state" -n0 --no-cov
           tests/integration/runtime/sandbox/test_jail.py
           tests/integration/runtime/sandbox/test_bwrap_containment.py
           tests/unit/runtime/sandbox/test_jail_expiry.py
@@ -647,6 +662,10 @@ jobs:
         run: uv tool install rust-just
 
       - name: Pytest via just test-all
+        # The recipe's pytest calls carry no -m of their own, so the
+        # deselection the other jobs spell inline reaches them through the env.
+        env:
+          PYTEST_ADDOPTS: -m "not eval and not repo_state"
         run: just test-all
 
   windows:
@@ -657,7 +676,11 @@ jobs:
     # cold-start budget) is never actually exercised there. This job runs
     # the win32 test set plus shared CLI smoke on a real Windows host so a
     # regression in the pipe transport or common CLI path reds pull
-    # requests and protected branch pushes.
+    # requests and protected branch pushes. Gated on the changes job like
+    # the shards, so a bookkeeping-only tree runs no test job.
+    needs: changes
+    if: >-
+      !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -721,7 +744,7 @@ jobs:
         # so the job is the focused Windows transport gate, not a full
         # cross-OS suite re-run.
         run: >
-          uv run pytest -n0 --no-cov
+          uv run pytest -m "not eval and not repo_state" -n0 --no-cov
           tests/unit/runtime/daemon/test_windows_pipe.py
           tests/unit/runtime/daemon/test_windows_pipe_design_only.py
           tests/unit/runtime/daemon/test_windows_pipe_poc_scenarios.py
@@ -729,6 +752,64 @@ jobs:
           tests/integration/test_windows_atomic_floor.py
           tests/integration/surfaces/cli/test_windows_w04_policy.py
           tests/integration/test_packaging.py
+
+  console-replay:
+    name: Console replay
+    # The console golden contract replays on every pull request ready for
+    # review, whatever paths it touches, so a change that moves the
+    # chassis, the fixture or the normalisation map learns it broke the
+    # contract before it lands, and ci-ok carries the result. A draft and a
+    # push skip it: the ready pull request that carried the change already
+    # replayed it, and the nightly twice-green run replays the whole TUI
+    # snapshot tier. Gated on the changes job like the shards: a
+    # bookkeeping-only change replays a tree the baseline run, itself a
+    # ready pull request run, already replayed.
+    needs: changes
+    if: >-
+      !cancelled() && github.event_name == 'pull_request' && !github.event.pull_request.draft
+      && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
+    uses: ./.github/workflows/console-replay.yaml
+
+  ci-ok:
+    name: ci-ok
+    # The one check a ruleset requires. The test jobs skip by event and by
+    # the changes verdict, and a skipped required check never reports, so
+    # this job always runs and stands for all of them: it passes when every
+    # needed job succeeded or skipped, and fails on any failure or
+    # cancellation. A change set the changes job marks code=false thus
+    # passes here with no test job run.
+    needs:
+      [
+        changes,
+        gates,
+        test,
+        e2e,
+        test-macos,
+        macos-affected,
+        coverage,
+        linux-jail,
+        twice-green,
+        windows,
+        console-replay,
+      ]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every needed job succeeded or skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in ${RESULTS}; do
+            case "${result}" in
+              success | skipped) ;;
+              *)
+                echo "a needed job concluded ${result}: ${RESULTS}"
+                exit 1
+                ;;
+            esac
+          done
+          echo "every needed job succeeded or skipped: ${RESULTS}"
 
   green-tree:
     name: Record the green tree
@@ -756,6 +837,8 @@ jobs:
         linux-jail,
         twice-green,
         windows,
+        console-replay,
+        ci-ok,
       ]
     if: >-
       !cancelled() && github.event_name == 'push'

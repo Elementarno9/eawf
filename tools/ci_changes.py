@@ -1,30 +1,52 @@
 """Decide whether a CI run must execute the heavy test jobs.
 
-A push that changes only ``.secrets.baseline`` leaves the code tree
-exactly as it was when CI last went green, so re-running the test matrix
-and the twice-green job on it spends half an hour proving nothing new.
-This tool compares the checked-out tree with the last green ``ci.yaml``
-run on the same ref and writes ``code=false`` to ``$GITHUB_OUTPUT`` only
-when every change is bookkeeping (an identical tree changes no path at
-all). Bookkeeping is any change to that one file, plus a pure content
-edit (diff status ``M``) of ``.ea/state.json`` or a ``.ea/store/`` ledger.
-The ``.ea/`` commit-policy census
-(``tests/lint/test_ea_commit_census.py``, via
-:func:`eawf.kernel.store.commit_census.run_census`) checks which ``.ea/``
-paths are tracked against their commit declaration, so an added, deleted
-or type-changed path there writes ``code=true`` and runs the suite that
-carries the census, while an edit to a path already tracked cannot change
-the census verdict and keeps every ``state:`` push off the matrix. Any
-other path writes ``code=true``. The workflow gates the heavy jobs on the
-``code`` output. The ``green`` output names the green
-commit the tree was compared with, so a skipped run can record which
-green tree it inherits; it is empty when no baseline was established.
+A push that changes only project state under ``.ea/`` or
+``.secrets.baseline`` leaves the code tree exactly as it was when CI last
+went green, so re-running the test matrix and the twice-green job on it
+spends half an hour proving nothing new. This tool compares the
+checked-out tree with the last green ``ci.yaml`` tree and writes
+``code=false`` to ``$GITHUB_OUTPUT`` only when every change is bookkeeping
+(an identical tree changes no path at all). Bookkeeping is any added,
+modified, deleted or retyped path under ``.ea/`` and that one file; the
+``.ea/`` commit-policy census runs before push, not in the CI test jobs.
+Any other path writes ``code=true``. The workflow gates the heavy jobs on
+the ``code`` output. The ``green`` output names the green commit the tree
+was compared with, so a skipped run can record which green tree it
+inherits; it is empty when no baseline was established.
 
 The baseline is the last *successful* run, never ``github.event.before``:
 a push whose predecessor was cancelled or red must not inherit a green it
 never earned. A run that skipped the heavy jobs is still a sound baseline,
 because its code tree equals the tree of the green run it was compared
 against.
+
+A run that must execute the full configuration inherits only from a run
+that executed it. A draft pull request runs the fast lane, with no
+coverage, end-to-end lane or whole-suite macOS shards, so its green proves
+less than a push or a ready pull request needs. The proof that a
+``pull_request`` run executed the full configuration is its coverage job
+concluding success: that job runs only off drafts and only once the
+ubuntu shards and the serial lane passed. A run that skipped its heavy
+jobs skipped coverage too, so it never proves the full configuration;
+the scan moves past it to the run it inherited from.
+
+The baseline each run may take:
+
+- A push to ``release`` or ``release/**`` takes the newest green push run
+  of its own ref, so a commit already green on ``dev`` still runs
+  twice-green on the release train.
+- Any other push takes the newest green run whose head the pushed history
+  contains, among push runs of any ref and ``pull_request`` runs that
+  executed the full configuration. So ``dev`` fast-forwarded to a ready
+  pull request head inherits that head's green run. A pull request run
+  proved the merge of its head into the base tip of that moment; the two
+  trees agree whenever the base was an ancestor of the head, which a
+  fast-forward requires.
+- A draft pull request takes the newest green ``pull_request`` run of its
+  head branch.
+- A pull request that is not a draft, including one just marked ready,
+  takes the newest green ``pull_request`` run of its head branch that
+  executed the full configuration.
 
 A ``pull_request`` run tests the merge of the head into the base branch,
 so a base-branch code change reaches the tested tree even when the head
@@ -35,7 +57,7 @@ commit the green head does not contain: a superset of the real base diff,
 which can only turn a skip into a run.
 
 Changes are listed with ``--no-renames``: rename detection reports one
-``R`` row for the destination, so a code file moved under ``.ea/store/``
+``R`` row for the destination, so a code file moved under ``.ea/``
 would lose its source-side deletion. Without it the move reads as a
 ``D`` plus an ``A``, and both run the matrix.
 
@@ -44,8 +66,9 @@ diff: it exists to re-prove the whole tree, so it writes ``code=true``
 without looking for a baseline.
 
 Every failure to establish the baseline (no green run, an API or git
-error, a fork pull request, any other event) writes ``code=true``: the
-tool fails open to the full matrix instead of failing the run.
+error, a jobs list without the proof, a fork pull request, any other
+event) writes ``code=true``: the tool fails open to the full matrix
+instead of failing the run.
 
 Invocation (GitHub Actions, ``changes`` job)::
 
@@ -53,7 +76,8 @@ Invocation (GitHub Actions, ``changes`` job)::
 
 Inputs are the standard Actions variables ``GITHUB_EVENT_NAME``,
 ``GITHUB_REPOSITORY``, ``GITHUB_REF_NAME`` (push), ``GITHUB_HEAD_REF`` and
-``GITHUB_EVENT_PATH`` (pull request), ``GITHUB_API_URL`` and
+``GITHUB_EVENT_PATH`` (pull request, read for the head repository and the
+draft flag), ``GITHUB_API_URL`` and
 ``GITHUB_OUTPUT``, plus ``GITHUB_TOKEN`` for the runs lookup. The tool is
 stdlib-only because the job runs it with the runner's system Python,
 before any dependency sync.
@@ -66,6 +90,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import re
@@ -77,17 +102,13 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-#: The only path whose change never alters what the heavy test jobs
-#: exercise or what the ``.ea/`` commit-policy census checks.
+#: The one file outside ``.ea/`` whose change never alters what the heavy
+#: test jobs exercise.
 BOOKKEEPING_FILES: frozenset[str] = frozenset({".secrets.baseline"})
 
-#: The state paths whose pure content edits the census cannot see: it
-#: checks which ``.ea/`` paths are tracked, never what they hold.
-STATE_FILE = ".ea/state.json"
-STATE_STORE_PREFIX = ".ea/store/"
-
-#: The diff status of an in-place content edit of an already-tracked path.
-_MODIFIED = "M"
+#: Project state lives under this prefix; the test jobs never read it, and
+#: the ``.ea/`` commit-policy census runs before push instead of in CI.
+EA_PREFIX = ".ea/"
 
 #: Events that run the heavy jobs unconditionally: a nightly or hand-started
 #: run carries no diff and exists to re-prove the whole tree.
@@ -96,10 +117,28 @@ FULL_RUN_EVENTS: frozenset[str] = frozenset({"schedule", "workflow_dispatch"})
 #: The workflow whose green runs anchor the comparison.
 WORKFLOW_FILE = "ci.yaml"
 
+PUSH_EVENT = "push"
+PULL_REQUEST_EVENT = "pull_request"
+
+#: The release-train branch; its ``release/`` children belong to it too.
+RELEASE_BRANCH = "release"
+
+#: The name of the ci.yaml coverage job. It runs only in the full
+#: configuration and only after the ubuntu shards and the serial lane
+#: passed, so its success proves a pull request run executed that
+#: configuration.
+FULL_CONFIGURATION_JOB = "Coverage gate over the combined shards"
+
+#: Jobs lookups one classification may spend before it gives up and runs
+#: the full matrix; each costs one API call against the token's rate limit.
+PROOF_LOOKUPS = 10
+
 _DEFAULT_API_URL = "https://api.github.com"
 
-#: Recent green runs scanned for one pushed from this repository.
-_RUNS_PER_PAGE = 30
+#: Recent green runs scanned for a baseline, and jobs listed per run. A
+#: push lists the runs of every ref, so the API maximum keeps its own
+#: ancestors in reach; a ci.yaml run has far fewer jobs than that.
+_RUNS_PER_PAGE = 100
 
 _API_TIMEOUT_SECONDS = 30
 
@@ -119,6 +158,22 @@ FetchJson = Callable[[str], object]
 
 class BaselineError(Exception):
     """The last green tree could not be established."""
+
+
+@dataclass(frozen=True)
+class GreenRun:
+    """A successful ci.yaml run that may anchor the comparison.
+
+    Attributes:
+        run_id: The run's API id; 0 when the listing carried none, which
+            leaves the run unable to prove the full configuration.
+        head_sha: The run's head commit.
+        event: The event that triggered the run.
+    """
+
+    run_id: int
+    head_sha: str
+    event: str
 
 
 @dataclass(frozen=True)
@@ -149,85 +204,120 @@ class Verdict:
 
 
 def is_bookkeeping(path: str) -> bool:
-    """Return whether *path* is a bookkeeping file the census does not read.
+    """Return whether *path* is bookkeeping the heavy test jobs never read.
 
     Args:
         path: A repo-relative, slash-separated path as git lists it.
 
     Returns:
-        True for the bookkeeping files; False for every other path,
-        including the ``.ea/`` paths the commit-policy census reads.
+        True for ``.secrets.baseline`` and for every path under ``.ea/``,
+        whatever its diff status; False for every other path.
     """
-    return path in BOOKKEEPING_FILES
+    return path in BOOKKEEPING_FILES or path.startswith(EA_PREFIX)
 
 
-def is_state_content_edit(status: str, path: str) -> bool:
-    """Return whether a change only rewrites a tracked state file in place.
-
-    Args:
-        status: The ``git diff --name-status`` letter for *path*.
-        path: A repo-relative, slash-separated path as git lists it.
-
-    Returns:
-        True for a modification (``M``) of ``.ea/state.json`` or of a path
-        under ``.ea/store/``; False for an addition, deletion or type change
-        there (the census must see those) and for every other path.
-    """
-    if status != _MODIFIED:
-        return False
-    return path == STATE_FILE or path.startswith(STATE_STORE_PREFIX)
-
-
-def runs_url(*, api_url: str, repository: str, branch: str, event: str) -> str:
-    """Return the API URL listing the green ``ci.yaml`` runs of one branch.
+def runs_url(
+    *, api_url: str, repository: str, branch: str | None = None, event: str | None = None
+) -> str:
+    """Return the API URL listing the green ``ci.yaml`` runs.
 
     Args:
         api_url: The API root, such as ``$GITHUB_API_URL``.
         repository: The ``owner/name`` repository.
-        branch: The branch the runs were triggered from.
-        event: The triggering event, so push and pull-request runs never
-            anchor each other.
+        branch: The branch the runs were triggered from; None lists every ref.
+        event: The triggering event; None lists every event.
 
     Returns:
-        The runs endpoint with the branch, event and success filters.
+        The runs endpoint with the success filter and any given branch and
+        event filters.
     """
-    query = urllib.parse.urlencode(
-        {"branch": branch, "event": event, "status": "success", "per_page": _RUNS_PER_PAGE}
-    )
+    filters = {"branch": branch, "event": event}
+    params: dict[str, str | int] = {key: value for key, value in filters.items() if value}
+    params.update({"status": "success", "per_page": _RUNS_PER_PAGE})
+    query = urllib.parse.urlencode(params)
     return (
         f"{api_url.rstrip('/')}/repos/{repository}/actions/workflows/{WORKFLOW_FILE}/runs?{query}"
     )
 
 
-def last_green_sha(payload: object, *, repository: str) -> str:
-    """Return the head SHA of the newest successful run from *repository*.
+def jobs_url(*, api_url: str, repository: str, run_id: int) -> str:
+    """Return the API URL listing the jobs of one run's latest attempt.
 
-    Runs are taken in the order the API lists them, newest first. A run
-    pushed from another repository (a fork carrying the same branch name)
-    is never a baseline.
+    Args:
+        api_url: The API root, such as ``$GITHUB_API_URL``.
+        repository: The ``owner/name`` repository.
+        run_id: The run whose jobs are listed.
+
+    Returns:
+        The run-jobs endpoint.
+    """
+    query = urllib.parse.urlencode({"per_page": _RUNS_PER_PAGE})
+    return f"{api_url.rstrip('/')}/repos/{repository}/actions/runs/{run_id}/jobs?{query}"
+
+
+def green_runs(payload: object, *, repository: str) -> list[GreenRun]:
+    """Return the successful runs from *repository*.
+
+    Runs keep the order the API lists them, newest first. A run pushed from
+    another repository (a fork carrying the same branch name) is never a
+    baseline, and a head SHA that is not a full object name is dropped.
 
     Args:
         payload: The decoded runs-endpoint response.
         repository: The ``owner/name`` repository the run must come from.
 
     Returns:
-        The green run's head commit SHA.
+        The green runs, newest first; empty when none qualifies.
 
     Raises:
-        BaselineError: The payload is malformed or names no such run.
+        BaselineError: The payload carries no ``workflow_runs`` list.
     """
     runs = payload.get("workflow_runs") if isinstance(payload, dict) else None
     if not isinstance(runs, list):
         raise BaselineError("the runs response carries no 'workflow_runs' list")
+    green: list[GreenRun] = []
     for run in runs:
         if not isinstance(run, dict) or run.get("conclusion") != "success":
             continue
         if _dig(run, "head_repository", "full_name") != repository:
             continue
         sha = run.get("head_sha")
-        if isinstance(sha, str) and _SHA_RE.fullmatch(sha):
-            return sha
-    raise BaselineError(f"no successful {WORKFLOW_FILE} run from {repository} on this ref")
+        if not isinstance(sha, str) or not _SHA_RE.fullmatch(sha):
+            continue
+        raw_id = run.get("id")
+        # bool is an int subclass, so ``True`` would pass as run 1.
+        run_id = raw_id if isinstance(raw_id, int) and not isinstance(raw_id, bool) else 0
+        event = run.get("event")
+        green.append(
+            GreenRun(
+                run_id=max(run_id, 0), head_sha=sha, event=event if isinstance(event, str) else ""
+            )
+        )
+    return green
+
+
+def ran_full_configuration(payload: object) -> bool:
+    """Return whether a run's jobs show the coverage job concluded success.
+
+    Args:
+        payload: The decoded run-jobs response.
+
+    Returns:
+        True only when a job named :data:`FULL_CONFIGURATION_JOB` concluded
+        ``success``; False when it is absent, skipped, failed or cancelled.
+
+    Raises:
+        BaselineError: The payload carries no ``jobs`` list.
+    """
+    jobs = payload.get("jobs") if isinstance(payload, dict) else None
+    if not isinstance(jobs, list):
+        raise BaselineError("the jobs response carries no 'jobs' list")
+    return any(
+        isinstance(job, dict)
+        and job.get("name") == FULL_CONFIGURATION_JOB
+        and job.get("conclusion") == "success"
+        for job in jobs
+    )
 
 
 def classify(env: Mapping[str, str], *, git: GitRunner, fetch: FetchJson) -> Verdict:
@@ -240,7 +330,7 @@ def classify(env: Mapping[str, str], *, git: GitRunner, fetch: FetchJson) -> Ver
 
     Returns:
         ``code=False`` only when every change since the green tree is
-        bookkeeping or a pure state content edit; ``code=True`` otherwise, for every scheduled or
+        bookkeeping; ``code=True`` otherwise, for every scheduled or
         dispatched run, and whenever the baseline cannot be established.
     """
     try:
@@ -262,8 +352,40 @@ def _classify(env: Mapping[str, str], *, git: GitRunner, fetch: FetchJson) -> Ve
 
 
 def _classify_push(env: Mapping[str, str], *, git: GitRunner, fetch: FetchJson) -> Verdict:
-    """Compare the pushed commit with the last green push on its branch."""
-    green = _green_sha(env, fetch=fetch, branch=_require(env, "GITHUB_REF_NAME"), event="push")
+    """Compare the pushed commit with the newest green run that may anchor it.
+
+    A release push compares with the last green push of its own ref. Any
+    other push takes a push run of any ref, or a pull request run that
+    executed the full configuration, whose head the pushed history
+    contains: a green commit on an unrelated branch would diff against
+    code the push never had.
+    """
+    repository = _require(env, "GITHUB_REPOSITORY")
+    api_url = env.get("GITHUB_API_URL") or _DEFAULT_API_URL
+    ref = _require(env, "GITHUB_REF_NAME")
+    if ref == RELEASE_BRANCH or ref.startswith(f"{RELEASE_BRANCH}/"):
+        url = runs_url(api_url=api_url, repository=repository, branch=ref, event=PUSH_EVENT)
+        runs = green_runs(fetch(url), repository=repository)
+        if not runs:
+            raise BaselineError(
+                f"no successful {WORKFLOW_FILE} push run from {repository} on {ref}"
+            )
+        green = runs[0].head_sha
+    else:
+        url = runs_url(api_url=api_url, repository=repository)
+        candidates = [
+            run
+            for run in green_runs(fetch(url), repository=repository)
+            if run.event in (PUSH_EVENT, PULL_REQUEST_EVENT)
+        ]
+        green = _first_baseline(
+            candidates,
+            contained=lambda run: _contains(git, run.head_sha),
+            needs_proof=lambda run: run.event != PUSH_EVENT,
+            prove=lambda run: _ran_full(fetch, api_url=api_url, repository=repository, run=run),
+            wanted="a push run, or a pull request run that executed the full "
+            "configuration, with a head the push contains",
+        )
     where = f"the push since green {green[:12]}"
     return _verdict(_code_paths(diff_changes(git, green, "HEAD")), where=where, green=green)
 
@@ -272,14 +394,32 @@ def _classify_pull_request(env: Mapping[str, str], *, git: GitRunner, fetch: Fet
     """Compare both merge parents with the last green run of the head branch.
 
     The checkout is the merge commit, so its first parent is the base tip
-    and its second parent is the pull request head.
+    and its second parent is the pull request head. A draft may inherit
+    any green pull request run; any other pull request only one that
+    executed the full configuration.
     """
     repository = _require(env, "GITHUB_REPOSITORY")
-    head_repository = _event_head_repository(_require(env, "GITHUB_EVENT_PATH"))
+    api_url = env.get("GITHUB_API_URL") or _DEFAULT_API_URL
+    pull_request = _event_pull_request(_require(env, "GITHUB_EVENT_PATH"))
+    head_repository = _dig(pull_request, "head", "repo", "full_name")
     if head_repository != repository:
         raise BaselineError(f"the pull request head lives in {head_repository!r}")
-    green = _green_sha(
-        env, fetch=fetch, branch=_require(env, "GITHUB_HEAD_REF"), event="pull_request"
+    # Only an explicit ``true`` reads as a draft; anything else takes the
+    # stricter ready rule.
+    draft = _dig(pull_request, "draft") is True
+    url = runs_url(
+        api_url=api_url,
+        repository=repository,
+        branch=_require(env, "GITHUB_HEAD_REF"),
+        event=PULL_REQUEST_EVENT,
+    )
+    wanted = "a pull request run of the head branch"
+    green = _first_baseline(
+        green_runs(fetch(url), repository=repository),
+        contained=lambda run: True,
+        needs_proof=lambda run: not draft,
+        prove=lambda run: _ran_full(fetch, api_url=api_url, repository=repository, run=run),
+        wanted=wanted if draft else f"{wanted} that executed the full configuration",
     )
     base = _rev_parse(git, "HEAD^1")
     head = _rev_parse(git, "HEAD^2")
@@ -379,8 +519,10 @@ def github_fetcher(token: str) -> FetchJson:
         try:
             with urllib.request.urlopen(request, timeout=_API_TIMEOUT_SECONDS) as response:
                 body: object = json.load(response)
-        except (OSError, ValueError) as exc:
-            raise BaselineError(f"the runs lookup failed: {exc}") from exc
+        # HTTPException covers a body cut short mid-read (IncompleteRead),
+        # which is neither an OSError nor a ValueError.
+        except (OSError, ValueError, http.client.HTTPException) as exc:
+            raise BaselineError(f"the runs lookup failed: {exc!r}") from exc
         return body
 
     return fetch
@@ -417,25 +559,73 @@ def main(
     return 0
 
 
-def _green_sha(env: Mapping[str, str], *, fetch: FetchJson, branch: str, event: str) -> str:
-    """Look up the newest green run of *branch* for *event*."""
-    repository = _require(env, "GITHUB_REPOSITORY")
-    url = runs_url(
-        api_url=env.get("GITHUB_API_URL") or _DEFAULT_API_URL,
-        repository=repository,
-        branch=branch,
-        event=event,
-    )
-    return last_green_sha(fetch(url), repository=repository)
+def _first_baseline(
+    runs: Sequence[GreenRun],
+    *,
+    contained: Callable[[GreenRun], bool],
+    needs_proof: Callable[[GreenRun], bool],
+    prove: Callable[[GreenRun], bool],
+    wanted: str,
+) -> str:
+    """Return the head of the newest run that may anchor this one.
+
+    Args:
+        runs: The green runs, newest first.
+        contained: Whether the run's head is in the tested history.
+        needs_proof: Whether the run must prove the full configuration.
+        prove: Looks the proof up; one API call per run.
+        wanted: Names the qualifying run in the refusal.
+
+    Returns:
+        The qualifying run's head commit.
+
+    Raises:
+        BaselineError: No run qualifies, the proof lookups ran out, or a
+            lookup failed.
+    """
+    lookups = 0
+    for run in runs:
+        if not contained(run):
+            continue
+        if needs_proof(run):
+            if lookups == PROOF_LOOKUPS:
+                raise BaselineError(f"none of {PROOF_LOOKUPS} proof lookups found {wanted}")
+            lookups += 1
+            if not prove(run):
+                continue
+        return run.head_sha
+    raise BaselineError(f"no successful {WORKFLOW_FILE} run is {wanted}")
 
 
-def _event_head_repository(event_path: str) -> object:
-    """Return the ``owner/name`` of the pull request head in the event payload."""
+def _contains(git: GitRunner, sha: str) -> bool:
+    """Return whether ``HEAD`` contains *sha*.
+
+    ``git merge-base --is-ancestor`` exits non-zero both for a commit that
+    is not an ancestor and for one the checkout lacks; either way that
+    green run cannot anchor this push.
+    """
+    try:
+        git(["merge-base", "--is-ancestor", sha, "HEAD"])
+    except BaselineError:
+        return False
+    return True
+
+
+def _ran_full(fetch: FetchJson, *, api_url: str, repository: str, run: GreenRun) -> bool:
+    """Return whether *run* executed the full configuration, per its jobs."""
+    if not run.run_id:
+        return False
+    url = jobs_url(api_url=api_url, repository=repository, run_id=run.run_id)
+    return ran_full_configuration(fetch(url))
+
+
+def _event_pull_request(event_path: str) -> object:
+    """Return the ``pull_request`` object of the event payload."""
     try:
         payload: object = json.loads(Path(event_path).read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise BaselineError(f"the event payload is unreadable: {exc}") from exc
-    return _dig(payload, "pull_request", "head", "repo", "full_name")
+    return _dig(payload, "pull_request")
 
 
 def _rev_parse(git: GitRunner, revision: str) -> str:
@@ -474,13 +664,7 @@ def _status_pairs(output: str) -> list[Change]:
 
 def _code_paths(changes: Iterable[Change]) -> list[str]:
     """Return the sorted distinct paths whose change is not bookkeeping."""
-    return sorted(
-        {
-            path
-            for status, path in changes
-            if not is_bookkeeping(path) and not is_state_content_edit(status, path)
-        }
-    )
+    return sorted({path for _status, path in changes if not is_bookkeeping(path)})
 
 
 def _verdict(code_paths: Sequence[str], *, where: str, green: str) -> Verdict:

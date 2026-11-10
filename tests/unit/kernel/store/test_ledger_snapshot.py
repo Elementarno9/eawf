@@ -56,6 +56,8 @@ from eawf.platform.lint.ledger_history import (
     snapshot_owner,
 )
 
+pytestmark = pytest.mark.repo_state
+
 AT: Final = datetime(2026, 10, 6, 12, 0, tzinfo=UTC)
 REPO_ROOT: Final = Path(__file__).resolve().parents[4]
 LEGACY_MARK: Final = b'"kind":"legacy"'
