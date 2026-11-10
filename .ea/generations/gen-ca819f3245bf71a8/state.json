@@ -90,37 +90,6 @@
       "updated_at": "2026-10-06T13:02:06.379890Z",
       "urn": "eawf://EAWF/batch/BAT-0203"
     },
-    "BAT-0391": {
-      "created_at": "2026-11-10T13:56:33.048871Z",
-      "current_head_binding": null,
-      "failure": null,
-      "key": "BAT-0391",
-      "milestone_ref": "eawf://EAWF/milestone/MLS-0108",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "repository_ref": "eawf://EAWF/repository/EAWF",
-      "revision": 1,
-      "status": "PLANNED",
-      "target_branch": null,
-      "task_refs": [
-        "eawf://EAWF/task/EAWF-0705",
-        "eawf://EAWF/task/EAWF-0706",
-        "eawf://EAWF/task/EAWF-0707",
-        "eawf://EAWF/task/EAWF-0708"
-      ],
-      "title": "Stop state-only changes from running the CI test jobs",
-      "uid": "cf7f74ff-9a93-5560-8f9f-e56c3dfa9f64",
-      "updated_at": "2026-11-10T13:56:33.048871Z",
-      "urn": "eawf://EAWF/batch/BAT-0391"
-    },
     "BAT-0392": {
       "created_at": "2026-11-10T13:56:33.048871Z",
       "current_head_binding": null,
@@ -138,9 +107,9 @@
         "source_urn": null
       },
       "repository_ref": "eawf://EAWF/repository/EAWF",
-      "revision": 1,
-      "status": "PLANNED",
-      "target_branch": null,
+      "revision": 2,
+      "status": "ACTIVE",
+      "target_branch": "feature/eawf-v0.7",
       "task_refs": [
         "eawf://EAWF/task/EAWF-0709",
         "eawf://EAWF/task/EAWF-0710",
@@ -152,7 +121,7 @@
       ],
       "title": "Resolve state from the main checkout and make hooks fail open",
       "uid": "e1db3c36-6eb9-5696-8cf5-2f5b4e4e4262",
-      "updated_at": "2026-11-10T13:56:33.048871Z",
+      "updated_at": "2026-11-10T14:00:35.530282Z",
       "urn": "eawf://EAWF/batch/BAT-0392"
     },
     "BAT-0393": {
@@ -172,9 +141,9 @@
         "source_urn": null
       },
       "repository_ref": "eawf://EAWF/repository/EAWF",
-      "revision": 1,
-      "status": "PLANNED",
-      "target_branch": null,
+      "revision": 2,
+      "status": "ACTIVE",
+      "target_branch": "feature/eawf-v0.7",
       "task_refs": [
         "eawf://EAWF/task/EAWF-0716",
         "eawf://EAWF/task/EAWF-0717",
@@ -185,7 +154,7 @@
       ],
       "title": "Keep machine rows local, tidy .ea/local and retire idle gates",
       "uid": "b3de39f6-d729-5781-bfcc-5a5045e509e6",
-      "updated_at": "2026-11-10T13:56:33.048871Z",
+      "updated_at": "2026-11-10T14:55:08.527290Z",
       "urn": "eawf://EAWF/batch/BAT-0393"
     },
     "BAT-0394": {
@@ -205,9 +174,9 @@
         "source_urn": null
       },
       "repository_ref": "eawf://EAWF/repository/EAWF",
-      "revision": 1,
-      "status": "PLANNED",
-      "target_branch": null,
+      "revision": 2,
+      "status": "ACTIVE",
+      "target_branch": "feature/eawf-v0.7",
       "task_refs": [
         "eawf://EAWF/task/EAWF-0722",
         "eawf://EAWF/task/EAWF-0723",
@@ -217,7 +186,7 @@
       ],
       "title": "Restyle the status line and install it once per user",
       "uid": "1109279a-82cb-54c1-9ebf-c4e81e45c524",
-      "updated_at": "2026-11-10T13:56:33.048871Z",
+      "updated_at": "2026-11-10T15:19:00.289039Z",
       "urn": "eawf://EAWF/batch/BAT-0394"
     },
     "BAT-0395": {
@@ -237,9 +206,9 @@
         "source_urn": null
       },
       "repository_ref": "eawf://EAWF/repository/EAWF",
-      "revision": 1,
-      "status": "PLANNED",
-      "target_branch": null,
+      "revision": 2,
+      "status": "ACTIVE",
+      "target_branch": "feature/eawf-v0.7",
       "task_refs": [
         "eawf://EAWF/task/EAWF-0727",
         "eawf://EAWF/task/EAWF-0728",
@@ -251,7 +220,7 @@
       ],
       "title": "Price reflect honestly, fix its geometry and cut 0.7.2",
       "uid": "a0f56bc7-dc06-52db-a0c8-f37048b6e68f",
-      "updated_at": "2026-11-10T13:56:33.048871Z",
+      "updated_at": "2026-11-10T14:00:37.619691Z",
       "urn": "eawf://EAWF/batch/BAT-0395"
     }
   },
@@ -1255,7 +1224,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 58185,
+  "canonical_sequence": 68457,
   "milestone": {
     "MLS-0108": {
       "acceptance_bundle_revision": null,
@@ -316123,445 +316092,6 @@
       "uid": "cbcda688-4985-51a7-8f68-0fd1d4ac8ba0",
       "updated_at": "2026-11-02T01:22:08.840517Z",
       "urn": "eawf://EAWF/task/EAWF-0663"
-    },
-    "EAWF-0705": {
-      "active_run_ref": null,
-      "batch_ref": "eawf://EAWF/batch/BAT-0391",
-      "contract_revision": 1,
-      "created_at": "2026-11-10T13:56:33.048871Z",
-      "criteria": [
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-01"
-          ],
-          "grounding": "measured",
-          "id": "CR-823",
-          "kind": "behavioral",
-          "measurable_signal": "classifier verdict for .ea-only and mixed diffs; gate: `uv run pytest tests/unit/test_ci_changes.py::test_ea_only_diff_is_bookkeeping -q` exits zero",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "zero from tests/unit/test_ci_changes.py::test_ea_only_diff_is_bookkeeping",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "tools/ci_changes.py treats every path under `.ea/` as bookkeeping: a diff since the green baseline whose every added, modified, deleted or renamed path lies under `.ea/` (for example only `.ea/generations/**`) yields the verdict line `code=false`, and one path outside `.ea/` in the same diff yields `code=true`.",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-01"
-          ],
-          "grounding": "measured",
-          "id": "CR-824",
-          "kind": "behavioral",
-          "measurable_signal": "verdict for a dev push onto a tree that went green on a pull request ref; gate: `uv run pytest tests/unit/test_ci_changes.py::test_green_tree_from_any_ref -q` exits zero",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "zero from tests/unit/test_ci_changes.py::test_green_tree_from_any_ref",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "A push run takes its green baseline from a successful ci.yaml run on any ref, so a push of `dev` fast-forwarded to a pull request head whose tree already went green prints `code=false` from the changes job; a schedule or workflow_dispatch run still yields `code=true`, and the exit codes stay 0 once a verdict is written and 2 when GITHUB_OUTPUT is unset.",
-          "waiver_reason": null
-        }
-      ],
-      "due_scope": "eawf://EAWF/milestone/MLS-0108",
-      "effort": "M",
-      "integrated_binding": null,
-      "intent": "52 of 57 pushed pull request heads were state: commits that each ran the full CI, because tools/ci_changes.py:82-87 counts .ea/generations/** as code. Make every path under .ea/ bookkeeping (lines 82-87 and 164-178) and let a push find its green baseline on any ref (lines 181-199), so a dev fast-forward to a gated pull request head runs no test job. Spec 18, Delivery split rows 1 and 5.",
-      "key": "EAWF-0705",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P0",
-      "revision": 1,
-      "role": "executor",
-      "status": "PLANNED",
-      "title": "Treat .ea paths as bookkeeping in the CI change classifier",
-      "uid": "3c745819-7b78-5b7f-a4f6-f2549241ac59",
-      "updated_at": "2026-11-10T13:56:33.048871Z",
-      "urn": "eawf://EAWF/task/EAWF-0705",
-      "write_claims": [
-        "tools/ci_changes.py",
-        "tests/unit/test_ci_changes.py"
-      ]
-    },
-    "EAWF-0706": {
-      "active_run_ref": null,
-      "batch_ref": "eawf://EAWF/batch/BAT-0391",
-      "contract_revision": 1,
-      "created_at": "2026-11-10T13:56:33.048871Z",
-      "criteria": [
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-01"
-          ],
-          "grounding": "measured",
-          "id": "CR-825",
-          "kind": "behavioral",
-          "measurable_signal": "pull_request trigger keys read from the parsed workflow; gate: `uv run pytest tests/unit/test_ci_workflow_structure.py::test_pull_request_types_unfiltered -q` exits zero",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "zero from tests/unit/test_ci_workflow_structure.py::test_pull_request_types_unfiltered",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "Parsed .github/workflows/ci.yaml triggers pull_request on the types opened, synchronize, reopened and ready_for_review, with no paths-ignore and no paths filter under pull_request.",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-01"
-          ],
-          "grounding": "measured",
-          "id": "CR-826",
-          "kind": "behavioral",
-          "measurable_signal": "ci-ok needs list, condition and verdict step in the parsed workflow; gate: `uv run pytest tests/unit/test_ci_workflow_structure.py::test_ci_ok_result_job -q` exits zero",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "zero from tests/unit/test_ci_workflow_structure.py::test_ci_ok_result_job",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "ci.yaml has a job named `ci-ok` with `if: always()` that needs every test job and fails unless each of them concluded success or skipped, so a change set the classifier marks `code=false` yields a passing `ci-ok` with no test job run.",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-01"
-          ],
-          "grounding": "measured",
-          "id": "CR-827",
-          "kind": "behavioral",
-          "measurable_signal": "concurrency group and cancel flag in the parsed workflow; gate: `uv run pytest tests/unit/test_ci_workflow_structure.py::test_concurrency_cancels_superseded_runs -q` exits zero",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "zero from tests/unit/test_ci_workflow_structure.py::test_concurrency_cancels_superseded_runs",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "ci.yaml sets concurrency group `ci-${{ github.event.pull_request.number || github.ref }}` with cancel-in-progress true, so of two pushes to one pull request within a minute the first run is cancelled.",
-          "waiver_reason": null
-        }
-      ],
-      "due_scope": "eawf://EAWF/milestone/MLS-0108",
-      "effort": "S",
-      "integrated_binding": null,
-      "intent": "A path-filtered workflow leaves a required check pending, and runs of one pull request do not cancel each other. Drop the pull_request paths-ignore (ci.yaml:7-8 area), list the pull request event types (ci.yaml:13-18), add a ci-ok job that always runs and carries the verdict, and key concurrency by pull request number (ci.yaml:27-31). Spec 18, Delivery split rows 2 and 5.",
-      "key": "EAWF-0706",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P0",
-      "revision": 1,
-      "role": "executor",
-      "status": "PLANNED",
-      "title": "Add the always-running ci-ok job, run concurrency and pull request types",
-      "uid": "99b56054-3112-56bb-9076-436bbf1539c1",
-      "updated_at": "2026-11-10T13:56:33.048871Z",
-      "urn": "eawf://EAWF/task/EAWF-0706",
-      "write_claims": [
-        ".github/workflows/ci.yaml",
-        "tests/unit/test_ci_workflow_structure.py",
-        "tests/lint/test_ci_workflow_shape.py"
-      ]
-    },
-    "EAWF-0707": {
-      "active_run_ref": null,
-      "batch_ref": "eawf://EAWF/batch/BAT-0391",
-      "contract_revision": 1,
-      "created_at": "2026-11-10T13:56:33.048871Z",
-      "criteria": [
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-01"
-          ],
-          "grounding": "measured",
-          "id": "CR-828",
-          "kind": "behavioral",
-          "measurable_signal": "job conditions for draft and ready pull_request events; gate: `uv run pytest tests/unit/test_ci_workflow_structure.py::test_full_configuration_at_ready -q` exits zero",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "zero from tests/unit/test_ci_workflow_structure.py::test_full_configuration_at_ready",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "In ci.yaml the full configuration (coverage, e2e, the macOS shards and every job formerly limited to pushes at ci.yaml lines 383-385, 453-455, 508 and 758-760) runs on a pull_request event only when the pull request is not a draft, and a draft pull request runs the fast lane only.",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-01"
-          ],
-          "grounding": "measured",
-          "id": "CR-829",
-          "kind": "behavioral",
-          "measurable_signal": "triggers of console-replay.yaml and the replay job in ci.yaml; gate: `uv run pytest tests/unit/test_ci_workflow_structure.py::test_console_replay_folded -q` exits zero",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "zero from tests/unit/test_ci_workflow_structure.py::test_console_replay_folded",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "console-replay.yaml carries no pull_request trigger, and ci.yaml holds the console replay job under the same ready condition with `ci-ok` needing it.",
-          "waiver_reason": null
-        }
-      ],
-      "depends_on": [
-        "eawf://EAWF/task/EAWF-0706"
-      ],
-      "due_scope": "eawf://EAWF/milestone/MLS-0108",
-      "effort": "M",
-      "integrated_binding": null,
-      "intent": "The full configuration (coverage, e2e, macOS shards and the jobs limited to pushes at ci.yaml:383-385, 453-455, 508 and 758-760) runs only on pushes today, and console-replay.yaml runs as its own pull request workflow. Run the full configuration on a pull request once it is ready for review and fold console-replay.yaml into ci.yaml under the same condition and the ci-ok verdict. Spec 18, Delivery split row 3.",
-      "key": "EAWF-0707",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P0",
-      "revision": 1,
-      "role": "executor",
-      "status": "PLANNED",
-      "title": "Run the full CI configuration when a pull request is marked ready",
-      "uid": "73a4b266-6e65-5b60-8bb4-bc3b8a534804",
-      "updated_at": "2026-11-10T13:56:33.048871Z",
-      "urn": "eawf://EAWF/task/EAWF-0707",
-      "write_claims": [
-        ".github/workflows/ci.yaml",
-        ".github/workflows/console-replay.yaml",
-        "tests/unit/test_ci_workflow_structure.py"
-      ]
-    },
-    "EAWF-0708": {
-      "active_run_ref": null,
-      "batch_ref": "eawf://EAWF/batch/BAT-0391",
-      "contract_revision": 1,
-      "created_at": "2026-11-10T13:56:33.048871Z",
-      "criteria": [
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-01"
-          ],
-          "grounding": "measured",
-          "id": "CR-830",
-          "kind": "behavioral",
-          "measurable_signal": "AST scan of tests for repository .ea reads without the marker; gate: `uv run pytest tests/lint/test_repo_state_marker.py::test_repo_state_modules_marked -q` exits zero",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "zero from tests/lint/test_repo_state_marker.py::test_repo_state_modules_marked",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "pyproject.toml registers the pytest marker `repo_state`, and every test module that reads this repository's committed `.ea/` directory (through REPO_EA_DIR or a repository-root path joined with `.ea`) carries a module `pytestmark` with `repo_state`, checked by an AST scan of tests/.",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-01"
-          ],
-          "grounding": "measured",
-          "id": "CR-831",
-          "kind": "behavioral",
-          "measurable_signal": "pytest command lines in ci.yaml and the pre-push hook entry; gate: `uv run pytest tests/lint/test_repo_state_marker.py::test_ci_deselects_and_prepush_runs -q` exits zero",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "zero from tests/lint/test_repo_state_marker.py::test_ci_deselects_and_prepush_runs",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "Every pytest invocation in .github/workflows/ci.yaml carries `-m \"not repo_state\"` combined with any marker expression it already had, and .pre-commit-config.yaml runs `pytest -m repo_state` as a pre-push stage hook.",
-          "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "accepted_risk_decision_ref": null,
-          "contract_refs": [],
-          "evidence_kind": "deterministic",
-          "gate_ids": [
-            "G-01"
-          ],
-          "grounding": "measured",
-          "id": "CR-832",
-          "kind": "behavioral",
-          "measurable_signal": "scan verdict on an unmarked fixture and collection with .ea hidden; gate: `uv run pytest tests/lint/test_repo_state_marker.py::test_marker_scan_fire_proof -q` exits zero",
-          "oracle_tier": null,
-          "quality_dimension": "maintainability",
-          "required": true,
-          "response": {
-            "expected": "0",
-            "gate_ref": "command_exit_zero",
-            "jury_reason": null,
-            "locus": "pytest",
-            "object": "zero from tests/lint/test_repo_state_marker.py::test_marker_scan_fire_proof",
-            "observe": "exits",
-            "quantifier": "single"
-          },
-          "text": "The marker scan reds on a fixture module that reads REPO_EA_DIR without the marker, and with REPO_EA_DIR pointed at an empty directory collection under `-m \"not repo_state\"` selects none of the marked modules.",
-          "waiver_reason": null
-        }
-      ],
-      "depends_on": [
-        "eawf://EAWF/task/EAWF-0707"
-      ],
-      "due_scope": "eawf://EAWF/milestone/MLS-0108",
-      "effort": "L",
-      "integrated_binding": null,
-      "intent": "A state-only change can red the product suite because test modules read this repository's committed .ea (findings G, coupling C2). Register a repo_state marker in pyproject.toml (lines 168-182), mark every such module, deselect the marker in every CI pytest call and run it from a pre-push hook. The listed modules come from a grep on 2026-11-10; the AST scan the criteria name defines the final set. Spec 18, Delivery split row 4.",
-      "key": "EAWF-0708",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P0",
-      "revision": 1,
-      "role": "executor",
-      "status": "PLANNED",
-      "title": "Mark tests that read the repository's own .ea and deselect them in CI",
-      "uid": "e105dd13-b92b-5336-b890-5b46af89335f",
-      "updated_at": "2026-11-10T13:56:33.048871Z",
-      "urn": "eawf://EAWF/task/EAWF-0708",
-      "write_claims": [
-        "pyproject.toml",
-        ".github/workflows/ci.yaml",
-        ".pre-commit-config.yaml",
-        "tests/lint/test_repo_state_marker.py",
-        "tests/conftest.py",
-        "tests/integration/kernel/migration/test_epoch2_live_cutover_record.py",
-        "tests/integration/surfaces/cli/test_limitations_page.py",
-        "tests/integration/test_bench_harness.py",
-        "tests/integration/workflow/planning/test_rc1_to_stable_roadmap.py",
-        "tests/integration/workflow/release/test_dev2_live_record.py",
-        "tests/integration/workflow/release/test_dev3_baked_record.py",
-        "tests/lint/test_ea_commit_census.py",
-        "tests/lint/test_i20_i21_legacy_drain.py",
-        "tests/lint/test_no_committed_artifact_reads.py",
-        "tests/lint/test_reflect_requirements_owned.py",
-        "tests/lint/test_rule_sources_native.py",
-        "tests/lint/test_test_tier_contract.py",
-        "tests/tui/surfaces/tui/console/test_console_live_smoke.py",
-        "tests/tui/surfaces/tui/console/test_linked_data_truth.py",
-        "tests/unit/kernel/release/test_full_suite_gate.py",
-        "tests/unit/kernel/spec/test_release_schema_tag.py",
-        "tests/unit/kernel/store/test_ledger_snapshot.py",
-        "tests/unit/workflow/release/test_dev2_advance_record.py"
-      ]
     },
     "EAWF-0709": {
       "active_run_ref": null,
