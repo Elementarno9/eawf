@@ -157,3 +157,29 @@ def test_reflect_run_sessions_is_incremental(tree: Path) -> None:
     second = Path(_run(tree)["analysis"]).read_text(encoding="utf-8")
 
     assert json.loads(first)["usage"] == json.loads(second)["usage"]
+
+
+def test_reflect_run_names_a_legacy_collection_it_does_not_read(tree: Path) -> None:
+    legacy = tree / "local" / "reflect"
+    legacy.mkdir(parents=True)
+    (legacy / HISTORY_INDEX_FILENAME).write_bytes(b"")
+
+    result = runner.invoke(
+        app, ["-w", str(tree.parent), "--json", "reflect", "run", "--local-only"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (
+        "reflect: .ea/local/reflect holds reflect data of an earlier version that nothing reads;"
+        " run eawf local tidy to move it to .ea/local/reports/reflect"
+    ) in result.stderr.splitlines()
+    assert (legacy / HISTORY_INDEX_FILENAME).exists()
+
+
+def test_reflect_run_without_a_legacy_collection_says_nothing_of_it(tree: Path) -> None:
+    result = runner.invoke(
+        app, ["-w", str(tree.parent), "--json", "reflect", "run", "--local-only"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "eawf local tidy" not in result.stderr

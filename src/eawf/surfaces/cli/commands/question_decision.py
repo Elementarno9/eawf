@@ -176,6 +176,11 @@ def forward_answer(
         errors.emit_error(exc, flags=flags)
         return
     envelope = answer_envelope(
-        answer, operation=method, urn=urn, revision_before=None, revision_after=None
+        answer,
+        operation=method,
+        urn=urn,
+        revision_before=None,
+        revision_after=None,
+        warnings=tuple(answer.get("warnings") or ()),
     )
     emit_envelope(envelope, urn=urn, flags=flags)

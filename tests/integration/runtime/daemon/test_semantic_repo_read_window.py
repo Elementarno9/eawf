@@ -41,7 +41,7 @@ from tests.integration.runtime.daemon.test_semantic_submit_candidate import (
 pytestmark = pytest.mark.integration
 
 #: A line the state-leak scan flags: it carries a home path.
-LEAKY_LINE: Final = "/Users/jdoe/project/keys"  # pragma: allowlist secret
+LEAKY_LINE: Final = "/Users/jdoe/project/keys"  # eawf: allow-leak
 
 
 @pytest.fixture
@@ -183,7 +183,7 @@ def test_a_byte_cap_window_still_cuts_a_line_over_the_line_bound(
 def test_a_byte_cap_window_of_withheld_lines_stops_within_the_inline_bound(
     canary: CanaryProvision, ctx: MethodContext, capsule: AuthorityCapsule, tree: Path
 ) -> None:
-    short = "/Users/a/b\n"  # pragma: allowlist secret
+    short = "/Users/a/b\n"  # eawf: allow-leak
     count = REPO_READ_TEXT_CHARS // len(WITHHELD_LINE) + 1
     body = short * count
 

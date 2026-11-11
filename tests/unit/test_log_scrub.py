@@ -46,9 +46,9 @@ def _canonical_author_email() -> str:
 
 def test_scrub_macos_home_path() -> None:
     scrubber = _scrubber()
-    line = "create_worktree path=/Users/jdoe/Workspace/repo done"  # pragma: allowlist secret
+    line = "create_worktree path=/Users/jdoe/Workspace/repo done"  # eawf: allow-leak
     out = scrubber.scrub(line)
-    assert "/Users/jdoe" not in out  # pragma: allowlist secret
+    assert "/Users/jdoe" not in out  # eawf: allow-leak
     assert REDACTION in out
     # Trailing path segments are split on '/', so only the home root is
     # masked; the redaction marker must be present.
@@ -57,15 +57,15 @@ def test_scrub_macos_home_path() -> None:
 
 def test_scrub_windows_home_path() -> None:
     scrubber = _scrubber()
-    out = scrubber.scrub(r"open path=C:\Users\jdoe done")  # pragma: allowlist secret
-    assert r"C:\Users\jdoe" not in out  # pragma: allowlist secret
+    out = scrubber.scrub(r"open path=C:\Users\jdoe done")  # eawf: allow-leak
+    assert r"C:\Users\jdoe" not in out  # eawf: allow-leak
     assert REDACTION in out
 
 
 def test_scrub_linux_home_path() -> None:
     scrubber = _scrubber()
-    out = scrubber.scrub("read path=/home/jdoe done")  # pragma: allowlist secret
-    assert "/home/jdoe" not in out  # pragma: allowlist secret
+    out = scrubber.scrub("read path=/home/jdoe done")  # eawf: allow-leak
+    assert "/home/jdoe" not in out  # eawf: allow-leak
     assert REDACTION in out
 
 
@@ -212,8 +212,8 @@ def test_canonical_author_email_preserved_by_allowlist() -> None:
 
 def test_non_canonical_email_scrubbed_even_with_default_allowlist() -> None:
     scrubber = _scrubber()
-    out = scrubber.scrub("author email=outsider@elsewhere.org ok")  # pragma: allowlist secret
-    assert "outsider@elsewhere.org" not in out  # pragma: allowlist secret
+    out = scrubber.scrub("author email=outsider@elsewhere.org ok")  # eawf: allow-leak
+    assert "outsider@elsewhere.org" not in out  # eawf: allow-leak
     assert REDACTION in out
 
 
@@ -238,27 +238,27 @@ def test_scrub_allowlisted_email_after_path_survives_in_position() -> None:
     # so first-occurrence restoration would drop the allowlisted email
     # into the path's slot. Positional placeholders keep each token put.
     scrubber = SensitiveScrubber(allowed_emails=frozenset({"keep@allow.test"}))
-    out = scrubber.scrub("path=/Users/jdoe email=keep@allow.test end")  # pragma: allowlist secret
+    out = scrubber.scrub("path=/Users/jdoe email=keep@allow.test end")  # eawf: allow-leak
     assert out == "path=<scrubbed> email=keep@allow.test end"
 
 
 def test_scrub_path_redacted_while_allowlisted_email_preserved() -> None:
     scrubber = SensitiveScrubber(allowed_emails=frozenset({"keep@allow.test"}))
-    out = scrubber.scrub("open path=/Users/secret mail=keep@allow.test")  # pragma: allowlist secret
-    assert "/Users/secret" not in out  # pragma: allowlist secret
+    out = scrubber.scrub("open path=/Users/secret mail=keep@allow.test")  # eawf: allow-leak
+    assert "/Users/secret" not in out  # eawf: allow-leak
     assert "keep@allow.test" in out
     assert REDACTION in out
 
 
 def test_scrub_multiple_paths_and_one_email_each_restored_to_right_slot() -> None:
     scrubber = SensitiveScrubber(allowed_emails=frozenset({"keep@allow.test"}))
-    out = scrubber.scrub("a=/Users/x b=keep@allow.test c=/home/y")  # pragma: allowlist secret
+    out = scrubber.scrub("a=/Users/x b=keep@allow.test c=/home/y")  # eawf: allow-leak
     assert out == "a=<scrubbed> b=keep@allow.test c=<scrubbed>"
 
 
 def test_scrub_two_allowlisted_emails_interleaved_with_path() -> None:
     scrubber = SensitiveScrubber(allowed_emails=frozenset({"a@allow.test", "b@allow.test"}))
-    out = scrubber.scrub("p=/Users/z m1=a@allow.test m2=b@allow.test")  # pragma: allowlist secret
+    out = scrubber.scrub("p=/Users/z m1=a@allow.test m2=b@allow.test")  # eawf: allow-leak
     assert out == "p=<scrubbed> m1=a@allow.test m2=b@allow.test"
 
 

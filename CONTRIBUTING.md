@@ -68,6 +68,8 @@ Install `just` with `brew install just` (macOS) or `cargo install just` (any OS,
 
 ## Project Rules
 
+The `detect-secrets` pre-commit hook runs its pattern detectors only, with the two entropy detectors off because their hits here were git SHAs and digests. It does not catch a base64 blob or a 40-hex value under a key with no secret keyword, a private-key body without its `BEGIN` line, or a `SERVICE_TOKEN=<value>` line in an env file. Only the hosting platform's secret scanning and push protection cover those, when the repository owner enables them; check a credential-shaped value yourself before you stage it.
+
 Keep generated runtime assets and user-local files out of commits. The Claude Code plugin tree (`.claude/` plus `CLAUDE.md`) and `.claude/settings.local.json` are machine-specific renders; regenerate them with `eawf plugin install claude` instead of committing them.
 
 Commit `.ea/state.json`, `.ea/profile.yaml`, and `AGENTS.md` when workflow state or agent policy changes. State mutations should go through `eawf` surfaces rather than hand edits.

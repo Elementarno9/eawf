@@ -220,9 +220,20 @@ def test_email_leak_lint_reads_escapes_in_a_ledger_line(tmp_path: Path) -> None:
 
 def test_path_leak_lint_honours_allowlist_marker_in_state_json(tmp_path: Path) -> None:
     repo = _repo_with_committed_state(tmp_path, {"title": "seed"})
-    marker = "pragma: allowlist " + "secret"
+    marker = "eawf: allow-" + "leak"
     _stage_state(repo, {"sample": f"{MACHINE_PATH} {marker}", "title": "seed"})
 
     exit_code, payload = _lint(repo, "path-leak-lint")
 
     assert exit_code == 0, payload
+
+
+def test_path_leak_lint_ignores_the_secret_pragma_in_state_json(tmp_path: Path) -> None:
+    """The detect-secrets pragma alone no longer silences the path leak lint."""
+    repo = _repo_with_committed_state(tmp_path, {"title": "seed"})
+    pragma = "pragma: allowlist " + "secret"
+    _stage_state(repo, {"sample": f"{MACHINE_PATH} {pragma}", "title": "seed"})
+
+    exit_code, payload = _lint(repo, "path-leak-lint")
+
+    assert exit_code != 0, payload

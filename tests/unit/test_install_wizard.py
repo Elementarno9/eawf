@@ -127,11 +127,6 @@ def test_gitignore_patterns_cover_agent_runtime_configs() -> None:
     assert ".claude/" in GITIGNORE_PATTERNS
 
 
-def test_gitignore_patterns_cover_per_wave_spec_renders() -> None:
-    """The commit policy classifies ``.ea/specs`` not committed, so init ignores it."""
-    assert ".ea/specs/" in GITIGNORE_PATTERNS
-
-
 def test_quick_profile_detection_adds_python_profile(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
 

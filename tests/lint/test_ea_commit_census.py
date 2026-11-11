@@ -328,12 +328,6 @@ def test_promoted_artifacts_are_exactly_the_reader_constants() -> None:
     assert {row.pattern for row in PROMOTED_ARTIFACTS} == set(_READERS)
 
 
-def test_classify_path_spec_render_is_not_committed() -> None:
-    row = classify_path(".ea/specs/P32/P32-I01/P32-I01-W01.md")
-    assert row.policy is CommitPolicy.NOT_COMMITTED
-    assert not row.must_exist
-
-
 def test_classify_path_folds_back_slashes() -> None:
     row = classify_path(".ea\\store\\release.jsonl")
     assert row.policy is CommitPolicy.COMMITTED

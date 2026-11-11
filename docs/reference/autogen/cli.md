@@ -218,7 +218,6 @@ Dispatch hook events through the Eä hook runner.
 | `plugin-doctor-drift` | Fail when ``plugin doctor --strict`` reports drift in the plugin tree. |
 | `run` | Dispatch a hook event read from stdin and emit the result envelope. |
 | `sigil-totality` | Assert every TUI-render status value resolves to a real ratified glyph. |
-| `vale-prose` | Run the Vale prose linter over Markdown and emit the findings. |
 | `validate-prose` | Compose every Layer-2 prose check over changed Markdown — the chokepoint. |
 
 ### `eawf local`
@@ -228,6 +227,7 @@ Upkeep of the machine-local .ea/local store.
 | Verb | Summary |
 |---|---|
 | `gc` | Remove each ``.ea/local`` entry whose ``.retention`` date has passed. |
+| `tidy` | Move hand-made ``.ea/local`` entries and orphan ``.ea`` files into a dated archive. |
 
 ### `eawf mcp`
 
@@ -282,6 +282,14 @@ Milestone lifecycle (activate, open-review, reopen-review, open-approval, accept
 | `seal-approval` | Seal the operator's answer onto a waiting acceptance question. |
 | `set-target` | Set or clear the day an open Milestone is aimed at; its status does not move. |
 | `show` | Print one Milestone as the generation stores it. |
+
+### `eawf paths`
+
+Print the folders an agent may write in this repository.
+
+| Verb | Summary |
+|---|---|
+| `local` | Print the absolute path of one agent-writable ``.ea/local`` folder. |
 
 ### `eawf plan`
 

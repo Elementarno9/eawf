@@ -30,7 +30,7 @@ from eawf.kernel.runtime.certification import (
 )
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.paths import store_path
+from eawf.kernel.store.paths import local_store_path, store_path
 from eawf.observability.doctor.models import (
     RUNTIME_TUPLE_CHECK_PREFIX,
     CheckResult,
@@ -96,37 +96,44 @@ def runtime_tuple_verdicts(
         One triple per tuple, ordered by tuple digest: the check, the failure code
         (``None`` for a newest record that passed) and when that record's stage
         completed, which is when the check last ran. Empty when the tree has no
-        conformance store.
+        conformance store in either tier.
     """
-    path = store_path(workspace / ".ea" / "state.json", StoreKind.CONFORMANCE_STAGE)
-    if not path.is_file():
-        return []
+    state_path = workspace / ".ea" / "state.json"
+    # The committed file is frozen history from earlier releases; probes now
+    # append to the local tier, so its rows follow the committed ones.
+    paths = (
+        store_path(state_path, StoreKind.CONFORMANCE_STAGE),
+        local_store_path(state_path, StoreKind.CONFORMANCE_STAGE),
+    )
     return [
         (
             _tuple_check(tuple_digest=digest, records=records),
             records[-1].reason_code,
             records[-1].completed_at,
         )
-        for digest, records in sorted(_history_by_tuple(path).items())
+        for digest, records in sorted(_history_by_tuple(paths).items())
     ]
 
 
-def _history_by_tuple(path: Path) -> dict[str, list[ConformanceStageRecord]]:
-    """Return every stage record of every tuple in *path*, in append order.
+def _history_by_tuple(paths: tuple[Path, ...]) -> dict[str, list[ConformanceStageRecord]]:
+    """Return every stage record of every tuple in *paths*, in file then append order.
 
-    A line that is not a stage envelope is skipped rather than raised on:
-    doctor reports on the store it finds, and a single malformed row must
-    not take the whole surface down with it.
+    A missing file contributes nothing. A line that is not a stage envelope
+    is skipped rather than raised on: doctor reports on the store it finds,
+    and a single malformed row must not take the whole surface down with it.
     """
     history: dict[str, list[ConformanceStageRecord]] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
+    for path in paths:
+        if not path.is_file():
             continue
-        record = _stage_record(line)
-        if record is None:
-            continue
-        digest, stage = record
-        history.setdefault(digest, []).append(stage)
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            record = _stage_record(line)
+            if record is None:
+                continue
+            digest, stage = record
+            history.setdefault(digest, []).append(stage)
     return history
 
 

@@ -127,6 +127,7 @@ from eawf.kernel.state.epoch2.transitions import (
     row_for,
 )
 from eawf.kernel.state.epoch2.urns import AnyEntityUrn
+from eawf.kernel.state.epoch2.values import TaskIntegratedBinding
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, Epoch2Collection
 from eawf.runtime.daemon.epoch2_recovery import (
@@ -928,7 +929,12 @@ def _bind_integration(
             f"unavailable {', '.join(answer.unavailable_gate_ids) or 'none'}",
             revision=revision,
         )
-    updates = {**params.updates, "integrated_binding": binding.model_dump(mode="json")}
+    integrated = TaskIntegratedBinding(
+        head_sha=binding.head_sha,
+        tree_sha=binding.tree_sha,
+        policy_revision=binding.policy_revision,
+    )
+    updates = {**params.updates, "integrated_binding": integrated.model_dump(mode="json")}
     return params.model_copy(update={"updates": updates})
 
 

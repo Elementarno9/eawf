@@ -298,6 +298,10 @@ class ApprovalAnswer(BaseModel):
         numbered_prompt: The same question as the numbered text prompt a
             host without a native picker prints verbatim; set exactly when
             ``host_question`` is.
+        warnings: The plain-prose findings on the presented question, the
+            ``prose_warnings`` of ``host_question``, lifted so the asker's
+            surface shows them without reading the question; empty when
+            there is none or no question is presented.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -316,6 +320,7 @@ class ApprovalAnswer(BaseModel):
     dispositions: tuple[PrincipalDispositionRow, ...] = ()
     host_question: UserQuestion | None = None
     numbered_prompt: str | None = None
+    warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -578,6 +583,7 @@ def action_answer(
         dispositions=action.dispositions,
         host_question=host_question,
         numbered_prompt=None if host_question is None else numbered_prompt(host_question),
+        warnings=() if host_question is None else tuple(host_question.prose_warnings),
     )
 
 

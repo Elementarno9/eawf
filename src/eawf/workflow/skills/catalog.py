@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Final, Literal
 from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 
 from eawf.kernel.economics.prompt_budget import BudgetClassId
+from eawf.kernel.layout import MOCKUPS_DIRNAME, REFLECT_DIRNAME, LocalKind, local_scope
 from eawf.kernel.runtime.semantic import SemanticToolId
 
 if TYPE_CHECKING:
@@ -866,7 +867,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             "/mockup <surface...> [--question <text>] [--option <text>...]"
             " [--count <2..4>] [--format <ascii|html|image>] [--viewport <spec>...]"
             " [--state <name>...] [--compare <axis>...] [--output <inline|local>]"
-            " [--local-root <path-under-.ea/local/mockups>] [--budget <spec>]"
+            " [--local-root <path-under-spikes/mockups>] [--budget <spec>]"
         ),
         effects=EffectsBoundary(
             summary=(
@@ -876,7 +877,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             rpcs=("runtime.question.answer_numbered", "runtime.question.open_decision"),
             tools=(SemanticToolId.ASK_OPERATOR,),
             canonical_mutates=True,
-            local_write_scope=".ea/local/mockups",
+            local_write_scope=local_scope(LocalKind.SPIKES, MOCKUPS_DIRNAME),
         ),
         output=_out("MockupReport", "presented|selected|needs_operator|blocked"),
     ),
@@ -985,7 +986,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
                 "reflect prune",
             ),
             canonical_mutates=False,
-            local_write_scope=".ea/local/reflect",
+            local_write_scope=local_scope(LocalKind.REPORTS, REFLECT_DIRNAME),
         ),
         output=_out("ReflectReport", "reported|partial|unavailable|blocked"),
     ),
@@ -1039,7 +1040,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             ),
             verbs=("reflect run",),
             canonical_mutates=True,
-            local_write_scope=".ea/local/reflect",
+            local_write_scope=local_scope(LocalKind.REPORTS, REFLECT_DIRNAME),
         ),
         output=_out(
             "ReleaseSkillReport",
@@ -1082,7 +1083,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
                 SemanticToolId.SUBMIT_REPORT,
             ),
             canonical_mutates=False,
-            local_write_scope=".ea/local/research",
+            local_write_scope=local_scope(LocalKind.RESEARCH),
         ),
         output=_out("SwiftResearchReport", "answered|open|blocked", coverage=True),
     ),
@@ -1104,7 +1105,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             " [--stack <auto|python|shell|node|other>] [--entrypoint <relative-path>]"
             " [--verify <command>...] [--fixture <ref>...] [--provider <id>...]"
             " [--agents <2..8>] [--budget <spec>] [--slug <slug>]"
-            " [--local-root <path-under-.ea/local/spikes>] [--network <deny|allow>]"
+            " [--local-root <path-under-spikes>] [--network <deny|allow>]"
             " [--retention <keep|expire-after-review>] [--resume <folder>]"
         ),
         effects=EffectsBoundary(
@@ -1119,7 +1120,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
                 SemanticToolId.SUBMIT_EVIDENCE,
             ),
             canonical_mutates=False,
-            local_write_scope=".ea/local/spikes",
+            local_write_scope=local_scope(LocalKind.SPIKES),
         ),
         output=_out("SpikeReport", "ready|inconclusive|failed|cancelled|blocked", coverage=True),
     ),

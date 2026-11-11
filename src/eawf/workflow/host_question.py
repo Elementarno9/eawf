@@ -17,8 +17,10 @@ in plain words, what choosing it costs, and shows a concrete rendering of
 what choosing it produces; the options differ in what they produce, since a question whose
 answers all lead to the same place costs attention and changes nothing.
 Exactly one option is recommended, for a reason stated in one sentence.
-Every identifier, abbreviation or screaming-case key in the view is
-expanded in the same view. Sentences are short.
+Every identifier, abbreviation or screaming-case key in the view should be
+expanded in the same view, and sentences should be short; a question that
+misses either is still shown, with a warning per miss in its
+``prose_warnings``.
 
 A host without a native multiple-choice picker -- Codex -- shows the same
 question as :func:`numbered_prompt`: the question, then each option on its
@@ -70,8 +72,6 @@ class PresentationRefusal(StrEnum):
     NOT_WAITING = "question_not_waiting"
     TIMEOUT_UNSHOWN = "timeout_default_unshown"
     OPTION_UNSHOWN = "option_not_shown"
-    TERM_UNEXPANDED = "term_unexpanded"
-    PROSE_NOT_PLAIN = "prose_not_plain"
     RECOMMENDATION_UNSTATED = "recommendation_unstated"
     NO_CONSEQUENCE = "question_without_consequence"
     COST_UNSTATED = "option_cost_unstated"
@@ -165,32 +165,39 @@ def _require_recommendation(action: PendingAction) -> str:
     return rationale
 
 
-def _require_plain_prose(action: PendingAction, rationale: str) -> None:
-    """Refuse a sentence too long to read once.
+def _require_plain_prose(action: PendingAction, rationale: str) -> list[str]:
+    """Return one warning per sentence too long to read once.
 
-    Raises:
-        QuestionPresentationError: ``prose_not_plain``.
+    The heuristic sentence split misreads abbreviations and code, so a long
+    sentence is reported to the author rather than keeping the question from
+    the operator.
+
+    Returns:
+        One warning per over-long sentence, in view order; empty when none.
     """
     texts = [action.question, rationale]
     for option in action.options:
         texts.append(option.label)
         texts.append(option.consequence or "")
         texts.append(option.cost or "")
-    for text in texts:
-        for sentence in _sentences(text):
-            if len(sentence.split()) > MAX_SENTENCE_WORDS:
-                raise QuestionPresentationError(
-                    PresentationRefusal.PROSE_NOT_PLAIN,
-                    f"{action.id} has a sentence of {len(sentence.split())} words, over "
-                    f"{MAX_SENTENCE_WORDS}: {sentence!r}",
-                )
+    return [
+        f"{action.id} has a sentence of {len(sentence.split())} words, over "
+        f"{MAX_SENTENCE_WORDS}: {sentence!r}"
+        for text in texts
+        for sentence in _sentences(text)
+        if len(sentence.split()) > MAX_SENTENCE_WORDS
+    ]
 
 
-def _require_expanded_terms(action: PendingAction, rationale: str) -> None:
-    """Refuse a view that shows a term without its expansion.
+def _require_expanded_terms(action: PendingAction, rationale: str) -> list[str]:
+    """Return a warning naming every term the view shows without its expansion.
 
-    Raises:
-        QuestionPresentationError: ``term_unexpanded``.
+    The term pattern also matches common abbreviations an operator reads
+    without a gloss, so an unexpanded term is reported, not refused.
+
+    Returns:
+        One warning listing the unexpanded terms; empty when every term is
+        expanded.
     """
     view = [action.question, rationale]
     for option in action.options:
@@ -199,11 +206,9 @@ def _require_expanded_terms(action: PendingAction, rationale: str) -> None:
         )
     expanded = {item.term for item in action.terms}
     unexpanded = sorted({term for text in view for term in _TERM.findall(text)} - expanded)
-    if unexpanded:
-        raise QuestionPresentationError(
-            PresentationRefusal.TERM_UNEXPANDED,
-            f"{action.id} shows {', '.join(unexpanded)} without saying what it stands for",
-        )
+    if not unexpanded:
+        return []
+    return [f"{action.id} shows {', '.join(unexpanded)} without saying what it stands for"]
 
 
 def present_pending_action(action: PendingAction) -> UserQuestion:
@@ -220,20 +225,22 @@ def present_pending_action(action: PendingAction) -> UserQuestion:
         override window shown with the question. Bound to
         the action's URN and the revision it was read at, and opening with
         the line ``[eawf act=<key> rev=<revision>]`` that names both to a
-        harness reporting the answer.
+        harness reporting the answer. A sentence too long and an unexpanded
+        term are carried in ``prose_warnings`` and do not stop the question.
 
     Raises:
         QuestionPresentationError: The action is not a filed waiting
             question, carries a timeout default with no override window, or is not
             presentable as it stands -- an option without a consequence,
-            cost or rendering, options that do not differ, no single one-sentence
-            recommendation, a sentence too long, or an unexpanded term.
+            cost or rendering, options that do not differ, or no single
+            one-sentence recommendation.
     """
     _require_answerable(action)
     _require_shown_options(action)
     rationale = _require_recommendation(action)
-    _require_plain_prose(action, rationale)
-    _require_expanded_terms(action, rationale)
+    prose_warnings = _require_plain_prose(action, rationale) + _require_expanded_terms(
+        action, rationale
+    )
     question = action.question
     if action.terms:
         glossary = "; ".join(f"{item.term} is {item.expansion}" for item in action.terms)
@@ -266,6 +273,7 @@ def present_pending_action(action: PendingAction) -> UserQuestion:
         options=options,
         action_ref=render_qualified_urn(action.urn),
         action_revision=action.revision,
+        prose_warnings=prose_warnings,
     )
 
 

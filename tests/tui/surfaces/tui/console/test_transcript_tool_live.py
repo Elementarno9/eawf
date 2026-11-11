@@ -49,7 +49,7 @@ BUILD_ID: Final = "toolu_01BashBuildH8i9J0k1L2m3N4"
 BROKEN_ID: Final = "toolu_01BashBrokenO5p6Q7r8S9t0U"
 
 #: A home path a command printed, which the store must never keep.
-LEAKED: Final = "/Users/jdoe/project/keys"  # pragma: allowlist secret
+LEAKED: Final = "/Users/jdoe/project/keys"  # eawf: allow-leak
 
 
 def _tool_hook(repo: Path, event: str, payload: dict[str, Any]) -> None:

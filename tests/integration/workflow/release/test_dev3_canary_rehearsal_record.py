@@ -113,8 +113,8 @@ _METHOD_SURFACE = re.compile(r"^[a-z][a-z_]*(\.[a-z_]+)+$")
 #: into the pattern so the teeth cases are the very shapes the scan looks for,
 #: and a shape added here is proved caught without anybody adding a case.
 LEAK_SHAPES: tuple[str, ...] = (
-    "/Users/",  # pragma: allowlist secret
-    "/home/",  # pragma: allowlist secret
+    "/Users/",  # eawf: allow-leak
+    "/home/",  # eawf: allow-leak
     "/private/",
     "/var/folders/",
     "/tmp/",

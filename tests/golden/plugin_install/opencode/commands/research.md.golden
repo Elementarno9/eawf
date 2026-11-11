@@ -14,7 +14,7 @@ Answer one question as a one-page local brief, swift or in rounds; no Campaign.
 - Allowed RPCs: `projection.evidence.read`. Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
 - Run tools: `eawf_state_query`, `repo_read`, `repo_search`, `submit_report`. These exist only inside a native Run eawf dispatches; a host session has none of them and uses the `eawf` commands above instead.
 - Canonical state: never mutated by this skill.
-- Local write root: `.ea/local/research` in an eawf-managed repository; outside one, none, unless `--save <path>` names a file.
+- Local write root: the folder `eawf paths local --kind research` prints in an eawf-managed repository; outside one, none, unless `--save <path>` names a file.
 - Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one.
 - Standalone use (supported): Returns the brief in the conversation; writes a file only when `--save <path>` names one.
 
@@ -41,7 +41,7 @@ Answer one bounded question in one markdown brief of at most one rendered page. 
 5. Reconcile evidence once. Distinguish implementation fact, document claim, external claim, and inference. Resolve every citation used by the verdict.
 6. Compare plausible alternatives with their main advantage and cost. Give a verdict, confidence, and material open gaps.
 7. If evidence cannot decide, recommend the cheapest discriminating next step. Do not turn the invocation into a Campaign or Spike implicitly: a question that needs more than the rounds allow is recommended as a Campaign, which the operator plans with `eawf campaign new` (`runtime.campaign.start`) and the daemon drives step by step with `eawf campaign run` (`runtime.campaign.run`).
-8. Write the brief. In an eawf-managed repository, write it to the `--save` path under `.ea/local/research/`, by default `<date>-<slug>.md` there. Outside one, write no file and return the brief in the conversation, unless `--save <path>` names a file. Either way: an H1 title, then exactly the sections Question, Findings, Alternatives, Recommendation, Open gaps, References in that order. References is a numbered table with the columns `#` and `Reference`, one repo-relative path, URL or Eawf URN per row, each cited in the prose as `[N]`.
+8. Write the brief. In an eawf-managed repository, write it to the `--save` path, by default the file `eawf paths local --kind research --slug <slug>` prints. Outside one, write no file and return the brief in the conversation, unless `--save <path>` names a file. Either way: an H1 title, then exactly the sections Question, Findings, Alternatives, Recommendation, Open gaps, References in that order. References is a numbered table with the columns `#` and `Reference`, one repo-relative path, URL or Eawf URN per row, each cited in the prose as `[N]`.
 9. If the brief is a file, run `eawf research check <brief>` and fix every error it names. If a report file exists, run `eawf skill check-report /research <report>`. With no file, check the section order and the References table yourself. Stop at the last pass, one rendered page, or the first hard budget cap.
 
 ## 4b. Applicable rules

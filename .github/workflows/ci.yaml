@@ -33,13 +33,12 @@ concurrency:
 jobs:
   changes:
     name: Classify changes since the last green tree
-    # A push that only edits project state under .ea/ or .secrets.baseline
-    # leaves the code tree exactly as it was when CI last went green, and
-    # re-running the matrix and twice-green on it costs about half an hour
-    # proving nothing new. This job compares the checkout with the newest
-    # green ci.yaml run that may anchor it, and exposes code=false only
-    # when every changed path is bookkeeping: anything under .ea/ and that
-    # one file. A run owing the full configuration (a push, a pull request
+    # A push that only edits project state under .ea/ leaves the code tree
+    # exactly as it was when CI last went green, and re-running the matrix
+    # and twice-green on it costs about half an hour proving nothing new.
+    # This job compares the checkout with the newest green ci.yaml run that
+    # may anchor it, and exposes code=false only when every changed path is
+    # bookkeeping: anything under .ea/. A run owing the full configuration (a push, a pull request
     # off draft) inherits only from a run that executed it, proven by a
     # successful coverage job; a release push only from its own ref's last
     # green push. So dev fast-forwarded to a ready pull request head
@@ -83,8 +82,7 @@ jobs:
     # succeeded, even after an earlier gate failed, so one red run reports
     # every finding. The hooks and the type check read the tree, not the
     # host, so one ubuntu run proves them. It does not need the changes job:
-    # the bookkeeping paths that job lets the matrix skip include
-    # .secrets.baseline, exactly what the detect-secrets hook reads. The
+    # the hooks also scan the .ea/ paths that job lets the matrix skip. The
     # snapshot-pairing, commit-grammar and prose steps read the pull
     # request's range and run on pull requests only.
     runs-on: ubuntu-24.04
@@ -179,25 +177,6 @@ jobs:
         # must stay reachable once the branch lands; a finding fails the job.
         if: ${{ !cancelled() && steps.sync.outcome == 'success' && github.event_name == 'pull_request' }}
         run: uv run eawf hook ledger-history --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
-
-      - name: Install Vale + sync styles
-        # The strict prose gate installs Vale so its prose leg participates.
-        # The chokepoint still fails open on the Vale leg if this step is
-        # skipped or sync fails (an unsynced StylesPath is an E100
-        # fail-open), so the deterministic EAWF013/014/017 legs remain the
-        # blocking floor.
-        if: ${{ !cancelled() && steps.sync.outcome == 'success' && github.event_name == 'pull_request' }}
-        run: |
-          uv tool install vale || pipx install vale || true
-          vale sync || true
-
-      - name: Validate prose (strict)
-        # The fail-closed half of the validate_prose chokepoint: locally the
-        # same chokepoint is advisory, here any EAWF013/014/017 finding reds
-        # the pull request. The diff base is the pull request's base SHA, so
-        # the scan sees exactly the Markdown the pull request adds or changes.
-        if: ${{ !cancelled() && steps.sync.outcome == 'success' && github.event_name == 'pull_request' }}
-        run: uv run eawf hook validate-prose --strict --base "${{ github.event.pull_request.base.sha }}"
 
       - name: Citation scope (EAWF027) over the tree and the PR body
         if: ${{ !cancelled() && steps.sync.outcome == 'success' && github.event_name == 'pull_request' }}

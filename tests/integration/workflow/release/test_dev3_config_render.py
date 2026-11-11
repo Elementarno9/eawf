@@ -68,17 +68,13 @@ MEMBERSHIP_REF = "milestone://epoch2/native-canary"
 #: sha256 of the rendered ``dev2`` configuration text as it stands now.
 #: Pinned rather than recomputed, so a later edit to the train template
 #: has to come through here and say what it moved.
-DEV2_CONFIG_DIGEST = (
-    "5e3d6dd2f93d7510e57624c6b1280dab43b02cdaca745d45a8ff1e0523651a38"  # pragma: allowlist secret
-)
+DEV2_CONFIG_DIGEST = "5e3d6dd2f93d7510e57624c6b1280dab43b02cdaca745d45a8ff1e0523651a38"
 
 #: sha256 of that same text with the target ``identity`` lines removed,
 #: which is the document the ``dev2`` record was approved against. The
 #: two digests together localise any drift: a moved identity trips only
 #: the first, anything else trips both.
-DEV2_CONFIG_AS_APPROVED_DIGEST = (
-    "d9a94643dd08786c92a99fa6a89d0ba8aab8bd29f8b773aeee2facfa09102f3f"  # pragma: allowlist secret
-)
+DEV2_CONFIG_AS_APPROVED_DIGEST = "d9a94643dd08786c92a99fa6a89d0ba8aab8bd29f8b773aeee2facfa09102f3f"
 
 #: The registry identity each ``dev2`` target is observed against. These
 #: three names are inputs to the frozen manifest the approved record

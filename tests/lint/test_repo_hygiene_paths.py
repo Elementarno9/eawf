@@ -10,26 +10,26 @@ notices when they drift apart.
 * The release ledger is where a publication RPC's idempotency key lives,
   so a clone without it cannot tell a retry from a second publication.
   Being neither tracked nor ignored is the one state that helps nobody.
-* An exclusion written as a whole directory prefix stops scanning files
-  nobody has written yet. A fixture directory is exactly where a
-  hand-pasted credential lands, so each excluded file is named and the
-  one generated class that cannot be baselined stays a narrow pattern.
-
-The extraction and comparison helpers take text and parsed documents
-rather than reading the tree themselves, so each gate is driven with a
-synthetic defect as well as with the live files.
+* The migration fixtures and rehearsal goldens carry digests that once
+  tripped the secret scan's entropy plugins and needed an exclusion. A
+  fixture directory is exactly where a hand-pasted credential lands, so
+  the hook scans them like any other path and they must scan clean.
 """
 
 from __future__ import annotations
 
-import re
+import contextlib
+import io
+import json
+import os
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
-import pytest
 import yaml
+from detect_secrets.main import main as detect_secrets_main
+from detect_secrets.settings import transient_settings
 
 from eawf.kernel.store.commit_policy import CommitPolicy, classify_path
 from eawf.kernel.store.tiers import StorageTier
@@ -47,94 +47,17 @@ COVERAGE_SHARD = ".coverage.host.1.2"
 #: The publication ledger a clone needs to resolve an idempotency key.
 RELEASE_LEDGER = ".ea/store/release.jsonl"
 
-#: The two directory prefixes the exclusion used to carry wholesale. A
-#: prefix un-scans every file added under it later, which is the drift
-#: this module exists to catch.
-RETIRED_PREFIXES: tuple[str, ...] = (
-    "^tests/fixtures/migration/",
-    "^tests/golden/kernel/migration/",
+#: The fixture trees whose pinned commit SHAs, manifest digests and
+#: generated rehearsal goldens once needed a secret-scan exclusion; the
+#: snapshot's state document was the hook's last exempted path.
+SCANNED_FIXTURE_TREES: tuple[str, ...] = (
+    "tests/fixtures/migration",
+    "tests/golden/kernel/migration",
+    "tests/fixtures/epoch1-snapshot",
 )
 
-#: Every migration fixture whose pinned commit SHAs, manifest digests or
-#: recorded state slices trip an entropy plugin. Each is excluded by
-#: name, so this tuple is also the list a reviewer re-derives by running
-#: the scan with the exclusion removed.
-EXCLUDED_MIGRATION_FIXTURES: tuple[str, ...] = (
-    "tests/fixtures/migration/cutover-faults/pending-wal/locks/wal/wal-canary-0001.pending.json",
-    "tests/fixtures/migration/epoch1-full/backlog_corpus.json",
-    "tests/fixtures/migration/epoch2/complete-manifest.json",
-    "tests/fixtures/migration/live-cutover/corpus-pin.json",
-    "tests/fixtures/migration/p30-i26-history/provenance.json",
-    "tests/fixtures/migration/p30-i26-history/snapshot/document.json",
-    "tests/fixtures/migration/p30-i26-history/snapshot/store/audit.jsonl",
-)
-
-#: A migration fixture no exclusion names, so the scan still reads it.
-UNNAMED_MIGRATION_FIXTURE = "tests/fixtures/migration/epoch1-full/snapshot/document.json"
-
-#: The generated goldens whose digests re-roll on every regeneration.
-REHEARSAL_GOLDEN_DIR = "tests/golden/kernel/migration/rehearsal"
-
-#: Regex characters that make an alternative a family rather than a path.
-_FAMILY_CHARACTERS = frozenset("[]()*+?{}")
-
-
-# --- extraction and comparison ----------------------------------------------
-
-
-def secrets_exclude(config: Mapping[str, Any]) -> str:
-    """Return the detect-secrets hook's ``exclude`` pattern.
-
-    Args:
-        config: A parsed pre-commit configuration.
-
-    Returns:
-        The pattern as written.
-
-    Raises:
-        LookupError: No detect-secrets hook declares an exclusion.
-    """
-    for repo in config.get("repos", ()):
-        for hook in repo.get("hooks", ()):
-            if hook.get("id") == "detect-secrets" and "exclude" in hook:
-                return str(hook["exclude"])
-    raise LookupError("no detect-secrets hook declares an exclude")
-
-
-def alternatives(pattern: str) -> tuple[str, ...]:
-    """Return the top-level alternatives of *pattern*.
-
-    A plain split is only correct while no alternative wraps a group, so
-    the exclusion is written without them and this stays a one-liner.
-
-    Args:
-        pattern: The exclusion regex.
-
-    Returns:
-        Each alternative, in written order; empty for an empty pattern.
-    """
-    return tuple(part for part in pattern.split("|") if part)
-
-
-def literal_paths(pattern: str) -> tuple[str, ...]:
-    """Return every anchored, single-file path *pattern* names.
-
-    Args:
-        pattern: The exclusion regex.
-
-    Returns:
-        The unescaped path of each alternative that is anchored at both
-        ends and describes one file rather than a family.
-    """
-    paths: list[str] = []
-    for alternative in alternatives(pattern):
-        if not (alternative.startswith("^") and alternative.endswith("$")):
-            continue
-        unescaped = alternative[1:-1].replace("\\.", ".")
-        if any(character in _FAMILY_CHARACTERS for character in unescaped):
-            continue
-        paths.append(unescaped)
-    return tuple(paths)
+#: The secret types the two entropy plugins the hook disables report.
+ENTROPY_SECRET_TYPES = frozenset({"Hex High Entropy String", "Base64 High Entropy String"})
 
 
 # --- live-tree readers ------------------------------------------------------
@@ -155,9 +78,45 @@ def _is_ignored(path: str) -> bool:
     return _git("check-ignore", "--no-index", "-q", "--", path).returncode == 0
 
 
-def _live_exclude() -> str:
-    """Return the exclusion the committed pre-commit config declares."""
-    return secrets_exclude(yaml.safe_load(_PRE_COMMIT_CONFIG.read_text(encoding="utf-8")))
+def _hook_scan_args() -> list[str]:
+    """Return the detect-secrets hook arguments minus ``--baseline <path>``."""
+    config = yaml.safe_load(_PRE_COMMIT_CONFIG.read_text(encoding="utf-8"))
+    (hook,) = [
+        hook for repo in config["repos"] for hook in repo["hooks"] if hook["id"] == "detect-secrets"
+    ]
+    assert "exclude" not in hook, "the hook scans every path; an exclusion hides new fixtures"
+    args = list(hook["args"])
+    at = args.index("--baseline")
+    del args[at : at + 2]
+    return args
+
+
+def _scan(paths: Sequence[str], args: list[str]) -> dict[str, Any]:
+    """Run ``detect-secrets scan`` in-process over *paths* from the repository root.
+
+    Fresh plugin settings per call, because the scan keeps them in a module
+    global; ``--no-verify`` keeps it offline.
+    """
+    out = io.StringIO()
+    with (
+        _in_repo_root(),
+        transient_settings({"plugins_used": []}),
+        contextlib.redirect_stdout(out),
+    ):
+        detect_secrets_main(["scan", "--no-verify", *args, *paths])
+    result: dict[str, Any] = json.loads(out.getvalue())
+    return result
+
+
+@contextlib.contextmanager
+def _in_repo_root() -> Iterator[None]:
+    """Run the block from the repository root; the scan resolves paths from the cwd."""
+    previous = Path.cwd()
+    os.chdir(_REPO_ROOT)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
 
 
 # --- coverage shards are ignored --------------------------------------------
@@ -197,80 +156,24 @@ def test_release_ledger_is_kept_like_the_other_release_stores() -> None:
     assert classify_path(".ea/store/audit.jsonl").policy is CommitPolicy.NOT_COMMITTED
 
 
-# --- the secrets exclusion names its files ----------------------------------
+# --- the fixture trees scan clean under the hook ----------------------------
 
 
-def test_secrets_exclude_retires_the_whole_migration_prefixes() -> None:
-    """Neither directory prefix survives as an alternative."""
-    declared = alternatives(_live_exclude())
-    assert [prefix for prefix in RETIRED_PREFIXES if prefix in declared] == []
+def test_migration_fixture_trees_scan_clean_under_the_hook() -> None:
+    """Every file in both trees is read by the hook's scan and none trips it."""
+    for tree in SCANNED_FIXTURE_TREES:
+        assert (_REPO_ROOT / tree).is_dir(), tree
+    assert _scan(SCANNED_FIXTURE_TREES, _hook_scan_args())["results"] == {}
 
 
-def test_secrets_exclude_scans_an_unnamed_migration_fixture() -> None:
-    """A fixture nobody named is read by the scan, as a new one will be."""
-    assert (_REPO_ROOT / UNNAMED_MIGRATION_FIXTURE).is_file()
-    assert re.search(_live_exclude(), UNNAMED_MIGRATION_FIXTURE) is None
+def test_fixture_trees_trip_only_the_disabled_entropy_plugins() -> None:
+    """With every plugin on, both trees trip, and only on the plugins the hook turns off.
 
-
-def test_secrets_exclude_names_every_entropy_tripping_fixture() -> None:
-    """Each fixture the narrowed exclusion has to carry is still carried."""
-    pattern = _live_exclude()
-    missed = [path for path in EXCLUDED_MIGRATION_FIXTURES if re.search(pattern, path) is None]
-    assert missed == []
-
-
-def test_secrets_exclude_named_files_all_exist() -> None:
-    """Every path the exclusion names is a real file, so none is stale."""
-    absent = [path for path in literal_paths(_live_exclude()) if not (_REPO_ROOT / path).is_file()]
-    assert absent == []
-
-
-def test_secrets_exclude_named_files_cover_the_migration_fixtures() -> None:
-    """The fixtures are named one by one rather than matched by a family."""
-    named = literal_paths(_live_exclude())
-    assert all(path in named for path in EXCLUDED_MIGRATION_FIXTURES)
-
-
-def test_secrets_exclude_covers_every_rehearsal_golden() -> None:
-    """The class pattern holds for the whole generated directory."""
-    pattern = _live_exclude()
-    goldens = sorted((_REPO_ROOT / REHEARSAL_GOLDEN_DIR).glob("*.json"))
-    assert goldens, "the rehearsal goldens moved, so the pattern guards nothing"
-    for golden in goldens:
-        relative = golden.relative_to(_REPO_ROOT).as_posix()
-        assert re.search(pattern, relative) is not None, relative
-
-
-def test_secrets_exclude_stops_at_the_rehearsal_directory() -> None:
-    """A sibling golden outside the generated class is still scanned."""
-    assert re.search(_live_exclude(), "tests/golden/kernel/migration/plan.json") is None
-
-
-def test_secrets_exclude_raises_without_the_hook() -> None:
-    with pytest.raises(LookupError, match="no detect-secrets hook"):
-        secrets_exclude({"repos": [{"hooks": [{"id": "ruff"}]}]})
-
-
-def test_secrets_exclude_raises_on_an_empty_config() -> None:
-    with pytest.raises(LookupError, match="no detect-secrets hook"):
-        secrets_exclude({})
-
-
-def test_alternatives_of_an_empty_pattern_is_empty() -> None:
-    assert alternatives("") == ()
-
-
-def test_alternatives_splits_a_single_alternative() -> None:
-    assert alternatives("^a\\.json$") == ("^a\\.json$",)
-
-
-def test_literal_paths_skips_a_family_alternative() -> None:
-    assert literal_paths("^a/b\\.json$|^c/[a-z]+\\.json$") == ("a/b.json",)
-
-
-def test_literal_paths_skips_an_unanchored_alternative() -> None:
-    assert literal_paths("uv\\.lock|^a/b\\.json$") == ("a/b.json",)
-
-
-def test_literal_paths_of_an_empty_pattern_is_empty() -> None:
-    assert literal_paths("") == ()
+    So the clean scan above reads these files, and turning the entropy
+    plugins off is the only thing keeping their digests from tripping it.
+    """
+    results = _scan(SCANNED_FIXTURE_TREES, [])["results"]
+    for tree in SCANNED_FIXTURE_TREES:
+        assert any(path.startswith(f"{tree}/") for path in results), tree
+    found = {row["type"] for rows in results.values() for row in rows}
+    assert found <= ENTROPY_SECRET_TYPES

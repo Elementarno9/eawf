@@ -11,12 +11,10 @@ Enforces:
 
 2. State-bookkeeping path whitelist applies to any commit with
    ``type == "state"``. State-scoped commits MUST touch only
-   state-bookkeeping paths (``.ea/state.json``, ``.ea/store/**``,
-   ``.secrets.baseline`` and ``.ea/specs/**``). Two release companions
-   may ride along: publication evidence under a
-   ``.ea/artifacts/evidence/<date>-<label>-publication/`` directory, and
-   ``.pre-commit-config.yaml`` only beside a staged ``.secrets.baseline``
-   (its ``# Baseline-hash:`` comment follows the baseline refresh).
+   state-bookkeeping paths (``.ea/state.json``, ``.ea/store/**`` and
+   ``.ea/specs/**``). Release publication evidence under a
+   ``.ea/artifacts/evidence/<date>-<label>-publication/`` directory may
+   ride along.
    On an epoch-2 root, where the lifecycle lives in the selected
    generation, ``.ea/generations/**`` and ``.ea/epoch2-opt-in.json`` are
    admitted too. Touching anything else is rejected.
@@ -135,14 +133,7 @@ _SUBJECT_STYLE_TRAILER = "trailer"
 # defaults are kept in lockstep by hand and pinned by
 # tests/unit/kernel/config/test_subject_style_default.py.
 _SUBJECT_STYLE_DEFAULT = _SUBJECT_STYLE_TRAILER
-_STATE_ONLY_ALLOWED = (
-    ".ea/state.json",
-    # ``.secrets.baseline`` auto-tracks state.json line numbers; the
-    # detect-secrets pre-commit hook regenerates it whenever state.json
-    # mutates, and refuses to commit when baseline is left unstaged.
-    # State-bookkeeping commits therefore always need it riding along.
-    ".secrets.baseline",
-)
+_STATE_ONLY_ALLOWED = (".ea/state.json",)
 # The TYPED per-kind JSONLs under ``.ea/store/`` are daemon-written, committed
 # stores (audit / evidence / decision / flow / role reports / memory) per the
 # authority map, so a state commit carries them alongside ``state.json``.
@@ -160,16 +151,13 @@ _STATE_ONLY_PREFIXES = (".ea/store/", ".ea/specs/")
 _EPOCH2_STATE_PREFIXES = (".ea/generations/",)
 _EPOCH2_STATE_ALLOWED = (".ea/epoch2-opt-in.json",)
 # The post-merge release pipeline ends in one state commit that lands its
-# publication evidence beside the release store, and refreshing the
-# detect-secrets baseline bumps the baseline-hash comment in the pre-commit
-# config. These stay out of ``_is_state_only_path``: that predicate also
-# decides the fold exemption from the commit cap, which evidence and config
-# edits must not trigger. Only the pipeline's own
+# publication evidence beside the release store. It stays out of
+# ``_is_state_only_path``: that predicate also decides the fold exemption
+# from the commit cap, which evidence edits must not trigger. Only the pipeline's own
 # ``<date>-<label>-publication/`` directory qualifies, so other evidence
 # cannot slip into a state commit under the release carve-out.
 _STATE_EVIDENCE_PREFIX = ".ea/artifacts/evidence/"
 _STATE_EVIDENCE_DIR_SUFFIX = "-publication"
-_STATE_BASELINE_HASH_COMPANION = ".pre-commit-config.yaml"
 # Mirrors the ``golden_dir`` of every surface in ``SNAPSHOT_SURFACES``
 # (src/eawf/surfaces/cli/commands/snapshot.py), the inventory the
 # snapshot-pairing gate watches. The hook runs under system Python and cannot
@@ -572,18 +560,15 @@ def _state_strays(staged: list[str], *, epoch2: bool) -> list[str]:
 
     Returns:
         Every path off the state-bookkeeping whitelist, except publication
-        evidence under ``.ea/artifacts/evidence/<date>-<label>-publication/``,
-        the pre-commit config when ``.secrets.baseline`` is staged beside it,
+        evidence under ``.ea/artifacts/evidence/<date>-<label>-publication/``
         and, on an epoch-2 root, the generations tree and the opt-in
         declaration.
     """
-    refreshes_baseline = ".secrets.baseline" in staged
     return [
         path
         for path in staged
         if not _is_state_only_path(path)
         and not _is_publication_evidence_path(path)
-        and not (refreshes_baseline and path == _STATE_BASELINE_HASH_COMPANION)
         and not (epoch2 and _is_epoch2_state_path(path))
     ]
 
@@ -594,8 +579,7 @@ def _check_state_paths(
     """Enforce the state-bookkeeping path whitelist for a ``state`` commit.
 
     State-scoped commits (``type == 'state'``) must touch only
-    state-bookkeeping paths, plus release publication evidence and the
-    baseline-hash companion of a staged baseline refresh. On an epoch-2 root
+    state-bookkeeping paths, plus release publication evidence. On an epoch-2 root
     (*epoch2*) a state commit may also carry ``.ea/generations/**`` and
     ``.ea/epoch2-opt-in.json``.
 
@@ -611,10 +595,8 @@ def _check_state_paths(
     return 1, (
         f"state-type commit touches non-state paths: {bad}\n"
         "state-scoped commits must mutate only .ea/state.json, "
-        f".ea/store/**, .secrets.baseline, .ea/specs/**{epoch2_note} or "
-        ".ea/artifacts/evidence/<date>-<label>-publication/**; "
-        ".pre-commit-config.yaml may ride "
-        "along solely beside a staged .secrets.baseline"
+        f".ea/store/**, .ea/specs/**{epoch2_note} or "
+        ".ea/artifacts/evidence/<date>-<label>-publication/**"
     )
 
 

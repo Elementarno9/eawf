@@ -52,9 +52,7 @@ _instrument_statuses: tuple[InstrumentStatus, ...] = ("ok", "missing", "degraded
 
 # URN-shaped scope/session keep the strings recognisable but bounded.
 # YAML-safe alphabet: letters + digits + dash + underscore.
-_URN_ALPHABET = (
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"  # pragma: allowlist secret
-)
+_URN_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
 _scopes = st.text(
     alphabet=_URN_ALPHABET,
     min_size=1,
@@ -71,7 +69,7 @@ _started_at = st.datetimes(
 ).map(lambda dt: dt.replace(tzinfo=UTC))
 _durations = st.integers(min_value=0, max_value=86_400).map(lambda s: timedelta(seconds=s))
 
-_INSTRUMENT_KEY_ALPHABET = "abcdefghijklmnopqrstuvwxyz_"  # pragma: allowlist secret
+_INSTRUMENT_KEY_ALPHABET = "abcdefghijklmnopqrstuvwxyz_"
 _instrument_keys = st.text(
     alphabet=_INSTRUMENT_KEY_ALPHABET,
     min_size=1,

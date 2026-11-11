@@ -41,7 +41,6 @@ _SMALL_GATES = (
     "tools/snapshot_pairing_gate.py",
     "tools/commit_prefix_lint.py --check-history",
     "eawf hook ledger-history",
-    "eawf hook validate-prose --strict",
     "eawf hook eawf027-citation-scope",
 )
 

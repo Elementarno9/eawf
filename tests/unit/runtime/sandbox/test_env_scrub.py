@@ -43,7 +43,7 @@ _FULL_BASE_ENV: dict[str, str] = {
     # claude-lane auth (placeholder, non-secret values)
     "ANTHROPIC_API_KEY": "placeholder-anthropic",  # pragma: allowlist secret
     "CLAUDE_CONFIG_DIR": "/sandbox/agent/.claude",
-    "CLAUDE_CODE_OAUTH_TOKEN": "placeholder-oauth",  # pragma: allowlist secret
+    "CLAUDE_CODE_OAUTH_TOKEN": "placeholder-oauth",
     # codex-lane auth (placeholder, non-secret values)
     "OPENAI_API_KEY": "placeholder-openai",  # pragma: allowlist secret
     "CODEX_HOME": "/sandbox/agent/.codex",
@@ -52,8 +52,8 @@ _FULL_BASE_ENV: dict[str, str] = {
     # must-drop credential families (placeholder, non-secret values)
     "AWS_SECRET_ACCESS_KEY": "placeholder-aws",  # pragma: allowlist secret
     "AWS_SESSION_TOKEN": "placeholder-aws-session",
-    "GH_TOKEN": "placeholder-gh",  # pragma: allowlist secret
-    "GITHUB_TOKEN": "placeholder-github",  # pragma: allowlist secret
+    "GH_TOKEN": "placeholder-gh",
+    "GITHUB_TOKEN": "placeholder-github",
     "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock",
     "KUBECONFIG": "/sandbox/agent/.kube/config",
     "EAWF_DAEMONLESS": "1",

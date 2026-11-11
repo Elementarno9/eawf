@@ -59,7 +59,7 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     # PII guards on the manifest body.
     serialised = json.dumps(manifest)
     assert "@" not in serialised
-    assert "/Users/" not in serialised  # pragma: allowlist secret
+    assert "/Users/" not in serialised  # eawf: allow-leak
     marketplace = json.loads((target / ".claude-plugin" / "marketplace.json").read_text())
     assert marketplace["name"] == "eawf"
     # Default publish_source keeps the relative dev source so
@@ -99,7 +99,7 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
         for entry in entries:
             command = entry["hooks"][0]["command"]
             assert command.startswith('bash "${CLAUDE_PLUGIN_ROOT}/hooks/')
-            assert "/Users/" not in command  # pragma: allowlist secret
+            assert "/Users/" not in command  # eawf: allow-leak
     # Forbidden surfaces.
     assert not (target / "settings.json").exists()
     assert not (target / ".claude").exists()
@@ -196,7 +196,7 @@ def test_package_published_npm_has_no_pii(tmp_path: Path) -> None:
     # email-leak heuristic still catches a real address.
     residual = serialised.replace("@elementarno/eawf", "")
     assert "@" not in residual
-    assert "/Users/" not in serialised  # pragma: allowlist secret
+    assert "/Users/" not in serialised  # eawf: allow-leak
 
 
 def test_package_skips_readme_when_disabled(tmp_path: Path) -> None:

@@ -238,6 +238,7 @@ def test_completion_records_the_binding_it_derives_not_the_one_presented(
     assert binding["tree_sha"] == world.TREE
     assert binding["policy_revision"] == 1
     assert binding != forged
+    assert {"contract_digest", "evidence_digest"}.isdisjoint(binding)
 
 
 def test_completion_with_a_leg_left_to_rerun_is_proof_stale(tmp_path: Path) -> None:
@@ -492,6 +493,8 @@ def test_a_task_walks_from_backlog_to_an_accepted_milestone(tmp_path: Path) -> N
         )
     )
     integrated = _row(canary, Epoch2Collection.TASK, "EAWF-0042")["integrated_binding"]
+    # A Task binding carries no digests; the Batch pins its own on the same head.
+    head_binding = {**seed_row("batch", "READY_TO_MERGE")["current_head_binding"], **integrated}
     batch = _ok(
         _call(
             canary,
@@ -499,7 +502,7 @@ def test_a_task_walks_from_backlog_to_an_accepted_milestone(tmp_path: Path) -> N
             "domain.batch.ready",
             BATCH_URN,
             batch,
-            updates={"current_head_binding": integrated},
+            updates={"current_head_binding": head_binding},
         )
     )
     batch = _ok(_call(canary, tmp_path, "domain.batch.merge", BATCH_URN, batch))

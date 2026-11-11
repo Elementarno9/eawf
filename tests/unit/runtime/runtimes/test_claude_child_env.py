@@ -51,15 +51,15 @@ _SEEDED_ENV: dict[str, str] = {
     "LC_CTYPE": "UTF-8",
     "PATH": "/sandbox/hostile/bin:/usr/bin",
     "CLAUDE_CONFIG_DIR": "/sandbox/agent/.claude",
-    "CLAUDE_CODE_OAUTH_TOKEN": "placeholder-oauth",  # pragma: allowlist secret
+    "CLAUDE_CODE_OAUTH_TOKEN": "placeholder-oauth",
     "ANTHROPIC_BASE_URL": "https://example.invalid",
-    _OPERATOR_TOKEN_KEY: "placeholder-operator-token",  # pragma: allowlist secret
+    _OPERATOR_TOKEN_KEY: "placeholder-operator-token",
     "CLAUDE_CODE_MESSAGING_SOCKET": "/sandbox/operator.sock",
     "CLAUDE_CODE_SESSION_ID": "operator-session",
     "CLAUDE_CODE_ENTRYPOINT": "cli",
     "CLAUDE_PID": "12345",
     "CLAUDECODE": "1",
-    "GH_TOKEN": "placeholder-gh",  # pragma: allowlist secret
+    "GH_TOKEN": "placeholder-gh",
     "AWS_SECRET_ACCESS_KEY": "placeholder-aws",  # pragma: allowlist secret
     "OPENAI_API_KEY": "placeholder-openai",  # pragma: allowlist secret
     "EAWF_RUNTIME_DIR": "/sandbox/runtime",
@@ -97,7 +97,7 @@ def test_build_child_env_claude_lane_keeps_account_auth() -> None:
     """Dropping the session wiring still leaves the child able to authenticate."""
     env = build_child_env(_CLAUDE_LANE, base_env=_SEEDED_ENV)
     assert env["CLAUDE_CONFIG_DIR"] == "/sandbox/agent/.claude"
-    assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "placeholder-oauth"  # pragma: allowlist secret
+    assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "placeholder-oauth"
     assert env["ANTHROPIC_BASE_URL"] == "https://example.invalid"
     assert env["PATH"].split(os.pathsep)[0] != "/sandbox/hostile/bin"
 

@@ -31,8 +31,8 @@ def _kinds(findings: list[SteFinding]) -> list[str]:
 @pytest.mark.parametrize(
     "body",
     [
-        f"instruction: {_sentence(21)}\n",
-        f"rationale: {_sentence(26)}\n",
+        f"instruction: {_sentence(31)}\n",
+        f"rationale: {_sentence(36)}\n",
         "instruction: Run the gate; then stop.\n",
     ],
 )
@@ -58,6 +58,26 @@ def test_prose_findings_flags_one_word_past_the_limit(kind: SentenceKind, limit:
     assert finding.detail == f"{limit + 1} words > {limit}"
 
 
+def test_caps_30_35(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """The caps sit at 30 and 35: 30 and 35 words pass, 31 and 36 words are reported.
+
+    Over the shipped sources the lint still exits 0 and reports fewer findings
+    than the 346 it reported at the old 20 and 25 caps.
+    """
+    monkeypatch.chdir(Path(__file__).resolve().parents[4])
+    assert main([]) == 0
+    assert capsys.readouterr().out.count(" ste-") < 346
+    assert (INSTRUCTION_MAX_WORDS, DESCRIPTION_MAX_WORDS) == (30, 35)
+    assert prose_findings(_sentence(30), kind="instruction", path="p", line=1) == []
+    assert prose_findings(_sentence(35), kind="description", path="p", line=1) == []
+    assert _kinds(prose_findings(_sentence(31), kind="instruction", path="p", line=1)) == [
+        "instruction-length"
+    ]
+    assert _kinds(prose_findings(_sentence(36), kind="description", path="p", line=1)) == [
+        "description-length"
+    ]
+
+
 @pytest.mark.parametrize("text", ["", "   ", "Run."])
 def test_prose_findings_passes_empty_and_single_word_text(text: str) -> None:
     assert prose_findings(text, kind="instruction", path="p", line=1) == []
@@ -74,15 +94,15 @@ def test_prose_findings_splits_sentences_and_ignores_code_semicolons() -> None:
 def test_markdown_findings_classifies_items_and_skips_code_tables_headings() -> None:
     text = "\n".join(
         [
-            f"# {_sentence(30)}",
-            f"- {_sentence(21)}",
+            f"# {_sentence(40)}",
+            f"- {_sentence(31)}",
             "",
-            " ".join(["Run"] * 13),
-            _sentence(13),
+            " ".join(["Run"] * 18),
+            _sentence(18),
             "```",
             "a; b",
             "```",
-            f"| {_sentence(30)} |",
+            f"| {_sentence(40)} |",
         ]
     )
     findings = markdown_findings(text, path="skill:x", line=10)
@@ -96,8 +116,8 @@ def test_yaml_findings_reads_prose_fields_and_body_templates() -> None:
     text = "\n".join(
         [
             "rules:",
-            f"  - title: {_sentence(30)}",
-            f"    instruction: {_sentence(21)}",
+            f"  - title: {_sentence(40)}",
+            f"    instruction: {_sentence(31)}",
             "    body_template: |",
             "      Run a; run b.",
         ]

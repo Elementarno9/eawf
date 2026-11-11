@@ -2,7 +2,7 @@
 
 The three verbs are the three stages, and they are the only way a
 :class:`DriverCertification` comes into being. Each appends its stage
-record to ``<state_dir>/store/conformance_stage.jsonl`` under the tuple's
+record to ``<state_dir>/local/conformance_stage.jsonl`` under the tuple's
 digest, so the history a certification cites is on disk before the
 certification is returned.
 
@@ -35,7 +35,7 @@ from eawf.kernel.runtime.certification import ConformanceStageRecord
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.paths import store_path
+from eawf.kernel.store.paths import local_store_path, store_path
 from eawf.runtime.daemon.methods import MethodContext, register
 from eawf.runtime.runtimes.conformance import (
     CanaryRequest,
@@ -64,8 +64,14 @@ class StageParams(BaseModel):
 class StoreStageJournal:
     """Append-only stage journal over one tree's conformance store.
 
+    A probe describes the machine it ran on, so new records land in the
+    machine-local tier and never dirty the committed tree. Records an
+    earlier release appended to the committed store stay there, frozen,
+    and are read ahead of the local ones as the start of each history.
+
     Attributes:
-        path: The JSONL collection every stage record lands in.
+        path: The machine-local JSONL collection every new stage record lands in.
+        frozen_path: The committed JSONL collection read but never appended to.
     """
 
     def __init__(self, state_path: Path) -> None:
@@ -74,7 +80,8 @@ class StoreStageJournal:
         Args:
             state_path: Path to the tree's ``state.json``.
         """
-        self.path = store_path(state_path, StoreKind.CONFORMANCE_STAGE)
+        self.path = local_store_path(state_path, StoreKind.CONFORMANCE_STAGE)
+        self.frozen_path = store_path(state_path, StoreKind.CONFORMANCE_STAGE)
 
     def append(self, *, tuple_digest: str, record: ConformanceStageRecord) -> None:
         """Append one stage record for one tuple.
@@ -106,23 +113,24 @@ class StoreStageJournal:
             tuple_digest: Digest of the runtime tuple to read.
 
         Returns:
-            The tuple's stage records, oldest first; empty when the tuple
-            has never been probed.
+            The tuple's stage records, oldest first, committed records ahead
+            of local ones; empty when the tuple has never been probed.
 
         Raises:
             ValueError: A line is not an envelope of this kind, or its
                 payload is not a stage record.
         """
-        if not self.path.exists():
-            return ()
         rows: list[ConformanceStageRecord] = []
-        for number, line in enumerate(self.path.read_text(encoding="utf-8").splitlines(), start=1):
-            if not line.strip():
+        for path in (self.frozen_path, self.path):
+            if not path.exists():
                 continue
-            envelope = _envelope(line, path=self.path, number=number)
-            if envelope.scope_id != tuple_digest:
-                continue
-            rows.append(_record(envelope, path=self.path, number=number))
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                if not line.strip():
+                    continue
+                envelope = _envelope(line, path=path, number=number)
+                if envelope.scope_id != tuple_digest:
+                    continue
+                rows.append(_record(envelope, path=path, number=number))
         return tuple(rows)
 
 

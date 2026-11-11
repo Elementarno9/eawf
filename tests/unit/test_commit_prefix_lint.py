@@ -263,16 +263,14 @@ def test_disabled_coauthor_policy_accepts_no_trailer(tmp_path: Path, mod) -> Non
     [
         [],
         [".ea/specs/spec.md"],
-        [".ea/state.json", ".ea/store/event.jsonl", ".secrets.baseline"],
+        [".ea/state.json", ".ea/store/event.jsonl", ".ea/specs/spec.md"],
         [".ea/state.json", ".ea/store/audit.jsonl", ".ea/store/evidence.jsonl"],
         [
             ".ea/store/release_record.jsonl",
             ".ea/artifacts/evidence/2026-09-26-dev4-publication/dev4-baked.json",
-            ".secrets.baseline",
-            ".pre-commit-config.yaml",
         ],
     ],
-    ids=["empty", "specs", "baseline", "stores", "publication-evidence"],
+    ids=["empty", "specs", "ea-only", "stores", "publication-evidence"],
 )
 def test_state_commit_accepts_bookkeeping_paths(tmp_path: Path, mod, staged: list[str]) -> None:
     msg = _write_msg(tmp_path, "state: land the bookkeeping\n")
@@ -286,6 +284,11 @@ def test_state_commit_accepts_bookkeeping_paths(tmp_path: Path, mod, staged: lis
         ([".ea/state.json", "src/eawf/x.py"], "src/eawf/x.py"),
         ([".ea/state.json", "docs/x.md"], "docs/x.md"),
         ([".ea/store/release_record.jsonl", ".pre-commit-config.yaml"], ".pre-commit-config.yaml"),
+        ([".ea/state.json", ".secrets.baseline"], ".secrets.baseline"),
+        (
+            [".ea/state.json", ".secrets.baseline", ".pre-commit-config.yaml"],
+            ".pre-commit-config.yaml",
+        ),
         ([".ea/state.json", ".ea/artifacts/audits/x.md"], ".ea/artifacts/audits/x.md"),
         (
             [".ea/state.json", ".ea/artifacts/evidence/2026-09-26-dev4-conformance/x.json"],
@@ -301,6 +304,8 @@ def test_state_commit_accepts_bookkeeping_paths(tmp_path: Path, mod, staged: lis
         "source",
         "docs",
         "config-without-baseline",
+        "secrets-baseline",
+        "config-beside-baseline",
         "audit-artifact",
         "non-publication-evidence",
         "loose-evidence",

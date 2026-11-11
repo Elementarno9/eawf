@@ -181,17 +181,17 @@ def test_research_page_texts() -> None:
     page = shipped_skill_page(resolve_skill("research"))
     plain = page.replace("`", "")
     assert (
-        "Local write root: .ea/local/research in an eawf-managed repository; outside one, none,"
-        " unless --save <path> names a file."
+        "Local write root: the folder eawf paths local --kind research prints in an eawf-managed"
+        " repository; outside one, none, unless --save <path> names a file."
     ) in plain
     assert (
-        "8. Write the brief. In an eawf-managed repository, write it to the `--save` path under"
-        " `.ea/local/research/`, by default `<date>-<slug>.md` there. Outside one, write no file"
-        " and return the brief in the conversation, unless `--save <path>` names a file. Either"
-        " way: an H1 title, then exactly the sections Question, Findings, Alternatives,"
-        " Recommendation, Open gaps, References in that order. References is a numbered table"
-        " with the columns `#` and `Reference`, one repo-relative path, URL or Eawf URN per row,"
-        " each cited in the prose as `[N]`."
+        "8. Write the brief. In an eawf-managed repository, write it to the `--save` path, by"
+        " default the file `eawf paths local --kind research --slug <slug>` prints. Outside one,"
+        " write no file and return the brief in the conversation, unless `--save <path>` names a"
+        " file. Either way: an H1 title, then exactly the sections Question, Findings,"
+        " Alternatives, Recommendation, Open gaps, References in that order. References is a"
+        " numbered table with the columns `#` and `Reference`, one repo-relative path, URL or"
+        " Eawf URN per row, each cited in the prose as `[N]`."
     ) in page
     assert (
         "9. If the brief is a file, run `eawf research check <brief>` and fix every error it"

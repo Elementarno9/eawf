@@ -66,7 +66,7 @@ from eawf.kernel.state.epoch2.transitions import (
     TransitionGuard,
     row_for,
 )
-from eawf.kernel.state.epoch2.values import ExactRevisionBinding
+from eawf.kernel.state.epoch2.values import ExactRevisionBinding, TaskIntegratedBinding
 from eawf.kernel.store.commit_policy import (
     CENSUS_SURFACE_PREFIX,
     PROBE_SEGMENT,
@@ -358,14 +358,10 @@ def _head_binding(
     )
 
 
-def _task_binding(head: ExactRevisionBinding, task: Task, commit: str | None) -> dict[str, Any]:
+def _task_binding(head: ExactRevisionBinding, task: Task) -> dict[str, Any]:
     """Return the integrated binding a Task completes on, at the Batch's pinned head."""
-    return ExactRevisionBinding(
-        head_sha=head.head_sha,
-        tree_sha=head.tree_sha,
-        contract_digest=canonical_digest(_contract(task)),
-        policy_revision=task.contract_revision,
-        evidence_digest=canonical_digest({"task": task.key, "commit": commit}),
+    return TaskIntegratedBinding(
+        head_sha=head.head_sha, tree_sha=head.tree_sha, policy_revision=task.contract_revision
     ).model_dump(mode="json")
 
 
@@ -515,7 +511,7 @@ def _complete_tasks(
                 to=TaskStatus.COMPLETED,
                 actor=actor,
                 now=now,
-                updates={"integrated_binding": _task_binding(binding, task, commit)},
+                updates={"integrated_binding": _task_binding(binding, task)},
                 binding_refs=(str(batch.urn), *carried, *citations.get(key, ())),
             )
         )

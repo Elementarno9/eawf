@@ -43,8 +43,8 @@ _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 #: The path prefixes that name one machine, and the pattern built from them.
 LEAK_SHAPES: tuple[str, ...] = (
-    "/Users/",  # pragma: allowlist secret
-    "/home/",  # pragma: allowlist secret
+    "/Users/",  # eawf: allow-leak
+    "/home/",  # eawf: allow-leak
     "/private/",
     "/var/folders/",
     "/tmp/",

@@ -19,6 +19,8 @@ from eawf.workflow.host_question import (
     MAX_SENTENCE_WORDS,
     PresentationRefusal,
     QuestionPresentationError,
+    _require_expanded_terms,
+    _require_plain_prose,
     action_marker,
     numbered_option,
     numbered_prompt,
@@ -287,20 +289,33 @@ def test_surf_034_an_option_told_only_in_prose_is_incomplete() -> None:
 
 
 @pytest.mark.parametrize("term", ["MLS-0030", "CI", "P31", "ACCEPTANCE_REVIEW", "SURF-035"])
-def test_surf_035_an_unexpanded_term_is_refused(term: str) -> None:
-    """Error path: an identifier, abbreviation or screaming-case key needs its expansion."""
+def test_surf_035_an_unexpanded_term_is_warned_not_refused(term: str) -> None:
+    """An identifier, abbreviation or screaming-case key without its expansion is a warning."""
     action = _action(question=f"Where should the side panel go for {term}?")
 
-    with pytest.raises(QuestionPresentationError, match=term) as caught:
-        present_pending_action(action)
-    assert caught.value.code is PresentationRefusal.TERM_UNEXPANDED
+    warnings = present_pending_action(action).prose_warnings
+
+    assert len(warnings) == 1
+    assert term in warnings[0]
+    assert "without saying what it stands for" in warnings[0]
 
 
 def test_surf_035_a_term_in_a_preview_needs_its_expansion_too() -> None:
     """The preview is part of the view the reader has to understand."""
     action = _action(options=_option_with(0, preview="[panel] [main]  CI"))
 
-    assert _refusal(action) is PresentationRefusal.TERM_UNEXPANDED
+    assert present_pending_action(action).prose_warnings == [
+        "ACT-0001 shows CI without saying what it stands for"
+    ]
+
+
+def test_surf_035_several_unexpanded_terms_share_one_warning() -> None:
+    """Boundary: every unexpanded term is named, sorted, in one warning."""
+    action = _action(question="Where should the panel go for MLS-0030 and CI?")
+
+    assert present_pending_action(action).prose_warnings == [
+        "ACT-0001 shows CI, MLS-0030 without saying what it stands for"
+    ]
 
 
 def test_surf_035_the_expansion_is_shown_in_the_same_view() -> None:
@@ -350,14 +365,65 @@ def test_surf_036_a_sentence_at_the_limit_presents() -> None:
     """Boundary: exactly the maximum sentence length is plain enough."""
     action = _action(question=_sentence(MAX_SENTENCE_WORDS))
 
-    assert _body(present_pending_action(action)) == _sentence(MAX_SENTENCE_WORDS)
+    question = present_pending_action(action)
+
+    assert _body(question) == _sentence(MAX_SENTENCE_WORDS)
+    assert question.prose_warnings == []
 
 
-def test_surf_036_a_sentence_one_word_over_the_limit_is_refused() -> None:
-    """Boundary: one word past the maximum is refused."""
+def test_surf_036_a_sentence_one_word_over_the_limit_is_warned() -> None:
+    """Boundary: one word past the maximum presents with one warning."""
     action = _action(options=_option_with(0, consequence=_sentence(MAX_SENTENCE_WORDS + 1)))
 
-    assert _refusal(action) is PresentationRefusal.PROSE_NOT_PLAIN
+    warnings = present_pending_action(action).prose_warnings
+
+    assert len(warnings) == 1
+    over = f"a sentence of {MAX_SENTENCE_WORDS + 1} words, over {MAX_SENTENCE_WORDS}"
+    assert over in warnings[0]
+
+
+def test_surf_036_each_long_sentence_is_its_own_warning() -> None:
+    """Boundary: two over-long sentences in two fields give two warnings."""
+    action = _action(
+        question=_sentence(MAX_SENTENCE_WORDS + 1),
+        options=_option_with(1, cost=_sentence(MAX_SENTENCE_WORDS + 2)),
+    )
+
+    assert len(present_pending_action(action).prose_warnings) == 2
+
+
+def test_prose_warnings_not_refusals() -> None:
+    """A 40-word sentence and a bare Milestone key present with two warnings, raising nothing."""
+    words = " ".join(["word"] * 38)
+    action = _action(question=f"Ship {words} MLS-0030?")
+
+    question = present_pending_action(action)
+
+    assert len(question.prose_warnings) == 2
+    assert "a sentence of 40 words, over 25" in question.prose_warnings[0]
+    assert "MLS-0030" in question.prose_warnings[1]
+    assert {"PROSE_NOT_PLAIN", "TERM_UNEXPANDED"}.isdisjoint(PresentationRefusal.__members__)
+    assert {"prose_not_plain", "term_unexpanded"}.isdisjoint(r.value for r in PresentationRefusal)
+
+
+def test_prose_checks_return_empty_lists_on_plain_prose() -> None:
+    """Boundary: a plain, fully expanded question yields no warning from either check."""
+    action = _action()
+    rationale = action.recommendation_rationale
+    assert rationale is not None
+
+    assert _require_plain_prose(action, rationale) == []
+    assert _require_expanded_terms(action, rationale) == []
+    assert present_pending_action(action).prose_warnings == []
+
+
+def test_prose_warnings_must_be_a_list_of_strings() -> None:
+    """Error path: the warnings field is typed, so a non-string entry does not validate."""
+    payload = present_pending_action(_action()).model_dump()
+    payload["prose_warnings"] = [{"not": "text"}]
+
+    with pytest.raises(ValidationError):
+        UserQuestion.model_validate(payload)
 
 
 # ---------- SURF-037: one recommendation, one sentence ----------
@@ -407,16 +473,18 @@ def test_surf_037_an_option_without_its_cost_is_refused(index: int) -> None:
     assert _refusal(action) is PresentationRefusal.COST_UNSTATED
 
 
-def test_surf_037_a_cost_too_long_to_read_once_is_refused() -> None:
+def test_surf_037_a_cost_too_long_to_read_once_is_warned() -> None:
     action = _action(options=_option_with(1, cost=_sentence(MAX_SENTENCE_WORDS + 1)))
 
-    assert _refusal(action) is PresentationRefusal.PROSE_NOT_PLAIN
+    assert len(present_pending_action(action).prose_warnings) == 1
 
 
-def test_surf_037_an_unexpanded_term_in_a_cost_is_refused() -> None:
+def test_surf_037_an_unexpanded_term_in_a_cost_is_warned() -> None:
     action = _action(options=_option_with(1, cost="The ZQX lane is given up."))
 
-    assert _refusal(action) is PresentationRefusal.TERM_UNEXPANDED
+    assert present_pending_action(action).prose_warnings == [
+        "ACT-0001 shows ZQX without saying what it stands for"
+    ]
 
 
 def test_surf_037_a_recommendation_of_an_option_not_offered_does_not_validate() -> None:
@@ -533,9 +601,9 @@ def test_the_marker_names_the_revision_the_action_was_read_at() -> None:
 
 def test_the_marker_is_added_after_the_presentation_checks() -> None:
     """The marker's own key is not held to the term rule; the question's words still are."""
-    assert (
-        _refusal(_action(question="Ship it for MLS-0030?")) is PresentationRefusal.TERM_UNEXPANDED
-    )
+    assert present_pending_action(_action(question="Ship it for MLS-0030?")).prose_warnings == [
+        "ACT-0001 shows MLS-0030 without saying what it stands for"
+    ]
     assert present_pending_action(_action()).question.startswith("[eawf act=ACT-0001 rev=3]\n")
 
 

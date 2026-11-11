@@ -43,13 +43,13 @@ from eawf.surfaces.cli.app import app
 
 _FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "ledger_history"
 _LEDGER = ".ea/generations/gen-ca819f3245bf71a8/ledger/batch.jsonl"
-_REMAPPED_FROM = "e2ed250ef4ab065391ecc7a895a8af22dc3d4d54"  # pragma: allowlist secret
-_REMAPPED_TO = "b80533bebb6421ad4dd935aacd268171a08eefae"  # pragma: allowlist secret
+_REMAPPED_FROM = "e2ed250ef4ab065391ecc7a895a8af22dc3d4d54"
+_REMAPPED_TO = "b80533bebb6421ad4dd935aacd268171a08eefae"
 #: Three of the stray SHAs, each on the fixture line of the same index.
 _STRAYS = (
-    ("P22-I01-W05", "131b469339b4354624e9c0a635aa5b851df096d7"),  # pragma: allowlist secret
-    ("P28-I03-W03", "ecc5d99c0f4b59ed61e733223c69a1d9fdf7ff60"),  # pragma: allowlist secret
-    ("P36-I01-W01", "d8bf262acf51a847d063f7d40b688a2684a21cf3"),  # pragma: allowlist secret
+    ("P22-I01-W05", "131b469339b4354624e9c0a635aa5b851df096d7"),
+    ("P28-I03-W03", "ecc5d99c0f4b59ed61e733223c69a1d9fdf7ff60"),
+    ("P36-I01-W01", "d8bf262acf51a847d063f7d40b688a2684a21cf3"),
 )
 _TASK_LEDGER = ".ea/generations/gen-x/ledger/task.jsonl"
 

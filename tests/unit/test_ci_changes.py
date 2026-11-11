@@ -2,7 +2,7 @@
 
 The classifier decides whether a run may skip the test matrix and the
 twice-green job: only when every change since the last green ``ci.yaml``
-tree is ``.secrets.baseline`` or any path under ``.ea/``.
+tree is a path under ``.ea/``.
 Git and the GitHub API are both injected, so no test spawns git or
 touches the network; the two default adapters are exercised through
 patched ``subprocess.run`` / ``urlopen``.
@@ -208,7 +208,6 @@ def _pr_git(mod: ModuleType, *, head_diff: str, base_log: str) -> FakeGit:
 @pytest.mark.parametrize(
     "path",
     [
-        ".secrets.baseline",
         ".ea/a",
         ".ea/state.json",
         ".ea/store/evidence.jsonl",
@@ -219,7 +218,7 @@ def _pr_git(mod: ModuleType, *, head_diff: str, base_log: str) -> FakeGit:
         ".ea/" + "x/" * 200 + "row.jsonl",
     ],
 )
-def test_is_bookkeeping_accepts_the_baseline_and_every_ea_path(mod: ModuleType, path: str) -> None:
+def test_is_bookkeeping_accepts_every_ea_path(mod: ModuleType, path: str) -> None:
     assert mod.is_bookkeeping(path) is True
 
 
@@ -233,6 +232,7 @@ def test_is_bookkeeping_accepts_the_baseline_and_every_ea_path(mod: ModuleType, 
         "ea/state.json",
         "docs/.ea/state.json",
         "./.ea/state.json",
+        ".secrets.baseline",
         ".secrets.baseline.bak",
         "src/eawf/kernel/state/models.py",
         ".github/workflows/ci.yaml",
@@ -245,10 +245,8 @@ def test_is_bookkeeping_rejects_paths_outside_ea(mod: ModuleType, path: str) -> 
 # --- push runs ---------------------------------------------------------------
 
 
-def test_classify_push_secrets_baseline_only_diff_reports_no_code(
-    mod: ModuleType, tmp_path: Path
-) -> None:
-    git = _push_git(mod, _z(".secrets.baseline"))
+def test_classify_push_state_only_diff_reports_no_code(mod: ModuleType, tmp_path: Path) -> None:
+    git = _push_git(mod, _z(".ea/state.json"))
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is False
     assert "only state bookkeeping" in verdict.reason
@@ -256,12 +254,19 @@ def test_classify_push_secrets_baseline_only_diff_reports_no_code(
     assert verdict.green == _GREEN
 
 
+def test_classify_push_secrets_baseline_diff_reports_code(mod: ModuleType, tmp_path: Path) -> None:
+    git = _push_git(mod, _z(".secrets.baseline"))
+    verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
+    assert verdict.code is True
+    assert ".secrets.baseline" in verdict.reason
+
+
 @pytest.mark.parametrize("status", ["A", "M", "D", "T"])
 def test_classify_push_ea_paths_report_no_code_under_every_status(
     mod: ModuleType, tmp_path: Path, status: str
 ) -> None:
     diff = _z(".ea/state.json", ".ea/generations/g/state.json", status=status)
-    git = _push_git(mod, diff + _z(".secrets.baseline"))
+    git = _push_git(mod, diff)
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is False
     assert "only state bookkeeping" in verdict.reason
@@ -339,7 +344,7 @@ def test_classify_push_red_and_foreign_runs_are_no_baseline(
 
 def test_classify_push_uses_the_newest_green_run(mod: ModuleType, tmp_path: Path) -> None:
     runs = _runs(_run(_GREEN), _run(_BASE))
-    git = _push_git(mod, _z(".secrets.baseline"))
+    git = _push_git(mod, _z(".ea/state.json"))
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(runs))
     assert verdict.code is False
     assert git.calls == [_ancestor_key(_GREEN), _diff_key(_GREEN, "HEAD")]
@@ -522,7 +527,7 @@ def test_full_configuration_job_names_the_ci_coverage_job(mod: ModuleType) -> No
 def test_classify_pull_request_state_only_head_and_base_reports_no_code(
     mod: ModuleType, tmp_path: Path
 ) -> None:
-    git = _pr_git(mod, head_diff=_z(".secrets.baseline"), base_log=_z(".secrets.baseline"))
+    git = _pr_git(mod, head_diff=_z(".ea/state.json"), base_log=_z(".ea/store/x.jsonl"))
     verdict = mod.classify(_pr_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is False
     assert "head and base branch" in verdict.reason
@@ -562,7 +567,7 @@ def test_classify_pull_request_base_code_change_reports_code(
 ) -> None:
     git = _pr_git(
         mod,
-        head_diff=_z(".secrets.baseline"),
+        head_diff=_z(".ea/state.json"),
         base_log=_z(".ea/state.json") + _z("src/eawf/app.py", status="A"),
     )
     verdict = mod.classify(_pr_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
@@ -898,7 +903,7 @@ def test_main_appends_code_false_to_github_output(
     env = _push_env(tmp_path)
     output = Path(env["GITHUB_OUTPUT"])
     output.write_text("earlier=1\n", encoding="utf-8")
-    git = _push_git(mod, _z(".secrets.baseline"))
+    git = _push_git(mod, _z(".ea/state.json"))
     assert mod.main(env, git=git, fetch=FakeFetch(_runs(_run(_GREEN)))) == 0
     assert output.read_text(encoding="utf-8") == f"earlier=1\ncode=false\ngreen={_GREEN}\n"
     assert capsys.readouterr().out.startswith("code=false: ")

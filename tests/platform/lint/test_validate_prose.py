@@ -4,18 +4,18 @@ Pins the chokepoint contract (see ``.ea/local/research/2026-05-29-doc-clarity.md
 "Layer 2" + the "Prose coverage DAGs" stability model):
 
 - it AGGREGATES findings from the composed deterministic lints (EAWF013
-  bracket-position, EAWF014 no-manual-wrap, EAWF017 inline-reference) plus any
-  injected Vale rows;
+  bracket-position, EAWF014 no-manual-wrap, EAWF017 inline-reference);
 - **fail-open** (``strict=False``) returns ``ok`` / exit 0 even on a finding;
 - **fail-closed** (``strict=True``) returns not-``ok`` / exit non-zero on a
   finding;
 - a known-bad Markdown is rejected in strict mode and a clean one passes both
   modes;
-- the Vale leg is injected (the chokepoint never shells out), so an absent /
-  empty Vale leg still leaves the deterministic legs blocking in strict mode.
+- the removed Vale leg leaves no ``vale_rows`` parameter behind.
 """
 
 from __future__ import annotations
+
+import pytest
 
 from eawf.platform.lint.validate_prose import (
     COMPOSED_RULES,
@@ -92,7 +92,7 @@ def test_validate_prose_composed_rules_constant_lists_the_deterministic_legs() -
 def test_validate_prose_findings_sorted_by_position() -> None:
     source = "A second line, see https://example.org/x here.\nThe claim holds. [1]\n"
     report = validate_prose(source)
-    linenos = [f.lineno for f in report.findings if f.code != "VALE"]
+    linenos = [f.lineno for f in report.findings]
     assert linenos == sorted(linenos)
 
 
@@ -140,39 +140,15 @@ def test_validate_prose_clean_passes_both_modes() -> None:
         assert report.exit_code == 0
 
 
+def test_validate_prose_rejects_removed_vale_rows_keyword() -> None:
+    with pytest.raises(TypeError):
+        validate_prose(_CLEAN, strict=True, vale_rows=())  # type: ignore[call-arg]
+
+
 def test_validate_prose_empty_source_is_clean() -> None:
     # Boundary: empty input has nothing to flag in either mode.
     assert validate_prose("", strict=True).exit_code == 0
     assert validate_prose("\n\n", strict=True).exit_code == 0
-
-
-# --- Vale leg (injected; chokepoint never shells out) ------------------------
-
-
-def test_validate_prose_folds_injected_vale_rows() -> None:
-    row = "  note.md:3:5: warning Google.Weasel Weasel word"
-    report = validate_prose(_CLEAN, strict=False, vale_rows=(row,))
-    assert report.has_findings
-    assert "VALE" in report.codes()
-
-
-def test_validate_prose_vale_rows_block_in_strict_mode() -> None:
-    row = "  note.md:3:5: warning Google.Weasel Weasel word"
-    report = validate_prose(_CLEAN, strict=True, vale_rows=(row,))
-    assert report.exit_code == 1
-
-
-def test_validate_prose_empty_vale_leg_still_blocks_deterministic_in_strict() -> None:
-    # The fail-open-vale stability property: even with NO vale rows (binary
-    # absent / unsynced styles), a deterministic finding still blocks strict.
-    report = validate_prose(_BAD_EAWF013, strict=True, vale_rows=())
-    assert report.exit_code == 1
-    assert "EAWF013" in report.codes()
-
-
-def test_validate_prose_clean_with_empty_vale_leg_passes_strict() -> None:
-    report = validate_prose(_CLEAN, strict=True, vale_rows=())
-    assert report.exit_code == 0
 
 
 # --- ProseReport / ProseFinding rendering ------------------------------------
@@ -195,8 +171,8 @@ def test_prose_finding_render_with_snippet() -> None:
 
 
 def test_prose_finding_render_without_snippet() -> None:
-    finding = ProseFinding(code="VALE", lineno=0, col_offset=0, reason="weasel word")
-    assert finding.render() == "VALE 0:0 weasel word"
+    finding = ProseFinding(code="EAWF014", lineno=0, col_offset=0, reason="manual wrap")
+    assert finding.render() == "EAWF014 0:0 manual wrap"
 
 
 def test_prose_report_codes_distinct() -> None:

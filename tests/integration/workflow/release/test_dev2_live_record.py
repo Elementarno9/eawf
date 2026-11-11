@@ -27,9 +27,9 @@ pytestmark = pytest.mark.repo_state
 RELEASE_KEY = "REL-0.7.0.dev2"
 STATE_PATH = Path(__file__).resolve().parents[4] / ".ea" / "state.json"
 APPROVED_MANIFEST_DIGEST = "sha256:" + (
-    "3ea0e1250281a90d1840583cbd92c2751fc1c99b9d9f1824e69f740ea9c9e148"  # pragma: allowlist secret
+    "3ea0e1250281a90d1840583cbd92c2751fc1c99b9d9f1824e69f740ea9c9e148"
 )
-PINNED_SOURCE_SHA = "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac"  # pragma: allowlist secret
+PINNED_SOURCE_SHA = "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac"
 OBSERVED_TARGETS = ("github", "npm", "pypi")
 
 

@@ -50,8 +50,9 @@ _BINDING_RE: Final = re.compile(r"^(?:commit:)?(?P<sha>[0-9a-f]{40})$")
 #: What a line quoting a dropped commit says in its place, before the drop's reason.
 DROPPED_LINE: Final = "this line named a commit no published branch carries and is withheld"
 
-#: The member an exact revision binding carries beside the head it binds.
-_EXACT_BINDING_MARK: Final = "contract_digest"
+#: The member every exact revision binding carries beside the head it binds,
+#: a Task's integrated binding included, which may omit its digests.
+_EXACT_BINDING_MARK: Final = "policy_revision"
 
 
 @dataclass(frozen=True, slots=True)

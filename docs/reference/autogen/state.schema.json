@@ -4883,7 +4883,7 @@
         "integrated_binding": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ExactRevisionBinding"
+              "$ref": "#/$defs/TaskIntegratedBinding"
             },
             {
               "type": "null"
@@ -4990,6 +4990,60 @@
         "status"
       ],
       "title": "Task",
+      "type": "object"
+    },
+    "TaskIntegratedBinding": {
+      "additionalProperties": false,
+      "description": "The exact tree a completed Task was integrated on.\n\nThe head, its tree and the contract revision are the proof. The two\ndigests are optional because nothing ever compared them against a\nrecomputation: a stored row that carries them still loads and\nre-serializes unchanged, and a new row leaves them out rather than\nwriting a value no reader checks.",
+      "properties": {
+        "contract_digest": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contract Digest"
+        },
+        "evidence_digest": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Digest"
+        },
+        "head_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Head Sha",
+          "type": "string"
+        },
+        "policy_revision": {
+          "exclusiveMinimum": 0,
+          "title": "Policy Revision",
+          "type": "integer"
+        },
+        "tree_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Tree Sha",
+          "type": "string"
+        }
+      },
+      "required": [
+        "head_sha",
+        "tree_sha",
+        "policy_revision"
+      ],
+      "title": "TaskIntegratedBinding",
       "type": "object"
     },
     "TaskPriority": {

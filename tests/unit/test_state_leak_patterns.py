@@ -7,11 +7,9 @@ file carries no literal the leak lints or detect-secrets would flag.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import pytest
-import yaml
 
 from eawf.observability.logging.state_leak import (
     HOME_PATH_PATTERNS,
@@ -23,8 +21,6 @@ from eawf.observability.logging.state_leak import (
     is_placeholder_path,
     scan_state_leaks,
 )
-
-_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 MACOS_HOME = "/" + "Users" + "/" + "alice"
 WINDOWS_HOME = "C:" + "\\" + "Users" + "\\" + "alice"
@@ -288,15 +284,3 @@ def test_default_allowed_emails_includes_noreply_casefolded() -> None:
 
     assert "noreply@anthropic.com" in allowed
     assert all(email == email.casefold() for email in allowed)
-
-
-def test_pre_commit_config_excludes_only_the_snapshot_document_from_detect_secrets() -> None:
-    config = yaml.safe_load((_REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
-    hooks = [hook for repo in config["repos"] for hook in repo["hooks"]]
-
-    detect_secrets = next(hook for hook in hooks if hook["id"] == "detect-secrets")
-
-    snapshot = "tests/fixtures/epoch1-snapshot"
-    assert re.search(detect_secrets["exclude"], f"{snapshot}/state.json")
-    assert not re.search(detect_secrets["exclude"], f"{snapshot}/store/evidence.jsonl")
-    assert not re.search(detect_secrets["exclude"], ".ea/store/audit.jsonl")

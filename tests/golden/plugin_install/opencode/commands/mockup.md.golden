@@ -15,7 +15,7 @@ Build and compare operator-visible design options.
 - Allowed RPCs: `eawf question answer` (`runtime.question.answer_numbered`), `eawf question open-decision` (`runtime.question.open_decision`). Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
 - Run tools: `ask_operator`. These exist only inside a native Run eawf dispatches; a host session has none of them and uses the `eawf` commands above instead.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
-- Local write root: `.ea/local/mockups` in an eawf-managed repository; outside one, none, unless `--save <path>` names a file.
+- Local write root: `mockups/` in the folder `eawf paths local --kind spikes` prints in an eawf-managed repository; outside one, none, unless `--save <path>` names a file.
 - Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one.
 - Standalone use (degraded): Presents the options with AskUserQuestion; the choice is not filed and no asset file is kept.
 
@@ -30,7 +30,7 @@ Resolve the subject before acting. Name every entity with its identifier and its
 Create two to four genuinely distinct and comparable options for one operator choice.
 
 ```text
-/mockup <surface...> [--question <text>] [--option <text>...] [--count <2..4>] [--format <ascii|html|image>] [--viewport <spec>...] [--state <name>...] [--compare <axis>...] [--output <inline|local>] [--local-root <path-under-.ea/local/mockups>] [--budget <spec>]
+/mockup <surface...> [--question <text>] [--option <text>...] [--count <2..4>] [--format <ascii|html|image>] [--viewport <spec>...] [--state <name>...] [--compare <axis>...] [--output <inline|local>] [--local-root <path-under-spikes/mockups>] [--budget <spec>]
 ```
 
 ## 4. Method
@@ -73,5 +73,5 @@ The report validates against `MockupReport`, and its terminal outcome is exactly
 | `outcome` | one of `"presented"`, `"selected"`, `"needs_operator"`, `"blocked"` | yes | How the invocation ended; the result. |
 | `summary` | string | no | Explanation of the outcome and what supports it; never the result. |
 
-<!-- argument hint: <surface...> [--question <text>] [--option <text>...] [--count <2..4>] [--format <ascii|html|image>] [--viewport <spec>...] [--state <name>...] [--compare <axis>...] [--output <inline|local>] [--local-root <path-under-.ea/local/mockups>] [--budget <spec>] -->
+<!-- argument hint: <surface...> [--question <text>] [--option <text>...] [--count <2..4>] [--format <ascii|html|image>] [--viewport <spec>...] [--state <name>...] [--compare <axis>...] [--output <inline|local>] [--local-root <path-under-spikes/mockups>] [--budget <spec>] -->
 ARGUMENTS: $ARGUMENTS

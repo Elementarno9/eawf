@@ -153,7 +153,7 @@ def test_surf_090_the_exemplars_land_in_the_local_reflection_collection(repo: Pa
 
     row = _row(repo)
 
-    stored = repo / ".ea" / "local" / "reflect" / "2027-02-01-reflect-retyped.json"
+    stored = repo / ".ea" / "local" / "reports" / "reflect" / "2027-02-01-reflect-retyped.json"
     assert str(stored.relative_to(repo)) in row.remediation
     (counted,) = json.loads(stored.read_text(encoding="utf-8"))
     assert counted["exemplar"] == INSTRUCTION

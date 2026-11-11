@@ -29,6 +29,7 @@ from typing import Final, Literal, get_args, get_origin
 
 from pydantic import BaseModel
 
+from eawf.kernel.layout import split_local_scope
 from eawf.kernel.runtime.semantic import SemanticToolId
 from eawf.platform.rules.records import RuleRecord
 from eawf.surfaces.cli.verb_effects import CLI_VERB_EFFECTS
@@ -373,19 +374,27 @@ def _audience_lines(entry: SkillCatalogEntry) -> list[str]:
     return [f"- {REFUSED_AUTHORITY_LINE}", f"- {audience}"]
 
 
+def _write_root(scope: str) -> str:
+    # A page names the command that prints the root, never the path: the
+    # command resolves the main checkout a linked worktree shares.
+    kind, rest = split_local_scope(scope)
+    folder = f"the folder `eawf paths local --kind {kind.value}` prints"
+    return folder if not rest else f"`{rest}/` in {folder}"
+
+
 def _write_root_lines(entry: SkillCatalogEntry) -> list[str]:
     # The local write root, then the closing grant: a page that also runs
     # outside a managed repository closes with what bounds it there.
     scope = entry.effects.local_write_scope
     if entry.standalone == "refused":
-        root = "none." if scope is None else f"`{scope}`; nothing is written outside it."
+        root = "none." if scope is None else f"{_write_root(scope)}; nothing is written outside it."
         return [
             f"- Local write root: {root}",
             "- Executable grants come from the compiled capsule of the enclosing scope alone;"
             " nothing on this page adds or widens a tool, path, RPC, credential or external"
             " effect.",
         ]
-    root = "none." if scope is None else f"`{scope}` {_STANDALONE_WRITE_ROOT_TAIL}"
+    root = "none." if scope is None else f"{_write_root(scope)} {_STANDALONE_WRITE_ROOT_TAIL}"
     return [
         f"- Local write root: {root}",
         f"- {STANDALONE_AUTHORITY_LINE}",

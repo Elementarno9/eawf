@@ -82,10 +82,10 @@ TREE_PATH = f"versions/{VERSION}/plugins/eawf"
 #: The tree digest the manifest freezes, and the one a mismatching
 #: branch exposes instead. Both are the fixtures' literals.
 FROZEN_TREE_DIGEST = "sha256:" + (
-    "8888888888888888888888888888888888888888888888888888888888888888"  # pragma: allowlist secret
+    "8888888888888888888888888888888888888888888888888888888888888888"
 )
 REPUBLISHED_TREE_DIGEST = "sha256:" + (
-    "9999999999999999999999999999999999999999999999999999999999999999"  # pragma: allowlist secret
+    "9999999999999999999999999999999999999999999999999999999999999999"
 )
 
 #: Instant every judgement in this module is stamped with.

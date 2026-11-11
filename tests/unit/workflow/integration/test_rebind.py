@@ -188,3 +188,44 @@ def test_only_commits_rebound_tells_a_rebind_from_any_other_change(
     before: dict[str, Any], after: dict[str, Any], expected: bool
 ) -> None:
     assert only_commits_rebound(before, after) is expected
+
+
+# ---- an exact binding takes its new head's tree --------------------------------
+
+NEW_TREE = "e" * 40
+DIGESTS = {"contract_digest": "sha256:" + "c" * 64, "evidence_digest": "sha256:" + "d" * 64}
+
+
+def _rebound_binding(tmp_path: Path, binding: dict[str, Any]) -> dict[str, Any]:
+    """Rebind a Task row carrying *binding* from ``OLD`` to ``NEW`` and return the binding."""
+    state = tmp_path / "state.json"
+    record = _record(Epoch2Collection.TASK, "EAWF-0042", {"integrated_binding": binding})
+    append_ledger_record(ledger_path(state, Epoch2Collection.TASK), record)
+    squash_map = SquashMap(
+        branch="b", base="c" * 40, source_head=OLD, head=NEW, commits={OLD: NEW}, batches={}
+    )
+    (row,) = plan_rebind(
+        state,
+        squash_map,
+        TASKS,
+        trees={NEW: NEW_TREE},
+        parents={},
+        recorded_at=datetime(2026, 10, 9, tzinfo=UTC),
+    )
+    rebound: dict[str, Any] = row.record.payload["integrated_binding"]
+    return rebound
+
+
+@pytest.mark.parametrize("digests", [{}, DIGESTS], ids=["new-row", "stored-row"])
+def test_a_task_binding_takes_the_tree_of_its_new_head(
+    tmp_path: Path, digests: dict[str, str]
+) -> None:
+    binding = {"head_sha": OLD, "tree_sha": "f" * 40, "policy_revision": 1, **digests}
+
+    assert _rebound_binding(tmp_path, binding) == {**binding, "head_sha": NEW, "tree_sha": NEW_TREE}
+
+
+def test_a_head_and_tree_pair_that_is_no_exact_binding_keeps_its_tree(tmp_path: Path) -> None:
+    binding = {"head_sha": OLD, "tree_sha": "f" * 40}
+
+    assert _rebound_binding(tmp_path, binding) == {"head_sha": NEW, "tree_sha": "f" * 40}

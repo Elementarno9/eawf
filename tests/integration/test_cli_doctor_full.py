@@ -122,6 +122,7 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "stray_daemons",
         "runtime_dir_size",
         "local_size",
+        "local-layout",
         "worktrees",
         "leftovers",
         "hook_health",

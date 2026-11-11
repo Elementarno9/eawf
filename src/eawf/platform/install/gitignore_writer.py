@@ -56,12 +56,9 @@ _LISTED_PATTERNS: tuple[str, ...] = (
     ".ea/generations/gen-*/indexes/",
     ".ea/worktrees/",
     ".ea/indexes/",
-    # Per-wave spec renders: the typed criteria in state.json are the record.
-    ".ea/specs/",
     ".ea/instrument-probe.json",
     ".ea/telemetry.db",
     "*.db",
-    ".ea/state.json.bak.*",
     # The event store is the firehose, not the ledger: it accumulates one row
     # per lifecycle mutation plus the raw stdout of every spawned agent, so it
     # grows without bound and carries free text nobody typed. Tracking it

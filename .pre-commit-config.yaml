@@ -23,68 +23,17 @@ repos:
       - id: debug-statements
 
   - repo: https://github.com/Yelp/detect-secrets
-    # Baseline-hash: 249ccad0cd7523f1 (.secrets.baseline; recompute and bump
-    # this comment when the baseline is edited so the change is re-acknowledged).
     rev: v1.5.0
     hooks:
       - id: detect-secrets
-        args: [--baseline, .secrets.baseline]
-        # Exclude state-bookkeeping files: state.json + store/*.jsonl carry
-        # canonical 40-char hex wave-commit SHAs + URNs that trigger the
-        # Hex-High-Entropy plugin as false positives, and their line offsets
-        # shift on every state mutation — refreshing the baseline per commit
-        # became loop noise.
-        #
-        # The v1 state.json and its stores have left git; the stripped
-        # epoch-1 snapshot the tests pin carries the same SHAs, so its
-        # document is excluded by name and its store slices stay scanned.
-        #
-        # The claude plugin_install golden settings.json carries a blake2b
-        # content hash in __eawf_managed that trips the Hex-High-Entropy plugin
-        # and re-rolls whenever the managed body changes (same loop noise as
-        # state.json). It is deterministic render output with no user secrets,
-        # so it is excluded rather than baselined per regeneration.
-        # The named epoch-1 migration fixtures are slices of state.json taken
-        # at a pinned revision, so they carry the same 40-char wave-commit SHAs
-        # and URN-shaped audit ids the state.json exclusion above already
-        # covers. Baselining them would re-roll every line offset whenever a
-        # slice is widened, which is the loop noise the exclusions exist to
-        # avoid. They are listed one by one rather than as a
-        # tests/fixtures/migration/ prefix: a prefix silently un-scans every
-        # fixture added later, and a fixture is exactly where a hand-pasted
-        # credential would land.
-        #
-        # The migration rehearsal goldens are the same class one step further
-        # on: they record the sha256 manifest, source and approval digests of
-        # each fixture's sealed plan, which is the whole point of pinning them.
-        # Whether a given digest trips the Hex-High-Entropy plugin depends on
-        # the digest's own bytes, so a regenerated golden can start tripping
-        # for a fixture that did not before -- the baseline could never settle.
-        # That is a property of the whole generated class, so this one stays a
-        # pattern, narrowed to the rehearsal directory and its .json renders.
-        #
-        # The live release-observation captures (``*-dev2.json``) are the
-        # same class: public registry bodies recorded to pin the published
-        # artifacts' real sha256 digests. They are trimmed to the fields the
-        # readers read, which test_observe_adapters enforces, so nothing but
-        # names, URLs and digests can land in them.
-        #
-        # The requirement census stamps the git revision it was generated at
-        # and rewrites it on every regeneration, the same unsettleable class;
-        # its titles are scrubbed for paths and addresses by the extractor.
-        #
-        # An epoch-2 generation's document is the successor of state.json and
-        # carries the same commit SHAs and URNs; the generation markers pin a
-        # manifest digest, the rehearsal goldens' class. The generation's
-        # ledgers stay scanned, like the epoch-1 typed stores.
-        #
-        # The ledger-history fixtures are slices of committed ledgers taken at
-        # pinned revisions, so they carry the same commit SHAs; they are listed
-        # one by one like the migration fixtures.
-        #
-        # The duration baseline is generated from a JUnit report and stamps
-        # the commit it measured, a hex revision like the lockfile's hashes.
-        exclude: 'uv\.lock|^tests/duration-baseline\.json$|\.gitignore|^tests/fixtures/epoch1-snapshot/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/cutover-faults/pending-wal/locks/wal/wal-canary-0001\.pending\.json$|^tests/fixtures/migration/epoch1-full/backlog_corpus\.json$|^tests/fixtures/migration/epoch2/complete-manifest\.json$|^tests/fixtures/migration/live-cutover/corpus-pin\.json$|^tests/fixtures/migration/p30-i26-history/provenance\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/document\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/store/audit\.jsonl$|^tests/golden/kernel/migration/rehearsal/[a-z0-9-]+\.json$|^tests/fixtures/release/observations/[a-z_]+-dev2\.json$|^\.ea/requirements\.json$|^\.ea/generations/gen-[0-9a-f]{16}/state\.json$|^\.ea/generations/(EPOCH2_ACTIVE|selected)\.json$|^tests/fixtures/ledger_history/(batch_before|batch_remapped|task_stray)\.jsonl$'
+        # Pattern detectors only; entropy hits here were git SHAs and digests.
+        # Not caught: a base64 blob or a 40-hex value under a key with no
+        # secret keyword, a private-key body without its BEGIN line, and a
+        # SERVICE_TOKEN=<value> line in an env file. Only the hosting
+        # platform's secret scanning and push protection cover them, when the
+        # repository owner enables those; no local hook does.
+        # Baseline entries, one line each: <path>:<line> <detector> <reason>
+        args: [--baseline, .secrets.baseline, --disable-plugin, HexHighEntropyString, --disable-plugin, Base64HighEntropyString]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.0.0
@@ -255,7 +204,7 @@ repos:
         # bullet list, over-long single bullet) and .py docstrings (over-long
         # leading paragraph, wrapped lines joined). Non-blocking (advisory-first
         # per the doc-clarity rollout): a finding warns and exits 0. Catches
-        # Vale's block-structure blind spot; thresholds are tighten-only under
+        # block-structure smells; thresholds are tighten-only under
         # [tool.eawf.lint.eawf018].
         files: '\.(md|py)$'
         pass_filenames: false
@@ -285,31 +234,16 @@ repos:
         files: '\.json$'
         pass_filenames: false
         stages: [pre-commit]
-      - id: vale-prose
-        name: vale-prose
-        entry: uv run eawf hook vale-prose
-        language: system
-        # Vale prose linter (Google package + custom eawf style) over the
-        # staged .md delta. Non-blocking (advisory-first per the doc-clarity
-        # rollout) and fails open when the `vale` binary is absent, so a
-        # machine without Vale installed still commits. CI installs vale +
-        # runs `vale sync` to fetch the Google package; locally it is a skip.
-        files: '\.md$'
-        pass_filenames: false
-        stages: [pre-commit]
-        verbose: true
       - id: validate-prose
         name: validate-prose
         entry: uv run eawf hook validate-prose
         language: system
         # The Layer-2 prose chokepoint: composes EAWF013 (bracket position),
-        # EAWF014 (no-manual-wrap), EAWF017 (inline-reference tabulation), and
-        # the Vale wrapper over the staged .md delta. Fail-OPEN locally (no
-        # --strict): findings are advisory and the gate exits 0, so the operator
-        # is never blocked at commit time. The strict, blocking pass is the CI
-        # `validate-prose (strict)` job, which passes --strict. The Vale leg
-        # fails open when the binary is absent; the deterministic legs run
-        # regardless.
+        # EAWF014 (no-manual-wrap) and EAWF017 (inline-reference tabulation)
+        # over the staged .md delta. Fail-OPEN locally (no --strict): findings
+        # are advisory and the gate exits 0, so the operator is never blocked
+        # at commit time. tests/lint/test_prose_gate_clean.py runs the strict
+        # pass over the branch delta.
         files: '\.md$'
         pass_filenames: false
         stages: [pre-commit]

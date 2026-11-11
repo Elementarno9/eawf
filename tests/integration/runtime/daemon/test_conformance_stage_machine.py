@@ -41,7 +41,7 @@ from eawf.kernel.runtime.compiled import (
 from eawf.kernel.runtime.provider import AgentProviderProfile, AuthorityGrant
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.paths import store_path
+from eawf.kernel.store.paths import local_store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.conformance import (
@@ -255,7 +255,7 @@ def call(handler: Any, ctx: MethodContext, request: Any) -> dict[str, Any]:
 
 def journal_rows(state_path: Path) -> list[Envelope]:
     """Return every envelope in the tree's conformance journal."""
-    path = store_path(state_path, StoreKind.CONFORMANCE_STAGE)
+    path = local_store_path(state_path, StoreKind.CONFORMANCE_STAGE)
     if not path.exists():
         return []
     return [
@@ -305,7 +305,7 @@ def test_certify_cites_exactly_the_stages_that_earned_it(ctx: MethodContext) -> 
 def test_stage_records_are_append_only(ctx: MethodContext, state_path: Path) -> None:
     """A later stage adds bytes and rewrites none of the earlier ones."""
     walk_to_canary(ctx)
-    path = store_path(state_path, StoreKind.CONFORMANCE_STAGE)
+    path = local_store_path(state_path, StoreKind.CONFORMANCE_STAGE)
     before = path.read_bytes()
 
     call(certify, ctx, certification_request())

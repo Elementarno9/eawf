@@ -324,7 +324,7 @@ def test_containment_call_outcome_refuses_an_unknown_field() -> None:
                 "attempt": ContainmentAttempt.HOST_PROCESS_METADATA,
                 "denied": True,
                 "denial_reason": DenialReason.SCOPE_ESCAPE,
-                "observed_value": "token-abc",  # pragma: allowlist secret
+                "observed_value": "token-abc",
             }
         )
 

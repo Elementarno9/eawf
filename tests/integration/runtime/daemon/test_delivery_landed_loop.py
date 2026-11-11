@@ -278,9 +278,12 @@ def test_landed_work_walks_to_an_accepted_milestone_through_the_cli(
     eawf(root, "task", "complete", TASK_URN, "--expected-task-revision", "2",
          "--idempotency-key", "complete-1", "--actor", ACTOR,
          "--integrated-commit", head, "--assessment", str(out))  # fmt: skip
-    binding = stored(canary, Epoch2Collection.TASK, "EAWF-0042")["integrated_binding"]
-    assert binding == assessed["integrated_binding"]
-    assert binding["head_sha"] == head
+    integrated = stored(canary, Epoch2Collection.TASK, "EAWF-0042")["integrated_binding"]
+    binding = assessed["integrated_binding"]
+    assert integrated == {
+        name: binding[name] for name in ("head_sha", "tree_sha", "policy_revision")
+    }
+    assert integrated["head_sha"] == head
     finished = {"observations": ["run_report_bound"], "updates": {"ended_at": AT.isoformat()}}
     finish = spec(tmp_path, "finish.json", finished)
     eawf(root, "run", "finish", RUN_URN, "--expected-run-revision", "1",

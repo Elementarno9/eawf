@@ -893,8 +893,7 @@ _HEAVY_JOBS: dict[str, str] = {
 }
 
 #: Jobs that run whatever the classifier says: the combined small gates run
-#: the detect-secrets hook over .secrets.baseline, a path the classifier
-#: counts as bookkeeping.
+#: the hooks over the .ea/ paths the classifier counts as bookkeeping.
 _CHEAP_JOBS = ("gates",)
 
 

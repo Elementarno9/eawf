@@ -796,7 +796,7 @@ def service_status_cmd(ctx: typer.Context) -> None:
     registration AND an active PID) and folds in the two daemon-service
     advisories the doctor surface also carries: the launchd/systemd agent
     health (loaded / plist-vs-binary drift / a rival daemon) and the
-    runtime-dir + ``.ea`` backup footprint that ``eawf daemon reclaim`` trims.
+    runtime-dir footprint that ``eawf daemon reclaim`` trims.
     """
     from eawf.observability.doctor.checks import (
         check_launchd_agent,
@@ -807,7 +807,7 @@ def service_status_cmd(ctx: typer.Context) -> None:
     flags: GlobalFlags = ctx.obj
     status = service_status()
     agent_row = check_launchd_agent()
-    size_row = check_runtime_dir_size(workspace=flags.workspace)
+    size_row = check_runtime_dir_size()
     payload = {
         "platform": sys.platform,
         "status": status.value,

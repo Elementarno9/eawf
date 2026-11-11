@@ -32,6 +32,7 @@ from eawf.observability.doctor import daemon_checks
 from eawf.observability.doctor.checks_authority import check_authority_epoch
 from eawf.observability.doctor.checks_gitignore import check_gitignore_block
 from eawf.observability.doctor.checks_hooks import check_hook_health
+from eawf.observability.doctor.checks_local_layout import check_local_layout
 from eawf.observability.doctor.checks_local_size import check_local_size
 from eawf.observability.doctor.checks_plugin_version import check_plugin_version
 from eawf.observability.doctor.checks_sequence import check_canonical_sequence_drift
@@ -680,11 +681,9 @@ def check_cli_daemon_version(
 
 # ``eawf daemon reclaim`` trims runtime-dir bloat; doctor warns once the
 # runtime dir (WAL records plus the never-auto-GC'd ``eawfd.log``) crosses this
-# size, or the ``.ea/`` migration backups pile up past this count, so the
-# operator knows to run it. Both are advisory (``warn`` only, never ``fail``)
-# -- disk pressure is a capacity signal, not a broken install.
+# size, so the operator knows to run it. Advisory (``warn`` only, never
+# ``fail``) -- disk pressure is a capacity signal, not a broken install.
 RUNTIME_DIR_WARN_BYTES = 100 * 1024 * 1024
-STATE_BACKUP_WARN_COUNT = 10
 
 
 def check_launchd_agent(
@@ -761,67 +760,35 @@ def _dir_size_bytes(path: Path) -> int:
     return total
 
 
-def _state_backup_census(workspace: Path | None) -> tuple[int, int]:
-    """Return ``(count, total_bytes)`` of ``.ea/state.json.bak.*`` backups."""
-    anchor = _resolve_anchor(workspace)
-    if anchor is None:
-        return 0, 0
-    backups = list((anchor / ".ea").glob("state.json.bak.*"))
-    total = 0
-    for path in backups:
-        try:
-            total += path.stat().st_size
-        except OSError:
-            continue
-    return len(backups), total
+def check_runtime_dir_size() -> CheckResult:
+    """Advise when the daemon runtime dir grows large.
 
+    The daemon runtime directory (``~/.eawfd`` -- WAL records plus the
+    never-auto-GC'd ``eawfd.log``) is the disk-pressure source a long-lived
+    install accumulates and ``eawf daemon reclaim`` trims.
 
-def check_runtime_dir_size(*, workspace: Path | None) -> CheckResult:
-    """Advise when the daemon runtime dir or the .ea backup census grows large.
-
-    Covers two disk-pressure sources a long-lived install accumulates and
-    ``eawf daemon reclaim`` trims: the daemon runtime directory (``~/.eawfd``
-    -- WAL records plus the never-auto-GC'd ``eawfd.log``) and the
-    ``.ea/state.json.bak.*`` migration backups (each schema bump writes one,
-    and they are gitignored, so they never leave the working tree on their
-    own).
-
-    Returns ``warn`` -- never ``fail`` -- when the runtime dir crosses
-    :data:`RUNTIME_DIR_WARN_BYTES` or the backup count reaches
-    :data:`STATE_BACKUP_WARN_COUNT`, pointing the operator at
-    ``eawf daemon reclaim``; ``ok`` otherwise.
-
-    Args:
-        workspace: Workspace anchor for the ``.ea`` backup census; ``None``
-            defers to the pwd-upward ``.ea/`` walk.
+    Returns:
+        ``warn`` -- never ``fail`` -- when the runtime dir crosses
+        :data:`RUNTIME_DIR_WARN_BYTES`, pointing the operator at
+        ``eawf daemon reclaim``; ``ok`` otherwise.
     """
     from eawf.runtime.daemon.runtime_dir import runtime_dir
 
     name = "runtime_dir_size"
     rt_dir = runtime_dir()
     rt_bytes = _dir_size_bytes(rt_dir)
-    backup_count, backup_bytes = _state_backup_census(workspace)
     rt_mib = rt_bytes / (1024 * 1024)
-    backup_mib = backup_bytes / (1024 * 1024)
-    issues: list[str] = []
     if rt_bytes >= RUNTIME_DIR_WARN_BYTES:
         ceiling_mib = RUNTIME_DIR_WARN_BYTES // (1024 * 1024)
-        issues.append(f"runtime dir {rt_dir} is {rt_mib:.1f} MiB (>= {ceiling_mib} MiB)")
-    if backup_count >= STATE_BACKUP_WARN_COUNT:
-        issues.append(f"{backup_count} state.json.bak.* backups ({backup_mib:.1f} MiB)")
-    if issues:
         return CheckResult(
             name=name,
             status="warn",
-            detail="; ".join(issues) + "; run `eawf daemon reclaim`",
+            detail=(
+                f"runtime dir {rt_dir} is {rt_mib:.1f} MiB (>= {ceiling_mib} MiB);"
+                " run `eawf daemon reclaim`"
+            ),
         )
-    return CheckResult(
-        name=name,
-        status="ok",
-        detail=(
-            f"runtime dir {rt_mib:.1f} MiB; {backup_count} state backup(s) {backup_mib:.1f} MiB"
-        ),
-    )
+    return CheckResult(name=name, status="ok", detail=f"runtime dir {rt_mib:.1f} MiB")
 
 
 def check_render_output_roundtrip() -> CheckResult:
@@ -973,8 +940,9 @@ def run_all(
         *run_runtime_tuple_health_checks(workspace=anchor),
         check_launchd_agent(),
         check_stray_daemons(),
-        check_runtime_dir_size(workspace=anchor),
+        check_runtime_dir_size(),
         check_local_size(workspace=anchor),
+        *check_local_layout(workspace=anchor),
         check_worktrees(workspace=anchor),
         check_leftovers(workspace=anchor),
         check_hook_health(workspace=anchor),

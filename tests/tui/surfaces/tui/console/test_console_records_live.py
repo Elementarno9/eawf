@@ -52,7 +52,7 @@ from tests.tui.surfaces.tui.console.test_transcript_live import (
 __all__ = ["live_tree"]
 
 #: The runtime tuple the conformance journal holds a failed certify for.
-TUPLE_DIGEST: Final = "sha256:" + "ab12cd34ef56" * 5 + "abcd"  # pragma: allowlist secret
+TUPLE_DIGEST: Final = "sha256:" + "ab12cd34ef56" * 5 + "abcd"
 
 #: When the stage ran.
 AT: Final = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)

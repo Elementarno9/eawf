@@ -317,8 +317,9 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "eawfd"))
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 22
+    assert len(results) == 23
     assert {r.name for r in results} == {
+        "local-layout",
         "branch_currency",
         "tools_available",
         "state_present",
@@ -658,38 +659,16 @@ def test_check_launchd_agent_default_detector_never_shells_on_none(
 # ---- P30-I23-W15: runtime-dir-size doctor row ------------------------------
 
 
-def _seed_backups(ea_dir: Path, count: int) -> None:
-    """Write *count* ``state.json.bak.*`` files under *ea_dir*."""
-    ea_dir.mkdir(parents=True, exist_ok=True)
-    for index in range(count):
-        (ea_dir / f"state.json.bak.v1.{index}.v1.{index + 1}").write_bytes(b"{}\n")
-
-
 def test_check_runtime_dir_size_small_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A small runtime dir and no backups report ``ok`` with both figures."""
+    """A small runtime dir reports ``ok`` with its size."""
     runtime = tmp_path / "eawfd"
     runtime.mkdir()
     (runtime / "eawfd.log").write_bytes(b"small\n")
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(runtime))
-    (tmp_path / ".ea").mkdir()
-    result = checks.check_runtime_dir_size(workspace=tmp_path)
+    result = checks.check_runtime_dir_size()
     assert result.status == "ok"
     assert result.name == "runtime_dir_size"
-    assert "state backup(s)" in (result.detail or "")
-
-
-def test_check_runtime_dir_size_backup_census_warns(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A pile of ``.ea/state.json.bak.*`` backups flips the row to ``warn``."""
-    runtime = tmp_path / "eawfd"
-    runtime.mkdir()
-    monkeypatch.setenv("EAWF_RUNTIME_DIR", str(runtime))
-    _seed_backups(tmp_path / ".ea", checks.STATE_BACKUP_WARN_COUNT)
-    result = checks.check_runtime_dir_size(workspace=tmp_path)
-    assert result.status == "warn"
-    assert "state.json.bak.* backups" in (result.detail or "")
-    assert "eawf daemon reclaim" in (result.detail or "")
+    assert result.detail == "runtime dir 0.0 MiB"
 
 
 def test_check_runtime_dir_size_large_runtime_dir_warns(
@@ -705,20 +684,15 @@ def test_check_runtime_dir_size_large_runtime_dir_warns(
     (runtime / "eawfd.log").write_bytes(b"x" * 4096)
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(runtime))
     monkeypatch.setattr(checks, "RUNTIME_DIR_WARN_BYTES", 1024)
-    (tmp_path / ".ea").mkdir()
-    result = checks.check_runtime_dir_size(workspace=tmp_path)
+    result = checks.check_runtime_dir_size()
     assert result.status == "warn"
     assert "runtime dir" in (result.detail or "")
 
 
-def test_check_runtime_dir_size_no_anchor_ok(
+def test_check_runtime_dir_size_absent_dir_ok(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """No ``.ea`` anchor means the backup census is empty (still ``ok``)."""
+    """An absent runtime dir measures zero bytes (still ``ok``)."""
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "nonexistent-eawfd"))
-    # Resolve from a tree with no ``.ea/`` ancestor so the pwd-upward walk
-    # finds no anchor (and never censuses the repo's own backups).
-    monkeypatch.chdir(tmp_path)
-    result = checks.check_runtime_dir_size(workspace=None)
-    assert result.status == "ok"
-    assert "0 state backup(s)" in (result.detail or "")
+    result = checks.check_runtime_dir_size()
+    assert (result.status, result.detail) == ("ok", "runtime dir 0.0 MiB")

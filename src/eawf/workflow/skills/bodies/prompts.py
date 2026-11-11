@@ -657,9 +657,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             "Declare RELEASED only after every required target is independently observed with"
             " matching digests. Return operation references immediately.",
             "Once observe reports `released`, run `eawf reflect run` without naming an output"
-            " path, so the report lands in the local reflect collection under"
-            " `.ea/local/reflect`; it writes nothing canonical. Cite the report path it prints"
-            " in your report.",
+            " path, so the report lands in the local reflect collection, `reflect/` in the"
+            " folder `eawf paths local --kind reports` prints; it writes nothing canonical."
+            " Cite the report path it prints in your report.",
         ),
         constraints=(
             "Stop on stale source, dirty or non-ancestor tree, version/channel mismatch, missing"
@@ -709,8 +709,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " more than the rounds allow is recommended as a Campaign, which the operator plans"
             " with `eawf campaign new` (`runtime.campaign.start`) and the daemon drives step by"
             " step with `eawf campaign run` (`runtime.campaign.run`).",
-            "Write the brief. In an eawf-managed repository, write it to the `--save` path under"
-            " `.ea/local/research/`, by default `<date>-<slug>.md` there. Outside one, write no"
+            "Write the brief. In an eawf-managed repository, write it to the `--save` path, by"
+            " default the file `eawf paths local --kind research --slug <slug>` prints. Outside"
+            " one, write no"
             " file and return the brief in the conversation, unless `--save <path>` names a file."
             f" Either way: an H1 title, then exactly the sections {_BRIEF_HEADINGS} in that order."
             " References is a numbered table with the columns `#` and `Reference`, one"
@@ -746,7 +747,8 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " local spike folder that holds the proof of concept."
         ),
         method=(
-            "Allocate `.ea/local/spikes/<date>-<slug>/` or the validated resume folder. Never"
+            "Allocate `<date>-<slug>/` in the folder `eawf paths local --kind spikes` prints, or"
+            " the validated resume folder. Never"
             " write canonical stores, tracked product paths, or another local root.",
             "Before coding, write `spike.yaml` with question, hypothesis, observable confirm and"
             " reject conditions, inputs, exclusions, safety/network policy, and hard budget.",

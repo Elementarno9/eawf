@@ -96,7 +96,7 @@ _CRED_DENY_DIRS: tuple[str, ...] = (
 #: Linux/Windows the claude subscription credential is an on-disk file; on
 #: macOS it lives in the encrypted Keychain instead (handled separately in
 #: the seatbelt profile, see ``_KEYCHAIN_READ_SUBPATHS``).
-_CLAUDE_OWN_CRED: str = ".claude/.credentials.json"  # pragma: allowlist secret
+_CLAUDE_OWN_CRED: str = ".claude/.credentials.json"
 
 #: macOS Keychain read subpaths the seatbelt profile permits so the claude
 #: subscription credential (Keychain item ``claude-code``) is reachable

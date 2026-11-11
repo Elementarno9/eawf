@@ -59,7 +59,7 @@ REPOSITORY_URN: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/repository/REP-EAWF"
 DAEMON_RUN_KEY: Final = "RUN-00000010"
 AGENT_ID: Final = "a0a45f67519cb14dd"
 #: A message carrying a home-path shape, which the bridge must withhold.
-LEAKY_TEXT: Final = "read /Users/someone/.ssh/config first"  # pragma: allowlist secret
+LEAKY_TEXT: Final = "read /Users/someone/.ssh/config first"  # eawf: allow-leak
 HOST_SESSION: Final = "30f683b4-388a-4c04-89f4-612b7fe60362"
 
 

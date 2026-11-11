@@ -50,13 +50,13 @@ ACTOR = "OP-0001"
 #: fixtures that prove the write-time gate sees the same shapes.
 LEAKS = [
     pytest.param(
-        "/Users/mallory/work/notes.md",  # pragma: allowlist secret
+        "/Users/mallory/work/notes.md",  # eawf: allow-leak
         "home_path",
         id="home-path",
     ),
     pytest.param("ghp_" + "a" * 36, "token", id="github-token"),
     pytest.param(
-        "mallory@leaky-corp.com",  # pragma: allowlist secret
+        "mallory@leaky-corp.com",  # eawf: allow-leak
         "email",
         id="email",
     ),
@@ -169,7 +169,7 @@ def test_text_already_in_the_document_is_not_re_flagged(
     """The scrub diffs the write; a leak that predates it is somebody else's."""
     path = document_path(canary)
     document = read_document(path)
-    older = "/Users/mallory/older/leak.md"  # pragma: allowlist secret
+    older = "/Users/mallory/older/leak.md"  # eawf: allow-leak
     document["legacy"] = {"LEG-0001": {"note": older}}
     write_document(path, document)
 

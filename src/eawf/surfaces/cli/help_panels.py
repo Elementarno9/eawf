@@ -104,6 +104,7 @@ COMMAND_PANELS: dict[str, str] = {
     "doc": "audit",
     "doctor": "audit",
     "local": "audit",
+    "paths": "audit",
     "schema": "audit",
     "snapshot": "audit",
     "validate": "audit",

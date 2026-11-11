@@ -703,9 +703,7 @@ def test_host_fact_reads_holds_each_projection_to_the_cap_on_its_own(repo: Path)
 _CLAUDE_EVIDENCE = (
     ".ea/artifacts/evidence/2026-10-24-rc3-claude-host-facts/claude-project-document-cap.json"
 )
-_CLAUDE_EVIDENCE_DIGEST = (
-    "beaf5db81685ba0fc6bef8eed25b5abf26b271d73be0309fbbe5383760501ca2"  # pragma: allowlist secret
-)
+_CLAUDE_EVIDENCE_DIGEST = "beaf5db81685ba0fc6bef8eed25b5abf26b271d73be0309fbbe5383760501ca2"
 
 
 def _uncapped(runtime: str) -> dict[str, Any]:

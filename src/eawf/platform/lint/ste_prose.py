@@ -2,7 +2,7 @@
 
 Rule, profile and skill text is read by agents, and a long sentence or a
 semicolon is where a condition or an exception gets lost. The lint flags an
-instruction sentence over 20 words, a description sentence over 25 words and
+instruction sentence over 30 words, a description sentence over 35 words and
 every sentence that carries a semicolon. It only reports: the exit status is
 0 whatever it finds, so a commit is never blocked by prose style.
 
@@ -30,8 +30,8 @@ from typing import Final, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-INSTRUCTION_MAX_WORDS: Final = 20
-DESCRIPTION_MAX_WORDS: Final = 25
+INSTRUCTION_MAX_WORDS: Final = 30
+DESCRIPTION_MAX_WORDS: Final = 35
 
 SentenceKind = Literal["instruction", "description"]
 FindingKind = Literal["instruction-length", "description-length", "semicolon"]

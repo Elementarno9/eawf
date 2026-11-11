@@ -45,7 +45,7 @@ from eawf.kernel.state.epoch2.base import (
 from eawf.kernel.state.epoch2.run import WriteSetPath
 from eawf.kernel.state.epoch2.task_status import TERMINAL_TASK_STATUSES, TaskStatus
 from eawf.kernel.state.epoch2.urns import BatchUrn, DueScopeUrn, RunUrn, TaskUrn
-from eawf.kernel.state.epoch2.values import Epoch2Record, ExactRevisionBinding
+from eawf.kernel.state.epoch2.values import Epoch2Record, TaskIntegratedBinding
 from eawf.kernel.state.types import UtcDatetime
 
 
@@ -158,7 +158,7 @@ class Task(Epoch2Record):
     criteria: tuple[CriterionSpec, ...] = ()
     status: TaskStatus
     active_run_ref: RunUrn | None = None
-    integrated_binding: ExactRevisionBinding | None = None
+    integrated_binding: TaskIntegratedBinding | None = None
     # The graph fields are omitted from the dump while unset, so a record
     # written before they existed reads and re-serializes byte for byte.
     depends_on: tuple[TaskUrn, ...] = Field(default=(), exclude_if=lambda value: not value)

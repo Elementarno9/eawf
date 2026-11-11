@@ -283,15 +283,13 @@ def test_configure_logging_file_handler_scrubs_seeded_leak(
     daemon_main._configure_logging(foreground=False)
 
     log = logging.getLogger("eawf.test.daemon.leak")
-    leak_line = (
-        "error_detail session_log_path=/Users/operator/.ea/state.json"  # pragma: allowlist secret
-    )
+    leak_line = "error_detail session_log_path=/Users/operator/.ea/state.json"  # eawf: allow-leak
     log.info(leak_line)
     for handler in logging.getLogger().handlers:
         handler.flush()
 
     written = log_file.read_text(encoding="utf-8")
-    assert "/Users/" not in written  # pragma: allowlist secret
+    assert "/Users/" not in written  # eawf: allow-leak
     assert REDACTION in written
 
 

@@ -141,9 +141,7 @@ REPORT_PARTS: Final[Mapping[ReportPartName, str]] = MappingProxyType(
         ReportPartName.USAGE_AND_COST: "what the Run's captured runtime states, one counter "
         "per line",
         ReportPartName.TRANSCRIPT: "what the runner said, one line per event, scrubbed",
-        ReportPartName.SECRETS: (  # pragma: allowlist secret
-            "policy redacts these; no report of any Run can carry them"
-        ),
+        ReportPartName.SECRETS: ("policy redacts these; no report of any Run can carry them"),
         ReportPartName.SANDBOX_DECISIONS: "left out unless --parts names it; every "
         "authorisation the gateway decided for the Run's calls, allowed and denied",
     }

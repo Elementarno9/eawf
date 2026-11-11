@@ -50,7 +50,7 @@ def test_a_long_line_is_cut_and_the_character_budget_stops_the_rest() -> None:
 
 
 def test_a_line_carrying_a_home_path_is_withheld_whole() -> None:
-    bounded = bound_content("ok\nwrote /Users/jdoe/project/keys\ndone")  # pragma: allowlist secret
+    bounded = bound_content("ok\nwrote /Users/jdoe/project/keys\ndone")  # eawf: allow-leak
     assert bounded.lines == ("ok", WITHHELD_LINE, "done")
     assert bounded.withheld_lines == 1
     assert "jdoe" not in "".join(bounded.lines)

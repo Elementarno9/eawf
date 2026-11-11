@@ -73,12 +73,8 @@ _EARLIER_PROFILES = (
 #: The digests of those rungs' configurations and binding tables as they
 #: stood before the stable rung was added, so adding it cannot move a
 #: document an earlier cut bound.
-_EARLIER_CONFIGS_DIGEST = (
-    "8b20b65e4f1c33ccc12b4e4d40d68b5a6d9647357a833d1fc5e352f7f62e21e4"  # pragma: allowlist secret
-)
-_EARLIER_BINDINGS_DIGEST = (
-    "4ae7c2d53a3cf635ba204218ba3e60dcd65b4153cb6990fa6f88163eef10ccd7"  # pragma: allowlist secret
-)
+_EARLIER_CONFIGS_DIGEST = "8b20b65e4f1c33ccc12b4e4d40d68b5a6d9647357a833d1fc5e352f7f62e21e4"
+_EARLIER_BINDINGS_DIGEST = "4ae7c2d53a3cf635ba204218ba3e60dcd65b4153cb6990fa6f88163eef10ccd7"
 
 
 def _stable() -> ReleaseConfig:

@@ -5,11 +5,8 @@ Pins the CLI dispatcher around the ``validate_prose`` Layer-2 chokepoint (see
 
 - **fail-open** (no ``--strict``) — a known-bad ``.md`` emits findings but the
   gate exits 0 (advisory, never blocks the local commit);
-- **fail-closed** (``--strict``) — the same known-bad ``.md`` exits 1
-  (blocks the PR);
+- **fail-closed** (``--strict``) — the same known-bad ``.md`` exits 1;
 - a clean ``.md`` passes both modes (exit 0);
-- the Vale leg fails open: with ``vale`` monkeypatched absent, ``--strict``
-  still blocks on a deterministic EAWF013/014/017 finding;
 - a non-``.md`` arg is a clean no-op; the subcommand registers on ``eawf hook``.
 - a byte-pinned fixture under ``tests/golden/`` is skipped even with a manual
   wrap, while the same wrap in authored Markdown outside that tree still
@@ -28,8 +25,7 @@ from eawf.surfaces.cli.app import app
 runner = CliRunner()
 
 
-# A known-bad markdown: a bare inline URL trips EAWF017. Deterministic — does
-# not depend on whether Vale is installed.
+# A known-bad markdown: a bare inline URL trips EAWF017.
 _BAD_MD = "Fixed the jitter, see https://example.org/jitter for the trace.\n"
 
 # A clean markdown: refs live in a ## References table, no bare URL, no wrap.
@@ -46,16 +42,10 @@ _CLEAN_MD = (
 _WRAPPED_MD = "A paragraph was manually wrapped\nacross two physical lines.\n"
 
 
-def _absent_vale(monkeypatch) -> None:
-    """Force the Vale leg to fail open (binary absent) for a deterministic run."""
-    monkeypatch.setattr("shutil.which", lambda _name: None)
-
-
 # --- fail-open (local) -------------------------------------------------------
 
 
-def test_validate_prose_fail_open_exit_0_on_finding(tmp_path, monkeypatch) -> None:
-    _absent_vale(monkeypatch)
+def test_validate_prose_fail_open_exit_0_on_finding(tmp_path) -> None:
     bad = tmp_path / "bad.md"
     bad.write_text(_BAD_MD, encoding="utf-8")
     result = runner.invoke(app, ["hook", "validate-prose", str(bad)])
@@ -64,8 +54,7 @@ def test_validate_prose_fail_open_exit_0_on_finding(tmp_path, monkeypatch) -> No
     assert "EAWF017" in result.stdout
 
 
-def test_validate_prose_fail_open_json_reports_non_blocking(tmp_path, monkeypatch) -> None:
-    _absent_vale(monkeypatch)
+def test_validate_prose_fail_open_json_reports_non_blocking(tmp_path) -> None:
     bad = tmp_path / "bad.md"
     bad.write_text(_BAD_MD, encoding="utf-8")
     result = runner.invoke(app, ["--json", "hook", "validate-prose", str(bad)])
@@ -76,11 +65,10 @@ def test_validate_prose_fail_open_json_reports_non_blocking(tmp_path, monkeypatc
     assert payload["violations"] >= 1
 
 
-# --- fail-closed (strict / CI) -----------------------------------------------
+# --- fail-closed (strict) ----------------------------------------------------
 
 
-def test_validate_prose_strict_exit_1_on_finding(tmp_path, monkeypatch) -> None:
-    _absent_vale(monkeypatch)
+def test_validate_prose_strict_exit_1_on_finding(tmp_path) -> None:
     bad = tmp_path / "bad.md"
     bad.write_text(_BAD_MD, encoding="utf-8")
     result = runner.invoke(app, ["hook", "validate-prose", "--strict", str(bad)])
@@ -88,8 +76,7 @@ def test_validate_prose_strict_exit_1_on_finding(tmp_path, monkeypatch) -> None:
     assert "EAWF017" in result.stdout
 
 
-def test_validate_prose_strict_json_reports_blocking(tmp_path, monkeypatch) -> None:
-    _absent_vale(monkeypatch)
+def test_validate_prose_strict_json_reports_blocking(tmp_path) -> None:
     bad = tmp_path / "bad.md"
     bad.write_text(_BAD_MD, encoding="utf-8")
     result = runner.invoke(app, ["--json", "hook", "validate-prose", "--strict", str(bad)])
@@ -99,21 +86,10 @@ def test_validate_prose_strict_json_reports_blocking(tmp_path, monkeypatch) -> N
     assert payload["clean"] is False
 
 
-def test_validate_prose_strict_blocks_even_when_vale_absent(tmp_path, monkeypatch) -> None:
-    # The stability property: the Vale leg fails open (binary absent) but the
-    # deterministic EAWF017 leg still blocks the strict gate.
-    _absent_vale(monkeypatch)
-    bad = tmp_path / "bad.md"
-    bad.write_text(_BAD_MD, encoding="utf-8")
-    result = runner.invoke(app, ["hook", "validate-prose", "--strict", str(bad)])
-    assert result.exit_code == 1, result.stdout
-
-
 # --- clean passes both modes -------------------------------------------------
 
 
-def test_validate_prose_clean_passes_fail_open(tmp_path, monkeypatch) -> None:
-    _absent_vale(monkeypatch)
+def test_validate_prose_clean_passes_fail_open(tmp_path) -> None:
     good = tmp_path / "good.md"
     good.write_text(_CLEAN_MD, encoding="utf-8")
     result = runner.invoke(app, ["hook", "validate-prose", str(good)])
@@ -121,8 +97,7 @@ def test_validate_prose_clean_passes_fail_open(tmp_path, monkeypatch) -> None:
     assert "clean" in result.stdout.lower()
 
 
-def test_validate_prose_clean_passes_strict(tmp_path, monkeypatch) -> None:
-    _absent_vale(monkeypatch)
+def test_validate_prose_clean_passes_strict(tmp_path) -> None:
     good = tmp_path / "good.md"
     good.write_text(_CLEAN_MD, encoding="utf-8")
     result = runner.invoke(app, ["hook", "validate-prose", "--strict", str(good)])
@@ -133,9 +108,8 @@ def test_validate_prose_clean_passes_strict(tmp_path, monkeypatch) -> None:
 # --- generated golden-fixture exemption --------------------------------------
 
 
-def test_validate_prose_strict_skips_generated_golden_fixture(tmp_path, monkeypatch) -> None:
+def test_validate_prose_strict_skips_generated_golden_fixture(tmp_path) -> None:
     """A byte-pinned fixture under ``tests/golden/`` is exempt even when wrapped."""
-    _absent_vale(monkeypatch)
     rel = "tests/golden/subagent_spec/full_wave.md"
     target = tmp_path / rel
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -144,11 +118,8 @@ def test_validate_prose_strict_skips_generated_golden_fixture(tmp_path, monkeypa
     assert result.exit_code == 0, result.stdout
 
 
-def test_validate_prose_strict_still_blocks_authored_md_outside_golden(
-    tmp_path, monkeypatch
-) -> None:
+def test_validate_prose_strict_still_blocks_authored_md_outside_golden(tmp_path) -> None:
     """The falsifier: the same wrap outside ``tests/golden/`` still reds."""
-    _absent_vale(monkeypatch)
     rel = "docs/note.md"
     target = tmp_path / rel
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -161,8 +132,7 @@ def test_validate_prose_strict_still_blocks_authored_md_outside_golden(
 # --- surface scoping + registration ------------------------------------------
 
 
-def test_validate_prose_ignores_non_markdown_arg(tmp_path, monkeypatch) -> None:
-    _absent_vale(monkeypatch)
+def test_validate_prose_ignores_non_markdown_arg(tmp_path) -> None:
     txt = tmp_path / "note.txt"
     txt.write_text(_BAD_MD, encoding="utf-8")
     # Even in strict mode a non-.md arg is outside the prose surface: clean.

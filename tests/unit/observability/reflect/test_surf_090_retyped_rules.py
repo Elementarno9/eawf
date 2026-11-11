@@ -414,7 +414,10 @@ def test_surf_090_counted_rows_are_written_only_to_the_local_reflection_collecti
 
     path = store_retyped_rows(tmp_path / ".ea", [row], today=date(2026, 9, 29))
 
-    assert path == tmp_path / ".ea" / "local" / "reflect" / "2026-09-29-reflect-retyped.json"
+    expected = (
+        tmp_path / ".ea" / "local" / "reports" / "reflect" / "2026-09-29-reflect-retyped.json"
+    )
+    assert path == expected
     (stored,) = json.loads(path.read_text(encoding="utf-8"))
     assert stored["mark"] == NON_QUOTABLE_MARK
     assert RetypedRule.model_validate(stored) == row

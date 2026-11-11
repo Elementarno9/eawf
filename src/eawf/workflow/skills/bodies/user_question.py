@@ -72,6 +72,9 @@ class UserQuestion(BaseModel):
             ``None`` when no pending action backs it.
         action_revision: The revision the action was presented at, which
             the answer is sealed against.
+        prose_warnings: Plain-prose findings on the presented words (a
+            sentence too long, a term shown without its expansion), for the
+            author to fix; they never stop the question being shown.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -81,6 +84,7 @@ class UserQuestion(BaseModel):
     urgency: Urgency = Urgency.NORMAL
     action_ref: str | None = None
     action_revision: int | None = Field(default=None, gt=0)
+    prose_warnings: list[str] = Field(default_factory=list)
 
     @field_validator("options")
     @classmethod

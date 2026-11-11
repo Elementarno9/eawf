@@ -94,7 +94,7 @@ def test_marketplace_published_pointer_has_no_pii(tmp_path: Path) -> None:
     package_plugin(target, publish_source=PublishSource.GIT_SUBDIR)
     serialised = (target / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8")
     assert "@" not in serialised
-    assert "/Users/" not in serialised  # pragma: allowlist secret
+    assert "/Users/" not in serialised  # eawf: allow-leak
 
 
 def test_plugin_manifest_matches_install_renderer(tmp_path: Path) -> None:

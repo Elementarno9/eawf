@@ -1,6 +1,6 @@
 """EAWF018 — advisory structure-smell lint (block-bloat heuristics).
 
-Catches the block-structure blind spot a prose linter (Vale) misses:
+Catches the block-structure smells a sentence-level prose check misses:
 over-long prose blocks, run-on bullet lists, over-long single bullets in
 Markdown, and over-long leading-description paragraphs in Python
 docstrings. All four heuristics are *advisory* — the hook wires this

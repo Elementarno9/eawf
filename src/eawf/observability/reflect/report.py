@@ -1,6 +1,6 @@
 """The reflection report: build, render, store, export and prune, all on this machine.
 
-Everything the reflection verbs write lands in one local collection, ``.ea/local/reflect``,
+Everything the reflection verbs write lands in one local collection, ``.ea/local/reports/reflect``,
 which is gitignored and retention-bounded, or at an output path the operator names. An
 output path inside the tree's canonical store is refused before anything is read, so no
 verb of the group can be turned into a canonical write by its arguments.
@@ -39,6 +39,7 @@ import orjson
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.identity import EntityKind, IdentityError, validate_entity_key
+from eawf.kernel.layout import REFLECT_DIRNAME, LocalKind, local_root
 from eawf.kernel.runtime.events import MessageSummaryPayload, RunEventKind
 from eawf.kernel.store.paths import LOCAL_DIRNAME
 from eawf.observability.reflect.issues import HighlightedIssue, highlight_issues
@@ -55,9 +56,6 @@ from eawf.observability.reflect.totals import RunSpend, TotalsRow, run_spend, sc
 from eawf.platform.scrub.scan import redact_text
 
 logger = logging.getLogger(__name__)
-
-#: The local collection the reflection verbs write under, below ``.ea/local``.
-REFLECT_DIRNAME: Final = "reflect"
 
 #: The title cache's file name inside the collection.
 TITLE_CACHE_FILENAME: Final = "title-cache.json"
@@ -229,7 +227,7 @@ class FillManifest(BaseModel):
 
 def reflect_root(tree_root: Path) -> Path:
     """Return the local collection the reflection verbs write under."""
-    return tree_root / LOCAL_DIRNAME / REFLECT_DIRNAME
+    return local_root(tree_root, LocalKind.REPORTS) / REFLECT_DIRNAME
 
 
 def resolve_output_path(tree_root: Path, out: Path) -> Path:

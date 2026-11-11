@@ -97,31 +97,17 @@ RECEIPTS: dict[str, dict[str, Any]] = {
 #: picks each kind's filenames, and the digest recipe itself -- and an
 #: edit to any of them would leave that approval pinning a manifest
 #: nothing can recompute, silently. Hence the standing reproduction.
-APPROVED_DEV2_MANIFEST_SHA = (
-    "3ea0e1250281a90d1840583cbd92c2751fc1c99b9d9f1824e69f740ea9c9e148"  # pragma: allowlist secret
-)
+APPROVED_DEV2_MANIFEST_SHA = "3ea0e1250281a90d1840583cbd92c2751fc1c99b9d9f1824e69f740ea9c9e148"
 
 #: sha256 of each file the three dev2 publish jobs really uploaded, bare
 #: hex so the allowlist pragma fits the line. The ``sha256:`` prefix the
 #: receipt model wants is added in :func:`write_published_receipts`.
-PUBLISHED_WHEEL_SHA = (
-    "d03753d6be17812e68621d2bb0ca1afef5dd07ef0148848c8ab14f239b998da5"  # pragma: allowlist secret
-)
-PUBLISHED_SDIST_SHA = (
-    "51218682f4581294f7c0ab1a78ba846b31fee3222b73349402aa985a05a12b78"  # pragma: allowlist secret
-)
-PUBLISHED_TARBALL_SHA = (
-    "61918412ca618f73dbae226a4777d44640110314bf9f3c2d07129a345bedbd8c"  # pragma: allowlist secret
-)
-PUBLISHED_NOTES_SHA = (
-    "135a7b960942be9cd3018e6e199a035356d20a1e2220b8fefb348f4dc31ed305"  # pragma: allowlist secret
-)
-PUBLISHED_CHECKSUMS_SHA = (
-    "d942badab2f0ada88cd4c0e8c31a0e0376686cdefdb0208b363aedd622e70afc"  # pragma: allowlist secret
-)
-PUBLISHED_BUNDLE_SHA = (
-    "6d89424461e18b8fea4b23f5877722b7d40bbe0ce4d4af57e94f6e83354b99e9"  # pragma: allowlist secret
-)
+PUBLISHED_WHEEL_SHA = "d03753d6be17812e68621d2bb0ca1afef5dd07ef0148848c8ab14f239b998da5"
+PUBLISHED_SDIST_SHA = "51218682f4581294f7c0ab1a78ba846b31fee3222b73349402aa985a05a12b78"
+PUBLISHED_TARBALL_SHA = "61918412ca618f73dbae226a4777d44640110314bf9f3c2d07129a345bedbd8c"
+PUBLISHED_NOTES_SHA = "135a7b960942be9cd3018e6e199a035356d20a1e2220b8fefb348f4dc31ed305"
+PUBLISHED_CHECKSUMS_SHA = "d942badab2f0ada88cd4c0e8c31a0e0376686cdefdb0208b363aedd622e70afc"
+PUBLISHED_BUNDLE_SHA = "6d89424461e18b8fea4b23f5877722b7d40bbe0ce4d4af57e94f6e83354b99e9"
 
 
 def dev2_config() -> ReleaseConfig:

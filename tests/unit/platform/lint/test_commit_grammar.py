@@ -123,7 +123,7 @@ def test_lint_009_a_bare_state_commit_meets_the_bookkeeping_path_set(
 
 def test_lint_009_a_bare_state_commit_admits_bookkeeping_paths(lint: Any, tmp_path: Path) -> None:
     """The same set the bracketed ``[P##] state:`` form has always met."""
-    staged = [".ea/state.json", ".ea/store/audit.jsonl", ".secrets.baseline"]
+    staged = [".ea/state.json", ".ea/store/audit.jsonl", ".ea/specs/spec.md"]
 
     code, diag = _run(lint, tmp_path, "state: record the move\n", staged)
 

@@ -799,11 +799,10 @@ class ArtifactKind(StrEnum):
 class SpecStatus(StrEnum):
     """Lifecycle states for the Spec entity.
 
-    Per c01-foundations §5.4.15: specs live on the filesystem at
-    ``.ea/specs/<phase>/[<iter>/]<wave|spec>.md``; no State.specs dict in
-    state.json. C03-IMPL wires the full lifecycle — this enum reserves the
-    canonical state vocabulary so C02 daemon transitions + C03 spec CLI verbs
-    share one source of truth.
+    The vocabulary the audit DSL's transition tables and transition-coverage
+    check read. No eawf writer keeps spec files under ``.ea`` and state.json holds
+    no specs collection; a leftover ``.ea/specs/`` is an orphan that ``eawf
+    local tidy`` archives.
     """
 
     DRAFT = "draft"

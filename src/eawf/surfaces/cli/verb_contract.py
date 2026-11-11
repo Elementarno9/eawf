@@ -177,6 +177,7 @@ def answer_envelope(
     revision_after: int | None,
     failed_guard: str | None = None,
     links: Mapping[str, str] | None = None,
+    warnings: tuple[str, ...] = (),
 ) -> DomainEnvelope:
     """Return the envelope one typed daemon answer stands for.
 
@@ -194,6 +195,8 @@ def answer_envelope(
             answer's own ``reason``, when it carries one, is the refusal text.
         links: Named commands or references a caller may follow next, or
             ``None`` for none.
+        warnings: Non-fatal notes the answer carries, shown beside the
+            result; empty for none.
 
     Returns:
         An ``ok`` envelope, or an ``error`` one whose row names the guard.
@@ -224,6 +227,7 @@ def answer_envelope(
         revision_before=revision_before,
         revision_after=revision_after,
         result=answer,
+        warnings=warnings,
         errors=errors,
         links=dict(links or {}),
     )

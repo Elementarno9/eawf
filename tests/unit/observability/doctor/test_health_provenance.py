@@ -25,7 +25,7 @@ from pydantic import ValidationError
 from eawf.kernel.runtime.certification import CertificationFailureCode, ConformanceStageRecord
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.paths import store_path
+from eawf.kernel.store.paths import local_store_path, store_path
 from eawf.observability.doctor import checks
 from eawf.observability.doctor.models import (
     RUNTIME_TUPLE_CHECK_PREFIX,
@@ -215,7 +215,7 @@ def test_an_empty_conformance_store_yields_no_checks(tmp_path: Path) -> None:
 def test_a_malformed_line_is_skipped_rather_than_raised_on(tmp_path: Path) -> None:
     """One broken row must not take the whole doctor surface down."""
     write(tmp_path, [(TUPLE_A, record("certify"))])
-    path = store_path(tmp_path / ".ea" / "state.json", StoreKind.CONFORMANCE_STAGE)
+    path = local_store_path(tmp_path / ".ea" / "state.json", StoreKind.CONFORMANCE_STAGE)
     with path.open("a", encoding="utf-8") as handle:
         handle.write("{not json}\n")
 
@@ -225,7 +225,7 @@ def test_a_malformed_line_is_skipped_rather_than_raised_on(tmp_path: Path) -> No
 def test_an_envelope_of_another_kind_is_skipped(tmp_path: Path) -> None:
     """A row filed under another kind is not a stage record of any tuple."""
     write(tmp_path, [(TUPLE_A, record("certify"))])
-    path = store_path(tmp_path / ".ea" / "state.json", StoreKind.CONFORMANCE_STAGE)
+    path = local_store_path(tmp_path / ".ea" / "state.json", StoreKind.CONFORMANCE_STAGE)
     foreign = Envelope(
         id="EV-1",
         kind=StoreKind.EVENT,

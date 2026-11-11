@@ -350,7 +350,7 @@ _IMPORTER_AT_PRODUCTION_CORPUS = MeasuredContract(
         "apply_journal_stages": 12,
         "rollback_boundaries": 11,
         "scrub_findings": 0,
-        "observed_at_revision": "af9e555278f2",  # pragma: allowlist secret
+        "observed_at_revision": "af9e555278f2",
     },
     limits=(
         ObservedLimit(

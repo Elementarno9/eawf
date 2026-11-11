@@ -32,10 +32,13 @@ from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.epoch2_transaction import TransactionRefusedError
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.methods.delivery_approval import DELIVERY_SEAL_APPROVAL_METHOD
+from eawf.runtime.daemon.methods.domain_envelope import DomainEnvelope
 from eawf.runtime.daemon.methods.question_decision import (
     QUESTION_ANSWER_NUMBERED_METHOD,
     QUESTION_OPEN_DECISION_METHOD,
 )
+from eawf.surfaces.cli.commands.question_decision import forward_answer
+from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.workflow.decision_question import QUESTION_DECISIONS_METHOD
 from eawf.workflow.skills.bodies.user_question import UserQuestion
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
@@ -183,7 +186,6 @@ def test_surf_030_the_decision_is_filed_waiting_and_presented_bound(
             {"recommended_option_id": None, "recommendation_rationale": None},
             "recommendation_unstated",
         ),
-        ({"question": "Should CI commit finished steps?"}, "term_unexpanded"),
         (
             {"options": [{**_options()[0], "preview": None}, _options()[1]]},
             "option_not_shown",
@@ -197,6 +199,52 @@ def test_surf_033_an_unpresentable_decision_is_refused_with_nothing_written(
     with pytest.raises(DaemonValidationError, match=code):
         open_decision(canary, tmp_path, **override)
     assert filed(canary) == {}
+
+
+def test_surf_033_an_unexpanded_term_is_filed_with_a_warning(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    """A question that shows a bare abbreviation is filed and carries the warning."""
+    opened = open_decision(canary, tmp_path, question="Should CI commit finished steps?")
+
+    assert sorted(filed(canary)) == ["ACT-0001"]
+    question = UserQuestion.model_validate(opened["host_question"])
+    assert question.prose_warnings == ["ACT-0001 shows CI without saying what it stands for"]
+    assert opened["warnings"] == question.prose_warnings
+
+
+def test_surf_033_the_open_decision_envelope_carries_each_prose_warning(
+    canary: CanaryProvision, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The asker's envelope shows each prose warning at its top level, not only in the question."""
+    opened = open_decision(canary, tmp_path, question="Should CI commit finished steps?")
+    shown: list[DomainEnvelope] = []
+    monkeypatch.setattr(
+        "eawf.surfaces.cli.commands.domain._native_answer", lambda *_args, **_kwargs: opened
+    )
+    monkeypatch.setattr(
+        "eawf.surfaces.cli.verb_contract.emit_envelope",
+        lambda envelope, **_kwargs: shown.append(envelope),
+    )
+
+    forward_answer(
+        QUESTION_OPEN_DECISION_METHOD,
+        {},
+        urn=MILESTONE_URN,
+        verb_text="question open-decision",
+        flags=GlobalFlags(json_output=True),
+    )
+
+    (envelope,) = shown
+    assert envelope.warnings == ("ACT-0001 shows CI without saying what it stands for",)
+    assert envelope.result == opened
+
+
+def test_surf_033_a_plain_question_answers_with_no_warning(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    """Boundary: a question every rule accepts lifts no warning."""
+    assert open_decision(canary, tmp_path)["warnings"] == []
 
 
 def test_surf_039_a_decision_whose_answers_change_nothing_is_not_asked(

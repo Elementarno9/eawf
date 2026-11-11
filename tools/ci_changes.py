@@ -1,14 +1,14 @@
 """Decide whether a CI run must execute the heavy test jobs.
 
-A push that changes only project state under ``.ea/`` or
-``.secrets.baseline`` leaves the code tree exactly as it was when CI last
-went green, so re-running the test matrix and the twice-green job on it
-spends half an hour proving nothing new. This tool compares the
-checked-out tree with the last green ``ci.yaml`` tree and writes
-``code=false`` to ``$GITHUB_OUTPUT`` only when every change is bookkeeping
-(an identical tree changes no path at all). Bookkeeping is any added,
-modified, deleted or retyped path under ``.ea/`` and that one file; the
-``.ea/`` commit-policy census runs before push, not in the CI test jobs.
+A push that changes only project state under ``.ea/`` leaves the code
+tree exactly as it was when CI last went green, so re-running the test
+matrix and the twice-green job on it spends half an hour proving nothing
+new. This tool compares the checked-out tree with the last green
+``ci.yaml`` tree and writes ``code=false`` to ``$GITHUB_OUTPUT`` only when
+every change is bookkeeping (an identical tree changes no path at all).
+Bookkeeping is any added, modified, deleted or retyped path under
+``.ea/``; the ``.ea/`` commit-policy census runs before push, not in the
+CI test jobs.
 Any other path writes ``code=true``. The workflow gates the heavy jobs on
 the ``code`` output. The ``green`` output names the green commit the tree
 was compared with, so a skipped run can record which green tree it
@@ -101,10 +101,6 @@ import urllib.request
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-
-#: The one file outside ``.ea/`` whose change never alters what the heavy
-#: test jobs exercise.
-BOOKKEEPING_FILES: frozenset[str] = frozenset({".secrets.baseline"})
 
 #: Project state lives under this prefix; the test jobs never read it, and
 #: the ``.ea/`` commit-policy census runs before push instead of in CI.
@@ -210,10 +206,10 @@ def is_bookkeeping(path: str) -> bool:
         path: A repo-relative, slash-separated path as git lists it.
 
     Returns:
-        True for ``.secrets.baseline`` and for every path under ``.ea/``,
-        whatever its diff status; False for every other path.
+        True for every path under ``.ea/``, whatever its diff status;
+        False for every other path.
     """
-    return path in BOOKKEEPING_FILES or path.startswith(EA_PREFIX)
+    return path.startswith(EA_PREFIX)
 
 
 def runs_url(

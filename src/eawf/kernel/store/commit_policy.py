@@ -422,11 +422,6 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
     ),
     *PROMOTED_ARTIFACTS,
     _row(
-        ".ea/specs/**",
-        _NO,
-        "per-wave spec renders; the typed criteria in state are the record",
-    ),
-    _row(
         ".ea/local/**",
         _NO,
         "machine-local scratch; a clone starts empty by design",
@@ -441,7 +436,6 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
     _row(".ea/locks/**", _NO, "lock directory carrying a live pid and hostname"),
     _row(".ea/worktrees/**", _NO, "per-wave worktrees; git owns their lifetime"),
     _row(".ea/**/*.lock", _NO, "sibling lockfiles carrying a pid heartbeat"),
-    _row(".ea/state.json.bak.*", _NO, "migration backups; forward-fix is the recovery path"),
     _row(".ea/instrument-probe.json", _NO, "probe cache that embeds absolute host paths"),
     _row(".ea/**/.DS_Store", _NO, "finder metadata the OS writes into any directory"),
     _row(

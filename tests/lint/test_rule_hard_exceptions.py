@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from eawf.platform.lint.ste_prose import INSTRUCTION_MAX_WORDS
 from eawf.platform.rules import load_rule_source
 from eawf.platform.rules.modules import select_rule_modules
 from eawf.platform.rules.render import POLICY_TARGET, plan_rule_projections
@@ -76,7 +77,8 @@ def test_ste_hook_is_advisory(tmp_path: Path) -> None:
     assert hook["verbose"] is True
     assert hook["pass_filenames"] is False
     long_rule = tmp_path / "rule.yaml"
-    long_rule.write_text(f"instruction: {' '.join(['Run'] * 30)}.\n", encoding="utf-8")
+    over_cap = ["Run"] * (INSTRUCTION_MAX_WORDS + 1)
+    long_rule.write_text(f"instruction: {' '.join(over_cap)}.\n", encoding="utf-8")
     argv = _hook_argv(hook)
     for extra in ([], [str(long_rule)]):
         run = subprocess.run(

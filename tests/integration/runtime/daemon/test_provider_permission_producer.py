@@ -194,7 +194,7 @@ def test_run_051_a_file_write_is_a_filesystem_permission(
 def test_run_051_words_carrying_a_home_path_are_withheld(
     canary: CanaryProvision, ctx: MethodContext
 ) -> None:
-    leaky = "cat /home/someone/notes"  # pragma: allowlist secret
+    leaky = "cat /home/someone/notes"  # eawf: allow-leak
     permission = request(ctx, canary, command=leaky)["permission"]
 
     assert permission["request_scope"].startswith("Bash call; its input carries a path")

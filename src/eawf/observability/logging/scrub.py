@@ -125,17 +125,17 @@ class SensitiveScrubber(logging.Filter):
     """
 
     PATTERNS: tuple[re.Pattern[str], ...] = (
-        re.compile(r"/Users/[^/\s]+"),  # macOS home  # pragma: allowlist secret
+        re.compile(r"/Users/[^/\s]+"),  # macOS home  # eawf: allow-leak
         re.compile(r"[A-Za-z]:\\Users\\[^\\\s]+", re.IGNORECASE),  # Windows home
-        re.compile(r"/home/[^/\s]+"),  # Linux home  # pragma: allowlist secret
+        re.compile(r"/home/[^/\s]+"),  # Linux home  # eawf: allow-leak
         # A server keeps checkouts and scratch under its site data root, so a
         # path there names the machine as plainly as a home directory does.
         # It must start the path (see ``_PATH_START``).
-        re.compile(rf"{_PATH_START}/srv/[^/\s]+"),  # server data root  # pragma: allowlist secret
+        re.compile(rf"{_PATH_START}/srv/[^/\s]+"),  # server data root  # eawf: allow-leak
         # A login's runtime directory names its uid, and pytest's temp root
         # names the user, wherever the temp directory sits.
-        re.compile(rf"{_PATH_START}/run/user/\d+"),  # runtime dir  # pragma: allowlist secret
-        re.compile(rf"{_PATH_START}pytest-of-[^/\s]+"),  # pytest temp  # pragma: allowlist secret
+        re.compile(rf"{_PATH_START}/run/user/\d+"),  # runtime dir
+        re.compile(rf"{_PATH_START}pytest-of-[^/\s]+"),  # pytest temp  # eawf: allow-leak
         # Bare ``~/`` home reference (shell-expanded path that still
         # leaks the project tree layout even without the username).
         re.compile(r"~/[^\s]+"),  # tilde home

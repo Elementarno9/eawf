@@ -28,9 +28,9 @@ from eawf.runtime.hooks.runner import (
     append_event_idempotent,
 )
 
-_SCOPE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"  # pragma: allowlist secret
+_SCOPE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-"
 _scopes = st.text(alphabet=_SCOPE_ALPHABET, min_size=0, max_size=12)
-_command_alphabet = "abcdefghijklmnopqrstuvwxyz "  # pragma: allowlist secret
+_command_alphabet = "abcdefghijklmnopqrstuvwxyz "
 _commands = st.text(alphabet=_command_alphabet, min_size=0, max_size=20)
 _runtimes = st.sampled_from(["claude", "opencode", "generic"])
 _event_types = st.sampled_from(list(HookEventType))

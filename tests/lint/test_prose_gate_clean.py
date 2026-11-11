@@ -11,12 +11,6 @@ the CI job never reads those files. Scanning everything here would red for
 reasons the branch did not cause, so this test scans exactly what the job would.
 Byte-pinned golden fixtures under ``tests/golden/`` are excluded the same way
 the CLI gate excludes them: their prose is renderer output, not authored text.
-
-The Vale leg is deliberately excluded. Vale is a subprocess that fails open when
-its binary is absent or its ``StylesPath`` is unsynced, so asserting on it would
-make this test pass or fail by machine. The deterministic EAWF013 / EAWF014 /
-EAWF017 / EAWF021 legs are pure functions and are the blocking floor
-that ``--strict`` enforces everywhere.
 """
 
 from __future__ import annotations
@@ -107,7 +101,7 @@ def test_changed_markdown_has_no_deterministic_prose_finding() -> None:
     )
 
 
-def test_strict_gate_exits_zero_over_changed_markdown(monkeypatch) -> None:
+def test_strict_gate_exits_zero_over_changed_markdown() -> None:
     """The CLI itself exits 0 -- the criterion is the exit code, not the count."""
     changed = _changed_markdown()
     if changed is None:
@@ -115,9 +109,6 @@ def test_strict_gate_exits_zero_over_changed_markdown(monkeypatch) -> None:
     if not changed:
         pytest.skip("this branch changes no Markdown")
 
-    # Force the Vale leg absent so the assertion is on the deterministic floor
-    # and does not depend on whether this machine ran `vale sync`.
-    monkeypatch.setattr("shutil.which", lambda _name: None)
     result = CliRunner().invoke(
         app,
         ["hook", "validate-prose", "--strict", *(str(_REPO_ROOT / rel) for rel in changed)],
@@ -125,9 +116,8 @@ def test_strict_gate_exits_zero_over_changed_markdown(monkeypatch) -> None:
     assert result.exit_code == 0, result.stdout
 
 
-def test_strict_gate_reds_on_a_known_bad_surface(tmp_path, monkeypatch) -> None:
+def test_strict_gate_reds_on_a_known_bad_surface(tmp_path) -> None:
     """The falsifier: the same code path must exit 1 on a broken input."""
-    monkeypatch.setattr("shutil.which", lambda _name: None)
     bad = tmp_path / "bad.md"
     bad.write_text(_KNOWN_BAD_MD, encoding="utf-8")
 

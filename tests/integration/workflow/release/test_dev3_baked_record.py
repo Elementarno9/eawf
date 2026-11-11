@@ -38,9 +38,9 @@ DEV3_KEY = "REL-0.7.0.dev3"
 DEV4_KEY = "REL-0.7.0.dev4"
 STATE_PATH = Path(__file__).resolve().parents[4] / ".ea" / "state.json"
 APPROVED_MANIFEST_DIGEST = "sha256:" + (
-    "c431c633f591df874501607db315baf00afe852867bfce2d95fcbbe18ca20eba"  # pragma: allowlist secret
+    "c431c633f591df874501607db315baf00afe852867bfce2d95fcbbe18ca20eba"
 )
-PINNED_SOURCE_SHA = "026b33abddebcde0bc57eb71ff37c747db16d468"  # pragma: allowlist secret
+PINNED_SOURCE_SHA = "026b33abddebcde0bc57eb71ff37c747db16d468"
 OBSERVED_TARGETS = ("github", "npm", "plugins-dist", "pypi")
 
 

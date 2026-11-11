@@ -143,7 +143,7 @@ def test_relevant_for_hook_staged_narrows(tmp_path: Path) -> None:
 
 def test_path_leak_lint_exits_one_on_seeded_leak(tmp_path: Path) -> None:
     leak = tmp_path / "leak.py"
-    body = 'HOME = "/Users/somebody/secret/config"\n'  # pragma: allowlist secret
+    body = 'HOME = "/Users/somebody/secret/config"\n'  # eawf: allow-leak
     leak.write_text(body, encoding="utf-8")
     result = runner.invoke(app, ["hook", "path-leak-lint", str(leak)])
     assert result.exit_code == 1, result.stdout
@@ -160,10 +160,10 @@ def test_path_leak_lint_clean_exits_zero(tmp_path: Path) -> None:
 
 def test_path_leak_lint_detects_windows_and_linux_home(tmp_path: Path) -> None:
     win = tmp_path / "win.txt"
-    win_body = "path = C:\\Users\\someone\\file\n"  # pragma: allowlist secret
+    win_body = "path = C:\\Users\\someone\\file\n"
     win.write_text(win_body, encoding="utf-8")
     linux = tmp_path / "linux.txt"
-    linux_body = "path = /home/someone/file\n"  # pragma: allowlist secret
+    linux_body = "path = /home/someone/file\n"  # eawf: allow-leak
     linux.write_text(linux_body, encoding="utf-8")
     assert runner.invoke(app, ["hook", "path-leak-lint", str(win)]).exit_code == 1
     assert runner.invoke(app, ["hook", "path-leak-lint", str(linux)]).exit_code == 1
@@ -171,7 +171,7 @@ def test_path_leak_lint_detects_windows_and_linux_home(tmp_path: Path) -> None:
 
 def test_path_leak_lint_json_output(tmp_path: Path) -> None:
     leak = tmp_path / "leak.py"
-    body = 'p = "/Users/x/y"\n'  # pragma: allowlist secret
+    body = 'p = "/Users/x/y"\n'  # eawf: allow-leak
     leak.write_text(body, encoding="utf-8")
     result = runner.invoke(app, ["--json", "hook", "path-leak-lint", str(leak)])
     assert result.exit_code == 1, result.stdout
@@ -191,7 +191,7 @@ def test_path_leak_lint_staged_fallback_clean_noop(tmp_path: Path) -> None:
     _git(["config", "user.email", "noreply@anthropic.com"], repo)
     _git(["config", "user.name", "Test"], repo)
     # An unstaged leak file in the tree must NOT be flagged.
-    untracked_body = 'p = "/Users/x/y"\n'  # pragma: allowlist secret
+    untracked_body = 'p = "/Users/x/y"\n'  # eawf: allow-leak
     (repo / "untracked_leak.py").write_text(untracked_body, encoding="utf-8")
     result = runner.invoke(app, ["-w", str(repo), "hook", "path-leak-lint"])
     assert result.exit_code == 0, result.stdout
@@ -199,7 +199,7 @@ def test_path_leak_lint_staged_fallback_clean_noop(tmp_path: Path) -> None:
 
 
 def test_path_leak_lint_staged_fallback_flags_staged_leak(tmp_path: Path) -> None:
-    staged_body = 'p = "/Users/x/y"\n'  # pragma: allowlist secret
+    staged_body = 'p = "/Users/x/y"\n'  # eawf: allow-leak
     repo = _init_repo_with_staged(tmp_path, rel="staged_leak.py", body=staged_body)
     result = runner.invoke(app, ["-w", str(repo), "hook", "path-leak-lint"])
     assert result.exit_code == 1, result.stdout
@@ -237,15 +237,15 @@ def test_path_leak_lint_skips_doc_placeholder(tmp_path: Path, placeholder: str) 
 @pytest.mark.parametrize(
     "real_path",
     [
-        "/Users/realuser",  # pragma: allowlist secret
-        "C:\\Users\\Bob",  # pragma: allowlist secret
-        "/home/realuser",  # pragma: allowlist secret
+        "/Users/realuser",  # eawf: allow-leak
+        "C:\\Users\\Bob",
+        "/home/realuser",  # eawf: allow-leak
     ],
 )
 def test_path_leak_lint_still_flags_real_path(tmp_path: Path, real_path: str) -> None:
     # A concrete home-dir path (no placeholder token) is still a leak.
     leak = tmp_path / "leak.py"
-    leak.write_text(f'HOME = "{real_path}"\n', encoding="utf-8")  # pragma: allowlist secret
+    leak.write_text(f'HOME = "{real_path}"\n', encoding="utf-8")
     result = runner.invoke(app, ["hook", "path-leak-lint", str(leak)])
     assert result.exit_code == 1, result.stdout
     assert "leak" in result.stdout.lower()
@@ -259,9 +259,9 @@ def test_is_placeholder_path_discriminates_placeholder_from_leak() -> None:
     assert is_placeholder_path("C:\\Users\\...")
     assert is_placeholder_path("~/Workspace/...")
     assert is_placeholder_path("/home/<user>")
-    assert not is_placeholder_path("/Users/realuser")  # pragma: allowlist secret
-    assert not is_placeholder_path("C:\\Users\\Bob")  # pragma: allowlist secret
-    assert not is_placeholder_path("~/Workspace/myproject")  # pragma: allowlist secret
+    assert not is_placeholder_path("/Users/realuser")  # eawf: allow-leak
+    assert not is_placeholder_path("C:\\Users\\Bob")
+    assert not is_placeholder_path("~/Workspace/myproject")
 
 
 # --- email-leak-lint ------------------------------------------------------
@@ -269,7 +269,7 @@ def test_is_placeholder_path_discriminates_placeholder_from_leak() -> None:
 
 def test_email_leak_lint_exits_one_on_seeded_leak(tmp_path: Path) -> None:
     leak = tmp_path / "leak.md"
-    body = "contact person@acmecorp.io for details\n"  # pragma: allowlist secret
+    body = "contact person@acmecorp.io for details\n"  # eawf: allow-leak
     leak.write_text(body, encoding="utf-8")
     result = runner.invoke(app, ["hook", "email-leak-lint", str(leak)])
     assert result.exit_code == 1, result.stdout
@@ -328,8 +328,8 @@ def test_leak_gates_honour_allowlist_marker(tmp_path: Path) -> None:
     # the path and the email gate (by-design fixture / pattern source).
     marked = tmp_path / "fixture.py"
     marked.write_text(
-        'P = "/Users/x/y"  # pragma: allowlist secret\n'  # pragma: allowlist secret
-        'E = "person@example.com"  # pragma: allowlist secret\n',  # pragma: allowlist secret
+        'P = "/Users/x/y"  # eawf: allow-leak\n'  # eawf: allow-leak
+        'E = "person@example.com"  # eawf: allow-leak\n',
         encoding="utf-8",
     )
     assert runner.invoke(app, ["hook", "path-leak-lint", str(marked)]).exit_code == 0
@@ -514,7 +514,7 @@ def test_path_leak_lint_skips_pure_relocation_of_committed_leak(tmp_path: Path) 
     # A pure `git mv` carries an already-committed leak to a new path without
     # changing a byte; the gate must not re-flag pre-existing debt the move
     # neither introduced nor can fix (forward-fix-only hygiene).
-    leak_body = 'p = "/Users/realuser/x"\n'  # pragma: allowlist secret
+    leak_body = 'p = "/Users/realuser/x"\n'  # eawf: allow-leak
     repo = _init_repo_with_committed_file(tmp_path, rel="old/leak.py", body=leak_body)
     (repo / "new").mkdir()
     _git(["mv", "old/leak.py", "new/leak.py"], repo)
@@ -544,7 +544,7 @@ def test_path_leak_lint_flags_relocation_with_added_leak(tmp_path: Path) -> None
     _git(["mv", "old/mod.py", "new/mod.py"], repo)
     moved = repo / "new" / "mod.py"
     moved.write_text(
-        clean_body + 'leak = "/Users/realuser/x"\n',  # pragma: allowlist secret
+        clean_body + 'leak = "/Users/realuser/x"\n',  # eawf: allow-leak
         encoding="utf-8",
     )
     _git(["add", "new/mod.py"], repo)

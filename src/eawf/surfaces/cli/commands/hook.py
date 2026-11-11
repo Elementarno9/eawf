@@ -476,13 +476,13 @@ _BINARY_SUFFIXES: frozenset[str] = frozenset(
     {".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".zip", ".gz", ".whl"}
 )
 
-# Inline marker that exempts a single line from the leak gates. Reuses
-# the established ``detect-secrets`` allowlist phrasing so a line that is
-# already acknowledged as a by-design fixture / pattern definition (a
-# scrub-test sample path, the scrubber's own regex source) is exempt
-# from both the path gate and the email gate without a brittle per-file
-# path exclude list.
-_LEAK_ALLOW_MARKER = "pragma: allowlist secret"
+# Inline marker that exempts a single line from both the path gate and the
+# email gate, for a by-design fixture or pattern definition (a scrub-test
+# sample path, the scrubber's own regex source), without a brittle per-file
+# path exclude list. It is distinct from the ``detect-secrets`` allowlist
+# pragma so that a leak exemption never also silences the secret scan, and
+# a secret exemption never also silences the leak gates.
+_LEAK_ALLOW_MARKER = "eawf: allow-leak"
 
 
 # Files whose lines are JSON text, so every string in them is escaped.
@@ -1570,7 +1570,7 @@ def path_leak_lint(
     files relevant to this gate per the conditional scan). A staged
     ``.ea/state.json`` is scanned only on the lines the commit adds,
     for credential-shaped tokens as well as home paths. A line
-    carrying the ``pragma: allowlist secret`` marker is exempt (for
+    carrying the ``eawf: allow-leak`` marker is exempt (for
     by-design fixtures / pattern source). Exits 1 when a leak is found,
     0 on a clean scan.
     """
@@ -2355,236 +2355,6 @@ def eawf017_inline_refs(
     )
 
 
-class _ValeRunError(RuntimeError):
-    """Vale ran but emitted its error-object JSON (e.g. an unsynced StylesPath).
-
-    ``vale --output=JSON`` returns a ``{path: [alert]}`` map on a normal run,
-    but on a runtime error (most commonly ``E100`` — a ``BasedOnStyles``
-    package missing from the ``StylesPath`` because ``vale sync`` has not been
-    run) it returns a single error object ``{"Code": "E100", "Text": ...}``.
-    The wrapper treats that as a fail-open skip, not a finding, because a
-    machine without the synced package is the same advisory-skip case as a
-    machine without the binary.
-    """
-
-
-def _vale_findings_to_rows(payload: dict[str, Any], *, rel_for: dict[str, str]) -> list[str]:
-    """Render parsed ``vale --output=JSON`` alerts into ``  rel:line:col`` rows.
-
-    ``vale --output=JSON`` maps each linted path to a list of alert objects
-    (``Line``, ``Span``, ``Severity``, ``Check``, ``Message``). This flattens
-    them into the one-liner rows the static-lint envelope renders, remapping
-    the temp-file path Vale reports back to the caller-facing label via
-    ``rel_for`` (so a commit-body bridge shows ``<commit body>`` not a
-    ``/tmp/...`` path). Non-list values (the Vale error-object shape) are
-    skipped defensively, though :func:`_run_vale_json` already raises
-    :class:`_ValeRunError` on that shape before this is reached.
-    """
-    rows: list[str] = []
-    for vale_path, alerts in payload.items():
-        if not isinstance(alerts, list):
-            continue
-        label = rel_for.get(vale_path, vale_path)
-        for alert in alerts:
-            line = alert.get("Line", 0)
-            span = alert.get("Span") or [0]
-            col = span[0] if span else 0
-            sev = alert.get("Severity", "warning")
-            check = alert.get("Check", "Vale")
-            message = alert.get("Message", "")
-            rows.append(f"  {label}:{line}:{col}: {sev} {check} {message}")
-    return rows
-
-
-def _run_vale_json(targets: list[Path], *, cwd: Path) -> dict[str, Any]:
-    """Subprocess ``vale --output=JSON`` over *targets* and parse the payload.
-
-    Returns the decoded ``{path: [alert, ...]}`` mapping. Vale exits non-zero
-    when it finds alerts at or above ``MinAlertLevel`` — that is the normal
-    "found something" path, not a failure — so the return code is ignored and
-    only the JSON body is parsed. An empty / unparseable body yields ``{}``.
-
-    Raises:
-        _ValeRunError: when Vale emits its error-object shape (a top-level
-            object carrying a ``"Code"`` key instead of the ``{path: [alert]}``
-            map), e.g. ``E100`` for an unsynced ``StylesPath``. The caller
-            fails open on this signal.
-    """
-    proc = subprocess.run(
-        ["vale", "--output=JSON", *[str(t) for t in targets]],
-        cwd=cwd,
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        **no_window_kwargs(),
-    )
-    # Vale writes the alert map to stdout on a normal run, but writes its
-    # error-object JSON (E100 etc.) to stderr with a non-zero exit. Check
-    # stderr first so an unsynced StylesPath fails open instead of looking
-    # like a clean (empty) result.
-    if proc.stderr.strip():
-        _raise_if_vale_error(proc.stderr)
-    if not proc.stdout.strip():
-        return {}
-    try:
-        decoded: Any = orjson.loads(proc.stdout)
-    except orjson.JSONDecodeError:
-        return {}
-    if not isinstance(decoded, dict):
-        return {}
-    _raise_if_vale_error_obj(decoded)
-    return cast(dict[str, Any], decoded)
-
-
-def _raise_if_vale_error(stderr: str) -> None:
-    """Raise :class:`_ValeRunError` when *stderr* parses to a Vale error object.
-
-    Vale emits its runtime-error JSON (``E100`` for an unsynced ``StylesPath``,
-    a config parse error, …) on stderr. A stderr body that is not JSON, or is
-    JSON but not the error-object shape, is ignored (best-effort diagnostics).
-    """
-    try:
-        decoded: Any = orjson.loads(stderr)
-    except orjson.JSONDecodeError:
-        return
-    if isinstance(decoded, dict):
-        _raise_if_vale_error_obj(decoded)
-
-
-def _raise_if_vale_error_obj(decoded: dict[str, Any]) -> None:
-    """Raise :class:`_ValeRunError` when *decoded* is the Vale error-object shape.
-
-    The error object carries a top-level ``"Code"`` key (``E100`` …) whose
-    sibling values are scalars, not the per-path alert lists of a normal run.
-    """
-    if "Code" in decoded and not any(isinstance(v, list) for v in decoded.values()):
-        detail = str(decoded.get("Text") or decoded.get("Code") or "vale runtime error")
-        raise _ValeRunError(detail.splitlines()[0])
-
-
-def _emit_vale_skip(*, reason: str, flags: GlobalFlags) -> None:
-    """Emit the advisory fail-open envelope when Vale cannot run, exit 0."""
-    payload: dict[str, object] = {
-        "hook": "vale-prose",
-        "skipped": True,
-        "clean": True,
-        "reason": reason,
-    }
-    emit_json_or_text(payload, f"vale-prose: skipped ({reason})", flags=flags)
-
-
-@hook_app.command(name="vale-prose")
-def vale_prose(
-    ctx: typer.Context,
-    files: _FilesArg = None,
-    base: _BaseOpt = "origin/main",
-    text_surface: Annotated[
-        str,
-        typer.Option(
-            "--text-surface",
-            help="Lint a literal prose string (commit/PR body, state.json "
-            "description) instead of files: the text is written to a temp "
-            "markdown file, linted, then discarded. Mutually exclusive with "
-            "file args.",
-        ),
-    ] = "",
-    surface_label: Annotated[
-        str,
-        typer.Option(
-            "--surface-label",
-            help="Human label for the --text-surface bridge (e.g. 'commit "
-            "body'); shown in findings instead of the temp path.",
-        ),
-    ] = "<text surface>",
-) -> None:
-    """Run the Vale prose linter over Markdown and emit the findings.
-
-    Subprocesses ``vale --output=JSON <file>`` and emits the parsed alerts
-    through the same static-lint envelope as the EAWF lints. Two input modes:
-
-    - **files** — the given ``.md`` files (or, when none are given, the staged
-      ``.md`` delta per the conditional scan).
-    - **--text-surface** — a literal prose string (a commit body, PR body, or
-      ``state.json`` description); Vale lints files on disk, so the text is
-      written to a temporary markdown file, linted, then deleted. The findings
-      report ``--surface-label`` instead of the temp path.
-
-    When the ``vale`` binary is absent the gate **fails open**: it emits an
-    advisory skip note and exits 0 (the prose lint is advisory, never a
-    hard block on a machine without Vale installed). On a clean lint it also
-    exits 0; findings are emitted non-blocking (advisory-first per the
-    doc-clarity rollout).
-    """
-    import shutil
-    import tempfile
-
-    flags: GlobalFlags = ctx.obj
-    cwd = (flags.workspace or Path.cwd()).resolve()
-
-    if shutil.which("vale") is None:
-        _emit_vale_skip(reason="vale binary not found on PATH", flags=flags)
-        return
-
-    if text_surface:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmp = Path(tmpdir) / "surface.md"
-            tmp.write_text(text_surface, encoding="utf-8")
-            try:
-                payload = _run_vale_json([tmp], cwd=cwd)
-            except _ValeRunError as exc:
-                _emit_vale_skip(reason=str(exc), flags=flags)
-                return
-            rows = _vale_findings_to_rows(payload, rel_for={str(tmp): surface_label})
-        _emit_static_lint_result(
-            hook_name="vale-prose", rows=rows, scanned=1, flags=flags, blocking=False
-        )
-        return
-
-    paths = _resolve_scan_paths(files, hook_name="vale-prose", base=base, cwd=cwd)
-    targets = [cwd / rel for rel in paths if rel.endswith(".md") and (cwd / rel).exists()]
-    if not targets:
-        emit_json_or_text(
-            {"hook": "vale-prose", "scanned": 0, "clean": True},
-            "vale-prose: clean (0 file(s) scanned)",
-            flags=flags,
-        )
-        return
-    try:
-        payload = _run_vale_json(targets, cwd=cwd)
-    except _ValeRunError as exc:
-        _emit_vale_skip(reason=str(exc), flags=flags)
-        return
-    rel_for = {str(cwd / rel): rel for rel in paths}
-    rows = _vale_findings_to_rows(payload, rel_for=rel_for)
-    _emit_static_lint_result(
-        hook_name="vale-prose", rows=rows, scanned=len(targets), flags=flags, blocking=False
-    )
-
-
-def _collect_vale_rows(
-    targets: list[Path], *, cwd: Path, rel_for: dict[str, str]
-) -> tuple[str, ...]:
-    """Run the Vale subprocess over *targets* and return rendered rows, fail-open.
-
-    The Vale leg of the ``validate-prose`` chokepoint. Vale is a subprocess that
-    fails open: when the binary is absent, or it emits its error-object JSON (an
-    unsynced ``StylesPath``), this returns an empty tuple so the deterministic
-    EAWF013/014/017 legs still run. The returned rows are the same
-    ``  label:line:col: sev Check Message`` shape :func:`_vale_findings_to_rows`
-    emits, ready to fold into :func:`~eawf.platform.lint.validate_prose.validate_prose`.
-    """
-    import shutil
-
-    if shutil.which("vale") is None or not targets:
-        return ()
-    try:
-        payload = _run_vale_json(targets, cwd=cwd)
-    except _ValeRunError:
-        return ()
-    return tuple(_vale_findings_to_rows(payload, rel_for=rel_for))
-
-
 @hook_app.command(name="validate-prose")
 def validate_prose_gate(
     ctx: typer.Context,
@@ -2604,21 +2374,16 @@ def validate_prose_gate(
     The single enforcement entry point for the doc-clarity Layer-2 stack. It
     runs :func:`~eawf.platform.lint.validate_prose.validate_prose` (which
     composes EAWF013 citation-bracket position, EAWF014 no-manual-wrap, and
-    EAWF017 inline-reference tabulation in-process) and folds in the Vale
-    subprocess leg, over the given ``.md`` files — or, when none are given, the
-    staged ``.md`` delta per the conditional scan.
+    EAWF017 inline-reference tabulation in-process) over the given ``.md``
+    files — or, when none are given, the staged ``.md`` delta per the
+    conditional scan.
 
     Two modes implement the stability contract:
 
     - **fail-open** (default) — a local pre-commit / in-skill run. Findings are
       emitted as advisory and the gate exits 0, never blocking the operator.
-    - **fail-closed** (``--strict``) — the CI gate. Any finding from the
-      composed deterministic lints exits 1, blocking the PR.
-
-    The Vale leg always fails open (an absent binary or an unsynced
-    ``StylesPath`` yields no Vale rows), so ``--strict`` still rejects a
-    known-bad artifact on a machine without Vale — the deterministic
-    EAWF013/014/017 legs run regardless.
+    - **fail-closed** (``--strict``) — any finding from the composed
+      deterministic lints exits 1.
     """
     from eawf.platform.lint.validate_prose import validate_prose
 
@@ -2632,20 +2397,13 @@ def validate_prose_gate(
         and (cwd / rel).exists()
         and not _is_generated_markdown_fixture_path(rel)
     ]
-    targets = [cwd / rel for rel in md_paths]
-    rel_for = {str(cwd / rel): rel for rel in md_paths}
-    vale_rows = _collect_vale_rows(targets, cwd=cwd, rel_for=rel_for)
-
     rows: list[str] = []
     for rel in md_paths:
         try:
             source = (cwd / rel).read_text(encoding="utf-8")
         except OSError, UnicodeDecodeError:
             continue
-        # The Vale rows already carry their file label; pass them only to the
-        # report whose surface they belong to so a finding is attributed once.
-        per_file_vale = tuple(row for row in vale_rows if row.lstrip().startswith(f"{rel}:"))
-        report = validate_prose(source, strict=strict, vale_rows=per_file_vale)
+        report = validate_prose(source, strict=strict)
         rows.extend(f"  {rel}:{finding.render()}" for finding in report.findings)
     _emit_static_lint_result(
         hook_name="validate-prose",

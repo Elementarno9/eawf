@@ -168,6 +168,7 @@ ROOT_ENTRY_EXCEPTIONS: Final[tuple[RootEntryException, ...]] = (
     _entry("vfl", "tooling", "approves visual fidelity goldens"),
     _entry("backup", "tooling", "snapshots and restores the tree's stores"),
     _entry("local", "tooling", "reclaims expired entries of the machine-local store"),
+    _entry("paths", "tooling", "prints the local folders an agent may write"),
     _entry("worktree", "tooling", "lists the linked worktrees a garbage collection may reap"),
     _entry("help", "tooling", "prints prose help topics"),
     _entry("version", "tooling", "prints the installed version"),

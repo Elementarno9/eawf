@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any, Final, Literal, Self
 from uuid import UUID
 
-from pydantic import ConfigDict, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from eawf.kernel.identity import EntityKind
 from eawf.kernel.state.budget_signal import refuse_budget_signal
@@ -166,6 +166,29 @@ class ExactRevisionBinding(Epoch2Model):
     evidence_digest: Sha256DigestStr
 
 
+class TaskIntegratedBinding(Epoch2Model):
+    """The exact tree a completed Task was integrated on.
+
+    The head, its tree and the contract revision are the proof. The two
+    digests are optional because nothing ever compared them against a
+    recomputation: a stored row that carries them still loads and
+    re-serializes unchanged, and a new row leaves them out rather than
+    writing a value no reader checks.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    head_sha: ShaStr
+    tree_sha: ShaStr
+    contract_digest: Sha256DigestStr | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    policy_revision: StrictPositiveInt
+    evidence_digest: Sha256DigestStr | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+
 class OwnerPrincipal(Epoch2Model):
     """Exactly who owns something: a kind and an immutable qualified key.
 
@@ -285,5 +308,6 @@ __all__ = [
     "MappingBasis",
     "OriginConfidence",
     "OwnerPrincipal",
+    "TaskIntegratedBinding",
     "TransitionReason",
 ]

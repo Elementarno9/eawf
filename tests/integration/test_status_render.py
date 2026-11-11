@@ -52,7 +52,7 @@ def test_git_info_returns_clean_tree(
 ) -> None:
     sequence = iter(
         [
-            _stub_proc("abcdef0123456789abcdef0123456789abcdef01"),  # pragma: allowlist secret
+            _stub_proc("abcdef0123456789abcdef0123456789abcdef01"),
             _stub_proc("main"),
             _stub_proc(""),  # empty porcelain → not dirty
         ]
@@ -64,7 +64,7 @@ def test_git_info_returns_clean_tree(
     monkeypatch.setattr(subprocess, "run", _fake_run)
     info = status_mod._git_info(cwd=tmp_path)
     assert info == {
-        "head": "abcdef0123456789abcdef0123456789abcdef01",  # pragma: allowlist secret
+        "head": "abcdef0123456789abcdef0123456789abcdef01",
         "branch": "main",
         "dirty": False,
     }

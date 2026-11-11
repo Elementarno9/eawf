@@ -38,8 +38,8 @@ AT: Final = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
 DELEGATION: Final = "delegation://claude-code/0123abcd"
 OTHER_RUN: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000011"
 #: Leak-shaped inputs the bridge and the reference grammar must refuse.
-HOST_PATH_REF: Final = "delegation:///Users/x"  # pragma: allowlist secret
-LEAKY_TEXT: Final = "see /home/someone/notes"  # pragma: allowlist secret
+HOST_PATH_REF: Final = "delegation:///Users/x"  # eawf: allow-leak
+LEAKY_TEXT: Final = "see /home/someone/notes"  # eawf: allow-leak
 
 
 def event(kind: RunEventKind, payload: Any) -> RunEventRecord:

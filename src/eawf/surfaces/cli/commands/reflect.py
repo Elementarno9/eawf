@@ -3,7 +3,7 @@
 The group carries ``run``, ``show``, ``serve``, ``export``, ``prune`` and ``prices check``.
 ``prices check`` writes nothing; with ``--online`` it fetches the public vendor pricing
 pages and sends nothing about the tree. The other verbs read the tree and write only to
-the local reflection collection under ``.ea/local/reflect``, its title cache, or an output
+the local reflection collection under ``.ea/local/reports/reflect``, its title cache, or an output
 path the operator names; an output path inside the canonical store is refused before
 anything is read. Of those, ``run`` is the one verb that may call out: it fills session
 titles from a scrubbed structural digest, and ``--local-only`` turns that off.
@@ -25,6 +25,7 @@ from typing import Annotated
 
 import typer
 
+from eawf.kernel.layout import LOCAL_DIRNAME
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
@@ -114,6 +115,7 @@ def reflect_run(
     from eawf.observability.reflect.sessions import reflect_sessions
     from eawf.observability.telemetry.projector import IndexBusyError, LocalHistory
     from eawf.observability.telemetry.sources.session_history import claude_history_root
+    from eawf.platform.local_tidy import legacy_reflect_notice
 
     try:
         selected_scope = rp.parse_scope(scope)
@@ -123,6 +125,9 @@ def reflect_run(
     flags: GlobalFlags = ctx.obj
     tree_root = _tree_root(flags)
     target = _output(tree_root, out, flags=flags)
+    legacy = legacy_reflect_notice(tree_root / LOCAL_DIRNAME)
+    if legacy is not None:
+        typer.echo(f"reflect: {legacy}", err=True)
     root = rp.reflect_root(tree_root)
     area = sc.OutputArea.of(root if target is None else target.parent, tree_root=tree_root)
     now = datetime.now(UTC)

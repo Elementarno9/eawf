@@ -66,15 +66,13 @@ ESTABLISHED_TARGETS = ("pypi", "npm", "github")
 #: ``test_dev3_config_render`` carries, repeated here because this is the
 #: change that could move it: the deferral is the whole reason the
 #: fourth target does not reach an already-published rung.
-DEV2_CONFIG_DIGEST = (
-    "5e3d6dd2f93d7510e57624c6b1280dab43b02cdaca745d45a8ff1e0523651a38"  # pragma: allowlist secret
-)
+DEV2_CONFIG_DIGEST = "5e3d6dd2f93d7510e57624c6b1280dab43b02cdaca745d45a8ff1e0523651a38"
 
 #: The manifest digest ``REL-0.7.0.dev2`` approved and baked on. It is
 #: recomputed from the manifest's content, so any change to the targets
 #: that rung declares would move it.
 DEV2_APPROVED_MANIFEST_DIGEST = "sha256:" + (
-    "3ea0e1250281a90d1840583cbd92c2751fc1c99b9d9f1824e69f740ea9c9e148"  # pragma: allowlist secret
+    "3ea0e1250281a90d1840583cbd92c2751fc1c99b9d9f1824e69f740ea9c9e148"
 )
 
 #: The manifest the ``dev2`` publication froze, kept as a fixture because

@@ -43,11 +43,6 @@ site/
 # machine-specific runtime renders (CLAUDE.md, .claude/, AGENTS.override.md,
 # .codex/, .opencode/) are ignored by the managed block at the end of this file.
 
-# Vale prose-linter: the eawf style package + .vale.ini ARE committed; the
-# Google base package is fetched by `vale sync` into StylesPath at CI time
-# and must not be committed.
-.vale/styles/Google/
-
 # Self-hosted marketplace catalog pointers ARE committed — small declarative
 # manifests (NOT rendered plugin trees) that publish the install source for
 # each runtime. Re-included with explicit negations so an operator's global
@@ -61,16 +56,12 @@ site/
 !.agents/plugins/marketplace.json
 
 # .ea/ — the managed block at the end of this file owns the scratch, lock,
-# cache, worktree and backup paths; only what it does not cover is listed here.
+# cache and worktree paths; only what it does not cover is listed here.
 #
 # instrument-probe cache embeds absolute host paths; the bare glob covers
 # nested copies a doctor / skill run may write under a resolved state dir
 # (e.g. tests/fixtures/**/.ea/), not just the repo-root .ea/ default.
 **/instrument-probe.json
-
-# State migration backups written adjacent to any resolved state.json, not
-# just the .ea/ default. Forward-fix is the canonical recovery path.
-state.json.bak.*
 
 # Secrets
 .env
@@ -100,11 +91,9 @@ AGENTS.override.md
 .ea/generations/gen-*/indexes/
 .ea/worktrees/
 .ea/indexes/
-.ea/specs/
 .ea/instrument-probe.json
 .ea/telemetry.db
 *.db
-.ea/state.json.bak.*
 .ea/store/event.jsonl
 .ea/state.json
 .ea/store/*.jsonl

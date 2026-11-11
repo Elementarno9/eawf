@@ -90,7 +90,7 @@ def test_spike_rule_sends_heavy_artefacts_to_scratch() -> None:
         ("", 0),
         ("keep it under `.ea/local/research/`", 0),
         ("run /plan propose", 0),
-        ("put it in /srv/scratch/models", 1),  # pragma: allowlist secret
+        ("put it in /srv/scratch/models", 1),  # eawf: allow-leak
         ("put it in ~/scratch", 1),
         ("put it in `C:\\scratch`", 1),
     ],

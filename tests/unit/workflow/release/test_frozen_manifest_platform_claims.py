@@ -50,9 +50,7 @@ REPORTED: dict[str, tuple[str, ...]] = {
 
 #: Digest of :func:`v1_payload` as the first schema computed it before
 #: platform claims existed; a v1 manifest must keep this byte for byte.
-V1_DIGEST_HEX = (
-    "ccb41d983a188021a14e33b19deac621f24790ded3bdcb3d7e4e71481dd3a606"  # pragma: allowlist secret
-)
+V1_DIGEST_HEX = "ccb41d983a188021a14e33b19deac621f24790ded3bdcb3d7e4e71481dd3a606"
 V1_DIGEST = f"sha256:{V1_DIGEST_HEX}"
 
 

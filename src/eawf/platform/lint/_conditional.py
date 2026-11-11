@@ -67,7 +67,6 @@ HOOK_FILTERS: dict[str, re.Pattern[str]] = {
     "eawf015-ears-advisory": _MARKDOWN,
     "eawf017-inline-refs": _MARKDOWN,
     "eawf019-math-facets": _JSON,
-    "vale-prose": _MARKDOWN,
     "validate-prose": _MARKDOWN,
     "plugin-doctor-drift": _PLUGIN_SURFACE,
 }

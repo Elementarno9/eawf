@@ -83,7 +83,7 @@ def test_pointers_carry_no_pii() -> None:
         # the email-leak heuristic so a real address still trips the check.
         residual = text.replace("@elementarno/eawf", "")
         assert "@" not in residual, pointer
-        assert "/Users/" not in text, pointer  # pragma: allowlist secret
+        assert "/Users/" not in text, pointer  # eawf: allow-leak
 
 
 def test_claude_pointer_matches_packager_published_output() -> None:

@@ -242,7 +242,7 @@ def test_shared_lock_serialises_doctor_after_sync(tmp_path: Path) -> None:
 
 def test_dispatch_goldens_have_no_machine_paths() -> None:
     """No committed dispatch golden may embed a machine path or PII marker."""
-    home_needle = "/Users/"  # pragma: allowlist secret — leak probe, not a real path
+    home_needle = "/Users/"  # eawf: allow-leak — leak probe, not a real path
     for golden in sorted(_GOLDEN_DIR.glob("*.txt")):
         body = golden.read_text(encoding="utf-8")
         assert home_needle not in body, f"machine path leaked into {golden.name}"

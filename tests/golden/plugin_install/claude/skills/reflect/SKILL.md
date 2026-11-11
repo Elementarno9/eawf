@@ -18,7 +18,7 @@ Report where effort, time and money actually went, without mutating canonical st
 - Effects: The reflect run, show, export, serve and prune verbs: read-only apart from the session title fill, which --local-only disables, and the local report files.
 - Allowed RPCs: none. This skill calls no daemon RPC.
 - Canonical state: never mutated by this skill.
-- Local write root: `.ea/local/reflect`; nothing is written outside it.
+- Local write root: `reflect/` in the folder `eawf paths local --kind reports` prints; nothing is written outside it.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
 
 ## 2. Context

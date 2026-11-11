@@ -155,6 +155,7 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "stray_daemons",
         "runtime_dir_size",
         "local_size",
+        "local-layout",
         "worktrees",
         "leftovers",
         "hook_health",

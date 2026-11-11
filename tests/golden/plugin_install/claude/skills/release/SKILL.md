@@ -18,7 +18,7 @@ Prove, preflight, approve, publish, observe and recover a release.
 - Effects: Release reads plus the create, pin, readiness, approval and publish verbs, and a reflect run once the release is observed.
 - Allowed RPCs: `projection.release.read`, `eawf release show` (`release.show`), `eawf release create` (`release.create`), `eawf release candidate` (`release.candidate`), `eawf release readiness` (`release.compute_readiness`), `eawf release approve` (`release.approve`), `eawf release publish` (`release.publish`), `eawf release observe` (`release.observe_target`), `eawf release retry` (`release.retry_target`), `eawf release reconcile` (`release.reconcile`). Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
-- Local write root: `.ea/local/reflect`; nothing is written outside it.
+- Local write root: `reflect/` in the folder `eawf paths local --kind reports` prints; nothing is written outside it.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
 
 ## 2. Context
@@ -46,7 +46,7 @@ Select exactly one action: `create`, `show`, `pin`, `preflight`, `approve`, `pub
 5. For publish, submit one durable external operation per target. Treat accepted, effected, and independently observed as distinct facts.
 6. For observe, query each target through its observation adapter. For retry-target or recover, operate only missing or ambiguous legs and preserve the burned version and frozen artifacts.
 7. Declare RELEASED only after every required target is independently observed with matching digests. Return operation references immediately.
-8. Once observe reports `released`, run `eawf reflect run` without naming an output path, so the report lands in the local reflect collection under `.ea/local/reflect`; it writes nothing canonical. Cite the report path it prints in your report.
+8. Once observe reports `released`, run `eawf reflect run` without naming an output path, so the report lands in the local reflect collection, `reflect/` in the folder `eawf paths local --kind reports` prints; it writes nothing canonical. Cite the report path it prints in your report.
 
 ## 4b. Applicable rules
 

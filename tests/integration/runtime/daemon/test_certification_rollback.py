@@ -27,7 +27,7 @@ from pydantic import ValidationError
 from eawf.kernel.runtime.compiled import CompiledRunSpec, canonical_digest
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.paths import store_path
+from eawf.kernel.store.paths import local_store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.conformance import (
@@ -233,7 +233,7 @@ def roll_profile_back(ctx: MethodContext, profile: dict[str, Any]) -> dict[str, 
 
 def journal_rows(state_path: Path) -> list[Envelope]:
     """Return every envelope in the tree's conformance journal."""
-    path = store_path(state_path, StoreKind.CONFORMANCE_STAGE)
+    path = local_store_path(state_path, StoreKind.CONFORMANCE_STAGE)
     if not path.exists():
         return []
     return [

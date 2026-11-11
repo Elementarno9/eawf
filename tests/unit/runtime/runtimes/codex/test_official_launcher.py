@@ -404,7 +404,7 @@ def test_the_child_env_is_the_scrub_allowlist(
 def test_the_wrapper_config_names_keys_and_never_values(
     workspace: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-fixture-value")  # pragma: allowlist secret
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-fixture-value")
     launcher = _launcher(workspace)
 
     asyncio.run(_launch_and_turn(launcher, _request(workspace)))

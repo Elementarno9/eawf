@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 #: The revision the corpus is frozen at: the commit that closed P30-I26
 #: together with phase P30. Freezing at the close rather than mid-iter is
 #: what makes the lifecycle rows terminal and the slice self-consistent.
-SOURCE_REVISION: Final = "9edef45aed746a153edbba8f351209ef5fc20793"  # pragma: allowlist secret
+SOURCE_REVISION: Final = "9edef45aed746a153edbba8f351209ef5fc20793"
 
 #: The iter the slice is taken around, and the phase that holds it.
 SLICE_ITER_ID: Final = "P30-I26"
