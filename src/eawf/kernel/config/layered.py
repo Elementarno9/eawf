@@ -317,6 +317,7 @@ _RESERVED_ENV_VARS: frozenset[str] = frozenset(
         "EAWF_NO_OSC",
         "EAWF_CONSOLE_COLD_PAINT_T0",
         "EAWF_STATUSLINE_THEME",
+        "EAWF_STATUSLINE_GLYPHS",
         "EAWF_STATUSLINE_CACHE",
         "EAWF_EGRESS_SOCKET",
         "EAWF_SNAPSHOT_OUT",

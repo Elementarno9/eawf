@@ -49,7 +49,9 @@ def _leaves(command: click.Command, path: tuple[str, ...] = ()) -> Iterator[tupl
         if path and command.invoke_without_command:
             yield " ".join(path), command
         for name, child in sorted(command.commands.items()):
-            yield from _leaves(child, (*path, name))
+            # A hidden subcommand alias is off the verb catalog, as `eawf verbs` lists it.
+            if not (path and child.hidden):
+                yield from _leaves(child, (*path, name))
     else:
         yield " ".join(path), command
 

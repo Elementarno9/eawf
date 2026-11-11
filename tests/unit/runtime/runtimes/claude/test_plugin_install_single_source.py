@@ -3,7 +3,7 @@
 Claude Code runs the hooks of an enabled plugin's ``hooks.json`` beside the
 project ``settings.json`` hooks, so a project entry next to the enabled eawf
 plugin fires every handler twice. A project ``statusLine`` overrides the
-user's own, so the installer writes one only when neither file sets it.
+user's own, so the installer writes none and keeps one it finds.
 
 Every test runs against a temporary ``HOME`` and the real registry detector,
 so nothing reads the operator's own Claude files.
@@ -23,7 +23,6 @@ from eawf.runtime.runtimes.claude.plugin_install import install_plugin
 
 _PROJECT_MARKER = "/.claude/hooks/"
 _PLUGIN_MARKER = "${CLAUDE_PLUGIN_ROOT}/hooks/"
-_EAWF_STATUSLINE = {"type": "command", "command": "eawf cc statusline"}
 _USER_STATUSLINE = {"type": "command", "command": "my-own-statusline"}
 
 
@@ -189,8 +188,8 @@ def test_project_enabled_flag_alone_switches_hooks_to_the_plugin(home: Path, pro
 @pytest.mark.parametrize(
     ("user", "project_settings", "expected"),
     [
-        pytest.param(None, None, _EAWF_STATUSLINE, id="neither-sets-it"),
-        pytest.param({}, {}, _EAWF_STATUSLINE, id="both-empty"),
+        pytest.param(None, None, None, id="neither-sets-it"),
+        pytest.param({}, {}, None, id="both-empty"),
         pytest.param({"statusLine": _USER_STATUSLINE}, None, None, id="user-sets-it"),
         pytest.param(None, {"statusLine": _USER_STATUSLINE}, _USER_STATUSLINE, id="project"),
         pytest.param(
@@ -251,4 +250,4 @@ def test_blank_user_settings_read_as_empty(home: Path, project: Path) -> None:
 
     install_plugin(project, extra_tools={})
 
-    assert _project_settings(project)["statusLine"] == _EAWF_STATUSLINE
+    assert "statusLine" not in _project_settings(project)

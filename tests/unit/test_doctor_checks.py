@@ -317,7 +317,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "eawfd"))
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 23
+    assert len(results) == 24
     assert {r.name for r in results} == {
         "local-layout",
         "branch_currency",
@@ -339,6 +339,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         "worktrees",
         "leftovers",
         "hook_health",
+        "claude.statusline",
         "render_output_roundtrip",
         "agents_md_byte_cap",
         "agents_override_byte_cap",

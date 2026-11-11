@@ -169,6 +169,14 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "glyphs": "auto",
         "toasts": "important",
     },
+    # The Claude Code status line: the terminal's own 16 colours with nerd-font
+    # separators by default, so it follows the terminal's palette.
+    "statusline": {
+        "theme": "ansi",
+        "glyphs": "nerd",
+        "ink": "30",
+        "bar_width": 20,
+    },
     # C09 (telemetry) projector reads these keys. Ingestion is ON by
     # default because an off-by-default projector never runs in CI or
     # dogfood, so every duration / cost distribution reads as an empty

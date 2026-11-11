@@ -6,7 +6,7 @@ stdin and asserts:
 1. ``eawf cc statusline`` emits the powerline rows on stdout with exit ``0``:
    line 1 with the segments the payload sources, then one bar row per window,
    and no ``n/a`` marker for a segment it cannot source.
-2. ``EAWF_STATUSLINE_THEME`` picks the palette, and ``--theme`` wins over it.
+2. ``EAWF_STATUSLINE_THEME`` picks the theme, and ``--theme`` wins over it.
 3. ``eawf cc statusline prewarm`` writes a cache entry at the expected
    path; subsequent ``statusline`` invocations with the same session id
    use the cached rows while they are fresh.
@@ -31,9 +31,9 @@ from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
 
-#: The background escapes of the dark and the light palettes' base colour.
-_DARK_BASE = "\x1b[48;2;30;30;46m"
-_LIGHT_BASE = "\x1b[48;2;239;241;245m"
+#: The model fill of the dark (Catppuccin Mocha) and light (Latte) themes.
+_DARK_BASE = "48;2;203;166;247m"
+_LIGHT_BASE = "48;2;136;57;239m"
 
 
 def _stub_no_git(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -96,7 +96,7 @@ def test_statusline_e2e_emits_powerline_rows_with_zero_exit(
     segments = [part.strip() for part in rows[0].split("\ue0b0") if part.strip()]
     assert segments == ["claude-opus-4-7", tmp_path.name]
     assert len(rows) == 2
-    assert rows[1].startswith(" ctx ") and rows[1].endswith("   1% 1K/200K")
+    assert rows[1].startswith("ctx ") and rows[1].endswith("   1%   0%c 1K/200K")
     assert "n/a" not in result.stdout
 
 
@@ -117,7 +117,7 @@ def test_statusline_env_theme_is_honored_when_no_flag(
     )
     assert result.exit_code == 0, result.output
     line = result.stdout.rstrip("\n")
-    assert _LIGHT_BASE in line, f"env-selected light palette not drawn: {line!r}"
+    assert _LIGHT_BASE in line, f"env-selected light theme not drawn: {line!r}"
     assert " haiku " in line
 
 
@@ -168,11 +168,10 @@ def test_statusline_prewarm_writes_cache_and_subsequent_run_hits_cache(
     cached = orjson.loads(cache_path.read_bytes())
     assert isinstance(cached, dict)
     assert " haiku " in cached["value"]
-    assert cached["key"] == "dark"
+    assert cached["key"] == "catppuccin-mocha/config"
 
-    # 2. Subsequent statusline call: cache hit. Tamper the cache with a
-    # sentinel string (keeping the fresh write stamp) so we can verify the
-    # cached value is what's printed, not a fresh render.
+    # 2. Subsequent statusline call: the render finishes in time, so the fresh
+    # line is printed and replaces the entry, never the older cached one.
     cache_path.write_bytes(orjson.dumps({**cached, "value": "SENTINEL"}))
 
     result = runner.invoke(
@@ -181,7 +180,8 @@ def test_statusline_prewarm_writes_cache_and_subsequent_run_hits_cache(
         input=json.dumps(payload),
     )
     assert result.exit_code == 0, result.output
-    assert result.stdout.rstrip("\n") == "SENTINEL"
+    assert result.stdout.rstrip("\n") == cached["value"]
+    assert orjson.loads(cache_path.read_bytes())["value"] == cached["value"]
 
 
 @pytest.mark.integration

@@ -2784,6 +2784,38 @@ def plugin_doctor_drift(
     emit_json_or_text(payload, "plugin-doctor-drift: clean", flags=flags)
 
 
+health_app = typer.Typer(
+    name="health",
+    help="Read and acknowledge the hook health record.",
+    no_args_is_help=True,
+)
+hook_app.add_typer(health_app, name="health")
+
+
+@health_app.command(name="ack")
+def health_ack(ctx: typer.Context) -> None:
+    """Acknowledge the recorded hook failures so the status line stops showing them.
+
+    Writes the acknowledgement beside the record in the main checkout and
+    prints how many failures of the last 24 hours it covered. Exits 1
+    outside a managed repository.
+    """
+    from eawf.runtime.hooks.health import acknowledge
+    from eawf.runtime.runtimes.claude.statusline import drop_cached_lines
+    from eawf.runtime.vcs.branch_name import main_checkout
+    from eawf.surfaces.cli.scope import resolve_state_path
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        state_dir = resolve_state_path(flags.workspace).parent
+        count = acknowledge(main_checkout(state_dir.parent) / state_dir.name, now=datetime.now(UTC))
+    except FileNotFoundError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotManaged"), flags=flags)
+    drop_cached_lines()
+    emit_json_or_text({"acknowledged": count}, f"acknowledged {count} hook failures", flags=flags)
+
+
 __all__ = [
+    "health_app",
     "hook_app",
 ]

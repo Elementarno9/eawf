@@ -319,6 +319,59 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         ),
         consumer="eawf.surfaces.tui.launch.persisted_toast_verbosity",
     ),
+    # --- statusline ----------------------------------------------------------
+    LeafKey(
+        key="statusline.theme",
+        domain="ui",
+        type="literal",
+        default="ansi",
+        writable_layers=_WRITABLE_GWR,
+        choices=(
+            "ansi",
+            "catppuccin-latte",
+            "catppuccin-frappe",
+            "catppuccin-macchiato",
+            "catppuccin-mocha",
+            "none",
+        ),
+        description=(
+            "Status line colours: the terminal's 16 colours, a Catppuccin flavour, or none; "
+            "--theme, NO_COLOR and EAWF_STATUSLINE_THEME win over it."
+        ),
+        consumer="eawf.runtime.runtimes.claude.statusline_theme.statusline_config",
+    ),
+    LeafKey(
+        key="statusline.glyphs",
+        domain="ui",
+        type="literal",
+        default="nerd",
+        writable_layers=_WRITABLE_GWR,
+        choices=("nerd", "unicode", "ascii"),
+        description=(
+            "Status line separator glyphs; EAWF_STATUSLINE_GLYPHS wins over it, and "
+            "TERM=linux or a non-UTF-8 locale forces ascii."
+        ),
+        consumer="eawf.runtime.runtimes.claude.statusline_theme.statusline_config",
+    ),
+    LeafKey(
+        key="statusline.ink",
+        domain="ui",
+        type="literal",
+        default="30",
+        writable_layers=_WRITABLE_GWR,
+        choices=("30", "97"),
+        description="Text colour on the ansi theme's segment fills: 30 black or 97 bright white.",
+        consumer="eawf.runtime.runtimes.claude.statusline_theme.statusline_config",
+    ),
+    LeafKey(
+        key="statusline.bar_width",
+        domain="ui",
+        type="int",
+        default=20,
+        writable_layers=_WRITABLE_GWR,
+        description="Cells per status line meter bar, 10 to 40, before it shrinks to COLUMNS.",
+        consumer="eawf.runtime.runtimes.claude.statusline_theme.statusline_config",
+    ),
     # --- telemetry (C09 surface) ------------------------------------------
     LeafKey(
         key="telemetry.enabled",

@@ -36,6 +36,7 @@ from eawf.observability.doctor.checks_local_layout import check_local_layout
 from eawf.observability.doctor.checks_local_size import check_local_size
 from eawf.observability.doctor.checks_plugin_version import check_plugin_version
 from eawf.observability.doctor.checks_sequence import check_canonical_sequence_drift
+from eawf.observability.doctor.checks_statusline import check_claude_statusline
 from eawf.observability.doctor.checks_steering_cap import (
     CODEX_PROJECT_DOC_BYTE_CAP as CODEX_PROJECT_DOC_BYTE_CAP,
 )
@@ -946,6 +947,7 @@ def run_all(
         check_worktrees(workspace=anchor),
         check_leftovers(workspace=anchor),
         check_hook_health(workspace=anchor),
+        check_claude_statusline(workspace=anchor),
         check_render_output_roundtrip(),
         check_agents_md_byte_cap(workspace=anchor),
         check_agents_override_byte_cap(workspace=anchor),

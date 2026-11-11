@@ -14,8 +14,8 @@ The count is *informational only*: it reports how many files sit on disk, not
 whether any of them ran or exited cleanly. The module never reads a hook exit
 code, so it must not paint the segment ``status="ok"`` (a health claim it
 cannot back), and a count is no fault either, so it reports ``status="info"``.
-Failures the hook health record holds are a fault: the segment then appends
-``hook-errors:<n>`` and reports ``degraded``, as it does for an install record
+Recent unacknowledged failures in the hook health record are a fault: the
+segment then appends ``hooks!<n>`` and reports ``degraded``, as it does for an install record
 that exists but cannot be read; an absent record is ``missing``, the same as
 any value with no producer.
 """
@@ -25,11 +25,12 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
 from eawf.kernel.projection.truth import TruthKind
-from eawf.runtime.hooks.health import HEALTH_RECORD, unacknowledged_count
+from eawf.runtime.hooks.health import HEALTH_RECORD, WINDOW_ROWS, recent_failure_count
 from eawf.runtime.runtimes.claude.statusline_modules._host import (
     HOST_PLUGIN_PRODUCER,
     HOST_PLUGIN_RECORD,
@@ -113,25 +114,34 @@ def _count_hooks(state_path: Path) -> int:
         return 0
 
 
+def _failure_token(failures: int) -> str:
+    """Return ``hooks!<n>``, ``hooks!99+`` from :data:`WINDOW_ROWS`, or ``""`` at ``0``."""
+    if not failures:
+        return ""
+    return f"hooks!{WINDOW_ROWS - 1}+" if failures >= WINDOW_ROWS else f"hooks!{failures}"
+
+
 def _hook_errors(ea_dir: Path) -> str:
-    """Return the ``hook-errors:<n>`` token for unacknowledged failures, else ``""``.
+    """Return the failure token with a leading space, else ``""``.
 
     Args:
         ea_dir: The resolved ``.ea`` directory, a linked worktree's own included.
 
     Returns:
-        The token with a leading space, or ``""`` when nothing is unacknowledged
-        or the record cannot be read.
+        The token, or ``""`` when no failure is recent and unacknowledged, or
+        when the record cannot be read. An unreadable acknowledgement counts
+        as none, so it never hides a failure.
     """
     # A hook records its failures in the main checkout's tree, wherever it
     # fired, so a worktree session reads the record there too.
     record_dir = main_checkout(ea_dir.parent) / ea_dir.name
     try:
-        failures = unacknowledged_count(record_dir)
+        failures = recent_failure_count(record_dir, now=datetime.now(UTC))
     except OSError as exc:
         logger.debug(f"_hook_errors health-record-unreadable error={exc}")
         return ""
-    return f" hook-errors:{failures}" if failures else ""
+    token = _failure_token(failures)
+    return f" {token}" if token else ""
 
 
 def build(claude_payload: dict[str, Any], state_path: Path | None) -> StatuslineSegment:
@@ -146,8 +156,8 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
         ``status="missing"`` when no workspace resolves or the host keeps no
         install record, ``status="degraded"`` when that record is unreadable,
         and ``status="info"`` for the counts, which claim no health because the
-        module never inspects a hook exit code. Unacknowledged hook failures
-        append ``hook-errors:<n>`` and make the segment ``degraded``. A counted
+        module never inspects a hook exit code. Recent unacknowledged hook
+        failures append ``hooks!<n>`` and make the segment ``degraded``. A counted
         plugin half names the host's install record as the producer, with the
         hooks directory as a second provenance.
     """

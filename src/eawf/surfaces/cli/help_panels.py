@@ -141,6 +141,7 @@ COMMAND_PANELS: dict[str, str] = {
     "runtime": "runtime",
     "session": "runtime",
     "skill": "runtime",
+    "statusline": "runtime",
     # ship: release artifacts and the sync renderer.
     "release": "ship",
     "sync": "ship",

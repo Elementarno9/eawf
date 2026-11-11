@@ -1,26 +1,95 @@
-# Statusline palettes for `eawf cc statusline`.
+# Statusline themes for `eawf cc statusline`.
 #
-# Exactly two palettes, `light` and `dark`, each a closed set of 24-bit
-# `#rrggbb` colours (see `Palette` in src/eawf/surfaces/render/statusline.py
-# for what each role paints). The palette is picked per redraw from
-# `--theme`, `EAWF_STATUSLINE_THEME`, Claude Code's `theme` setting or
-# `COLORFGBG`, in that order, and defaults to dark.
+# Each theme names one colour per role (see `Theme` in
+# src/eawf/surfaces/render/statusline.py for what each role paints). A fill is
+# an SGR background code (40-47, 100-107) or a 24-bit `#rrggbb`; `ink`, the
+# text on a segment fill, is an SGR foreground code or a `#rrggbb`. Gaps,
+# meter-row text and the cell after the last separator are never painted:
+# they stay on the terminal's own background (SGR 49) in every theme.
 #
-# Every foreground drawn on a background here must keep a WCAG contrast of
-# at least 4.5:1: `ink` on each segment fill, each fill on `base` (the
-# powerline arrow), and `text`, `muted`, `track`, the bar levels and the
-# trend colours on `base`. A test computes the ratio for every pair.
-#
-# The hues follow Catppuccin: Mocha accents on a Mocha base for dark, and
-# Latte accents darkened until they hold 4.5:1 on a Latte base for light.
+# `ansi` is the default: the terminal's own 16 colours, so the line follows
+# whatever palette the terminal is set to. Its ink is replaced by the
+# `statusline.ink` config leaf. The four Catppuccin flavours take their hex
+# from the upstream palette.json and reuse the same roles: mauve, blue, teal,
+# green for model, project, session, cost; sky, lavender, yellow for MCP,
+# scope, budget; peach and red for warn and alert; surface2 for the bar
+# track; teal, yellow, red for the bar fills; green for a limit bar under
+# pace; pink for the pace marker; ink crust (Latte: base).
 
-dark:
-  base: "#1e1e2e"
+ansi:
+  ink: "30"
+  model: "45"
+  project: "44"
+  active_time: "46"
+  cost: "42"
+  mcp: "47"
+  scope: "105"
+  budget: "106"
+  warn: "43"
+  alert: "41"
+  track: "100"
+  calm: "46"
+  caution: "43"
+  danger: "41"
+  under: "42"
+  marker: "95"
+
+catppuccin-latte:
+  ink: "#eff1f5"
+  model: "#8839ef"
+  project: "#1e66f5"
+  active_time: "#179299"
+  cost: "#40a02b"
+  mcp: "#04a5e5"
+  scope: "#7287fd"
+  budget: "#df8e1d"
+  warn: "#fe640b"
+  alert: "#d20f39"
+  track: "#acb0be"
+  calm: "#179299"
+  caution: "#df8e1d"
+  danger: "#d20f39"
+  under: "#40a02b"
+  marker: "#ea76cb"
+
+catppuccin-frappe:
+  ink: "#232634"
+  model: "#ca9ee6"
+  project: "#8caaee"
+  active_time: "#81c8be"
+  cost: "#a6d189"
+  mcp: "#99d1db"
+  scope: "#babbf1"
+  budget: "#e5c890"
+  warn: "#ef9f76"
+  alert: "#e78284"
+  track: "#626880"
+  calm: "#81c8be"
+  caution: "#e5c890"
+  danger: "#e78284"
+  under: "#a6d189"
+  marker: "#f4b8e4"
+
+catppuccin-macchiato:
+  ink: "#181926"
+  model: "#c6a0f6"
+  project: "#8aadf4"
+  active_time: "#8bd5ca"
+  cost: "#a6da95"
+  mcp: "#91d7e3"
+  scope: "#b7bdf8"
+  budget: "#eed49f"
+  warn: "#f5a97f"
+  alert: "#ed8796"
+  track: "#5b6078"
+  calm: "#8bd5ca"
+  caution: "#eed49f"
+  danger: "#ed8796"
+  under: "#a6da95"
+  marker: "#f5bde6"
+
+catppuccin-mocha:
   ink: "#11111b"
-  text: "#cdd6f4"
-  muted: "#a6adc8"
-  track: "#9399b2"
-  label: "#bac2de"
   model: "#cba6f7"
   project: "#89b4fa"
   active_time: "#94e2d5"
@@ -30,30 +99,9 @@ dark:
   budget: "#f9e2af"
   warn: "#fab387"
   alert: "#f38ba8"
-  low: "#a6e3a1"
-  mid: "#f9e2af"
-  high: "#f38ba8"
-  rising: "#fab387"
-  falling: "#a6e3a1"
-
-light:
-  base: "#eff1f5"
-  ink: "#eff1f5"
-  text: "#4c4f69"
-  muted: "#5c5f77"
-  track: "#5c5f77"
-  label: "#4c4f69"
-  model: "#7a2fd6"
-  project: "#1a56d6"
-  active_time: "#0e6f74"
-  cost: "#2d7a1e"
-  mcp: "#036d99"
-  scope: "#4b5fd6"
-  budget: "#8a5a0a"
-  warn: "#b0450a"
-  alert: "#b80d32"
-  low: "#2d7a1e"
-  mid: "#8a5a0a"
-  high: "#b80d32"
-  rising: "#b0450a"
-  falling: "#2d7a1e"
+  track: "#585b70"
+  calm: "#94e2d5"
+  caution: "#f9e2af"
+  danger: "#f38ba8"
+  under: "#a6e3a1"
+  marker: "#f5c2e7"

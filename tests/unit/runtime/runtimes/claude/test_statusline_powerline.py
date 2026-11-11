@@ -1,38 +1,36 @@
 """The powerline layout: line 1 segments over the ctx, 5h and 7d bar rows.
 
-Line 1 shows model, project, active time, cost, MCP and, when it carries a
-failure token, hooks, as arrow-ended segments. Under it each window the host
-reports gets a bar row with its used percentage, trend and reset countdown.
-Four goldens pin the rows byte for byte in both palettes at 80 and 120
-columns. Regenerate them by running this file with ``EAWF_SNAPSHOT_REGEN=1``
-set, then re-run it without the variable to confirm the committed files match.
+Line 1 shows model, project, session time, cost, MCP and, when it carries a
+failure token, hooks, as filled segments joined by separators. Under it each
+window the host reports gets a meter row with its used percentage, pace or
+cache-read share, and reset countdown. The byte-exact goldens live in
+``test_statusline_goldens``.
 """
 
 from __future__ import annotations
 
-import os
 import re
 import unicodedata
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from typing import Any, Final, Literal
+from typing import Any, Final
 
 import pytest
 
 from eawf.runtime.runtimes.claude import statusline as orchestrator
 from eawf.runtime.runtimes.claude.statusline_modules import context_tokens, cost, model_session_cwd
 from eawf.surfaces.render.statusline import (
+    ColourTheme,
+    LineStyle,
     PowerlineBar,
     SegmentSource,
     StatuslineSegment,
     format_context_tokens,
     format_countdown,
-    load_palette,
+    load_theme,
     render_powerline,
     sourced_segment,
 )
 
-_GOLDEN_DIR: Final = Path(__file__).resolve().parents[4] / "golden" / "statusline"
 _SGR: Final = re.compile(r"\x1b\[[0-9;]*m")
 _ARROW: Final = ""
 _NOW: Final = datetime(2026, 11, 6, 12, 0, tzinfo=UTC)
@@ -71,14 +69,11 @@ PAYLOAD: Final[dict[str, Any]] = {
 #: What the registry and the hook health record state for the fixture session.
 _MCP: Final = sourced_segment("mcp_health", "mcp", "3/6", _SOURCE, status="warn")
 _HOOKS: Final = sourced_segment(
-    "hooks_plugins", "hooks", "4 plugins:2 hook-errors:2", _SOURCE, status="degraded"
+    "hooks_plugins", "hooks", "4 plugins:2 hooks!2", _SOURCE, status="degraded"
 )
 _HOOKS_CLEAN: Final = sourced_segment(
     "hooks_plugins", "hooks", "4 plugins:2", _SOURCE, status="info"
 )
-
-#: The used percentages of the fixture session's previous render.
-_PREVIOUS: Final = {"ctx": 3, "5h": 23, "7d": 46}
 
 
 def _cells(row: str) -> int:
@@ -99,11 +94,11 @@ def _segments(hooks: StatuslineSegment = _HOOKS) -> list[StatuslineSegment]:
 
 
 def _bars(payload: dict[str, Any] = PAYLOAD) -> list[PowerlineBar]:
-    return orchestrator._with_trends(orchestrator._build_bars(payload, _NOW), _PREVIOUS)
+    return orchestrator._build_bars(payload, _NOW)
 
 
 def _render(
-    palette: Literal["light", "dark"] = "dark",
+    theme: ColourTheme | None = "catppuccin-mocha",
     width: int | None = None,
     *,
     segments: list[StatuslineSegment] | None = None,
@@ -112,7 +107,7 @@ def _render(
     return render_powerline(
         _segments() if segments is None else segments,
         _bars() if bars is None else bars,
-        load_palette(palette),
+        LineStyle(theme=None if theme is None else load_theme(theme)),
         width=width,
     )
 
@@ -133,10 +128,10 @@ def test_line_one() -> None:
     assert texts == [
         "Opus 5.5",
         "sample-project",
-        "12m · 62% active",
-        "$1.22",
+        "20m · 62% active",
+        "$1.22 API-equivalent",
         "MCP: 3/6",
-        "hook-errors:2",
+        "hooks!2",
     ]
     # Without a failure token the hooks segment is left out.
     clean = _render(segments=_segments(_HOOKS_CLEAN))
@@ -146,12 +141,14 @@ def test_line_one() -> None:
 # ---- CR-733: bar rows -------------------------------------------------------
 
 
-def test_bar_rows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    rows = _plain(_render())[1:]
+def test_bar_rows() -> None:
+    # ctx: 50K of 64K read from cache is 78%; 5h: 23% used 58.2% in is -35%;
+    # 7d: 41% used 5.9% in is +35%, its marker inside the fill.
+    rows = _render(None)[1:]
     assert rows == [
-        f" ctx {_ARROW} ▋░░░░░░░░░   6% ↑+3 64K/1.0M",
-        f" 5h  {_ARROW} ██▎░░░░░░░  23% 2h05m",
-        f" 7d  {_ARROW} ████▏░░░░░  41% ↓-5 6d14h",
+        f"ctx █▎{'░' * 18}   6%  78%c 64K/1.0M",
+        f"5h  ████▋{'░' * 6}│{'░' * 8}  23%  -35% 2h05m",
+        f"7d  █│██████▎{'░' * 11}  41%  +35% 6d14h",
     ]
 
     partial = {**PAYLOAD, "rate_limits": {"seven_day": PAYLOAD["rate_limits"]["seven_day"]}}
@@ -160,36 +157,15 @@ def test_bar_rows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert [bar.label for bar in _bars(absent)] == ["ctx"]
     assert orchestrator._build_bars({}, _NOW) == []
 
-    # The trend counts from the session's previous render, through the sidecar.
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(tmp_path / "cache"))
-    monkeypatch.delenv("COLUMNS", raising=False)
-    monkeypatch.chdir(tmp_path)
-    levels = orchestrator._levels_path_for("ses-powerline")
-    first = orchestrator.render_pipeline(
-        PAYLOAD, workspace=None, palette="dark", levels_path=levels
-    )
-    assert "↑" not in first and "↓" not in first
-    busier = {
-        **PAYLOAD,
-        "rate_limits": {"five_hour": {"used_percentage": 30}, "seven_day": {"used_percentage": 41}},
-    }
-    second = _plain(
-        orchestrator.render_pipeline(
-            busier, workspace=None, palette="dark", levels_path=levels
-        ).split("\n")
-    )
-    assert second[2].endswith(" 30% ↑+7")
-    assert second[3].endswith(" 41%")
 
-
-def test_bar_rows_show_a_falling_trend_and_omit_a_zero_one() -> None:
+def test_bar_rows_show_on_pace_and_end_an_unknown_one_at_its_percent() -> None:
     bars = [
-        PowerlineBar(label="5h", ratio=0.2, trend=-3),
-        PowerlineBar(label="7d", ratio=0.2, trend=0),
+        PowerlineBar(label="5h", ratio=0.2, pace=-3),
+        PowerlineBar(label="7d", ratio=0.2),
     ]
-    rows = _plain(_render(segments=[], bars=bars))
-    assert rows == [f" 5h  {_ARROW} ██░░░░░░░░  20% ↓-3", f" 7d  {_ARROW} ██░░░░░░░░  20%"]
+    rows = _render(None, segments=[], bars=bars)
+    track = "░" * 16
+    assert rows == [f"5h  ████{track}  20%     ~", f"7d  ████{track}  20%"]
 
 
 def test_context_bar_row_needs_a_size_and_every_input_class() -> None:
@@ -218,20 +194,14 @@ def test_context_bar_row_needs_a_size_and_every_input_class() -> None:
 # ---- CR-736: goldens and width ----------------------------------------------
 
 
-def test_goldens() -> None:
-    regen = bool(os.environ.get("EAWF_SNAPSHOT_REGEN"))
-    for palette in ("light", "dark"):
+def test_rows_fit_the_width() -> None:
+    for theme in ("catppuccin-mocha", "catppuccin-latte"):
         for width in (80, 120):
-            rows = _render(palette, width)
-            path = _GOLDEN_DIR / f"{palette}-{width}.ansi"
-            rendered = "\n".join(rows) + "\n"
-            if regen:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(rendered.encode("utf-8"))
-            assert path.read_bytes() == rendered.encode("utf-8"), path.name
+            rows = _render(theme, width)
             assert all("\n" not in row and _cells(row) <= width for row in rows)
 
-    # Line 1 drops MCP, then active time, then project, and keeps model and cost.
+    # Line 1 narrows the cost label, then drops MCP, then active time, then
+    # project, and keeps model and cost.
     kept: list[list[str]] = []
     for width in range(120, 13, -1):
         rows = _render(width=width)
@@ -239,26 +209,28 @@ def test_goldens() -> None:
         texts = _line_one_texts(rows)
         if not kept or texts != kept[-1]:
             kept.append(texts)
-    order = [[text.split()[0] for text in step] for step in kept]
-    assert order[:5] == [
-        ["Opus", "sample-project", "12m", "$1.22", "MCP:", "hook-errors:2"],
-        ["Opus", "sample-project", "12m", "$1.22", "hook-errors:2"],
-        ["Opus", "sample-project", "$1.22", "hook-errors:2"],
-        ["Opus", "$1.22", "hook-errors:2"],
-        ["Opus", "$1.22"],
+    session, wide, narrow = "20m · 62% active", "$1.22 API-equivalent", "$1.22 API-eq"
+    assert kept[:6] == [
+        ["Opus 5.5", "sample-project", session, wide, "MCP: 3/6", "hooks!2"],
+        ["Opus 5.5", "sample-project", session, narrow, "MCP: 3/6", "hooks!2"],
+        ["Opus 5.5", "sample-project", session, narrow, "hooks!2"],
+        ["Opus 5.5", "sample-project", narrow, "hooks!2"],
+        ["Opus 5.5", narrow, "hooks!2"],
+        ["Opus 5.5", narrow],
     ]
-    assert kept[-1][-1] == "$1.22" and kept[-1][0].endswith("…")
+    assert any(step[0].endswith("…") and step[-1] == narrow for step in kept)
 
-    # A bar row shrinks its bar to five cells, then drops the trend, then the reset.
+    # A meter row shrinks its bar to ten cells, then drops the detail, then the pace.
     def ctx_row(width: int) -> str | None:
-        rows = _plain(_render(width=width, segments=[], bars=_bars()[:1]))
+        rows = _render(None, width=width, segments=[], bars=_bars()[:1])
         return rows[0] if rows else None
 
-    assert ctx_row(35) == f" ctx {_ARROW} ▋░░░░░░░░░   6% ↑+3 64K/1.0M"
-    assert ctx_row(34) == f" ctx {_ARROW} ▍░░░░   6% ↑+3 64K/1.0M"
-    assert ctx_row(29) == f" ctx {_ARROW} ▍░░░░   6% 64K/1.0M"
-    assert ctx_row(25) == f" ctx {_ARROW} ▍░░░░   6%"
-    assert ctx_row(16) is None
+    assert ctx_row(44) == f"ctx █▎{'░' * 18}   6%  78%c 64K/1.0M"
+    assert ctx_row(43) == f"ctx █▎{'░' * 17}   6%  78%c 64K/1.0M"
+    assert ctx_row(34) == f"ctx ▋{'░' * 9}   6%  78%c 64K/1.0M"
+    assert ctx_row(33) == f"ctx █▏{'░' * 16}   6%  78%c"
+    assert ctx_row(24) == f"ctx █{'░' * 14}   6%"
+    assert ctx_row(18) is None
 
 
 def test_a_width_too_narrow_for_anything_renders_no_row() -> None:
@@ -303,17 +275,17 @@ def test_project_segment_reads_the_workspace_basename(workspace: Any, expected: 
 @pytest.mark.parametrize(
     ("cost_block", "expected"),
     [
-        ({"total_api_duration_ms": 754_000, "total_duration_ms": 1_216_000}, "12m · 62% active"),
-        ({"total_api_duration_ms": 59_999, "total_duration_ms": 60_000}, "0m · 100% active"),
-        ({"total_api_duration_ms": 0, "total_duration_ms": 1}, "0m · 0% active"),
-        ({"total_api_duration_ms": 9_000, "total_duration_ms": 1_000}, "0m · 100% active"),
+        ({"total_api_duration_ms": 754_000, "total_duration_ms": 1_216_000}, "20m · 62% active"),
+        ({"total_api_duration_ms": 59_999, "total_duration_ms": 60_000}, "1m · 100% active"),
+        ({"total_api_duration_ms": 0, "total_duration_ms": 1}, "0m"),
+        ({"total_api_duration_ms": 9_000, "total_duration_ms": 1_000}, "0m"),
         ({"total_api_duration_ms": 1_000, "total_duration_ms": 0}, None),
-        ({"total_duration_ms": 1_000}, None),
+        ({"total_duration_ms": 61_000}, "1m"),
         ({"total_api_duration_ms": 1_000}, None),
-        ({"total_api_duration_ms": "1000", "total_duration_ms": 2_000}, None),
+        ({"total_api_duration_ms": "1000", "total_duration_ms": 120_000}, "2m"),
     ],
 )
-def test_active_time_is_api_minutes_and_their_share(
+def test_active_time_is_wall_time_and_the_api_share(
     cost_block: dict[str, Any], expected: str | None
 ) -> None:
     segment = cost.build_active({"cost": cost_block}, None)

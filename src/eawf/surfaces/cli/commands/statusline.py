@@ -1,92 +1,123 @@
-"""``eawf cc statusline install`` global-install wizard (B018 W41).
+"""``eawf statusline``: install the Claude Code status line once per user and diagnose it.
 
-A thin CLI flow that wires the Eä statusline into the operator's global
-Claude Code setup by patching ``~/.claude/settings.json`` to invoke
-``eawf cc statusline`` on every redraw. All install logic lives in the pure
-:mod:`eawf.runtime.runtimes.claude.statusline_install` library; this handler
-only resolves the path, gates on a confirmation, and maps a bad settings
-file onto the operator-facing ``UserError`` bucket.
+- ``eawf statusline install [--scope user|project|local] [--print] [--yes]``
+  sets the ``statusLine`` key of one settings file. Exit ``0`` when it is
+  written or already the same, ``1`` when another entry is kept (``--yes``
+  replaces it), ``6`` when the file cannot be written: the line goes to
+  stdout for the operator to add by hand.
+- ``eawf statusline doctor [--json]`` reports the winning entry and its
+  verdict; exit ``1`` only for ``broken``.
 
-The wizard is idempotent: a re-run on an already-installed setup reports the
-no-op and exits ``0`` without rewriting. ``--yes`` skips the interactive
-confirmation (for non-interactive / scripted installs); declining the
-confirmation aborts with a ``UserError`` (user-declined).
+``eawf cc statusline install`` stays as a hidden alias of the install verb.
+The library lives in :mod:`eawf.runtime.runtimes.claude.statusline_install`,
+imported in-body to keep it off the CLI's import path.
 """
 
 from __future__ import annotations
 
-import logging
-from typing import Annotated
+import dataclasses
+import json
+from pathlib import Path
+from typing import Annotated, Literal
 
 import typer
 
-from eawf.surfaces.cli.errors import UserError
+from eawf.surfaces.cli import exit_codes
+from eawf.surfaces.cli.flags import GlobalFlags
 
-logger = logging.getLogger(__name__)
-
-
-statusline_wizard_app = typer.Typer(
-    name="install",
-    help="Install the Eä statusline into the global Claude Code setup.",
-    no_args_is_help=False,
-    invoke_without_command=True,
+statusline_cli_app = typer.Typer(
+    name="statusline",
+    help="Install the Claude Code status line once per user and diagnose it.",
+    no_args_is_help=True,
 )
 
 
-@statusline_wizard_app.callback(invoke_without_command=True)
 def statusline_install(
-    ctx: typer.Context,
+    scope: Annotated[
+        Literal["user", "project", "local"],
+        typer.Option(
+            "--scope",
+            help=(
+                "Settings file: user (~/.claude/settings.json), project "
+                "(.claude/settings.json) or local (.claude/settings.local.json)."
+            ),
+        ),
+    ] = "user",
+    print_only: Annotated[
+        bool,
+        typer.Option("--print", help="Print the statusLine line and write nothing."),
+    ] = False,
     assume_yes: Annotated[
         bool,
-        typer.Option(
-            "--yes",
-            "-y",
-            help="Skip the confirmation prompt (for non-interactive installs).",
-        ),
+        typer.Option("--yes", "-y", help="Replace another statusLine entry."),
     ] = False,
 ) -> None:
-    """Patch ``~/.claude/settings.json`` to invoke the Eä statusline.
+    """Set ``statusLine`` to run ``eawf cc statusline``, changing no other key.
 
-    Reads the current global settings, reports a no-op when the Eä
-    statusline command is already wired, otherwise confirms (unless
-    ``--yes``) and writes the patched settings.
-
-    Raises:
-        UserError: When the operator declines the confirmation
-            (``kind="UserDeclined"``) or the existing settings file is not
-            valid JSON (``kind="InvalidInput"``).
+    The settings file is written anew from its parsed content: every key
+    keeps its order and the file keeps its indentation, but inline arrays
+    and objects are laid out one item per line.
     """
-    if ctx.invoked_subcommand is not None:
-        return
-    # Imported in-body, not at module level: the installer lives under the
-    # claude runtime package, whose import pulls jinja2 (the template engine).
-    # A module-level import would leak jinja2 into the CLI app import and
-    # blow the cold-start import budget.
     from eawf.runtime.runtimes.claude.statusline_install import (
-        global_settings_path,
+        SettingsNotWritable,
         install_statusline,
-        is_already_installed,
-        read_settings,
+        settings_path,
+        statusline_line,
     )
 
-    path = global_settings_path()
-    try:
-        current = read_settings(path)
-    except ValueError as exc:
-        raise UserError(str(exc), kind="InvalidInput") from exc
-
-    if is_already_installed(current):
-        typer.echo(f"statusline already installed in {path}")
+    line = statusline_line()
+    if print_only:
+        typer.echo(line)
         return
+    path = settings_path(scope, cwd=Path.cwd())
+    try:
+        result = install_statusline(path, replace=assume_yes)
+    except SettingsNotWritable as exc:
+        typer.echo(line)
+        typer.echo(
+            f"statusline not installed: {exc.path}: {exc.reason}; add the line above to that file",
+            err=True,
+        )
+        raise typer.Exit(code=exit_codes.NEEDS_OPERATOR) from exc
+    if result.status == "differs":
+        typer.echo(f"statusLine in {path}: {json.dumps(result.current)}")
+        typer.echo("statusline not installed: another entry is set; --yes replaces it", err=True)
+        raise typer.Exit(code=exit_codes.USER_ERROR)
+    verb = "already installed" if result.status == "already" else "installed"
+    typer.echo(f"statusline {verb}: {path}")
 
-    if not assume_yes and not typer.confirm(f"Install the Eä statusline into {path}?"):
-        raise UserError("statusline install declined", kind="UserDeclined")
 
-    install_statusline(path)
-    typer.echo(f"statusline installed in {path}")
+def statusline_doctor(
+    ctx: typer.Context,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit the report as one JSON object."),
+    ] = False,
+) -> None:
+    """Report which statusLine entry Claude Code uses here and whether it renders."""
+    from eawf.runtime.runtimes.claude.statusline_install import diagnose_statusline
+
+    report = diagnose_statusline(cwd=Path.cwd(), render=True)
+    fields = dataclasses.asdict(report)
+    flags: GlobalFlags = ctx.obj
+    if json_output or flags.json_output:
+        typer.echo(json.dumps(fields))
+    else:
+        for key, value in fields.items():
+            shown = (
+                "-" if value is None else str(value).lower() if isinstance(value, bool) else value
+            )
+            typer.echo(f"{key}: {shown}")
+    if report.verdict == "broken":
+        raise typer.Exit(code=exit_codes.USER_ERROR)
+
+
+statusline_cli_app.command(name="install")(statusline_install)
+statusline_cli_app.command(name="doctor")(statusline_doctor)
 
 
 __all__ = [
+    "statusline_cli_app",
+    "statusline_doctor",
     "statusline_install",
-    "statusline_wizard_app",
 ]

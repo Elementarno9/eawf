@@ -358,7 +358,7 @@ def test_meas_037_the_first_render_rebuilds_the_sidecar_from_the_host_payload(
     """After a cutover nothing is cached; the first render derives it again."""
     monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(tmp_path))
     payload = {"session_id": "session-1", "cost": {"api_duration_ms": 17000, "cost_usd": 0.42}}
-    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload)))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(json.dumps(payload).encode())))
     monkeypatch.setattr(statusline, "render_pipeline", lambda *_args, **_kwargs: "rendered")
     sidecar = RuntimeCounterSidecar(tmp_path / COUNTER_SIDECAR_NAME)
     assert sidecar.read() is None

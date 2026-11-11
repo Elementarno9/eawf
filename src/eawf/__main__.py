@@ -2,15 +2,14 @@
 
 Claude Code runs ``eawf cc statusline`` on every redraw, and importing the
 CLI app costs several hundred milliseconds. The plain statusline invocation
-is therefore answered here without importing the app: a cached line is
-printed at once, and a miss is rendered and cached exactly as the
-``cc statusline`` command would. A bare ``--version`` is answered here too.
-Every other invocation goes to the full CLI.
+is therefore answered here without importing the app, rendered and cached
+exactly as the ``cc statusline`` command would. A bare ``--version`` is
+answered here too. Every other invocation goes to the full CLI.
 """
 
 from __future__ import annotations
 
-import io
+import os
 import sys
 
 
@@ -38,26 +37,28 @@ def _statusline_theme(argv: list[str]) -> tuple[bool, str | None]:
 def _serve_statusline(argv: list[str]) -> bool:
     """Print the statusline for *argv* and return ``True`` when it was served.
 
-    A cache hit loads nothing of the render stack. A miss installs the CLI's
-    scrubbed log sink and renders through the same cache-aware path the
-    ``cc statusline`` command takes, so output, cache entry and stderr match
-    it. A TTY stdin and Windows consoles go straight to the full CLI, which
-    owns the stdin hint and the console encoding setup.
+    It installs the CLI's scrubbed log sink and renders through the same
+    budgeted path the ``cc statusline`` command takes, so output, cache entry
+    and stderr match it. When that path printed the cached line because the
+    render overran, the process exits at once: the host waits for it to end,
+    and the abandoned render is a daemon thread that may be mid-import, which
+    interpreter shutdown should not wait on. A TTY stdin and Windows consoles
+    go straight to the full CLI, which owns the stdin hint and the console
+    encoding setup.
     """
     matched, theme = _statusline_theme(argv)
     if not matched or sys.platform == "win32" or sys.stdin.isatty():
         return False
-    from eawf.runtime.runtimes.claude.statusline import run_with_cache, serve_cached_line
+    from eawf.observability.logging.scrub import configure_cli_logging
+    from eawf.runtime.runtimes.claude.statusline import read_payload, serve_line
 
-    raw = sys.stdin.read()
-    line = serve_cached_line(raw, theme_name=theme)
-    if line is None:
-        from eawf.observability.logging.scrub import configure_cli_logging
-
-        configure_cli_logging()
-        sys.stdin = io.StringIO(raw)
-        line = run_with_cache(workspace=None, theme_name=theme)
-    sys.stdout.write(f"{line}\n")
+    configure_cli_logging()
+    served = serve_line(read_payload(), workspace=None, theme_name=theme)
+    sys.stdout.write(f"{served.text}\n")
+    if served.render_running:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)
     return True
 
 

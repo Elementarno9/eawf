@@ -277,9 +277,5 @@
         "matcher": ""
       }
     ]
-  },
-  "statusLine": {
-    "command": "eawf cc statusline",
-    "type": "command"
   }
 }

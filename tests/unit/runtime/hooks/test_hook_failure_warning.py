@@ -16,12 +16,13 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner  # noqa: EAWF024 the hook's stdout is the contract
 
+from eawf.runtime.hooks import health as health_module
 from eawf.runtime.hooks import runner as runner_module
 from eawf.runtime.hooks.event import HookEvent, HookEventType
 from eawf.runtime.hooks.health import (
     HEALTH_CURSOR,
     HEALTH_RECORD,
-    HEALTH_RECORD_CAP,
+    HEALTH_ROTATE_BYTES,
     HEALTH_ROTATED,
     HOOK_RAISED,
     HealthRow,
@@ -31,7 +32,6 @@ from eawf.runtime.hooks.health import (
     read_health_rows,
     record_failures,
     take_failure_warning,
-    unacknowledged_count,
     write_cursor,
 )
 from eawf.runtime.hooks.runner import HookResult, HookRunner
@@ -293,64 +293,61 @@ def _failure(code: str = HOOK_RAISED) -> HookFailure:
     return HookFailure(event="post_tool_use", hook="h", code=code, error="E", detail="", at=_AT)
 
 
-def _fill_to_cap(tree: Path, code: str) -> int:
-    """Append rows of *code* until the record reaches the cap; return how many."""
-    ea = tree / ".ea"
-    count = 0
-    while not (ea / HEALTH_RECORD).is_file() or (
-        (ea / HEALTH_RECORD).stat().st_size < HEALTH_RECORD_CAP
-    ):
-        record_failures(ea, [_failure(code)])
-        count += 1
+def _coded(code: str) -> bytes:
+    """Return a record line of a failure with *code*."""
+    return _line(_row(code))
+
+
+def _fill_past_limit(tree: Path, code: str) -> int:
+    """Append rows of *code* until the record is past the rotation limit; return how many."""
+    record = tree / ".ea" / HEALTH_RECORD
+    record.parent.mkdir(parents=True, exist_ok=True)
+    size = record.stat().st_size if record.is_file() else 0
+    count = (HEALTH_ROTATE_BYTES - size) // len(_coded(code)) + 1
+    with record.open("ab") as handle:
+        handle.write(_coded(code) * count)
     return count
 
 
-def test_record_failures_rotates_at_the_cap_and_keeps_the_newest(tree: Path) -> None:
+def test_record_failures_rotates_past_the_limit_and_keeps_the_newest(tree: Path) -> None:
     ea = tree / ".ea"
-    first = _fill_to_cap(tree, "first")
+    first = _fill_past_limit(tree, "first")
     assert not (ea / HEALTH_ROTATED).exists()
     record_failures(ea, [_failure("second")])
     # The full record became the older generation; the new row starts a fresh one.
-    assert (ea / HEALTH_ROTATED).stat().st_size >= HEALTH_RECORD_CAP
+    assert (ea / HEALTH_ROTATED).stat().st_size > HEALTH_ROTATE_BYTES
     assert [row.code for row in read_health_rows(ea).rows] == ["first"] * first + ["second"]
-    assert unacknowledged_count(ea) == first + 1
-    second = _fill_to_cap(tree, "second") + 1
+    second = _fill_past_limit(tree, "second") + 1
     record_failures(ea, [_failure("third")])
     # A second rotation drops the oldest generation: the record stays bounded.
     rows = read_health_rows(ea).rows
     assert [row.code for row in rows] == ["second"] * second + ["third"]
     total = sum((ea / p).stat().st_size for p in (HEALTH_RECORD, HEALTH_ROTATED))
-    assert total < 2 * HEALTH_RECORD_CAP + 1024
+    assert total < 2 * HEALTH_ROTATE_BYTES + 1024
 
 
 def test_the_cursor_stays_on_the_same_row_across_a_rotation(tree: Path) -> None:
     ea = tree / ".ea"
-    _fill_to_cap(tree, "first")
+    _fill_past_limit(tree, "first")
     record_failures(ea, [_failure("second")])
     # Everything so far was reported.
     assert take_failure_warning(ea) is not None
     assert take_failure_warning(ea) is None
-    _fill_to_cap(tree, "second")
+    added = _fill_past_limit(tree, "second")
     record_failures(ea, [_failure("third")])
     # The rotation dropped the reported first generation and moved the cursor back
     # by its bytes: the next warning names only rows written since the last one.
     warning = take_failure_warning(ea)
     assert warning is not None
-    assert warning.startswith(f"eawf: {_fill_count(ea)} hook failures since the last session")
+    assert warning.startswith(f"eawf: {added + 1} hook failures since the last session")
     assert take_failure_warning(ea) is None
-
-
-def _fill_count(ea: Path) -> int:
-    """Return how many rows the record holds after its first, the one already reported."""
-    rows = read_health_rows(ea).rows
-    return len(rows) - 1
 
 
 def test_a_rotation_past_an_unread_cursor_reads_the_newest_generation(tree: Path) -> None:
     ea = tree / ".ea"
-    _fill_to_cap(tree, "first")
+    _fill_past_limit(tree, "first")
     record_failures(ea, [_failure("second")])
-    _fill_to_cap(tree, "second")
+    _fill_past_limit(tree, "second")
     record_failures(ea, [_failure("third")])
     # The cursor never moved: rows of the dropped generation are gone, the rest read.
     assert read_cursor(ea) == 0
@@ -358,10 +355,139 @@ def test_a_rotation_past_an_unread_cursor_reads_the_newest_generation(tree: Path
     assert read_health_rows(ea, offset=read_cursor(ea)).rows == ()
 
 
-def test_a_record_below_the_cap_is_not_rotated(tree: Path) -> None:
+def test_a_record_of_exactly_the_limit_is_not_rotated(tree: Path) -> None:
     ea = tree / ".ea"
-    record_failures(ea, [_failure()])
+    record = ea / HEALTH_RECORD
+    record.parent.mkdir(parents=True)
+    record.write_bytes(b"x" * (HEALTH_ROTATE_BYTES - 1) + b"\n")
     write_cursor(ea, 3)
     record_failures(ea, [_failure()])
+    # Past the limit only after this append; the next writer rotates.
     assert not (ea / HEALTH_ROTATED).exists()
     assert read_cursor(ea) == 3
+
+
+# ---- one locked rotation rule ----------------------------------------------------------------
+
+
+def test_rotation_repro_two_writers_rotating_at_once(
+    tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A second writer rotating inside the first's rotation keeps the full generation."""
+    ea = tree / ".ea"
+    first = _fill_past_limit(tree, "first")
+    real_replace = os.replace
+    nested: list[str] = []
+
+    def racing_replace(src: Any, dst: Any) -> None:
+        # The other writer arrives just before this one moves the record.
+        if Path(src).name == HEALTH_RECORD.name and not nested:
+            nested.append("ran")
+            record_failures(ea, [_failure("racer")])
+        real_replace(src, dst)
+
+    monkeypatch.setattr(health_module.os, "replace", racing_replace)
+    record_failures(ea, [_failure("second")])
+
+    # Exactly one rotation: the full generation survives and no row is lost.
+    codes = [row.code for row in read_health_rows(ea).rows]
+    assert codes == ["first"] * first + ["racer", "second"]
+
+
+def test_rotation_repro_reader_keeps_its_layout(
+    tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A rotation racing the session-start warning never repeats the warning."""
+    ea = tree / ".ea"
+    _fill_past_limit(tree, "first")
+    record_failures(ea, [_failure("second")])
+    assert take_failure_warning(ea) is not None
+    _fill_past_limit(tree, "third")
+    real_read = health_module.read_health_rows
+    raced: list[str] = []
+
+    def racing_read(ea_dir: Path, *, offset: int = 0) -> Any:
+        read = real_read(ea_dir, offset=offset)
+        if not raced:
+            # Another hook rotates between the read and the cursor write.
+            raced.append("ran")
+            record_failures(ea, [_failure("racer")])
+        return read
+
+    monkeypatch.setattr(health_module, "read_health_rows", racing_read)
+    assert take_failure_warning(ea) is not None
+    monkeypatch.setattr(health_module, "read_health_rows", real_read)
+
+    # The next session start reports only the racing row, never the whole record again.
+    assert take_failure_warning(ea) == _WARNING.replace("hook_raised", "racer")
+    assert take_failure_warning(ea) is None
+
+
+def test_rotation_repro_reads_tolerate_a_rotation_between_reads(
+    tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ea = tree / ".ea"
+    record = ea / HEALTH_RECORD
+    record.parent.mkdir(parents=True)
+    (ea / HEALTH_ROTATED).write_bytes(_coded("older"))
+    record.write_bytes(_coded("current"))
+    real_read_bytes = Path.read_bytes
+    raced: list[str] = []
+
+    def racing_read_bytes(self: Path) -> bytes:
+        data = real_read_bytes(self)
+        if self.name == HEALTH_ROTATED.name and not raced:
+            raced.append("ran")
+            real_replace = os.replace
+            real_replace(record, ea / HEALTH_ROTATED)
+            record.write_bytes(_coded("newest"))
+        return data
+
+    monkeypatch.setattr(Path, "read_bytes", racing_read_bytes)
+    codes = [row.code for row in read_health_rows(ea).rows]
+    # Read again after the rotation: no row twice, none of the kept rows missed.
+    assert codes == ["current", "newest"]
+
+
+def test_the_wrapper_and_the_writers_share_one_older_generation(tree: Path) -> None:
+    ea = tree / ".ea"
+    _fill_past_limit(tree, "first")
+    record_failures(ea, [_failure("second")])
+    assert (ea / HEALTH_ROTATED).name == "health.1.jsonl"
+    assert not (ea / HEALTH_RECORD.with_name("health.jsonl.1")).exists()
+
+
+@pytest.mark.parametrize("acked", [False, True], ids=["alone", "beside-an-acked-file"])
+def test_a_leftover_legacy_generation_is_taken_over(tree: Path, acked: bool) -> None:
+    ea = tree / ".ea"
+    legacy = ea / HEALTH_RECORD.with_name("health.jsonl.1")
+    legacy.parent.mkdir(parents=True)
+    legacy.write_bytes(_coded("legacy") * 3)
+    if acked:
+        (ea / HEALTH_ROTATED).write_bytes(_coded("acked") * 5)
+    (ea / HEALTH_RECORD).write_bytes(_coded("current"))
+    # The previous release counted the cursor over the legacy file, then the record.
+    write_cursor(ea, 2 * len(_coded("legacy")))
+
+    warning = take_failure_warning(ea)
+
+    assert not legacy.exists()
+    assert (ea / HEALTH_ROTATED).read_bytes() == _coded("legacy") * 3
+    assert warning is not None and warning.startswith("eawf: 2 hook failures")
+    assert take_failure_warning(ea) is None
+
+
+def test_a_writer_that_cannot_take_the_lock_still_appends(
+    tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from eawf.runtime.lock import portalock
+
+    ea = tree / ".ea"
+    _fill_past_limit(tree, "first")
+    monkeypatch.setattr(health_module, "_LOCK_TIMEOUT_S", 0.05)
+    with portalock.acquire(ea / HEALTH_RECORD, timeout=1.0):
+        assert record_failures(ea, [_failure("second")]) == 1
+        # The session-start warning waits for the next session rather than racing.
+        assert take_failure_warning(ea) is None
+    assert not (ea / HEALTH_ROTATED).exists()
+    assert read_health_rows(ea).rows[-1].code == "second"

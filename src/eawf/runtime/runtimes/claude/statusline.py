@@ -1,7 +1,7 @@
 """Orchestrator for ``eawf cc statusline``.
 
 Reads Claude's stdin JSON, builds the line-1 segments and the bar rows, and
-writes them as powerline rows in the light or the dark palette. Modules
+writes them as powerline rows in the resolved theme. Modules
 degrade independently: any exception inside a module is caught here and
 becomes a ``status="failed"`` segment, which the renderer omits, so the whole
 pipeline never crashes.
@@ -11,30 +11,33 @@ Design notes:
 - Line 1 is built from a fixed list of builders, left to right: model,
   project, active time, cost, MCP, hooks, then the Run's scope and budget.
   The ``git``, ``memory`` and ``token_saving`` modules are not in the layout.
-- Under line 1 come the ``ctx``, ``5h`` and ``7d`` bar rows; each carries the
-  trend of its used percentage since the session's previous render, read
-  from a small per-session sidecar beside the cache entry.
+- Under line 1 come the ``ctx``, ``5h`` and ``7d`` bar rows: the context
+  with its cache-read share, each limit window with its pace against an even
+  spend, all read from the payload alone.
 - Every segment carries a truth field naming its producer, freshness and
   measurement quality; a value a module cannot source is omitted from the
   rows, never drawn as a marker.
-- Caching is stale-while-revalidate through
-  :class:`~eawf.runtime.statusline_cache.StatuslineCache`, one entry for
-  each Claude session id, keyed by the resolved palette so a theme switch is
-  a miss. A hit (fresh or stale) is served without rendering; a stale hit
-  also starts a detached ``eawf cc statusline prewarm`` that renders and
-  rewrites the entry. Only a miss renders on the caller's time.
+- Every redraw renders synchronously, so a line is never older than the
+  payload it answers. The render runs on a daemon thread under a 250 ms
+  budget; when it raises or overruns, the session's last line from
+  :class:`~eawf.runtime.statusline_cache.StatuslineCache` is printed instead
+  and a detached ``eawf cc statusline prewarm`` renders and rewrites it; a
+  claim file keeps it to one prewarm in flight per session.
+  Entries are keyed by the theme and glyphs the flag and the environment
+  name, so a fallback never shows a line drawn in another style.
 - Claude Code runs the statusline on every redraw, so this module imports
   nothing heavy at load time: the modules, the renderer, the state resolver
-  and the counter sidecar load only when a render actually runs. The palette
-  resolver it does import reads settings files with ``orjson`` alone.
-- The runtime counter sidecar is written whenever a render runs (a miss or
-  a background refresh), so it trails the live payload by at most one TTL.
+  and the counter sidecar load only when a render actually runs. The render
+  key it does compute reads the environment alone.
+- The runtime counter sidecar is written by every render, the redraw's own
+  or a background one.
 
 Public surface:
 
-- :func:`render_pipeline` — full module call + palette apply (always cold).
-- :func:`serve_cached_line` — hit-only path for the console entry point.
-- :func:`run_with_cache` — cache-aware entry point used by the CLI.
+- :func:`render_pipeline` — full module call + theme apply.
+- :func:`serve_line` — the budgeted render with its cached fallback, for the
+  console entry point.
+- :func:`run_with_cache` — :func:`serve_line` over stdin, used by the CLI.
 - :func:`prewarm` — render, write the cache entry, exit silently.
 - :func:`cache_path_for` — cache-path resolver, shared with the counter
   sidecar readers.
@@ -45,20 +48,23 @@ from __future__ import annotations
 import os
 import re
 import sys
-from collections.abc import Callable, Mapping
+import threading
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 import orjson
 
-from eawf.runtime.runtimes.claude.statusline_theme import PaletteName, resolve_palette
+from eawf.runtime.runtimes.claude.statusline_theme import render_key
 from eawf.runtime.statusline_cache import StatuslineCache
 
 if TYPE_CHECKING:
     import logging
 
-    from eawf.surfaces.render.statusline import PowerlineBar, StatuslineSegment
+    from eawf.surfaces.render.statusline import LineStyle, PowerlineBar, StatuslineSegment
 
 type SegmentBuilder = Callable[[dict[str, Any], Path | None], StatuslineSegment]
 
@@ -134,10 +140,34 @@ def cache_path_for(session_id: str) -> Path:
     return _cache_root() / f"{safe}.json"
 
 
-def _levels_path_for(session_id: str) -> Path:
-    """Return the trend sidecar beside the session's cache entry."""
-    cache_path = cache_path_for(session_id)
-    return cache_path.with_name(f"{cache_path.stem}.levels.json")
+def drop_cached_lines() -> int:
+    """Delete every session's cached rows, so each next redraw renders afresh.
+
+    A cached line would show state an operator just changed, such as
+    acknowledged hook failures, until its refresh lands. Sidecars beside an
+    entry (``<session>.<kind>.json``) are kept; a session id with a dot in
+    it keeps its entry too and catches up on its next refresh.
+
+    Best-effort: an entry that cannot be deleted is skipped and the rest are
+    still dropped; it catches up on its session's next render.
+
+    Returns:
+        How many entries were deleted; ``0`` when the cache directory is absent.
+    """
+    root = _cache_root()
+    if not root.is_dir():
+        return 0
+    dropped = 0
+    for path in root.glob("*.json"):
+        if "." in path.stem:
+            continue
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            _logger().debug(f"drop_cached_lines unlink-failed path={path!r} error={exc}")
+            continue
+        dropped += 1
+    return dropped
 
 
 def _decode_payload(raw: str) -> dict[str, Any]:
@@ -228,44 +258,6 @@ def _build_bars(claude_payload: dict[str, Any], now: datetime) -> list[Powerline
     return bars
 
 
-def _read_levels(path: Path | None) -> dict[str, int]:
-    """Return the used percentages the session's previous render recorded, by row."""
-    if path is None:
-        return {}
-    try:
-        decoded: Any = orjson.loads(path.read_bytes())
-    except OSError, orjson.JSONDecodeError:
-        return {}
-    if not isinstance(decoded, dict):
-        return {}
-    return {
-        str(label): level
-        for label, level in decoded.items()
-        if isinstance(level, int) and not isinstance(level, bool)
-    }
-
-
-def _write_levels(path: Path | None, levels: Mapping[str, int]) -> None:
-    """Record this render's used percentages for the next render's trend, best-effort."""
-    if path is None:
-        return
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(orjson.dumps(dict(levels)))
-    except OSError as exc:
-        _logger().debug(f"_write_levels levels-write-failed error={exc}")
-
-
-def _with_trends(bars: list[PowerlineBar], previous: Mapping[str, int]) -> list[PowerlineBar]:
-    """Return *bars*, each carrying its change in points since *previous* when known."""
-    from dataclasses import replace
-
-    return [
-        replace(bar, trend=bar.percent - previous[bar.label]) if bar.label in previous else bar
-        for bar in bars
-    ]
-
-
 def _columns() -> int | None:
     """Return the terminal width ``COLUMNS`` names, or ``None`` when it names none.
 
@@ -279,12 +271,34 @@ def _columns() -> int | None:
     return columns if columns > 0 else None
 
 
+def _line_style(theme_name: str | None, state_path: Path | None) -> LineStyle:
+    """Return the style this render draws in: flag and environment over the config.
+
+    The config is read from the repository *state_path* lies in, or from the
+    global layer alone outside one.
+    """
+    from eawf.runtime.runtimes.claude.statusline_theme import (
+        glyphs_override,
+        statusline_config,
+        theme_override,
+    )
+    from eawf.surfaces.render.statusline import LineStyle, load_theme
+
+    repo_root = state_path.parent.parent if state_path is not None else None
+    config = statusline_config(repo_root)
+    theme = theme_override(theme_name, os.environ) or config.theme
+    return LineStyle(
+        theme=None if theme == "none" else load_theme(theme, ink=config.ink),
+        glyphs=glyphs_override(os.environ) or config.glyphs,
+        bar_width=config.bar_width,
+    )
+
+
 def render_pipeline(
     claude_payload: dict[str, Any],
     *,
     workspace: Path | None,
-    palette: PaletteName,
-    levels_path: Path | None = None,
+    theme_name: str | None = None,
 ) -> str:
     """Run every module and draw the powerline rows, joined by newlines.
 
@@ -293,23 +307,24 @@ def render_pipeline(
     Args:
         claude_payload: Decoded Claude stdin JSON.
         workspace: The ``--workspace`` the state path is resolved from.
-        palette: The palette to draw in, resolved once by the caller so the
-            rows and the cache key they are stored under always agree.
-        levels_path: The session's trend sidecar, read for the previous
-            render's percentages and rewritten with this render's; ``None``
-            renders without trends.
+        theme_name: The ``--theme`` value; ``None`` leaves the theme to the
+            environment and the config.
 
     Returns:
-        The rows, top to bottom, without a trailing newline.
+        The rows, top to bottom, without a trailing newline;
+        :func:`_minimal_line` when no row, or an empty first row, could be
+        drawn, since the host shows an empty output as a blank status line.
     """
-    from eawf.surfaces.render.statusline import load_palette, render_powerline
+    from eawf.surfaces.render.statusline import render_powerline
 
     state_path = _safe_resolve_state_path(workspace)
     segments = _build_segments(claude_payload, state_path)
-    bars = _with_trends(_build_bars(claude_payload, datetime.now(UTC)), _read_levels(levels_path))
-    _write_levels(levels_path, {bar.label: bar.percent for bar in bars})
-    colours = load_palette(palette)
-    return "\n".join(render_powerline(segments, bars, colours, width=_columns()))
+    bars = _build_bars(claude_payload, datetime.now(UTC))
+    style = _line_style(theme_name, state_path)
+    rows = render_powerline(segments, bars, style, width=_columns())
+    if not rows or not rows[0].strip():
+        return _minimal_line(claude_payload)
+    return "\n".join(rows)
 
 
 def _write_runtime_counter_sidecar(session_id: str, claude_payload: dict[str, Any]) -> None:
@@ -332,26 +347,78 @@ def _render_session(
     session_id: str,
     *,
     workspace: Path | None,
-    palette: PaletteName,
+    theme_name: str | None,
 ) -> str:
-    """Record the session's counters, then render its rows with their trends."""
+    """Record the session's counters, then render its rows."""
     _write_runtime_counter_sidecar(session_id, claude_payload)
-    return render_pipeline(
-        claude_payload,
-        workspace=workspace,
-        palette=palette,
-        levels_path=_levels_path_for(session_id),
-    )
+    return render_pipeline(claude_payload, workspace=workspace, theme_name=theme_name)
 
 
-def _spawn_refresh(raw: str, *, workspace: Path | None, theme_name: str | None) -> None:
+_REFRESH_EXPIRY_SECONDS: Final = 10.0
+"""How long one session's refresh claim holds off another prewarm.
+
+A prewarm releases the claim when it has written the entry; the expiry
+covers one that crashed or hung, so it cannot block refreshes for good.
+"""
+
+
+def _refresh_claim_for(session_id: str) -> Path:
+    """Return the claim file marking a prewarm in flight for *session_id*.
+
+    Its suffix is not ``.json``, so :func:`drop_cached_lines` never takes it
+    for an entry.
+    """
+    entry = cache_path_for(session_id)
+    return entry.with_name(f"{entry.stem}.refresh")
+
+
+def _claim_refresh(session_id: str, *, now: float) -> bool:
+    """Claim the session's one refresh slot; ``True`` when a prewarm may start.
+
+    The claim file is created exclusively, so of the redraws that overrun
+    together only one spawns. A claim older than :data:`_REFRESH_EXPIRY_SECONDS`
+    is taken over by re-stamping it. When no claim can be recorded at all the
+    cache directory is unwritable, and a prewarm could not write its entry
+    either, so none starts.
+    """
+    claim = _refresh_claim_for(session_id)
+    try:
+        claim.parent.mkdir(parents=True, exist_ok=True)
+        os.close(os.open(claim, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
+    except FileExistsError:
+        try:
+            if now - claim.stat().st_mtime < _REFRESH_EXPIRY_SECONDS:
+                return False
+            os.utime(claim, (now, now))
+        except OSError as exc:
+            # Released by the prewarm between the two calls, or unwritable.
+            _logger().debug(f"_claim_refresh claim-retake-failed error={exc}")
+            return False
+    except OSError as exc:
+        _logger().debug(f"_claim_refresh claim-failed error={exc}")
+        return False
+    return True
+
+
+def _release_refresh(session_id: str) -> None:
+    """Remove the session's refresh claim, so the next overrun may refresh again."""
+    try:
+        _refresh_claim_for(session_id).unlink(missing_ok=True)
+    except OSError as exc:
+        _logger().debug(f"_release_refresh claim-unlink-failed error={exc}")
+
+
+def _spawn_refresh(
+    raw: str, *, workspace: Path | None, theme_name: str | None, stamp: float
+) -> None:
     """Start a detached ``eawf cc statusline prewarm`` fed *raw* on stdin.
 
     The payload goes through an unlinked temporary file rather than a pipe
     so the caller never blocks on a child that is still importing. The
-    child gets its own session so it outlives the redraw that started it.
-    A failed spawn is logged at debug; the entry stays stale and the next
-    redraw past the TTL tries again.
+    child gets its own session so it outlives the redraw that started it,
+    and the redraw's payload *stamp*, so its entry never replaces one
+    answering a later payload. A failed spawn is logged at debug; the entry
+    keeps its old line and the next redraw renders again.
     """
     import subprocess
     import tempfile
@@ -361,7 +428,7 @@ def _spawn_refresh(raw: str, *, workspace: Path | None, theme_name: str | None) 
     argv = [sys.executable, "-m", "eawf"]
     if workspace is not None:
         argv += ["--workspace", str(workspace)]
-    argv += ["cc", "statusline", "prewarm"]
+    argv += ["cc", "statusline", "prewarm", "--payload-at", repr(stamp)]
     if theme_name:
         argv += ["--theme", theme_name]
     try:
@@ -380,21 +447,141 @@ def _spawn_refresh(raw: str, *, workspace: Path | None, theme_name: str | None) 
         _logger().debug(f"_spawn_refresh spawn-failed error={exc}")
 
 
-def serve_cached_line(raw: str, *, theme_name: str | None) -> str | None:
-    """Return the cached rows for the payload in *raw*, or ``None`` to render.
+_RENDER_BUDGET_SECONDS: Final = 0.25
+"""How long a redraw waits for its render before printing the cached line.
 
-    The hit-only half of :func:`run_with_cache`, for the console entry
-    point: it renders nothing, so it loads none of the render stack. A
-    stale hit starts the background refresh. ``None`` means the caller must
-    take the full render path (no session id, or no entry for this palette).
+The host debounces redraws at 300 ms, so a render still running past this
+would leave the previous line up anyway; the cached line at least carries
+the session's last known state.
+"""
+
+_NO_CACHE_WAIT_SECONDS: Final = 3.0
+"""How long a redraw with no cached line waits for an overrunning render.
+
+Nothing else describes the session then, so the render gets longer than
+:data:`_RENDER_BUDGET_SECONDS`, but a hung one must not hold the host's
+redraw: past this the minimal line is printed.
+"""
+
+
+@dataclass(frozen=True)
+class ServedLine:
+    """The rows one redraw prints.
+
+    Attributes:
+        text: The rows, top to bottom, without a trailing newline.
+        render_running: ``True`` when *text* is a fallback printed while the
+            redraw's own render still runs on its daemon thread; the caller
+            should exit without waiting for it.
+    """
+
+    text: str
+    render_running: bool = False
+
+
+class _RenderAttempt:
+    """One render on a daemon thread, with its line or its exception."""
+
+    def __init__(self, render: Callable[[], str]) -> None:
+        """Hold *render* until :meth:`start` runs it."""
+        self._render = render
+        self.done = threading.Event()
+        self.line: str | None = None
+        self.error: Exception | None = None
+
+    def start(self) -> None:
+        """Start the render; :attr:`done` is set once it returns or raises."""
+        threading.Thread(target=self._run, name="eawf-statusline-render", daemon=True).start()
+
+    def _run(self) -> None:
+        try:
+            self.line = self._render()
+        except Exception as exc:
+            self.error = exc
+        finally:
+            self.done.set()
+
+
+def _await_render(done: threading.Event, budget_seconds: float) -> bool:
+    """Wait up to *budget_seconds* for *done*; ``True`` when the render finished."""
+    return done.wait(budget_seconds)
+
+
+def _minimal_line(claude_payload: dict[str, Any]) -> str:
+    """Return the plain model name, the line printed when nothing better exists.
+
+    Falls back to ``eawf`` when the payload names no model, so the host
+    never shows an empty status line for a failed render.
+    """
+    model = claude_payload.get("model")
+    if isinstance(model, dict):
+        model = model.get("display_name") or model.get("id") or model.get("name")
+    return model if isinstance(model, str) and model else "eawf"
+
+
+def serve_line(raw: str, *, workspace: Path | None, theme_name: str | None) -> ServedLine:
+    """Render the rows for the payload in *raw*, falling back to the cached line.
+
+    The render runs synchronously under :data:`_RENDER_BUDGET_SECONDS`; one
+    that finishes in time is printed and cached, never the older cached line.
+    When it raises, or overruns while the session has a cached line, that
+    line is returned and a detached prewarm renders the entry anew, unless
+    the session's one refresh is already in flight. With no
+    cached line an overrun is waited on for up to
+    :data:`_NO_CACHE_WAIT_SECONDS`, since nothing else describes the session;
+    a failed or hung render with none prints :func:`_minimal_line`. A payload
+    without a session id has no cache and renders on the caller's time.
+
+    Args:
+        raw: Claude's stdin JSON, undecoded.
+        workspace: The ``--workspace`` the state path is resolved from.
+        theme_name: The ``--theme`` value, or ``None``.
+
+    Returns:
+        The rows to print, and whether the render still runs.
     """
     claude_payload = _decode_payload(raw)
     session_id = _session_id(claude_payload)
     if session_id is None:
-        return None
-    palette = resolve_palette(claude_payload, override=theme_name)
-    cache = StatuslineCache(cache_path_for(session_id), key=palette)
-    return cache.serve_cached(lambda: _spawn_refresh(raw, workspace=None, theme_name=theme_name))
+        try:
+            return ServedLine(
+                render_pipeline(claude_payload, workspace=workspace, theme_name=theme_name)
+            )
+        except Exception as exc:
+            _logger().warning(f"serve_line render-raised error={exc}")
+            return ServedLine(_minimal_line(claude_payload))
+    stamp = time.time()
+    cache = StatuslineCache(cache_path_for(session_id), key=render_key(theme_name, os.environ))
+    cached = cache.get()
+    attempt = _RenderAttempt(
+        lambda: _render_session(
+            claude_payload, session_id, workspace=workspace, theme_name=theme_name
+        )
+    )
+    attempt.start()
+    if not _await_render(attempt.done, _RENDER_BUDGET_SECONDS) and cached is None:
+        _await_render(attempt.done, _NO_CACHE_WAIT_SECONDS)
+    if attempt.done.is_set() and attempt.line is not None:
+        cache.write(attempt.line, stamp=stamp)
+        return ServedLine(attempt.line)
+    if attempt.error is not None:
+        _logger().warning(f"serve_line render-raised error={attempt.error}")
+    if _claim_refresh(session_id, now=time.time()):
+        _spawn_refresh(raw, workspace=workspace, theme_name=theme_name, stamp=stamp)
+    return ServedLine(
+        cached if cached is not None else _minimal_line(claude_payload),
+        render_running=not attempt.done.is_set(),
+    )
+
+
+def read_payload() -> str:
+    """Return Claude's stdin as text, any byte that is not UTF-8 replaced.
+
+    The bytes are read and decoded here rather than through the text stream,
+    whose strict decoder raises on such a byte: a payload the line cannot use
+    still has to leave the host a line, not a traceback.
+    """
+    return sys.stdin.buffer.read().decode("utf-8", errors="replace")
 
 
 def run_with_cache(
@@ -402,52 +589,56 @@ def run_with_cache(
     workspace: Path | None,
     theme_name: str | None,
 ) -> str:
-    """Cache-aware entry point: read Claude stdin → return the statusline rows.
-
-    A payload without a session id renders uncached. Otherwise the session's
-    entry for the resolved palette is served stale-while-revalidate: a hit
-    returns the cached rows (a stale one also starts the background refresh)
-    and a miss renders synchronously and writes the entry.
-    """
-    raw = sys.stdin.read()
-    claude_payload = _decode_payload(raw)
-    palette = resolve_palette(claude_payload, override=theme_name)
-    session_id = _session_id(claude_payload)
-    if session_id is None:
-        return render_pipeline(claude_payload, workspace=workspace, palette=palette)
-    cache = StatuslineCache(cache_path_for(session_id), key=palette)
-    return cache.serve(
-        lambda: _render_session(claude_payload, session_id, workspace=workspace, palette=palette),
-        refresh=lambda: _spawn_refresh(raw, workspace=workspace, theme_name=theme_name),
-    )
+    """Read Claude's stdin and return the rows :func:`serve_line` serves for it."""
+    return serve_line(read_payload(), workspace=workspace, theme_name=theme_name).text
 
 
 def prewarm(
     *,
     workspace: Path | None,
     theme_name: str | None,
+    payload_at: float | None = None,
 ) -> str:
     """Render the rows from Claude stdin and write them to the session's cache.
 
-    This is the background refresh worker :func:`run_with_cache` spawns, and
-    a manual way to warm the cache. Returns the rendered rows. When
-    ``session_id`` is missing or not a string, the rows are rendered but not
-    cached.
+    This is the background refresh worker :func:`serve_line` spawns, and
+    a manual way to warm the cache. When ``session_id`` is missing or not a
+    string, the rows are rendered but not cached. Rendered or not, the
+    session's refresh claim is released, so the next overrun may refresh.
+
+    Args:
+        workspace: The ``--workspace`` the state path is resolved from.
+        theme_name: The ``--theme`` value, or ``None``.
+        payload_at: Unix seconds at which the spawning redraw received the
+            payload; ``None`` for a manual run, stamped now. An entry
+            answering a later payload is kept.
+
+    Returns:
+        The rendered rows.
     """
-    claude_payload = _decode_payload(sys.stdin.read())
-    palette = resolve_palette(claude_payload, override=theme_name)
+    stamp = time.time() if payload_at is None else payload_at
+    claude_payload = _decode_payload(read_payload())
     session_id = _session_id(claude_payload)
     if session_id is None:
-        return render_pipeline(claude_payload, workspace=workspace, palette=palette)
-    line = _render_session(claude_payload, session_id, workspace=workspace, palette=palette)
-    StatuslineCache(cache_path_for(session_id), key=palette).write(line)
+        return render_pipeline(claude_payload, workspace=workspace, theme_name=theme_name)
+    try:
+        line = _render_session(
+            claude_payload, session_id, workspace=workspace, theme_name=theme_name
+        )
+        cache = StatuslineCache(cache_path_for(session_id), key=render_key(theme_name, os.environ))
+        cache.write(line, stamp=stamp)
+    finally:
+        _release_refresh(session_id)
     return line
 
 
 __all__ = [
+    "ServedLine",
     "cache_path_for",
+    "drop_cached_lines",
     "prewarm",
+    "read_payload",
     "render_pipeline",
     "run_with_cache",
-    "serve_cached_line",
+    "serve_line",
 ]

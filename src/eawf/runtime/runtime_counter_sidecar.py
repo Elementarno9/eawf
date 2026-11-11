@@ -8,7 +8,9 @@ rendered line.
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -71,15 +73,24 @@ class RuntimeCounterSidecar:
         return payload.counters
 
     def write(self, counters: RuntimeCounters) -> None:
-        """Persist *counters* best-effort; write failures are degraded."""
+        """Persist *counters* best-effort; write failures are degraded.
+
+        The bytes go to a sibling temporary file renamed over the sidecar,
+        so a writer killed mid-write (a redraw exits without waiting for its
+        render) leaves the previous sidecar whole, never a torn one.
+        """
         payload = _SidecarPayload(schema_version=_SCHEMA_VERSION, counters=counters)
+        tmp = self._path.with_name(f".{self._path.name}.{os.getpid()}.tmp")
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._path.write_bytes(orjson.dumps(payload.model_dump(mode="json")))
+            tmp.write_bytes(orjson.dumps(payload.model_dump(mode="json")))
+            os.replace(tmp, self._path)
         except OSError as exc:
             logger.debug(
                 f"write runtime-counter-sidecar-write-failed path={self._path!r} error={exc}"
             )
+            with contextlib.suppress(OSError):
+                tmp.unlink()
 
 
 __all__ = [

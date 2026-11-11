@@ -38,6 +38,23 @@ def test_runtime_counter_sidecar_round_trips_counters(tmp_path: Path) -> None:
     assert sidecar.read() == counters
 
 
+def test_statusline_repro_sidecar_write_torn_by_a_failed_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # error-path: a write cut short leaves the previous sidecar whole and no temporary.
+    sidecar = RuntimeCounterSidecar(tmp_path / "ses.runtime-counters.json")
+    old = RuntimeCounters(input_tokens=1)
+    sidecar.write(old)
+
+    def _refuse(_src: object, _dst: object) -> None:
+        raise OSError("rename refused")
+
+    monkeypatch.setattr("eawf.runtime.runtime_counter_sidecar.os.replace", _refuse)
+    sidecar.write(RuntimeCounters(input_tokens=2))
+    assert sidecar.read() == old
+    assert [path.name for path in tmp_path.iterdir()] == ["ses.runtime-counters.json"]
+
+
 def test_runtime_counter_sidecar_missing_file_reads_none(tmp_path: Path) -> None:
     sidecar = RuntimeCounterSidecar(tmp_path / "missing.runtime-counters.json")
 
@@ -68,13 +85,17 @@ def test_statusline_render_writes_runtime_counter_sidecar(
     monkeypatch.setattr(
         sys,
         "stdin",
-        io.StringIO(
-            json.dumps(
-                {
-                    "session_id": "session-1",
-                    "cost": {"api_duration_ms": 17000, "cost_usd": 0.42},
-                    "context_window": {"current_usage": {"input_tokens": 100, "output_tokens": 50}},
-                }
+        io.TextIOWrapper(
+            io.BytesIO(
+                json.dumps(
+                    {
+                        "session_id": "session-1",
+                        "cost": {"api_duration_ms": 17000, "cost_usd": 0.42},
+                        "context_window": {
+                            "current_usage": {"input_tokens": 100, "output_tokens": 50}
+                        },
+                    }
+                ).encode()
             )
         ),
     )

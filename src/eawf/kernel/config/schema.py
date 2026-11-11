@@ -252,6 +252,39 @@ class RuntimeLivenessConfig(BaseModel):
     )
 
 
+#: A statusline theme: the terminal's 16 colours, a Catppuccin flavour, or no colour.
+StatuslineTheme = Literal[
+    "ansi",
+    "catppuccin-latte",
+    "catppuccin-frappe",
+    "catppuccin-macchiato",
+    "catppuccin-mocha",
+    "none",
+]
+#: The glyphs the statusline draws separators and bars with.
+StatuslineGlyphs = Literal["nerd", "unicode", "ascii"]
+#: The SGR foreground of the text on an ``ansi`` segment fill: black or bright white.
+StatuslineInk = Literal["30", "97"]
+
+
+class StatuslineConfig(BaseModel):
+    """Strict typed model for the ``statusline`` config section.
+
+    Attributes:
+        theme: The colours the line draws in.
+        glyphs: The separator and bar glyph set.
+        ink: The ``ansi`` theme's segment text colour.
+        bar_width: Cells per meter-row bar before any shrink to the terminal width.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    theme: StatuslineTheme = "ansi"
+    glyphs: StatuslineGlyphs = "nerd"
+    ink: StatuslineInk = "30"
+    bar_width: StrictInt = Field(default=20, ge=10, le=40)
+
+
 #: Every prompt-cache write class a price may name: Anthropic bills 5-minute and
 #: 1-hour writes, OpenAI 30-minute and 12-hour writes.
 CACHE_WRITE_CLASSES: Final[tuple[str, ...]] = ("5m", "1h", "30m", "12h")
@@ -364,6 +397,10 @@ __all__ = [
     "RuntimeAdapterId",
     "RuntimeLivenessConfig",
     "RuntimeModelsConfig",
+    "StatuslineConfig",
+    "StatuslineGlyphs",
+    "StatuslineInk",
+    "StatuslineTheme",
     "TaskReference",
     "ToastVerbosity",
     "VcsConventionsConfig",

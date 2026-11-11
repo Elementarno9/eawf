@@ -1,15 +1,15 @@
-"""The statusline orchestrator serves its per-session line stale-while-revalidate.
+"""The statusline orchestrator's per-session cache entry and its prewarm.
 
-A miss renders on the caller's time and writes the entry; a hit (fresh or
-stale) renders nothing; a stale hit starts a detached ``eawf cc statusline
-prewarm`` fed the same payload; the counter sidecar is written whenever a
-render runs.
+A render writes the entry and the counter sidecar; the detached ``eawf cc
+statusline prewarm`` is fed the same payload. The budgeted fallback to the
+cached line is pinned in ``test_statusline_sync_render``.
 """
 
 from __future__ import annotations
 
 import io
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -18,6 +18,7 @@ import orjson
 import pytest
 
 from eawf.runtime.runtimes.claude import statusline
+from eawf.runtime.runtimes.claude.statusline_theme import render_key
 from eawf.runtime.statusline_cache import StatuslineCache
 
 _PAYLOAD = {"session_id": "ses-swr", "cost": {"api_duration_ms": 17000}}
@@ -46,14 +47,15 @@ class _Spy:
 
 def _stdin(monkeypatch: pytest.MonkeyPatch, payload: dict[str, Any] | str) -> str:
     raw = payload if isinstance(payload, str) else json.dumps(payload)
-    monkeypatch.setattr(sys, "stdin", io.StringIO(raw))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(raw.encode())))
     return raw
 
 
 def _seed(cache_root: Path, session_id: str, value: str, written_at: float) -> Path:
     path = cache_root / f"{session_id}.json"
     cache_root.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(orjson.dumps({"value": value, "written_at": written_at, "key": "dark"}))
+    key = render_key(None, os.environ)
+    path.write_bytes(orjson.dumps({"value": value, "written_at": written_at, "key": key}))
     return path
 
 
@@ -81,30 +83,10 @@ def test_a_miss_renders_and_writes_the_entry(
     assert statusline.run_with_cache(workspace=None, theme_name=None) == "rendered"
     entry = StatuslineCache(cache_root / "ses-swr.json").read_entry()
     assert entry is not None
-    assert (entry.value, entry.key) == ("rendered", "dark")
+    assert (entry.value, entry.key) == ("rendered", render_key(None, os.environ))
+    assert entry.key.startswith("catppuccin-mocha/")
     assert (cache_root / "ses-swr.runtime-counters.json").exists()
     assert spawn.calls == []
-
-
-def test_a_fresh_hit_renders_nothing(
-    cache_root: Path, monkeypatch: pytest.MonkeyPatch, render: _Spy, spawn: _Spy
-) -> None:
-    _seed(cache_root, "ses-swr", "cached", written_at=4_000_000_000.0)
-    _stdin(monkeypatch, _PAYLOAD)
-    assert statusline.run_with_cache(workspace=None, theme_name=None) == "cached"
-    assert render.calls == []
-    assert spawn.calls == []
-
-
-def test_a_stale_hit_serves_the_old_line_and_spawns_a_refresh(
-    cache_root: Path, monkeypatch: pytest.MonkeyPatch, render: _Spy, spawn: _Spy
-) -> None:
-    _seed(cache_root, "ses-swr", "old", written_at=0.0)
-    raw = _stdin(monkeypatch, _PAYLOAD)
-    workspace = Path("ws")
-    assert statusline.run_with_cache(workspace=workspace, theme_name="ascii-fallback") == "old"
-    assert render.calls == []
-    assert spawn.calls == [((raw,), {"workspace": workspace, "theme_name": "ascii-fallback"})]
 
 
 @pytest.mark.parametrize("payload", ["", "not json", "[1]", json.dumps({"session_id": ""})])
@@ -116,27 +98,6 @@ def test_a_payload_without_a_session_renders_uncached(
     assert statusline.run_with_cache(workspace=None, theme_name=None) == "rendered"
     assert not cache_root.exists()
     assert spawn.calls == []
-
-
-# --- serve_cached_line -------------------------------------------------------
-
-
-def test_serve_cached_line_returns_none_on_a_miss(cache_root: Path, spawn: _Spy) -> None:
-    assert statusline.serve_cached_line(json.dumps(_PAYLOAD), theme_name=None) is None
-    assert spawn.calls == []
-
-
-def test_serve_cached_line_returns_none_without_a_session(cache_root: Path) -> None:
-    assert statusline.serve_cached_line("{}", theme_name=None) is None
-
-
-def test_serve_cached_line_serves_a_stale_hit_and_spawns_a_refresh(
-    cache_root: Path, spawn: _Spy
-) -> None:
-    _seed(cache_root, "ses-swr", "old", written_at=0.0)
-    raw = json.dumps(_PAYLOAD)
-    assert statusline.serve_cached_line(raw, theme_name="powerline") == "old"
-    assert spawn.calls == [((raw,), {"workspace": None, "theme_name": "powerline"})]
 
 
 # --- prewarm -----------------------------------------------------------------
@@ -152,6 +113,34 @@ def test_prewarm_overwrites_the_entry_with_a_fresh_render(
     assert entry is not None
     assert entry.value == "rendered"
     assert entry.written_at > 0.0
+
+
+def test_a_prewarm_for_an_older_payload_keeps_the_newer_entry(
+    cache_root: Path, monkeypatch: pytest.MonkeyPatch, render: _Spy
+) -> None:
+    # A redraw answered a later payload while this prewarm still rendered.
+    _seed(cache_root, "ses-swr", "newer", written_at=200.0)
+    _stdin(monkeypatch, _PAYLOAD)
+    statusline.prewarm(workspace=None, theme_name=None, payload_at=100.0)
+    entry = StatuslineCache(cache_root / "ses-swr.json").read_entry()
+    assert entry is not None
+    assert (entry.value, entry.written_at) == ("newer", 200.0)
+
+
+def test_prewarm_releases_the_refresh_claim_even_when_the_render_raises(
+    cache_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # error-path: a raising prewarm must not hold refreshes off until expiry.
+    assert statusline._claim_refresh("ses-swr", now=1.0) is True
+
+    def _raise(*_args: Any, **_kwargs: Any) -> str:
+        raise RuntimeError("render failed")
+
+    monkeypatch.setattr(statusline, "_render_session", _raise)
+    _stdin(monkeypatch, _PAYLOAD)
+    with pytest.raises(RuntimeError):
+        statusline.prewarm(workspace=None, theme_name=None, payload_at=1.0)
+    assert not (cache_root / "ses-swr.refresh").exists()
 
 
 def test_prewarm_without_a_session_writes_nothing(
@@ -180,7 +169,9 @@ def popen(monkeypatch: pytest.MonkeyPatch) -> _Spawned:
 
 
 def test_spawn_refresh_runs_prewarm_detached_with_the_payload(popen: _Spawned) -> None:
-    statusline._spawn_refresh('{"session_id":"s"}', workspace=Path("ws"), theme_name="ascii")
+    statusline._spawn_refresh(
+        '{"session_id":"s"}', workspace=Path("ws"), theme_name="ascii", stamp=12.5
+    )
     [(argv, stdin, kwargs)] = popen
     assert argv == [
         sys.executable,
@@ -191,6 +182,8 @@ def test_spawn_refresh_runs_prewarm_detached_with_the_payload(popen: _Spawned) -
         "cc",
         "statusline",
         "prewarm",
+        "--payload-at",
+        "12.5",
         "--theme",
         "ascii",
     ]
@@ -199,16 +192,25 @@ def test_spawn_refresh_runs_prewarm_detached_with_the_payload(popen: _Spawned) -
 
 
 def test_spawn_refresh_without_workspace_or_theme(popen: _Spawned) -> None:
-    statusline._spawn_refresh("", workspace=None, theme_name=None)
+    statusline._spawn_refresh("", workspace=None, theme_name=None, stamp=1.0)
     [(argv, stdin, _)] = popen
-    assert argv == [sys.executable, "-m", "eawf", "cc", "statusline", "prewarm"]
+    assert argv == [
+        sys.executable,
+        "-m",
+        "eawf",
+        "cc",
+        "statusline",
+        "prewarm",
+        "--payload-at",
+        "1.0",
+    ]
     assert stdin == b""
 
 
 def test_spawn_refresh_swallows_a_failed_spawn(monkeypatch: pytest.MonkeyPatch) -> None:
-    # error-path: the redraw still succeeds; the next stale redraw retries.
+    # error-path: the redraw still succeeds; the next redraw renders again.
     def _refuse(*_args: Any, **_kwargs: Any) -> None:
         raise OSError("fork refused")
 
     monkeypatch.setattr("subprocess.Popen", _refuse)
-    statusline._spawn_refresh("{}", workspace=None, theme_name=None)
+    statusline._spawn_refresh("{}", workspace=None, theme_name=None, stamp=1.0)

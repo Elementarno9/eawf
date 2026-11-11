@@ -158,7 +158,7 @@ def bind_and_observe(canary: CanaryProvision, *, cap: int, spent: int) -> None:
 
 def line(canary: CanaryProvision, session_id: str) -> str:
     """Return the rendered statusline, colour stripped, for *session_id*."""
-    rendered = render_pipeline({"session_id": session_id}, workspace=canary.root, palette="dark")
+    rendered = render_pipeline({"session_id": session_id}, workspace=canary.root, theme_name="dark")
     return ANSI.sub("", rendered)
 
 

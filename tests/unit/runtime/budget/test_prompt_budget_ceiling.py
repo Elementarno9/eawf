@@ -18,7 +18,6 @@ from typing import Any, Final
 import pytest
 from pydantic import ValidationError
 
-from eawf.kernel.economics.governor import DEFAULT_GOVERNOR
 from eawf.kernel.identity import EntityKind, parse_qualified_urn
 from eawf.kernel.store.compaction import read_document
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
@@ -42,7 +41,6 @@ from eawf.runtime.daemon.budget_interlock import (
 )
 from eawf.runtime.daemon.methods import run_budget
 from eawf.runtime.daemon.methods.run_budget import InFlightRunMeter
-from eawf.runtime.runtimes.claude.plugin_install import _patch_settings_json
 from eawf.runtime.runtimes.metering import UsageSample
 from eawf.surfaces.render.statusline import (
     SegmentSource,
@@ -247,12 +245,3 @@ def test_budget_segment_negative_spend_raises() -> None:
 def test_budget_unavailable_segment_refuses_a_bad_reason(reason: str) -> None:
     with pytest.raises(ValueError, match="one non-empty token"):
         budget_unavailable_segment(reason, _SEGMENT_SOURCE)
-
-
-def test_plugin_settings_wire_the_statusline_and_keep_a_foreign_one(tmp_path: Path) -> None:
-    fresh = tmp_path / "fresh.json"
-    rendered = _patch_settings_json(fresh, {}, governor=DEFAULT_GOVERNOR)
-    assert b'"command": "eawf cc statusline"' in rendered
-    foreign = tmp_path / "foreign.json"
-    foreign.write_text('{"statusLine": {"type": "command", "command": "mine"}}', encoding="utf-8")
-    assert b'"command": "mine"' in _patch_settings_json(foreign, {}, governor=DEFAULT_GOVERNOR)

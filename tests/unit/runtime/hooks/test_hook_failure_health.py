@@ -3,13 +3,14 @@
 A handler that raises, or whose daemon call fails, must not break the host
 session, so the hook still exits 0; the failure lands as one row in the hook
 health record, as one stderr line naming the event and error code, and as the
-``hook-errors:<n>`` token on the status line's hooks segment.
+``hooks!<n>`` token on the status line's hooks segment.
 """
 
 from __future__ import annotations
 
 import json
 import subprocess  # noqa: EAWF024 a linked worktree is built with git itself
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -26,7 +27,6 @@ from eawf.runtime.hooks.health import (
     HookFailure,
     failure_line,
     record_failures,
-    unacknowledged_count,
 )
 from eawf.runtime.hooks.runner import HookResult, HookRunner
 from eawf.runtime.runtimes.claude.statusline_modules import hooks_plugins
@@ -95,7 +95,7 @@ def test_failed_daemon_call_exits_zero_records_one_row_and_shows_the_token(
         ("post_tool_use", "runtime.host_tool", DAEMON_CALL_FAILED)
     ]
     assert rows[0]["detail"] == "ConnectionRefusedError('no daemon')"
-    assert _segment_text(tree).endswith(" hook-errors:1")
+    assert _segment_text(tree).endswith(" hooks!1")
 
 
 def _git(cwd: Path, *args: str) -> None:
@@ -122,7 +122,7 @@ def test_worktree_session_shows_the_failures_its_hook_recorded_in_the_main_check
     assert result.exit_code == 0, result.output
     assert not (linked / ".ea" / HEALTH_RECORD).exists()
     assert len(_rows(main)) == 1
-    assert _segment_text(linked).endswith(" hook-errors:1")
+    assert _segment_text(linked).endswith(" hooks!1")
 
 
 def test_raising_handler_exits_zero_and_each_run_adds_one_row(
@@ -145,7 +145,7 @@ def test_raising_handler_exits_zero_and_each_run_adds_one_row(
     ]
     assert [row["code"] for row in _rows(tree)] == [HOOK_RAISED, HOOK_RAISED]
     assert json.loads(second.stdout)["body"]["blocked"] is False
-    assert "hook-errors:2" in _segment_text(tree).split()
+    assert "hooks!2" in _segment_text(tree).split()
 
 
 def test_unwritable_record_still_exits_zero_and_names_the_failure(
@@ -171,7 +171,7 @@ def test_clean_run_records_nothing_and_shows_no_token(tree: Path) -> None:
     assert result.stderr == ""
     assert not (tree / ".ea" / HEALTH_RECORD).exists()
     segment = hooks_plugins.build({}, tree / ".ea" / "state.json")
-    assert "hook-errors" not in segment.text
+    assert "hooks!" not in segment.text
     assert segment.status == "missing"
 
 
@@ -270,7 +270,6 @@ def test_record_failures_appends_rows_in_order(tmp_path: Path) -> None:
 
     rows = (ea_dir / HEALTH_RECORD).read_text(encoding="utf-8").splitlines()
     assert [json.loads(row)["detail"] for row in rows] == ["a", "b", "c"]
-    assert unacknowledged_count(ea_dir) == 3
 
 
 def test_record_failures_with_no_failures_writes_nothing(tmp_path: Path) -> None:
@@ -301,25 +300,6 @@ def test_record_failures_raises_when_the_record_cannot_be_written(tmp_path: Path
         record_failures(tmp_path / ".ea", [_failure()])
 
 
-def test_unacknowledged_count_without_a_record_is_zero(tmp_path: Path) -> None:
-    assert unacknowledged_count(tmp_path / ".ea") == 0
-
-
-def test_unacknowledged_count_skips_blank_lines(tmp_path: Path) -> None:
-    record = tmp_path / ".ea" / HEALTH_RECORD
-    record.parent.mkdir(parents=True)
-    record.write_text('{"code": "a"}\n\n{"code": "b"}\n', encoding="utf-8")
-
-    assert unacknowledged_count(tmp_path / ".ea") == 2
-
-
-def test_unacknowledged_count_raises_on_an_unreadable_record(tmp_path: Path) -> None:
-    (tmp_path / ".ea" / HEALTH_RECORD).mkdir(parents=True)
-
-    with pytest.raises(OSError):
-        unacknowledged_count(tmp_path / ".ea")
-
-
 def test_failure_line_names_event_code_hook_and_error_not_detail() -> None:
     line = failure_line(_failure("secret detail"))
 
@@ -329,17 +309,17 @@ def test_failure_line_names_event_code_hook_and_error_not_detail() -> None:
 def test_segment_ignores_an_unreadable_record(tree: Path) -> None:
     (tree / ".ea" / HEALTH_RECORD).mkdir(parents=True)
 
-    assert "hook-errors" not in _segment_text(tree)
+    assert "hooks!" not in _segment_text(tree)
 
 
 def test_segment_with_a_plugin_record_turns_degraded_on_failures(tree: Path) -> None:
     record = tree / "home" / ".claude" / "plugins" / "installed_plugins.json"
     record.parent.mkdir(parents=True)
     record.write_text(json.dumps({"plugins": {"p": [{"scope": "user"}]}}), encoding="utf-8")
-    record_failures(tree / ".ea", [_failure()])
+    record_failures(tree / ".ea", [replace(_failure(), at=datetime.now(UTC))])
 
     segment = hooks_plugins.build({}, tree / ".ea" / "state.json")
 
-    assert segment.text == "hooks:0 plugins:1 hook-errors:1"
+    assert segment.text == "hooks:0 plugins:1 hooks!1"
     assert segment.status == "degraded"
     assert ".ea/local/hooks/health.jsonl" in segment.truth.provenance_refs

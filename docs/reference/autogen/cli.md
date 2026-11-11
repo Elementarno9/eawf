@@ -488,6 +488,15 @@ Golden-fixture snapshot surfaces — list and regenerate per --kind.
 | `list` | List every snapshot surface in the locked inventory. |
 | `update` | Regenerate the golden subset for one snapshot surface. |
 
+### `eawf statusline`
+
+Install the Claude Code status line once per user and diagnose it.
+
+| Verb | Summary |
+|---|---|
+| `doctor` | Report which statusLine entry Claude Code uses here and whether it renders. |
+| `install` | Set ``statusLine`` to run ``eawf cc statusline``, changing no other key. |
+
 ### `eawf store`
 
 JSONL store maintenance (compact, redact-content, drop-unpublished-row).

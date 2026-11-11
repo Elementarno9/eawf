@@ -198,8 +198,8 @@ def test_meas_028_every_segment_is_a_truth_field_with_producer_freshness_and_qua
     assert by_module["scope"].text == "scope:EAWF-0126"
     assert by_module["model"].text == "model:Opus"
     assert by_module["project"].text == "project:sample-project"
-    assert by_module["active_time"].text == "active:0m · 60% active"
-    assert by_module["cost"].text == "cost:$1.23"
+    assert by_module["active_time"].text == "active:0m"
+    assert by_module["cost"].text == "cost:$1.23 API-equivalent"
 
 
 def test_meas_028_cost_is_an_estimate_not_an_exact_figure() -> None:
@@ -294,8 +294,8 @@ def test_meas_029_context_without_complete_host_usage_draws_no_row_not_zero(
 
 
 def test_meas_029_cost_segment_reads_the_host_cost() -> None:
-    assert cost.build(HOST_PAYLOAD, None).text == "cost:$1.23"
-    assert cost.build({"cost": {"total_cost_usd": 0}}, None).text == "cost:$0.00"
+    assert cost.build(HOST_PAYLOAD, None).text == "cost:$1.23 API-equivalent"
+    assert cost.build({"cost": {"total_cost_usd": 0}}, None).text == "cost:$0.00 API-equivalent"
 
 
 @pytest.mark.parametrize(
@@ -823,7 +823,7 @@ def test_prx_043_mcp_reads_the_registry_on_the_selected_generation(tmp_path: Pat
 
 
 def test_line_one_draws_the_mcp_count_the_real_builder_states(tmp_path: Path) -> None:
-    from eawf.surfaces.render.statusline import load_palette, render_powerline
+    from eawf.surfaces.render.statusline import LineStyle, load_theme, render_powerline
 
     state_path = canary_state_path(tmp_path, {})
     register_mcp(
@@ -835,7 +835,7 @@ def test_line_one_draws_the_mcp_count_the_real_builder_states(tmp_path: Path) ->
     )
 
     segments = orchestrator._build_segments({**HOST_PAYLOAD, "cwd": str(tmp_path)}, state_path)
-    [line_one] = render_powerline(segments, [], load_palette("dark"), width=None)
+    [line_one] = render_powerline(segments, [], LineStyle(theme=load_theme("ansi")), width=None)
 
     texts = [part.strip() for part in re.sub(r"\x1b\[[0-9;]*m", "", line_one).split("")]
     # Installed over registered: the payload carries no connection state to count.

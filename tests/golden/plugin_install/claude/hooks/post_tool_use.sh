@@ -282,14 +282,28 @@ if [ "${_eawf_kind}" != "managed" ] && [ "${_eawf_kind}" != "guarded" ]; then
     exit 0
 fi
 
+# Print $1 as valid UTF-8: a byte that is not part of a valid character is
+# dropped by iconv where it runs; without a working iconv every byte above
+# ASCII becomes "?", which loses the text's other characters but never the row.
+_eawf_utf8() {
+    local out=""
+    if command -v iconv >/dev/null 2>&1; then
+        out="$(printf '%s' "$1" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null)"
+    fi
+    if [ -z "${out}" ] && [ -n "$1" ]; then
+        out="$(printf '%s' "$1" | LC_ALL=C tr '\200-\377' '?')"
+    fi
+    printf '%s' "${out}"
+}
+
 # Keep one health row for an infrastructure failure: code, error, detail.
-# A value is cut to 500 bytes without splitting a UTF-8 character, every
-# control character becomes a space, then quotes and backslashes are escaped,
-# so the row is always one valid JSON line.
+# A value is made valid UTF-8, cut to 500 bytes without splitting a
+# character, every control character becomes a space, then quotes and
+# backslashes are escaped, so the row is always one valid JSON line.
 _eawf_json_escape() {
     local LC_ALL=C
     local s n=0 b need=1
-    s="$(printf '%s' "${1-}" | tr '\000-\037' ' ')"
+    s="$(_eawf_utf8 "${1-}" | tr '\000-\037' ' ')"
     if [ -n "${s:500:1}" ]; then
         s="${s:0:500}"
         # Back up over continuation bytes to the last character's lead byte.
@@ -314,33 +328,12 @@ _eawf_json_escape() {
     s="${s//\"/\\\"}"
     printf '%s' "$s"
 }
-# Rotate a full record to its one older generation, as the Python writer does,
-# and move the read cursor back by the bytes the dropped generation held.
-_eawf_rotate() {
-    local record="$1" size dropped=0 cursor
-    local cursor_file="${record%/*}/health.cursor"
-    [ -f "${record}" ] || return 0
-    size="$(wc -c <"${record}" 2>/dev/null)" || return 0
-    [ "$((size + 0))" -ge 262144 ] || return 0
-    if [ -f "${record}.1" ]; then
-        dropped="$(wc -c <"${record}.1" 2>/dev/null)" || dropped=0
-    fi
-    mv -f "${record}" "${record}.1" 2>/dev/null || return 0
-    read -r cursor <"${cursor_file}" 2>/dev/null || return 0
-    case "${cursor}" in
-        "" | *[!0-9]*) return 0 ;;
-    esac
-    cursor=$((cursor - dropped))
-    [ "${cursor}" -ge 0 ] || cursor=0
-    printf '%s\n' "${cursor}" >"${cursor_file}.$$.tmp" 2>/dev/null &&
-        mv -f "${cursor_file}.$$.tmp" "${cursor_file}" 2>/dev/null
-    return 0
-}
+# The wrapper only appends: rotation takes the record's lock, which bash
+# cannot take portably, so the next Python hook that runs rotates.
 _eawf_health() {
     [ -n "${_eawf_main}" ] || return 0
     local record="${_eawf_main}/.ea/local/hooks/health.jsonl"
     mkdir -p "${record%/*}" 2>/dev/null || return 0
-    _eawf_rotate "${record}"
     local session="null"
     if [ -n "${_eawf_session}" ]; then
         session="\"${_eawf_session}\""

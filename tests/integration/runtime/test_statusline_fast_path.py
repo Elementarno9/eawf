@@ -1,11 +1,11 @@
 """The console entry point answers the plain statusline without importing the CLI.
 
 Claude Code runs ``eawf cc statusline`` on every redraw. :mod:`eawf.__main__`
-answers it without loading the Typer app: a cached line is printed at once, a
-miss is rendered and cached exactly as the ``cc statusline`` command would,
-and a stale entry is served and then rewritten by a detached background
-render. Any other invocation still goes to the full CLI. The process-level
-checks run a fresh interpreter, because the test process has the app imported.
+answers it without loading the Typer app, rendering and caching exactly as the
+``cc statusline`` command would; a render that overruns its budget prints the
+session's cached line, which a detached background render then rewrites. Any
+other invocation still goes to the full CLI. The process-level checks run a
+fresh interpreter, because the test process has the app imported.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ import orjson
 import pytest
 
 from eawf.__main__ import _statusline_theme
+from eawf.runtime.runtimes.claude.statusline_theme import render_key
 
 _PROBE = (
     "import sys\n"
@@ -94,41 +95,9 @@ def _run(
 def _seed(tmp_path: Path, session_id: str, value: str, written_at: float) -> Path:
     path = tmp_path / "cache" / f"{session_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(orjson.dumps({"value": value, "written_at": written_at, "key": "dark"}))
+    key = render_key(None, _env(tmp_path))
+    path.write_bytes(orjson.dumps({"value": value, "written_at": written_at, "key": key}))
     return path
-
-
-def test_a_fresh_hit_is_printed_without_loading_the_cli_app(tmp_path: Path) -> None:
-    _seed(tmp_path, "ses-fast", "CACHED", written_at=time.time() + 3600)
-    proc = _run(tmp_path, {"session_id": "ses-fast"})
-    assert proc.stdout == "CACHED\n"
-    assert proc.stderr.strip() == "app-unloaded"
-
-
-def test_a_fresh_hit_resolves_its_palette_without_the_model_stack(tmp_path: Path) -> None:
-    # The resolved palette keys the entry, so a hit resolves it on every redraw.
-    _seed(tmp_path, "ses-hot", "CACHED", written_at=time.time() + 3600)
-    probe = (
-        "import sys\n"
-        "sys.argv = ['eawf', 'cc', 'statusline']\n"
-        "from eawf.__main__ import main\n"
-        "main()\n"
-        "heavy = ('pydantic', 'yaml', 'eawf.kernel.state')\n"
-        "print(sorted(name for name in heavy if name in sys.modules), file=sys.stderr)\n"
-    )
-    env = {key: value for key, value in _env(tmp_path).items() if key != "EAWF_STATUSLINE_THEME"}
-    proc = subprocess.run(
-        [sys.executable, "-c", probe],
-        input=json.dumps({"session_id": "ses-hot"}),
-        capture_output=True,
-        text=True,
-        env={**env, "COLORFGBG": "15;0"},
-        cwd=tmp_path,
-        timeout=60,
-        check=True,
-    )
-    assert proc.stdout == "CACHED\n"
-    assert proc.stderr.strip() == "[]"
 
 
 def test_a_miss_is_rendered_and_cached_without_loading_the_cli_app(tmp_path: Path) -> None:
@@ -182,11 +151,18 @@ def test_another_statusline_form_still_goes_to_the_cli(tmp_path: Path) -> None:
     assert " haiku " in cached["value"]
 
 
-def test_a_stale_hit_is_served_then_refreshed_in_the_background(tmp_path: Path) -> None:
+def test_a_cached_line_stands_in_only_until_the_entry_is_rendered_anew(tmp_path: Path) -> None:
+    # A cold interpreter may finish its render inside the budget or overrun it,
+    # so the redraw prints either the fresh rows or the cached line, never
+    # anything else, and either way the entry ends up holding the fresh rows.
     path = _seed(tmp_path, "ses-stale", "OLD", written_at=0.0)
     proc = _run(tmp_path, {"session_id": "ses-stale", "model": "haiku"})
-    assert proc.stdout == "OLD\n"
-    assert proc.stderr.strip() == "app-unloaded"
+    if proc.stdout == "OLD\n":
+        # The overrun path exits before the probe's own marker prints.
+        assert proc.stderr.strip() == ""
+    else:
+        assert " haiku " in proc.stdout
+        assert proc.stderr.strip() == "app-unloaded"
     deadline = time.monotonic() + 45
     value = "OLD"
     while time.monotonic() < deadline:

@@ -168,6 +168,7 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("hook", "eawf.surfaces.cli.commands.hook", "hook_app"),
     GroupRow("plugin", "eawf.surfaces.cli.commands.plugin", "plugin_app"),
     GroupRow("cc", "eawf.surfaces.cli.commands.cc", "cc_app"),
+    GroupRow("statusline", "eawf.surfaces.cli.commands.statusline", "statusline_cli_app"),
     GroupRow("runtime", "eawf.surfaces.cli.commands.runtime", "runtime_app"),
     GroupRow("skill", "eawf.surfaces.cli.commands.skill", "skill_app"),
     # MCP servers and plan revisions.

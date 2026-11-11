@@ -138,6 +138,7 @@ ROOT_ENTRY_EXCEPTIONS: Final[tuple[RootEntryException, ...]] = (
     _entry("hook", "tooling", "installed git and host hooks call these paths"),
     _entry("plugin", "tooling", "installs and checks the host plugin bundles"),
     _entry("cc", "tooling", "the Claude Code status line calls this path"),
+    _entry("statusline", "tooling", "installs and diagnoses the Claude Code status line"),
     _entry("runtime", "tooling", "certifies the runtime harnesses installed on this machine"),
     _entry("skill", "tooling", "rendered skill bodies call these paths"),
     _entry("mcp", "tooling", "host MCP configuration launches these paths"),
@@ -354,7 +355,7 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
         "re-projects the derived telemetry database",
     ),
     _exempt("doctor", "local_setup", "--fix repairs the local install, below the record layer"),
-    _exempt("cc statusline install", "local_setup", "writes the host statusline configuration"),
+    _exempt("statusline install", "local_setup", "writes the host statusline configuration"),
     _exempt(
         "session bind",
         "unversioned_store",

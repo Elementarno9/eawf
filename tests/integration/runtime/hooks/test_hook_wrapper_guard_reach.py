@@ -24,7 +24,7 @@ from eawf.runtime.hooks.event import HookEvent, HookEventType
 from eawf.runtime.hooks.health import (
     HEALTH_CURSOR,
     HEALTH_RECORD,
-    HEALTH_RECORD_CAP,
+    HEALTH_ROTATE_BYTES,
     HEALTH_ROTATED,
     read_cursor,
     read_health_rows,
@@ -383,22 +383,46 @@ def test_a_child_failure_row_is_valid_json(wrapper: Path, tmp_path: Path, stderr
     assert row.detail == expected.decode("utf-8", errors="ignore")
 
 
-def test_the_wrapper_rotates_a_full_record_and_moves_the_cursor(
-    wrapper: Path, tmp_path: Path
-) -> None:
+@pytest.mark.parametrize("iconv", ["system", "broken"])
+def test_health_row_repro_invalid_utf8_stderr(wrapper: Path, tmp_path: Path, iconv: str) -> None:
+    managed = _managed(tmp_path / "managed")
+    stubs = tmp_path / "stubs"
+    _stub(stubs, "uv", _LOGGING_UV)
+    if iconv == "broken":
+        _stub(stubs, "iconv", "#!/bin/bash\ncat >/dev/null\nexit 127\n")
+    script = tmp_path / "line.bin"
+    script.write_bytes(b"lead \xff\xfe mid \xc3 caf\xc3\xa9 \xe2\x82 end \x80")
+    _stub(stubs, "eawf", f"#!/bin/bash\ncat >/dev/null\ncat '{script}' >&2\nexit 3\n")
+    env = _env(tmp_path, f"{stubs}:{_SYSTEM_PATH}", LANG="C.UTF-8")
+
+    result = _run(wrapper, "post_tool_use", {"cwd": str(managed)}, cwd=managed, env=env)
+
+    assert result.returncode == 0
+    raw = (managed / ".ea" / HEALTH_RECORD).read_bytes()
+    raw.decode("utf-8")
+    read = read_health_rows(managed / ".ea")
+    assert read.malformed == 0
+    (row,) = read.rows
+    if iconv == "system":
+        # Only the invalid bytes go; every valid character stays.
+        assert row.detail == "lead  mid  café  end "
+    else:
+        # Without iconv every byte above ASCII becomes "?", and the row stays valid.
+        assert row.detail.startswith("lead ?? mid ? caf?? ")
+        assert row.detail.endswith(" end ?")
+
+
+def test_the_wrapper_only_appends_to_a_full_record(wrapper: Path, tmp_path: Path) -> None:
     managed = _managed(tmp_path / "managed")
     ea = managed / ".ea"
     record = ea / HEALTH_RECORD
     record.parent.mkdir(parents=True)
     row = json.dumps(
-        {"at": "t", "event": "e", "hook": "h", "code": "old", "error": "", "detail": ""}
+        {"at": "t", "event": "e", "hook": "h", "code": "full", "error": "", "detail": ""}
     )
-    older = (row + "\n").encode("utf-8") * 10
-    (ea / HEALTH_ROTATED).write_bytes(older)
-    full = (row.replace("old", "full") + "\n").encode("utf-8")
-    record.write_bytes(full * (HEALTH_RECORD_CAP // len(full) + 1))
-    cursor = len(older) + 3 * len(full)
-    (ea / HEALTH_CURSOR).write_text(f"{cursor}\n", encoding="utf-8")
+    full = (row + "\n").encode("utf-8")
+    record.write_bytes(full * (HEALTH_ROTATE_BYTES // len(full) + 1))
+    (ea / HEALTH_CURSOR).write_text(f"{3 * len(full)}\n", encoding="utf-8")
 
     result = _run(
         wrapper,
@@ -409,10 +433,8 @@ def test_the_wrapper_rotates_a_full_record_and_moves_the_cursor(
     )
 
     assert result.returncode == 0
-    assert (ea / HEALTH_ROTATED).read_bytes().startswith(full)
-    assert [r["code"] for r in _health(managed)] == ["runner_missing"]
-    # The cursor still points just past the third "full" row.
+    # Rotation is the next Python writer's, under the record's lock.
+    assert not (ea / HEALTH_ROTATED).exists()
+    assert not (ea / HEALTH_RECORD.with_name("health.jsonl.1")).exists()
     assert read_cursor(ea) == 3 * len(full)
-    unread = read_health_rows(ea, offset=read_cursor(ea)).rows
-    assert [r.code for r in unread][-1] == "runner_missing"
-    assert {r.code for r in unread[:-1]} == {"full"}
+    assert [r["code"] for r in _health(managed)][-1] == "runner_missing"

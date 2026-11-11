@@ -47,7 +47,7 @@ def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def _rows(state_path: Path | None, payload: dict[str, Any]) -> list[str]:
     workspace = state_path.parent.parent if state_path is not None else None
-    rendered = orchestrator.render_pipeline(payload, workspace=workspace, palette="dark")
+    rendered = orchestrator.render_pipeline(payload, workspace=workspace, theme_name="dark")
     return _SGR.sub("", rendered).split("\n")
 
 
@@ -97,6 +97,6 @@ def test_a_payload_with_nothing_to_source_renders_no_marker(
         rendered = orchestrator.render_pipeline(
             payload,
             workspace=state_path.parent.parent if state_path is not None else None,
-            palette="light",
+            theme_name="light",
         )
         assert "n/a" not in rendered

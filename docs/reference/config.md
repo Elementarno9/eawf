@@ -68,6 +68,10 @@ Type is the value shape; Layers names the layers that may write the leaf.
 | `operator.principal` | string | unset | global | Principal key this machine's operator claims (for example `OP-0001`); a console launched without `--actor` acts as it, and as nobody without a claim. |
 | `ui.theme` | literal | `dark` | global, workspace, repo, env | Console colour theme: `dark`, `light`, `cb` (colour-blind safe) or `auto`. |
 | `ui.glyphs` | literal | `auto` | global, workspace, repo, env | Console glyph set: `unicode`, `ascii`, or `auto` to follow the terminal encoding. |
+| `statusline.theme` | literal | `ansi` | global, workspace, repo | Status line colours: `ansi` (the terminal's 16 colours), `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `catppuccin-mocha` or `none`. `--theme`, then `NO_COLOR`, then `EAWF_STATUSLINE_THEME` win over it. |
+| `statusline.glyphs` | literal | `nerd` | global, workspace, repo | Status line separators: `nerd` (U+E0B0), `unicode` (U+258C) or `ascii` (none). `EAWF_STATUSLINE_GLYPHS` wins over it; `TERM=linux` or a non-UTF-8 locale forces `ascii`. |
+| `statusline.ink` | literal | `30` | global, workspace, repo | Text colour on the `ansi` theme's segment fills: `30` (black) or `97` (bright white). |
+| `statusline.bar_width` | int, 10 to 40 | `20` | global, workspace, repo | Cells per status line meter bar before it shrinks to `COLUMNS`. |
 | `ui.toasts` | literal | `important` | global, workspace, repo, env | Toasts for state changes nobody keyed: `off` raises none, `important` and `all` raise them. Answers to a key and the quit prompt always show. |
 
 ### Telemetry
@@ -213,7 +217,8 @@ These control variables use a single underscore after the `EAWF_` prefix and are
 | `EAWF_DAEMON_PROBE_INTERVAL_S` | Seconds between the console's daemon liveness probes; defaults to 0.5. |
 | `EAWF_RECONNECT_MIN_INTERVAL_S` | Minimum seconds between the console's event-stream reconnects; defaults to 5. |
 | `EAWF_CONSOLE_COLD_PAINT_T0` | Set by eawf: the clock reading handed to the console cold-paint measurement child. |
-| `EAWF_STATUSLINE_THEME` | Statusline theme used when `--theme` is not given. |
+| `EAWF_STATUSLINE_THEME` | Statusline theme used when neither `--theme` nor `NO_COLOR` is given; wins over `statusline.theme`. |
+| `EAWF_STATUSLINE_GLYPHS` | Statusline glyph set (`nerd`, `unicode` or `ascii`); wins over `statusline.glyphs`. |
 
 ### Commits and co-author trailers
 

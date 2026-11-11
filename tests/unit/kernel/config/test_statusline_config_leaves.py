@@ -1,10 +1,10 @@
 """Every ``statusline.*`` config leaf the catalog keeps has a production reader.
 
-The statusline fits its width from ``COLUMNS`` with a fixed segment order and takes its
-colours and glyphs from the theme ``--theme`` or ``EAWF_STATUSLINE_THEME`` names, so it
-reads no config leaf. The five leaves once registered for rows, colour, glyphs and the
-module lists are retired: the catalog, the built-in layer and the console no longer offer
-them, and the config migration strips them from a layer that still states them.
+The statusline fits its width from ``COLUMNS`` with a fixed segment order, and reads its
+theme, glyphs, ink and bar width from the four ``statusline`` leaves, each through the
+section reader. The five leaves once registered for rows, colour, glyphs and the module
+lists are retired: the catalog, the built-in layer and the console no longer offer them,
+and the config migration strips them from a layer that still states them.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from eawf.kernel.config.layered import get_dotted
 from eawf.kernel.config.migration import migrate_config_payload
 from eawf.kernel.config.registry.config_keys import CONFIG_REGISTRY
 from eawf.kernel.config.registry.leaf_catalog import DEPRECATED_LEAF_KEYS, LEAF_KEY_REGISTRY
+from eawf.kernel.config.schema import StatuslineConfig
 from eawf.kernel.config.sections import layer_leaf_problems
 from eawf.kernel.projection.settings import build_settings_view
 
@@ -78,9 +79,17 @@ def test_every_catalogued_statusline_leaf_has_a_production_reader() -> None:
         assert _production_call_sites(entry.consumer, SRC_ROOT), (key, entry.consumer)
 
 
-def test_the_statusline_section_keeps_no_leaf() -> None:
-    # the width fit and the theme read no leaf; one added later needs a reader above
-    assert _statusline_leaves() == []
+def test_the_statusline_section_keeps_its_four_leaves() -> None:
+    # each one added later needs a reader above
+    assert _statusline_leaves() == [
+        "statusline.bar_width",
+        "statusline.glyphs",
+        "statusline.ink",
+        "statusline.theme",
+    ]
+    assert BUILT_IN_DEFAULTS["statusline"] == StatuslineConfig().model_dump()
+    for key in _statusline_leaves():
+        assert LEAF_KEY_REGISTRY[key].default == get_dotted(BUILT_IN_DEFAULTS, key), key
 
 
 def test_no_production_module_reads_a_retired_statusline_leaf() -> None:
@@ -134,7 +143,7 @@ def test_a_retired_statusline_leaf_is_offered_nowhere(key: str) -> None:
 
 @pytest.mark.parametrize("key", RETIRED_STATUSLINE_LEAVES)
 def test_a_layer_stating_a_retired_statusline_leaf_is_refused(key: str) -> None:
-    assert layer_leaf_problems(_nested(key, 1)) == ["statusline: unknown config key"]
+    assert layer_leaf_problems(_nested(key, 1)) == [f"{key}: unknown config key"]
 
 
 def test_the_migration_strips_every_retired_statusline_leaf() -> None:
@@ -147,7 +156,7 @@ def test_the_migration_strips_every_retired_statusline_leaf() -> None:
     assert layer_leaf_problems(upgraded) == []
 
 
-def test_the_settings_view_offers_no_statusline_leaf(
+def test_the_settings_view_offers_only_the_live_statusline_leaves(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     home = tmp_path / "home"
@@ -163,4 +172,29 @@ def test_the_settings_view_offers_no_statusline_leaf(
         env={},
         branch=None,
     )
-    assert not [leaf.key for leaf in view.leaves if leaf.key.startswith("statusline.")]
+    offered = sorted(leaf.key for leaf in view.leaves if leaf.key.startswith("statusline."))
+    assert offered == _statusline_leaves()
+
+
+@pytest.mark.parametrize(
+    ("leaf", "value", "problem"),
+    [
+        ("theme", "catppuccin-mocha", None),
+        ("theme", "dark", "'dark' is not one of"),
+        ("glyphs", "ascii", None),
+        ("glyphs", "powerline", "'powerline' is not one of"),
+        ("ink", "97", None),
+        ("ink", 97, "97 is not one of"),
+        ("bar_width", 40, None),
+        ("bar_width", "20", "'20' is not of type int"),
+    ],
+)
+def test_a_layer_states_a_statusline_leaf_by_its_catalog_entry(
+    leaf: str, value: Any, problem: str | None
+) -> None:
+    problems = layer_leaf_problems({"statusline": {leaf: value}})
+    if problem is None:
+        assert problems == []
+    else:
+        [found] = problems
+        assert found.startswith(f"statusline.{leaf}: {problem}")

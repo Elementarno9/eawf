@@ -13,8 +13,8 @@ defaults to the workspace root):
         <role>.md                       # one per role in render.agents.AGENT_REGISTRY
       hooks/
         <event_type>.sh                 # one per event in render.hooks.HOOK_REGISTRY
-      settings.json                     # __eawf_managed namespace + statusLine
-                                          # patched in; user-owned keys preserved
+      settings.json                     # __eawf_managed namespace patched in;
+                                          # user-owned keys preserved
     .mcp.json                           # project-scoped MCP config scaffold
 
 The renderer is *idempotent*: invoked twice on the same target with the
@@ -52,8 +52,10 @@ from eawf.runtime.hooks.event import HookEventType
 from eawf.runtime.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY
 from eawf.runtime.runtimes.claude.plugin_conflict import detect_marketplace_install
 from eawf.runtime.runtimes.claude.statusline_install import (
-    build_statusline_command,
+    STATUSLINE_KEY,
     global_settings_path,
+    is_eawf_project_leftover,
+    names_eawf,
     read_settings,
 )
 from eawf.surfaces.render._atomic import atomic_write_text
@@ -269,9 +271,6 @@ def _render_managed_block(timestamp: str) -> dict[str, Any]:
 #: preserving every user / other-plugin entry.
 _HOOK_COMMAND_MARKER: str = "/.claude/hooks/"
 
-#: The Claude Code settings key naming the statusline command.
-_STATUSLINE_KEY: str = "statusLine"
-
 #: The Claude Code settings key mapping ``"<plugin>@<marketplace>"`` to on/off.
 _ENABLED_PLUGINS_KEY: str = "enabledPlugins"
 
@@ -414,9 +413,10 @@ def _patch_settings_json(
       eawf plugin is installed and enabled its own ``hooks.json`` already
       wires every event, so Eä's entries are only removed here: Claude Code
       runs both sources, and each handler would fire twice.
-    - Wire ``statusLine`` to ``eawf cc statusline`` so the project renders
-      the Eä statusline, unless the project or user settings already set a
-      statusline, which is kept: a project key would override the user's.
+    - Write no ``statusLine``: the status line lives once in the user file
+      (``eawf statusline install``), and a project key would override it.
+      When the user file runs eawf's line, a project key equal to an entry an
+      earlier install wrote is removed; any other project key is kept.
     - Write the fan-out keys into ``env``, so Claude Code's own scheduler
       holds the Run ceiling of *governor* and the contract's one level of
       delegation; every other ``env`` entry is kept.
@@ -458,15 +458,9 @@ def _patch_settings_json(
     plugin_serves_hooks = plugin_installed and _eawf_plugin_enabled(user, parsed)
     eawf_hooks = {} if plugin_serves_hooks else _eawf_settings_hooks()
     fan_out = fan_out_values("claude", governor=governor)
-    sets_statusline = _STATUSLINE_KEY not in parsed and _STATUSLINE_KEY not in user
     require_recorded(
         "claude_settings",
-        (
-            _MANAGED_KEY,
-            *(f"hooks.{event}" for event in eawf_hooks),
-            *((_STATUSLINE_KEY,) if sets_statusline else ()),
-            *fan_out,
-        ),
+        (_MANAGED_KEY, *(f"hooks.{event}" for event in eawf_hooks), *fan_out),
     )
     parsed[_MANAGED_KEY] = managed_body
     merged_hooks = _merge_settings_hooks(parsed.get("hooks"), eawf_hooks)
@@ -475,8 +469,10 @@ def _patch_settings_json(
     elif isinstance(parsed.get("hooks"), dict):
         # Only Eä's own entries were left, and the plugin now serves them.
         del parsed["hooks"]
-    if sets_statusline:
-        parsed[_STATUSLINE_KEY] = build_statusline_command()
+    if names_eawf(user.get(STATUSLINE_KEY)) and is_eawf_project_leftover(
+        parsed.get(STATUSLINE_KEY)
+    ):
+        del parsed[STATUSLINE_KEY]
     env = parsed.get("env")
     env = dict(env) if isinstance(env, dict) else {}
     for path, value in fan_out.items():
@@ -750,8 +746,8 @@ def install_plugin(
     ``settings.json`` gets no Eä hook entry and loses any an earlier install
     wrote, and no project skill is rendered, an earlier unedited copy being
     removed. The user-level
-    ``~/.claude/settings.json`` is read for that switch and for a statusline
-    the project must not override.
+    ``~/.claude/settings.json`` is read for that switch and for whether it
+    runs eawf's status line, which makes a leftover project entry removable.
 
     Args:
         target_dir: Workspace root that hosts the ``.claude/`` directory.

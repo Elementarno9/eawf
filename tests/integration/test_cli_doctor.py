@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
+from eawf.observability.doctor.models import CheckResult
 from eawf.platform.install.instrument_probe import (
     PROBE_VERSION,
     ProbeReport,
@@ -65,6 +66,11 @@ def _sandbox_host_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     host_temp.mkdir()
     monkeypatch.setattr("tempfile.tempdir", str(host_temp))
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "host-xdg"))
+    # The status line check reads the host's Claude settings files.
+    monkeypatch.setattr(
+        "eawf.observability.doctor.checks.check_claude_statusline",
+        lambda *, workspace: CheckResult(name="claude.statusline", status="ok"),
+    )
 
 
 def _green_probe(*_args: object, **_kwargs: object) -> ProbeReport:
@@ -159,6 +165,7 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "worktrees",
         "leftovers",
         "hook_health",
+        "claude.statusline",
         "render_output_roundtrip",
         "agents_md_byte_cap",
         "agents_override_byte_cap",

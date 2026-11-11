@@ -27,7 +27,7 @@ from eawf.runtime.harness.host_keys import (
 )
 from eawf.runtime.mcp.installer import install_runtime_entry
 from eawf.runtime.runtimes.claude import plugin_install as claude_install
-from eawf.runtime.runtimes.claude.statusline_install import patch_settings
+from eawf.runtime.runtimes.claude.statusline_install import install_statusline
 from eawf.runtime.runtimes.codex import plugin_install as codex_install
 
 _REPO = Path(__file__).resolve().parents[4]
@@ -204,8 +204,8 @@ def test_surf_168_claude_settings_record_the_keys_they_write(tmp_path: Path) -> 
     require_recorded("claude_settings", paths)
 
 
-def test_surf_168_statusline_patch_is_recorded() -> None:
-    assert "statusLine" in patch_settings({})
+def test_surf_168_statusline_patch_is_recorded(tmp_path: Path) -> None:
+    assert install_statusline(tmp_path / "settings.json").status == "installed"
 
 
 def test_surf_168_claude_mcp_entry_carries_no_transport(tmp_path: Path) -> None:

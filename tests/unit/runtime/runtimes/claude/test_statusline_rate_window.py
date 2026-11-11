@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import ast
 import inspect
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 
@@ -126,6 +127,71 @@ def test_bar_rows_read_seconds_just_under_the_milliseconds_threshold() -> None:
         _payload(five_hour={"used_percentage": 5, "resets_at": 99_999_999_999}), _NOW
     )
     assert row.detail is not None and row.detail.endswith("h")
+
+
+_RESET_IN_2H05M = _NOW.timestamp() + 7_500
+
+
+#: ``resets_at`` values and the Unix seconds each normalises to; ``None`` is unknown.
+_RESETS: Final[tuple[tuple[object, float | None], ...]] = (
+    (_RESET_IN_2H05M, _RESET_IN_2H05M),
+    (int(_RESET_IN_2H05M), _RESET_IN_2H05M),
+    (int(_RESET_IN_2H05M * 1000), _RESET_IN_2H05M),
+    ("2026-11-06T14:05:00+00:00", _RESET_IN_2H05M),
+    ("2026-11-06T14:05:00Z", _RESET_IN_2H05M),
+    ("2026-11-06T15:05:00+01:00", _RESET_IN_2H05M),
+    ("2026-11-06T14:05:00", _RESET_IN_2H05M),
+    (100_000_000_000, 100_000_000),
+    (99_999_999_999, 99_999_999_999),
+    ("soon", None),
+    ("", None),
+    (True, None),
+    (None, None),
+    ([1], None),
+    (float("nan"), None),
+    (float("inf"), None),
+    (1e300, None),
+    (-1e300, None),
+)
+
+_STRIP = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _drawn(rows: list[statusline.PowerlineBar]) -> list[str]:
+    style = statusline.LineStyle(theme=None)
+    return [_STRIP.sub("", row) for row in statusline.render_powerline([], rows, style, width=120)]
+
+
+def test_reset_normalisation() -> None:
+    seven_day = {"used_percentage": 41, "resets_at": _NOW.timestamp() + 302_400}
+    seven_day_row = f"7d  ████████▎░│{'░' * 9}  41%   -9% 3d12h"
+    for raw, seconds in _RESETS:
+        parsed = rate_window._reset_seconds(raw)
+        assert parsed == (None if seconds is None else pytest.approx(seconds)), raw
+        rows = rate_window.bar_rows(
+            _payload(five_hour={"used_percentage": 31, "resets_at": raw}, seven_day=seven_day),
+            _NOW,
+        )
+        # Both rows always print; an unknown reset blanks only its own pace, marker and countdown.
+        five_hour, seven_day_drawn = _drawn(rows)
+        assert seven_day_drawn == seven_day_row, raw
+        if seconds is None:
+            assert five_hour == f"5h  ██████▎{'░' * 13}  31%", raw
+        elif seconds == pytest.approx(_RESET_IN_2H05M):
+            assert five_hour == f"5h  ██████▎░░░░│{'░' * 8}  31%  -27% 2h05m", raw
+
+    # A millisecond reset on both windows shows both rows with pace and countdown.
+    rows = rate_window.bar_rows(
+        _payload(
+            five_hour={"used_percentage": 31, "resets_at": int(_RESET_IN_2H05M * 1000)},
+            seven_day={
+                "used_percentage": 41,
+                "resets_at": int((_NOW.timestamp() + 302_400) * 1000),
+            },
+        ),
+        _NOW,
+    )
+    assert _drawn(rows) == [f"5h  ██████▎░░░░│{'░' * 8}  31%  -27% 2h05m", seven_day_row]
 
 
 def test_the_orchestrator_keeps_the_rate_rows_when_the_context_row_raises(

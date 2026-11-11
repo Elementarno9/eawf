@@ -26,7 +26,6 @@ def _root() -> click.Group:
     [
         ("doctor", "mutate"),
         ("cc statusline", "read"),
-        ("cc statusline install", "mutate"),
         ("help", "read"),
     ],
 )
@@ -34,6 +33,13 @@ def test_a_group_with_a_callback_is_catalogued(verb: str, effect_class: str) -> 
     catalog = build_verb_catalog(_root(), registered_methods())
     entries = {entry.verb: entry for entry in catalog.entries}
     assert entries[verb].effect_class == effect_class
+
+
+def test_a_hidden_alias_declares_its_effect_but_is_not_catalogued() -> None:
+    catalog = build_verb_catalog(_root(), registered_methods())
+    verbs = {entry.verb for entry in catalog.entries}
+    assert "statusline install" in verbs
+    assert "cc statusline install" not in verbs
 
 
 def test_a_callback_group_with_no_declared_effect_is_refused() -> None:
