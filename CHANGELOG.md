@@ -54,7 +54,7 @@ This patch release lets eawf hooks and skills behave safely outside a repository
 - **`hooks!N`.** The status line counts, as `hooks!N`, the hook failures of the last 24 hours that came after the last `eawf hook health ack`; an unreadable acknowledgement file counts as none, so it never hides failures.
 - **Per-user install.** `eawf statusline install` sets only `statusLine` in your user settings file, keeping its key order and indentation and re-serialising the rest; `eawf statusline doctor` and the `claude.statusline` doctor check name the winning settings layer and say whether the line is ok, missing, shadowed or broken. Plugin install and `eawf init --quick` no longer write a project status line.
 - **Synchronous render.** Each redraw renders within a 250 ms budget; on an overrun or an error the session's cached line is printed instead, and only one background refresh per session is in flight at a time.
-- **Robust output.** A bad payload, such as empty, non-JSON or non-UTF-8 input, never yields a blank line or a traceback: the status line prints at least the model line. In ascii glyph mode every character it emits is ASCII.
+- **Bad payloads.** A bad payload, such as empty, non-JSON or non-UTF-8 input, never yields a blank line or a traceback: the status line prints at least the model line. In ascii glyph mode every character it emits is ASCII.
 
 ### Reflect
 
