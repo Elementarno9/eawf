@@ -62,6 +62,7 @@ def reflect_sessions(
     now: datetime,
     on_wait: Callable[[], None],
     progress: ProgressSink | None = None,
+    index_root: Path | None = None,
 ) -> SessionRun:
     """Index local history, analyse it, title the scope's sessions and write the result.
 
@@ -69,7 +70,8 @@ def reflect_sessions(
     repository's directory name when the tree holds no project row.
 
     Args:
-        tree_root: The tree's ``.ea`` directory.
+        tree_root: The tree's ``.ea`` directory; outside a managed repository, the
+            ``.ea`` path of the working directory, which need not exist.
         report_scope: The parsed ``--scope``.
         area: Where the analysis and the pages go.
         history: This machine's session history.
@@ -82,6 +84,8 @@ def reflect_sessions(
         now: The run's instant.
         on_wait: Called once when another run holds the history index.
         progress: Called with each stage's progress.
+        index_root: Where the history index lives; ``None`` keeps it in *area*, or
+            in the tree's collection when *area* is committed.
 
     Returns:
         What the step wrote and answered.
@@ -95,7 +99,8 @@ def reflect_sessions(
     label = tree_project_code(tree_root) or project_root.name
     scope = resolve_session_scope(report_scope, project_root=project_root, label=label)
     # a committed area may still refuse, so the index waits in the collection
-    index_root = reflect_root(tree_root) if area.committed else area.directory
+    if index_root is None:
+        index_root = reflect_root(tree_root) if area.committed else area.directory
     index_root.mkdir(parents=True, exist_ok=True)
     index_path = index_root / an.HISTORY_INDEX_FILENAME
     with history_index_lock(index_path, on_wait=on_wait):

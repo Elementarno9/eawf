@@ -14,8 +14,8 @@ Build, test, independently verify and present a local proof of concept.
 - Allowed RPCs: `runtime.run.dispatch`, `runtime.evidence.spike_report.file`. Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
 - Run tools: `repo_read`, `submit_report`, `submit_evidence`. These exist only inside a native Run eawf dispatches; a host session has none of them and uses the `eawf` commands above instead.
 - Canonical state: never mutated by this skill.
-- Local write root: the folder `eawf paths local --kind spikes` prints in an eawf-managed repository; outside one, none, unless `--save <path>` names a file.
-- Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one.
+- Local write root: the folder `eawf paths local --kind spikes` prints in an eawf-managed repository; outside one, none, unless `--save <path>` names a file or the standalone use below says where.
+- Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one or the standalone use below says where.
 - Standalone use (degraded): Builds in a temporary directory outside the repository, deleted at the end; a host subagent verifies; nothing is filed.
 
 ## 2. Context

@@ -81,10 +81,12 @@ def test_rules_text_procedures_cite_d94() -> None:
 
 
 def test_version_and_changelog() -> None:
-    assert __version__ == "0.7.1"
+    # The current version is pinned by the latest release's own test; this one
+    # keeps the 0.7.1 section in place below any later release.
     text = _CHANGELOG.read_text(encoding="utf-8")
     headings = re.findall(r"^## \[([^\]]+)\]", text, re.M)
-    assert headings[:2] == ["0.7.1", "0.7.0"]
+    assert headings[headings.index("0.7.1") + 1] == "0.7.0"
+    assert headings.index(__version__) <= headings.index("0.7.1")
     section = _section(text, "0.7.1")
     batch_outcomes = {
         "hooks": ("exit 126", "about 140 ms", "hook-errors:<n>", "`plugin_version`"),

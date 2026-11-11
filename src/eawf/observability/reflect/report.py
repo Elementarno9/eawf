@@ -3,7 +3,9 @@
 Everything the reflection verbs write lands in one local collection, ``.ea/local/reports/reflect``,
 which is gitignored and retention-bounded, or at an output path the operator names. An
 output path inside the tree's canonical store is refused before anything is read, so no
-verb of the group can be turned into a canonical write by its arguments.
+verb of the group can be turned into a canonical write by its arguments. Outside a
+managed repository there is no collection: a run keeps its history index and titles
+under the XDG cache directory and writes its pages into a new temporary directory.
 
 A report is a pure function of the projection it was built from and the titles the fill
 resolved: it carries no clock reading and no fill counter, so two renders of one
@@ -28,6 +30,7 @@ import os
 import re
 import secrets
 import shutil
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -228,6 +231,33 @@ class FillManifest(BaseModel):
 def reflect_root(tree_root: Path) -> Path:
     """Return the local collection the reflection verbs write under."""
     return local_root(tree_root, LocalKind.REPORTS) / REFLECT_DIRNAME
+
+
+def user_reflect_root() -> Path:
+    """Return where a run outside a managed repository keeps its history index and titles.
+
+    The base directory specification ignores an unset, empty or relative
+    ``XDG_CACHE_HOME``, so each of those falls back to ``~/.cache``.
+
+    Returns:
+        ``$XDG_CACHE_HOME/eawf/reflect``; it need not exist.
+    """
+    configured = os.environ.get("XDG_CACHE_HOME", "")
+    base = Path(configured) if Path(configured).is_absolute() else Path.home() / ".cache"
+    return base / "eawf" / REFLECT_DIRNAME
+
+
+def new_output_dir() -> Path:
+    """Return a new directory, readable by this user alone, for a run that names no output.
+
+    A run outside a managed repository has no collection, and the pages it writes
+    hold every project's sessions, so they go to a fresh temporary directory rather
+    than into the working directory.
+
+    Returns:
+        The created directory, resolved.
+    """
+    return Path(tempfile.mkdtemp(prefix="eawf-reflect-")).resolve()
 
 
 def resolve_output_path(tree_root: Path, out: Path) -> Path:
@@ -564,12 +594,13 @@ class StoredReport:
     """Where one run's files landed.
 
     Attributes:
-        text: The plain-text report.
-        document: The machine form beside it.
+        text: The plain-text report, or ``None`` when only the machine form was
+            written at a named output.
+        document: The machine form.
         manifest: The fill manifest beside them.
     """
 
-    text: Path
+    text: Path | None
     document: Path
     manifest: Path
 
@@ -581,6 +612,7 @@ def store_report(
     *,
     on: date,
     out: Path | None,
+    document_only: bool = False,
 ) -> StoredReport:
     """Write the report, its machine form and the fill manifest.
 
@@ -594,14 +626,21 @@ def store_report(
             beside it, so a named output leaves the collection untouched; the
             machine form takes the text's name with a ``.json`` suffix, or with
             ``.report.json`` when the text is itself named ``.json``.
+        document_only: Write the machine form itself at a named *out* and no
+            text, for a run asked for JSON; ignored when *out* is ``None``.
 
     Returns:
-        The three paths written.
+        The paths written.
     """
     stem = f"{on.isoformat()}{REPORT_STEM_SUFFIX}"
     text = out if out is not None else root / f"{stem}.txt"
-    document = text.with_suffix(".report.json" if text.suffix == ".json" else ".json")
     manifest_path = text.parent / f"{on.isoformat()}{MANIFEST_STEM_SUFFIX}.json"
+    if out is not None and document_only:
+        _atomic_write(out, report.model_dump_json(indent=2).encode("utf-8"))
+        _atomic_write(manifest_path, manifest.model_dump_json(indent=2).encode("utf-8"))
+        logger.debug(f"store_report sessions={len(report.sessions)} document_only=True")
+        return StoredReport(text=None, document=out, manifest=manifest_path)
+    document = text.with_suffix(".report.json" if text.suffix == ".json" else ".json")
     _atomic_write(text, render_text(report).encode("utf-8"))
     _atomic_write(document, report.model_dump_json(indent=2).encode("utf-8"))
     _atomic_write(manifest_path, manifest.model_dump_json(indent=2).encode("utf-8"))
@@ -778,6 +817,7 @@ __all__ = [
     "fill_manifest",
     "latest_report",
     "load_report",
+    "new_output_dir",
     "parse_scope",
     "parse_window",
     "prune_collection",
@@ -786,4 +826,5 @@ __all__ = [
     "resolve_output_path",
     "select_cohort",
     "store_report",
+    "user_reflect_root",
 ]

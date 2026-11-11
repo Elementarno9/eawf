@@ -34,10 +34,11 @@ from eawf.workflow.skills.catalog import (
     standalone_class,
 )
 
-_SUPPORTED = {"research"}
+_SUPPORTED = {"research", "reflect"}
+#: Standalone skills only an operator invokes; their page states that audience everywhere.
+_OPERATOR_ONLY = {"reflect"}
 _DEGRADED = {"spike", "mockup", "refactor", "test"}
 _REFUSED = {
-    "reflect",
     "why",
     "memory",
     "attend",
@@ -168,7 +169,11 @@ def test_conditional_authority_lines() -> None:
             assert f"- {STANDALONE_AUTHORITY_LINE}" not in authority, skill_id
             assert f"- {MANAGED_AUTHORITY_LINE}" not in authority, skill_id
         else:
-            assert authority[0] == f"- {MANAGED_AUTHORITY_LINE}", skill_id
+            if skill_id in _OPERATOR_ONLY:
+                assert authority[0].startswith("- Only an authenticated operator"), skill_id
+                assert f"- {MANAGED_AUTHORITY_LINE}" not in authority, skill_id
+            else:
+                assert authority[0] == f"- {MANAGED_AUTHORITY_LINE}", skill_id
             assert f"- {STANDALONE_AUTHORITY_LINE}" in authority, skill_id
             assert REFUSED_AUTHORITY_LINE not in page, skill_id
             assert not [line for line in authority if "compiled capsule of the" in line]
@@ -182,7 +187,8 @@ def test_research_page_texts() -> None:
     plain = page.replace("`", "")
     assert (
         "Local write root: the folder eawf paths local --kind research prints in an eawf-managed"
-        " repository; outside one, none, unless --save <path> names a file."
+        " repository; outside one, none, unless --save <path> names a file or the standalone"
+        " use below says where."
     ) in plain
     assert (
         "8. Write the brief. In an eawf-managed repository, write it to the `--save` path, by"

@@ -128,7 +128,8 @@ MANAGED_AUTHORITY_LINE: Final = f"In an eawf-managed repository: {_BOTH_AUDIENCE
 STANDALONE_AUTHORITY_LINE: Final = (
     "Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the"
     " operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf`"
-    " commands marked as working anywhere. Write no file unless `--save <path>` names one."
+    " commands marked as working anywhere. Write no file unless `--save <path>` names one or"
+    " the standalone use below says where."
 )
 
 #: The line a page refused outside an eawf-managed repository opens with.
@@ -138,7 +139,8 @@ REFUSED_AUTHORITY_LINE: Final = (
 )
 
 _STANDALONE_WRITE_ROOT_TAIL: Final = (
-    "in an eawf-managed repository; outside one, none, unless `--save <path>` names a file."
+    "in an eawf-managed repository; outside one, none, unless `--save <path>` names a file or"
+    " the standalone use below says where."
 )
 
 #: Chassis-owned text naming ``--save`` on every standalone page; the option is
@@ -358,15 +360,19 @@ def shipped_skill_page(entry: SkillCatalogEntry) -> str:
 
 def _audience_lines(entry: SkillCatalogEntry) -> list[str]:
     # A page that also runs outside a managed repository states its in-repository
-    # audience conditionally; a refused page opens with its refusal instead.
-    if entry.standalone != "refused":
-        return [f"- {MANAGED_AUTHORITY_LINE}"]
+    # audience conditionally; a refused page opens with its refusal instead. An
+    # operator-only page states that audience everywhere, since no repository
+    # makes the model a caller.
     if "agent" not in skill_lanes(entry):
         audience = (
             "Only an authenticated operator initiates this skill, by design: it is kept out of"
             " the model's reach. An agent may prepare evidence or recommend the invocation, but"
             " never calls it."
         )
+        if entry.standalone != "refused":
+            return [f"- {audience}"]
+    elif entry.standalone != "refused":
+        return [f"- {MANAGED_AUTHORITY_LINE}"]
     elif "operator" not in skill_lanes(entry):
         audience = "Only an agent initiates this skill, inside an enclosing scope."
     else:

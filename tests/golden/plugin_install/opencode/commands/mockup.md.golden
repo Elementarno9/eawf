@@ -15,8 +15,8 @@ Build and compare operator-visible design options.
 - Allowed RPCs: `eawf question answer` (`runtime.question.answer_numbered`), `eawf question open-decision` (`runtime.question.open_decision`). Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
 - Run tools: `ask_operator`. These exist only inside a native Run eawf dispatches; a host session has none of them and uses the `eawf` commands above instead.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
-- Local write root: `mockups/` in the folder `eawf paths local --kind spikes` prints in an eawf-managed repository; outside one, none, unless `--save <path>` names a file.
-- Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one.
+- Local write root: `mockups/` in the folder `eawf paths local --kind spikes` prints in an eawf-managed repository; outside one, none, unless `--save <path>` names a file or the standalone use below says where.
+- Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one or the standalone use below says where.
 - Standalone use (degraded): Presents the options with AskUserQuestion; the choice is not filed and no asset file is kept.
 
 ## 2. Context

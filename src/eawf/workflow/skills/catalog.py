@@ -951,7 +951,11 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="reflect",
         skill_class="knowledge",
-        standalone="refused",
+        standalone="supported",
+        standalone_note=(
+            "`reflect run` reports scope user from the XDG cache index and writes its pages into"
+            " a new temporary directory."
+        ),
         subject="measurement record",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",

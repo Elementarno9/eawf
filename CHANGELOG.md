@@ -4,6 +4,88 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.7.2] - 2026-11-11
+
+This patch release lets eawf hooks and skills behave safely outside a repository eawf manages, makes every worktree of a repository share one state and one daemon, reorganises `.ea/local`, stops pushes that change only `.ea` from running tests, restyles the status line, and reworks `eawf reflect` on dated, verified price files. No state migration is required from 0.7.1, but read the upgrade notes: hooks now fail open, and the plugin must be updated after the package.
+
+### Upgrade notes
+
+- **Update the plugin after the package.** After upgrading the package, run `eawf plugin update claude` (and `codex` or `opencode` where you use them). A 0.7.1 plugin keeps its old hook wrapper, which still blocks judged tools when no eawf is runnable.
+- **Hooks fail open.** The new hook wrapper turns a missing `uv` or `eawf`, or a hook command that fails, into a local health record and lets the tool call through. A broken or missing eawf therefore leaves a managed repository unguarded: the data-loss guard and the other hook checks do not run. Run `eawf doctor hooks` after an upgrade, and watch for `hooks!N` on the status line.
+- **The data-loss guard follows the session.** The data-loss guard is on when the session's working directory or its host project directory lies in a managed tree: a git repository whose main checkout holds `.ea/`, with its subfolders, its linked worktrees and any clone or submodule nested inside it, or a directory outside git that holds `.ea/state.json`; then every protection of 0.7.1 applies. It is off otherwise, decided without reading the command, so a session outside every managed tree is no longer stopped from touching a managed repository by path.
+- **Hooks stand down outside a managed repository.** In a repository eawf does not manage, the hooks record nothing and print nothing; only a skill that needs a managed repository is refused there.
+- **One state per repository.** State and the daemon resolve through the repository's main checkout, so linked worktrees share it. `EA_STATE` or `-w` naming a linked worktree is refused, as is a bare repository.
+- **Reflect data moves.** Reflect now writes under `.ea/local/reports/reflect`. `eawf reflect run` names a leftover `.ea/local/reflect` folder; `eawf local tidy` moves it.
+- **`.ea/specs/` is no longer ignored.** Files there now show in `git status`; commit them or move them under `.ea/local`.
+- **Secret scanning is pattern-only.** The secret-scanning pre-commit hook no longer runs entropy detectors, so some credential shapes pass it; see Digests and secret scan below.
+- **Status line per user.** Plugin install no longer writes a project status line. Run `eawf statusline install` once to add it to your user settings, and `eawf statusline doctor` to see which settings layer wins.
+
+### .ea layout
+
+- **Agent folders.** `.ea/local` holds five agent folders: `research`, `spikes`, `release`, `reports` and `archive`. `eawf paths local --kind <kind> [--slug <slug>]` prints a folder, or a dated file in it, and skill pages name that command instead of a path.
+- **`eawf local tidy`.** `eawf local tidy [--dry-run]` moves hand-made `.ea/local` entries and orphan `.ea` paths into `archive/<date>-tidy/` with a `MANIFEST.tsv`, and moves legacy `.ea/local/reflect` data to `.ea/local/reports/reflect` file by file, recording each move before it makes it, so a rerun finishes an interrupted tidy; tracked files and existing targets stay in place. The `local-layout` doctor check names each hand-made entry once.
+- **Machine-local probe rows.** Runtime certification probe rows describe the machine they ran on, so they are written to `.ea/local/conformance_stage.jsonl` instead of the committed store; the committed file is still read.
+- **Fewer ignore lines.** `.ea/specs/` and `state.json.bak` are no longer in `.gitignore`.
+
+### Worktrees and state home
+
+- **State through the main checkout.** A command run from a linked worktree or a subfolder reaches the repository's `.ea` through its main checkout, and every checkout of one repository uses one daemon. A separate git directory follows `core.worktree`.
+- **`eawf worktree gc --dry-run`.** It lists landed, expired, prunable, unregistered and leftover trees under `.ea/worktrees/` with their sizes and prints a `git worktree remove` line for each landed, clean tree; it writes nothing. A tree counts as landed only when every one of its own commits is on the integration branch by patch equivalence, a tree that holds ignored files other than known caches is kept and listed, and the printed remove line is shell-quoted. Without `--dry-run` the verb exits 1: removal waits for eawf 0.8.
+- **Worktree doctor checks.** The `worktrees` check fails when a worktree resolves its own `.ea` and warns on piles of trees, stale trees and runtime directories keyed to a worktree; `leftovers` counts temporary sandboxes, dead runtime directories and suite clones with their sizes.
+
+### Epoch fence
+
+- **A managed test replaces the epoch fence.** A repository without `.ea` is no longer taken for an epoch-1 tree whose hooks refuse; the hook asks whether eawf manages the repository and stands down when it does not. The stale-bundle check is gone, and `eawf hook run` accepts and ignores the hidden `--target-epoch` option a 0.7.1 wrapper passes.
+- **eawf 0.8 trees.** A tree in the eawf 0.8 layout prints `eawf: this repository uses the eawf 0.8 layout; install eawf 0.8 or later` once at session start, and commands refuse it with the same text.
+
+### Hooks and skills
+
+- **One wrapper.** One bash wrapper, `hooks/eawf-hook.sh <event>`, replaces the ten per-event scripts, with 3, 5 or 10 second timeouts in the manifest. It checks the repository before starting eawf and fails open as described in the upgrade notes.
+- **Skills outside a managed repository.** Each skill declares how it runs outside a managed repository: `/research` and `/reflect` are supported, `/spike`, `/mockup`, `/refactor` and `/test` run in a reduced form their page states, and the rest are refused with `not an eawf-managed repository; run eawf init to manage it`. A project verb run there exits 1 with kind `NotManaged`.
+- **`eawf doctor hooks`.** It runs each installed bundle's wrapper across contexts, events and payloads in throwaway repositories and checks the manifest timeouts, the command form, double subscription, duplicate skills, skill classes and the launcher's version.
+- **Data-loss guard.** The data-loss guard is on when the session's working directory or its host project directory lies in a managed tree: a git repository whose main checkout holds `.ea/`, with its subfolders, its linked worktrees and any clone or submodule nested inside it, or a directory outside git that holds `.ea/state.json`; then every protection of 0.7.1 applies. It is off otherwise, decided without reading the command, so a session outside every managed tree is no longer stopped from touching a managed repository by path. Its worktree refusals point to `eawf worktree gc --dry-run` and `git worktree add .ea/worktrees/<name> -b <branch>`.
+- **Hook health.** A failed hook leaves a health record, which rotates to `health.1.jsonl` once it passes 1 MiB, and session start warns once about failures recorded since the last warning. A managed session start requests a background daemon start without waiting for it, and a daemon that is not up yet at session start is not counted as a failure.
+
+### Status line
+
+- **New look.** The status line draws on the terminal's 16 ANSI colours by default, with four Catppuccin flavours, chained separators, a column grid that shrinks to the terminal width and bars filled in eighth cells. The `statusline.theme`, `glyphs`, `ink` and `bar_width` settings choose the look; `--theme`, then `NO_COLOR`, then `EAWF_STATUSLINE_THEME`, then the config pick the theme.
+- **Pace and cache reads.** Limit rows show your pace against an even spend (`+N%`, `-N%` or `~`), the context row shows the last call's cache-read share as `N%c`, and the trend arrows are gone.
+- **API-equivalent cost.** The session cost is labelled API-equivalent: list prices for every token class, not what a subscription bills.
+- **`hooks!N`.** The status line counts, as `hooks!N`, the hook failures of the last 24 hours that came after the last `eawf hook health ack`; an unreadable acknowledgement file counts as none, so it never hides failures.
+- **Per-user install.** `eawf statusline install` sets only `statusLine` in your user settings file, keeping its key order and indentation and re-serialising the rest; `eawf statusline doctor` and the `claude.statusline` doctor check name the winning settings layer and say whether the line is ok, missing, shadowed or broken. Plugin install and `eawf init --quick` no longer write a project status line.
+- **Synchronous render.** Each redraw renders within a 250 ms budget; on an overrun or an error the session's cached line is printed instead, and only one background refresh per session is in flight at a time.
+- **Robust output.** A bad payload, such as empty, non-JSON or non-UTF-8 input, never yields a blank line or a traceback: the status line prints at least the model line. In ascii glyph mode every character it emits is ASCII.
+
+### Reflect
+
+- **Dated price files.** Prices load from dated price files shipped with the package, each row carrying the date its list price was verified; `reflect.pricing.overrides.<model-id>` in the layered config replaces a row's rates. Claude Mythos 5.2 fast mode is priced at the rates the vendor page lists.
+- **Exact model-id lookup.** A model id is priced only by its own row, its `[1m]` form or an alias the price file lists for that date. Any other id, such as an unlisted dated id or an alias outside its dates, is unpriced and named in a banner on every page; it is never priced as zero or at a neighbour's rate.
+- **Partial pricing.** A session's cost is the sum of its requests, each priced at its own date and rates, and reads `≥ $X + N unpriced tokens` when some are unpriced; it is empty only when nothing is priced. The overview leads with `$X API-equivalent · list prices verified <date>`, and `reflect.headline: tokens` leads with tokens instead.
+- **`eawf reflect prices check`.** It checks the price files offline; with `--online` it fetches the vendor pricing pages and compares every rate, exiting 0 only when every priced class was compared and equal, 1 on a difference and 2 for anything it could not compare.
+- **Accounting fixes.** Compaction summaries, thinking tokens and thinking time are read, Codex cache writes are counted (and stay unpriced, since the rollout names no write class), and 5-minute and 1-hour cache writes are priced at their own rates.
+- **Chart geometry fixes.** Axes, scrollers, markers and labels stay inside their boxes, Sankey labels no longer overlap, counts and durations share one format, and timeline totals sum the real intervals.
+- **Reflect outside a repository.** Outside a managed repository, `eawf reflect run` reports scope user into a new temporary directory: it keeps its history index and titles under `$XDG_CACHE_HOME/eawf/reflect`, writes its pages into that private directory and prints `pages: <path>`. `--format json --out <file>` writes the report JSON to the file and no text.
+- **Cache-miss storms.** A session with three or more requests that read nothing from the prompt cache and wrote at least 200,000 tokens into it raises the `cache_miss_storm` finding, which lists each miss with its gap since the previous request of its lane, flags gaps over 5 minutes or 1 hour and states their API-equivalent cost.
+
+### CI
+
+- **No tests for `.ea`-only changes.** A push or pull request that changes only `.ea` runs no test job.
+- **`ci-ok` is the required check.** An always-running `ci-ok` job carries the verdict, and superseded runs of a pull request are cancelled.
+- **Draft and ready lanes.** A draft pull request runs the fast lane; the full configuration, console replay included, runs once it is marked ready for review.
+- **`repo_state` tests.** Tests that read the repository's own `.ea` are marked `repo_state`, deselected in CI and run by a pre-push hook.
+- **Weekly price check.** A scheduled workflow runs `eawf reflect prices check --online` every Monday and opens or comments on one issue whenever the prices are not confirmed current; it never commits.
+
+### Digests and secret scan
+
+- **No unverified digests.** New Task integrated bindings record the head, the tree and the contract revision, and carry no contract or evidence digest; stored rows that carry them still load unchanged.
+- **Pattern-only secret scan.** The `detect-secrets` hook runs its pattern detectors only, with an empty baseline, because the entropy detectors flagged git SHAs and digests. It no longer catches a base64 blob or a 40-hex value under a key with no secret keyword, a private-key body without its `BEGIN` line, or a `SERVICE_TOKEN=<value>` line in an env file; the hosting platform's secret scanning and push protection cover those when the repository owner enables them.
+
+### Prose
+
+- **Vale is removed.** The Vale configuration, its styles, its hook and its CI steps are gone; the strict prose floor test stays.
+- **Question prose warns.** Long sentences and bare terms in a question now warn instead of refusing it, and the warnings appear in the answer's `warnings`.
+- **Higher prose caps.** The prose lint allows 30 words per instruction and 35 per description.
+
 ## [0.7.1]
 
 This patch release makes the Claude Code hooks start fast and fail visibly, binds subagent Runs to their Task, renders a themed status line, makes `eawf reflect` fast enough to run on every session, and moves day-to-day integration to a `dev` branch so `main` carries only stable releases. No migration is required from 0.7.0.

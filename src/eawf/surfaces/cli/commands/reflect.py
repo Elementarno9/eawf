@@ -12,6 +12,9 @@ indexes the local Claude and Codex session history incrementally into the collec
 analysis there beside the report, with offline overview, finder and session pages over
 the sessions ``--scope`` covers. Since the index holds every project's sessions, an
 output directory git would commit is refused before anything is written into it.
+Outside an eawf-managed repository ``run`` reports scope ``user``, keeps its history
+index and titles under the XDG cache directory, and writes its pages into a new
+temporary directory; ``--out`` then names the report file alone.
 
 The handlers parse, dispatch to :mod:`eawf.observability.reflect` and format.
 """
@@ -29,7 +32,7 @@ from eawf.kernel.layout import LOCAL_DIRNAME
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
-from eawf.surfaces.cli.scope import resolve_state_path
+from eawf.surfaces.cli.scope import NotManaged, resolve_state_path
 
 reflect_app = typer.Typer(
     name="reflect",
@@ -54,6 +57,16 @@ def _tree_root(flags: GlobalFlags) -> Path:
     """Return the tree's ``.ea`` directory."""
     try:
         return resolve_state_path(flags.workspace).parent
+    except FileNotFoundError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
+
+
+def _managed_tree_root(flags: GlobalFlags) -> Path | None:
+    """Return the tree's ``.ea`` directory, or ``None`` outside every managed repository."""
+    try:
+        return resolve_state_path(flags.workspace).parent
+    except NotManaged:
+        return None
     except FileNotFoundError as exc:
         cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
 
@@ -111,7 +124,7 @@ def reflect_run(
     from eawf.observability.reflect import report as rp
     from eawf.observability.reflect import scopes as sc
     from eawf.observability.reflect import titles as tt
-    from eawf.observability.reflect.runs import read_tree_runs
+    from eawf.observability.reflect.runs import RunReading, read_tree_runs
     from eawf.observability.reflect.sessions import reflect_sessions
     from eawf.observability.telemetry.projector import IndexBusyError, LocalHistory
     from eawf.observability.telemetry.sources.session_history import claude_history_root
@@ -123,23 +136,37 @@ def reflect_run(
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
     flags: GlobalFlags = ctx.obj
-    tree_root = _tree_root(flags)
-    target = _output(tree_root, out, flags=flags)
-    legacy = legacy_reflect_notice(tree_root / LOCAL_DIRNAME)
-    if legacy is not None:
-        typer.echo(f"reflect: {legacy}", err=True)
-    root = rp.reflect_root(tree_root)
-    area = sc.OutputArea.of(root if target is None else target.parent, tree_root=tree_root)
+    managed = _managed_tree_root(flags)
     now = datetime.now(UTC)
-    kept = read_tree_runs(
-        tree_root,
-        admits=selected_scope.admits,
-        started_since=None if window_days is None else now - timedelta(days=window_days),
-        progress=_progress,
-    )
+    if managed is None:
+        # With no tree there are no Runs and no project to narrow to, and the pages
+        # carry every project's sessions, so they never land in the working directory.
+        typer.echo("reflect: not an eawf-managed repository; reporting scope user", err=True)
+        selected_scope = rp.parse_scope("user")
+        tree_root = Path.cwd().resolve() / ".ea"
+        target = _output(tree_root, out, flags=flags)
+        root = rp.new_output_dir()
+        cache_root = index_root = rp.user_reflect_root()
+        area = sc.OutputArea.of(root, tree_root=tree_root)
+        kept: tuple[RunReading, ...] = ()
+    else:
+        tree_root = managed
+        target = _output(tree_root, out, flags=flags)
+        legacy = legacy_reflect_notice(tree_root / LOCAL_DIRNAME)
+        if legacy is not None:
+            typer.echo(f"reflect: {legacy}", err=True)
+        root = cache_root = rp.reflect_root(tree_root)
+        index_root = None
+        area = sc.OutputArea.of(root if target is None else target.parent, tree_root=tree_root)
+        kept = read_tree_runs(
+            tree_root,
+            admits=selected_scope.admits,
+            started_since=None if window_days is None else now - timedelta(days=window_days),
+            progress=_progress,
+        )
     cohort = rp.select_cohort(kept, scope=selected_scope, window_days=window_days, now=now)
     readings = cohort.sessions
-    cache_path = root / rp.TITLE_CACHE_FILENAME
+    cache_path = cache_root / rp.TITLE_CACHE_FILENAME
     provider = None if local_only else tt.ClaudeTitleProvider.discover()
     budget = tt.CallBudget()
     titles, account, cache = tt.fill_titles(
@@ -164,6 +191,7 @@ def reflect_run(
             now=now,
             on_wait=_index_wait,
             progress=_progress,
+            index_root=index_root,
         )
     except sc.ForeignRowsRefusedError as exc:
         cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
@@ -184,7 +212,9 @@ def reflect_run(
     )
     _progress("render", 1, 2)
     manifest = rp.fill_manifest(account, sessions=len(readings))
-    stored = rp.store_report(root, report, manifest, on=now.date(), out=target)
+    stored = rp.store_report(
+        root, report, manifest, on=now.date(), out=target, document_only=fmt is _ReportFormat.JSON
+    )
     _progress("render", 2, 2)
     if fmt is _ReportFormat.JSON:
         typer.echo(report.model_dump_json(indent=2))

@@ -34,7 +34,7 @@ import statistics
 from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from functools import cached_property
@@ -307,7 +307,26 @@ _ADVICE: Final[dict[str, str]] = {
     "peak_context_tokens_anomaly": "Every later request carries the peak; trimming it pays back.",
     "final_context_tokens_anomaly": "Close or split a task before its context reaches the window.",
     "calendar_ms_anomaly": "Wall-clock counts idle time; check whether the task was left open.",
+    "cache_miss_storm": (
+        "Each miss rewrites the whole prefix at the cache-write rate. Resume within the cache"
+        " lifetime, or compact or start afresh before a long pause."
+    ),
 }
+
+#: A request that read nothing from the prompt cache and wrote at least this many
+#: tokens into it is a cache miss.
+CACHE_MISS_WRITE_TOKENS: Final = 200_000
+
+#: A session with at least this many cache misses raises ``cache_miss_storm``.
+CACHE_MISS_STORM_COUNT: Final = 3
+
+# The prompt cache keeps a prefix 5 minutes at the base write rate and 1 hour at the
+# 1-hour rate, so a pause past either lifetime explains a miss; longest first.
+_CACHE_LIFETIMES: Final[tuple[tuple[timedelta, Literal["over_1h", "over_5m"]], ...]] = (
+    (timedelta(hours=1), "over_1h"),
+    (timedelta(minutes=5), "over_5m"),
+)
+_NO_TIME: Final = datetime.min.replace(tzinfo=UTC)
 
 
 class HistorySession(BaseModel):
@@ -436,6 +455,32 @@ class MetricAssessment(BaseModel):
     raised: bool
 
 
+class CacheMiss(BaseModel):
+    """One request that rewrote the prompt cache instead of reading it.
+
+    Attributes:
+        lane: ``main``, or the subagent lane that made the request.
+        ordinal: The request's position in its lane.
+        ts: When the runtime recorded it, or ``None``.
+        cache_write_tokens: The tokens it wrote into the cache.
+        gap_seconds: Seconds since the lane's previous request, or ``None`` for
+            the lane's first request or when either lacks a timestamp.
+        gap_flag: ``over_1h`` or ``over_5m`` when the gap outlived that cache
+            lifetime, otherwise ``None``.
+        cost_usd: The request's API-equivalent list cost, or ``None`` when unpriced.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    lane: str
+    ordinal: int = Field(ge=1)
+    ts: datetime | None
+    cache_write_tokens: int = Field(ge=CACHE_MISS_WRITE_TOKENS)
+    gap_seconds: float | None
+    gap_flag: Literal["over_5m", "over_1h"] | None
+    cost_usd: Decimal | None
+
+
 class Finding(BaseModel):
     """One thing worth a reader's attention about one session.
 
@@ -451,6 +496,8 @@ class Finding(BaseModel):
         cohort: The prior cohort it was raised against, when it was; the
             rung named here is the one used.
         recommendation: What to change, with no session-specific number.
+        misses: The cache misses a ``cache_miss_storm`` lists, oldest first;
+            empty for every other finding.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -465,6 +512,7 @@ class Finding(BaseModel):
     value: float | None = None
     cohort: CohortRef | None = None
     recommendation: str | None = None
+    misses: tuple[CacheMiss, ...] = ()
 
 
 class SessionTitle(BaseModel):
@@ -1086,6 +1134,88 @@ def _mechanism_findings(session: HistorySession) -> list[Finding]:
     return findings
 
 
+def _gap_flag(gap: timedelta | None) -> Literal["over_5m", "over_1h"] | None:
+    if gap is None:
+        return None
+    return next((flag for lifetime, flag in _CACHE_LIFETIMES if gap > lifetime), None)
+
+
+def _cache_misses(requests: Sequence[ObservedRequest]) -> tuple[CacheMiss, ...]:
+    lanes: dict[str, list[ObservedRequest]] = defaultdict(list)
+    for request in requests:
+        lanes[request.lane].append(request)
+    misses: list[CacheMiss] = []
+    for lane, members in lanes.items():
+        previous: ObservedRequest | None = None
+        for request in sorted(members, key=lambda item: item.ordinal):
+            if (
+                request.cache_read_tokens == 0
+                and request.cache_write_tokens >= CACHE_MISS_WRITE_TOKENS
+            ):
+                gap = (
+                    None
+                    if previous is None or previous.ts is None or request.ts is None
+                    else request.ts - previous.ts
+                )
+                misses.append(
+                    CacheMiss(
+                        lane=lane,
+                        ordinal=request.ordinal,
+                        ts=request.ts,
+                        cache_write_tokens=request.cache_write_tokens,
+                        gap_seconds=None if gap is None else gap.total_seconds(),
+                        gap_flag=_gap_flag(gap),
+                        cost_usd=request.cost_usd,
+                    )
+                )
+            previous = request
+    return tuple(
+        sorted(
+            misses,
+            key=lambda item: (item.ts is None, item.ts or _NO_TIME, item.lane, item.ordinal),
+        )
+    )
+
+
+def _requests_by_session(
+    requests: Sequence[ObservedRequest],
+) -> dict[str, list[ObservedRequest]]:
+    grouped: dict[str, list[ObservedRequest]] = defaultdict(list)
+    for request in requests:
+        grouped[request.vendor_session_ref].append(request)
+    return grouped
+
+
+def _cache_miss_storm(requests: Sequence[ObservedRequest]) -> list[Finding]:
+    misses = _cache_misses(requests)
+    if len(misses) < CACHE_MISS_STORM_COUNT:
+        return []
+    paused = sum(1 for miss in misses if miss.gap_flag is not None)
+    costs = [miss.cost_usd for miss in misses if miss.cost_usd is not None]
+    unpriced = len(misses) - len(costs)
+    cost = f"${sum(costs, Decimal(0)):.2f} API-equivalent"
+    if unpriced:
+        cost = f"at least {cost}, {unpriced} unpriced"
+    written = sum(miss.cache_write_tokens for miss in misses)
+    return [
+        Finding(
+            finding_type="cache_miss_storm",
+            severity=Severity.INVESTIGATE,
+            actor="runtime",
+            summary=(
+                f"{len(misses)} requests read nothing from the prompt cache and rewrote"
+                f" {written:,} tokens into it ({cost}); {paused} came after a pause past"
+                " a cache lifetime"
+            ),
+            guard="a miss after a deliberate long pause or a changed preamble may be unavoidable",
+            confidence="high",
+            value=float(len(misses)),
+            recommendation=_ADVICE["cache_miss_storm"],
+            misses=misses,
+        )
+    ]
+
+
 def _anomaly_findings(
     session: HistorySession, anomalies: Sequence[MetricAssessment], mechanism: bool
 ) -> list[Finding]:
@@ -1260,6 +1390,7 @@ def analyze_sessions(
         metric: [session.ended_at for session in members if session.ended_at is not None]
         for metric, members in eligible.items()
     }
+    by_session = _requests_by_session(requests)
     rows: list[SessionAnalysis] = []
     total = len(ordered)
     if progress is not None:
@@ -1293,6 +1424,7 @@ def analyze_sessions(
                 *_structural_findings(session),
                 *_baseline_notices(session, largest),
                 *mechanisms,
+                *_cache_miss_storm(by_session.get(session.session_ref, ())),
                 *_anomaly_findings(
                     session,
                     anomalies,
@@ -1378,6 +1510,8 @@ def write_analysis(root: Path, analysis: HistoryAnalysis, *, on: date) -> Path:
 __all__ = [
     "ANALYSIS_PREFIX",
     "ANOMALY_RULES",
+    "CACHE_MISS_STORM_COUNT",
+    "CACHE_MISS_WRITE_TOKENS",
     "COHORT_LABELS",
     "COHORT_LADDER",
     "HISTORY_INDEX_FILENAME",
@@ -1386,6 +1520,7 @@ __all__ = [
     "POPULATED_COHORT",
     "AnomalyRule",
     "Baseline",
+    "CacheMiss",
     "CohortRef",
     "CohortRung",
     "Finding",

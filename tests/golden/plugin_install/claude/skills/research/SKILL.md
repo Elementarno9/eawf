@@ -18,8 +18,8 @@ Answer one question as a one-page local brief, swift or in rounds; no Campaign.
 - Allowed RPCs: `projection.evidence.read`. Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
 - Run tools: `eawf_state_query`, `repo_read`, `repo_search`, `submit_report`. These exist only inside a native Run eawf dispatches; a host session has none of them and uses the `eawf` commands above instead.
 - Canonical state: never mutated by this skill.
-- Local write root: the folder `eawf paths local --kind research` prints in an eawf-managed repository; outside one, none, unless `--save <path>` names a file.
-- Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one.
+- Local write root: the folder `eawf paths local --kind research` prints in an eawf-managed repository; outside one, none, unless `--save <path>` names a file or the standalone use below says where.
+- Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one or the standalone use below says where.
 - Standalone use (supported): Returns the brief in the conversation; writes a file only when `--save <path>` names one.
 
 ## 2. Context

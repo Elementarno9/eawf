@@ -8,14 +8,14 @@ Report where effort, time and money actually went, without mutating canonical st
 
 ## 1. Authority
 
-- Needs an eawf-managed repository; outside one the hook refuses it with `not an eawf-managed repository; run eawf init to manage it`.
 - Only an authenticated operator initiates this skill, by design: it is kept out of the model's reach. An agent may prepare evidence or recommend the invocation, but never calls it.
 - Operates on: measurement record, through `eawf reflect run`, `eawf reflect show`, `eawf reflect export`, `eawf reflect serve`, `eawf reflect prune`.
 - Effects: The reflect run, show, export, serve and prune verbs: read-only apart from the session title fill, which --local-only disables, and the local report files.
 - Allowed RPCs: none. This skill calls no daemon RPC.
 - Canonical state: never mutated by this skill.
-- Local write root: `reflect/` in the folder `eawf paths local --kind reports` prints; nothing is written outside it.
-- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
+- Local write root: `reflect/` in the folder `eawf paths local --kind reports` prints in an eawf-managed repository; outside one, none, unless `--save <path>` names a file or the standalone use below says where.
+- Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one or the standalone use below says where.
+- Standalone use (supported): `reflect run` reports scope user from the XDG cache index and writes its pages into a new temporary directory.
 
 ## 2. Context
 
