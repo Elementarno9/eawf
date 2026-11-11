@@ -23,6 +23,7 @@ import hashlib
 import logging
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 from eawf.kernel.state.resolve import resolve_with_reason
@@ -43,6 +44,16 @@ TREES_DIRNAME: str = "trees"
 #: well inside the 104-byte AF_UNIX path cap while making a collision between
 #: two trees of one user negligible.
 _TREE_KEY_CHARS: int = 16
+
+#: The ``sun_path`` size of macOS and the BSDs, the smallest of the POSIX
+#: hosts eawf runs on (Linux allows 108). A bindable path is shorter, leaving
+#: room for the terminating NUL.
+SUN_PATH_MAX: int = 104
+
+#: The short fallback root for socket directories. macOS points ``TMPDIR`` at
+#: a per-user directory under ``/var/folders`` about 50 bytes deep, which a
+#: deep temporary tree such as pytest's quickly pushes past the cap.
+_SHORT_TEMP_ROOT: Path = Path("/tmp")
 
 # The tree the running CLI invocation names with ``-w/--workspace``. Module
 # state rather than a parameter so every daemon client, spawn and doctor probe
@@ -89,6 +100,32 @@ def runtime_base_dir() -> Path:
         if xdg:
             return Path(xdg) / "eawfd"
     return Path.home() / ".eawfd"
+
+
+def short_temp_root(room: int) -> Path:
+    """Return a temporary root under which *room* more bytes still bind a socket.
+
+    Callers create their own directory under the root and remove it when
+    done, so a socket they bind at most *room* bytes below the root fits
+    :data:`SUN_PATH_MAX` on every POSIX host.
+
+    Args:
+        room: The bytes the caller appends below the root, separators
+            included, up to the end of the longest socket path it binds.
+
+    Returns:
+        The system temporary directory when it leaves the room, else
+        ``/tmp``.
+
+    Raises:
+        ValueError: *room* is negative, or too long to fit even under ``/tmp``.
+    """
+    if room < 0:
+        raise ValueError(f"room must not be negative, got {room}")
+    for root in (Path(tempfile.gettempdir()), _SHORT_TEMP_ROOT):
+        if len(os.fsencode(root)) + room < SUN_PATH_MAX:
+            return root
+    raise ValueError(f"{room} bytes below {_SHORT_TEMP_ROOT} exceed the {SUN_PATH_MAX}-byte cap")
 
 
 def tree_key(state_path: Path) -> str:

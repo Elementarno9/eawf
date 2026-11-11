@@ -12,6 +12,8 @@ import os
 import shutil
 import socket
 import sys
+import tempfile
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,7 +22,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner  # noqa: EAWF024 exit status and output are the contract
 
-from eawf.observability.doctor import checks
+from eawf.observability.doctor import checks, checks_hooks
 from eawf.observability.doctor.checks_hooks import (
     HOOK_HEALTH_CHECK,
     CellFailure,
@@ -30,6 +32,7 @@ from eawf.observability.doctor.checks_hooks import (
     check_hook_health,
     installed_bundles,
     launcher_version,
+    run_matrix,
 )
 from eawf.observability.doctor.hook_matrix import (
     CONTEXTS,
@@ -41,6 +44,7 @@ from eawf.observability.doctor.hook_matrix import (
     matrix_events,
     payloads_for,
 )
+from eawf.runtime.daemon.runtime_dir import SUN_PATH_MAX, short_temp_root
 from eawf.runtime.hooks.daemon_start import DAEMON_START_UNANSWERED_CODE
 from eawf.runtime.hooks.health import HEALTH_RECORD, HOOK_RAISED, HookFailure, record_failures
 from eawf.runtime.runtimes.claude.plugin_package import package_plugin
@@ -57,8 +61,52 @@ _COMMAND = 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/eawf-hook.sh" '
 # subagent stops; everything else passes.
 _BIND = (
     "import os, socket; "
-    'socket.socket(socket.AF_UNIX).bind(os.environ["XDG_RUNTIME_DIR"] + "/x.sock")'
+    'socket.socket(socket.AF_UNIX).bind(os.environ["EAWF_RUNTIME_DIR"] + "/x.sock")'
 )
+
+# Prints, for a pre-tool call, the byte length of the socket path the cell's
+# eawf dials and whether a socket is there, resolved as on the platform the
+# test names, so a Linux run checks where a macOS hook would dial.
+_DIAL = (
+    "import os, stat, sys; "
+    "from eawf.runtime.daemon.runtime_dir import socket_path; "
+    'sys.platform = os.environ["DIAL_PLATFORM"]; '
+    "path = os.fsencode(socket_path()); "
+    "found = os.path.exists(path) and stat.S_ISSOCK(os.stat(path).st_mode); "
+    'print(len(path), int(found), file=open(os.environ["DIAL_LOG"], "a"))'
+)
+_DIAL_WRAPPER = f"""#!/bin/bash
+cat >/dev/null
+if [ "$1" = pre_tool_use ]; then
+    "{sys.executable}" -c '{_DIAL}'
+    echo '{{"hookSpecificOutput": {{"hookEventName": "PreToolUse", "permissionDecision": "deny"}}}}'
+fi
+exit 0
+"""
+
+
+@pytest.fixture
+def deep_temp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Make the system temp directory deeper than any socket path may be, as macOS's can be."""
+    deep = tmp_path / ("d" * 60) / ("d" * 60)
+    deep.mkdir(parents=True)
+    monkeypatch.setenv("TMPDIR", str(deep))
+    monkeypatch.setattr(tempfile, "tempdir", str(deep))
+    return deep
+
+
+@pytest.fixture
+def socket_dir() -> Iterator[Path]:
+    """A directory short enough to bind ``s.sock`` in, removed afterwards."""
+    directory = Path(
+        tempfile.mkdtemp(prefix="dh-", dir=short_temp_root(len("/dh-12345678/s.sock")))
+    )
+    try:
+        yield directory
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
+
+
 _BROKEN_WRAPPER = f"""#!/bin/bash
 cat >/dev/null
 case "$1" in
@@ -176,6 +224,49 @@ def test_doctor_hooks_on_both_bundles(tmp_path: Path, home: Path) -> None:
     assert "timeout PreToolUse: expected a timeout got none" in lines
     blocked = sorted(line for line in lines if line.startswith("runner-missing pre_tool_use bash"))
     assert blocked == ["runner-missing pre_tool_use bash: exit expected 0 got 2"], blocked
+
+
+def test_the_matrix_binds_short_sockets_under_a_deep_temp_directory(
+    tmp_path: Path, home: Path, deep_temp: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bound: list[Path] = []
+
+    class _Recording(StaleDaemon):
+        def __init__(self, path: Path, *, serve: bool) -> None:
+            bound.append(path)
+            super().__init__(path, serve=serve)
+
+    monkeypatch.setattr(checks_hooks, "StaleDaemon", _Recording)
+    bundle = _stub_bundle(tmp_path / "broken", _BROKEN_WRAPPER)
+
+    cells, failures = run_matrix(bundle)
+
+    assert cells == 282
+    # The wrapper's own bind in the cell's runtime directory succeeded too.
+    lines = {failure.line() for failure in failures}
+    assert "no-git subagent_stop agent: daemon expected no socket got x.sock" in lines
+    assert len(bound) == 2 * len(MANAGED_CONTEXTS) * len(matrix_events())
+    assert max(len(os.fsencode(path)) for path in bound) < SUN_PATH_MAX
+    assert not any(path.is_relative_to(deep_temp) for path in bound)
+
+
+def test_a_managed_cell_dials_its_stand_in_on_macos(
+    tmp_path: Path, home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    log = tmp_path / "dial.log"
+    # macOS keeps the runtime base under the home whatever XDG_RUNTIME_DIR says.
+    monkeypatch.setenv("DIAL_PLATFORM", "darwin")
+    monkeypatch.setenv("DIAL_LOG", str(log))
+    bundle = _stub_bundle(tmp_path / "dial", _DIAL_WRAPPER)
+
+    cells, failures = run_matrix(bundle)
+
+    assert (cells, [failure.line() for failure in failures]) == (282, [])
+    rows = [line.split() for line in log.read_text(encoding="utf-8").splitlines()]
+    # One pre-tool cell per context runs with a dead stand-in and one with a stale one.
+    found = [int(length) for length, there in rows if there == "1"]
+    assert len(found) == 2 * len(MANAGED_CONTEXTS), rows
+    assert max(found) < SUN_PATH_MAX
 
 
 def test_bundle_checks(tmp_path: Path, home: Path) -> None:
@@ -364,17 +455,17 @@ def test_the_matrix_covers_ten_events_and_six_contexts() -> None:
     assert {"managed-root", "managed-subfolder", "managed-worktree"} == MANAGED_CONTEXTS
 
 
-def test_a_dead_stand_in_refuses_connections(tmp_path: Path) -> None:
-    with StaleDaemon(tmp_path / "s.sock", serve=False) as path:
+def test_a_dead_stand_in_refuses_connections(socket_dir: Path) -> None:
+    with StaleDaemon(socket_dir / "s.sock", serve=False) as path:
         probe = socket.socket(socket.AF_UNIX)
         with pytest.raises(OSError):
             probe.connect(str(path))
         probe.close()
 
 
-def test_a_stale_stand_in_answers_version_000(tmp_path: Path) -> None:
+def test_a_stale_stand_in_answers_version_000(socket_dir: Path) -> None:
     with (
-        StaleDaemon(tmp_path / "s.sock", serve=True) as path,
+        StaleDaemon(socket_dir / "s.sock", serve=True) as path,
         socket.socket(socket.AF_UNIX) as probe,
     ):
         probe.connect(str(path))

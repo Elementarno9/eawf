@@ -3,7 +3,7 @@
 A host runs whatever wrapper the installed bundle ships, whichever eawf it
 finds, in whatever directory the session stands in. This module runs that
 wrapper the way the host does, through ``bash`` and the manifest command, in
-throwaway repositories and a throwaway ``XDG_RUNTIME_DIR``, across six
+throwaway repositories and a throwaway runtime directory, across six
 contexts, every subscribed event and a set of payloads, and checks each cell
 against the contract every hook keeps:
 
@@ -80,6 +80,16 @@ _SWEEP_INTERVAL_S: Final = 0.5
 
 #: Cells run side by side; each is one short process, mostly interpreter start.
 _WORKERS: Final = 2
+
+#: The prefixes of the matrix's temporary root and of each cell's runtime
+#: directory under it, and the daemon socket's name in that directory.
+_BASE_PREFIX: Final = "eawf-doctor-hooks-"
+_RUNTIME_PREFIX: Final = "rt-"
+_SOCKET_NAME: Final = "eawfd.sock"
+
+#: The bytes below the temporary root up to a cell's daemon socket; each
+#: ``mkdtemp`` adds eight random characters to its prefix.
+_SOCKET_ROOM: Final = len(f"/{_BASE_PREFIX}12345678/{_RUNTIME_PREFIX}12345678/{_SOCKET_NAME}")
 
 #: The PATH of a host session with no runner: the system directories, plus
 #: a directory holding only uv, which a host may well have on its own.
@@ -415,7 +425,10 @@ def _cell_env(bundle: Path, contexts: _Contexts, context: str, runtime: Path) ->
     """Return the environment one cell's wrapper runs under."""
     env = {k: v for k, v in os.environ.items() if k not in _DROPPED_ENV}
     env["CLAUDE_PLUGIN_ROOT"] = str(bundle)
-    env["XDG_RUNTIME_DIR"] = str(runtime)
+    # Pinned verbatim rather than through XDG_RUNTIME_DIR, which only Linux
+    # honours: elsewhere the runtime base is ~/.eawfd, so the cell would dial,
+    # and start daemons in, the operator's own home instead of its stand-in.
+    env["EAWF_RUNTIME_DIR"] = str(runtime)
     env["TMPDIR"] = str(contexts.base)
     env["GIT_CEILING_DIRECTORIES"] = str(contexts.base)
     if context == "runner-missing":
@@ -502,10 +515,10 @@ def _run_cell(
 ) -> list[CellFailure]:
     """Run one cell in a runtime directory of its own and judge it."""
     context, _event, payload = cell
-    runtime = Path(tempfile.mkdtemp(prefix="xdg-", dir=contexts.base))
+    runtime = Path(tempfile.mkdtemp(prefix=_RUNTIME_PREFIX, dir=contexts.base))
     cwd = contexts.dirs[context]
     try:
-        with _daemon_stand_in(payload, runtime, contexts.main) as stub:
+        with _daemon_stand_in(payload, runtime) as stub:
             try:
                 # The host's shell, not the cell's PATH, finds bash.
                 completed: subprocess.CompletedProcess[str] | None = subprocess.run(
@@ -528,16 +541,12 @@ def _run_cell(
 
 
 @contextmanager
-def _daemon_stand_in(payload: Payload, runtime: Path, main: Path) -> Iterator[Path | None]:
+def _daemon_stand_in(payload: Payload, runtime: Path) -> Iterator[Path | None]:
     """Put a dead socket or a stale-version stub where the cell's hook dials its daemon."""
-    from eawf.runtime.daemon.runtime_dir import TREES_DIRNAME, tree_key
-
     if payload.daemon == "none":
         yield None
         return
-    directory = runtime / "eawfd" / TREES_DIRNAME / tree_key(main / ".ea" / "state.json")
-    directory.mkdir(parents=True)
-    with StaleDaemon(directory / "eawfd.sock", serve=payload.daemon == "stale") as socket_path:
+    with StaleDaemon(runtime / _SOCKET_NAME, serve=payload.daemon == "stale") as socket_path:
         yield socket_path
 
 
@@ -561,11 +570,13 @@ def run_matrix(bundle: Path) -> tuple[int, list[CellFailure]]:
         event the manifest does not subscribe runs no cell; the bundle
         findings name it.
     """
+    from eawf.runtime.daemon.runtime_dir import short_temp_root
+
     manifest = _load_manifest(bundle)
     if isinstance(manifest, str):
         return 0, []
     subscriptions = _subscriptions(manifest)
-    base = Path(tempfile.mkdtemp(prefix="eawf-doctor-hooks-"))
+    base = Path(tempfile.mkdtemp(prefix=_BASE_PREFIX, dir=short_temp_root(_SOCKET_ROOM)))
     try:
         contexts = _lay_contexts(base)
         cells = [
@@ -592,7 +603,7 @@ def _settle_background_starts(base: Path) -> None:
     """
     deadline = time.monotonic() + _START_GRACE_S
     while time.monotonic() < deadline:
-        for runtime in base.glob("xdg-*"):
+        for runtime in base.glob(f"{_RUNTIME_PREFIX}*"):
             _stop_daemons(runtime)
         time.sleep(_SWEEP_INTERVAL_S)
 
