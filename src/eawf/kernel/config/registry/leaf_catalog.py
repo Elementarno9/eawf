@@ -337,6 +337,32 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         choices=("duckdb", "sqlite"),
         description="Database engine of the machine-local telemetry store.",
     ),
+    # --- reflect pricing (telemetry domain) -------------------------------
+    LeafKey(
+        key="reflect.pricing.overrides",
+        domain="telemetry",
+        type="mapping",
+        default=None,
+        writable_layers=_WRITABLE_GWR,
+        description=(
+            "Per-model price overrides (rates, effective_from, note) that replace the "
+            "shipped price files' rates and mark the model override."
+        ),
+        consumer="eawf.observability.telemetry.pricing.price_overrides",
+    ),
+    LeafKey(
+        key="reflect.headline",
+        domain="telemetry",
+        type="literal",
+        default="api_equivalent",
+        writable_layers=_WRITABLE_GWR,
+        choices=("api_equivalent", "tokens"),
+        description=(
+            "What the reflect overview leads with: list-price dollars labelled "
+            "API-equivalent, or tokens with the dollars in the subline."
+        ),
+        consumer="eawf.observability.reflect.html.pages.reflect_headline",
+    ),
     # --- agents ------------------------------------------------------------
     LeafKey(
         key="agents.extra_tools",

@@ -1,9 +1,11 @@
 """SURF-165 and SURF-170: the ``reflect`` group, read-only against canonical state.
 
-- SURF-165: the group carries ``run``, ``show``, ``serve``, ``export`` and ``prune``; each
-  writes only to the local reflection collection, its title cache or a named output path;
-  an output path inside the canonical store is refused before anything is read; and no
-  verb other than ``run`` calls out.
+- SURF-165: the group carries ``run``, ``show``, ``serve``, ``export``, ``prune`` and the
+  ``prices`` group holding ``check``; each writes only to the local reflection collection,
+  its title cache or a named output path (``prices check`` writes nothing); an output path
+  inside the canonical store is refused before anything is read; and no verb calls out
+  except ``run`` and ``prices check --online``, which fetches only the vendor pricing
+  pages. ``prices check`` without ``--online`` makes no network call.
 - SURF-170: the group is mounted under the closed verb contract, mutates no canonical
   state, and its viewer binds loopback behind a nonce-bearing URL.
 """
@@ -22,10 +24,12 @@ from typer.testing import CliRunner
 from eawf.observability.reflect import report as rp
 from eawf.observability.reflect import serve as sv
 from eawf.observability.reflect import titles as tt
+from eawf.observability.telemetry import price_check as pc
 from eawf.surfaces.cli import exit_codes, verb_contract
 from eawf.surfaces.cli.app import app
 from eawf.workflow.skills.catalog import resolve_skill
 from tests.contract.surfaces.cli._reflect_tree import (
+    _local_git_probe,
     command,
     native_tree,
     refuse_egress,
@@ -67,9 +71,68 @@ def _reflect_group() -> click.Group:
     return group
 
 
-def test_surf_165_the_group_carries_exactly_its_five_verbs() -> None:
-    """run, show, serve, export and prune, and nothing else."""
-    assert set(_reflect_group().commands) == {"run", "show", "serve", "export", "prune"}
+def test_surf_165_the_group_carries_exactly_its_verbs() -> None:
+    """run, show, serve, export, prune and prices, which holds only check."""
+    group = _reflect_group()
+    assert set(group.commands) == {"run", "show", "serve", "export", "prune", "prices"}
+    prices = group.commands["prices"]
+    assert isinstance(prices, click.Group)
+    assert set(prices.commands) == {"check"}
+
+
+@pytest.mark.parametrize(
+    ("argv", "runs"),
+    [
+        (["git", "-C", "/x", "rev-parse", "--git-dir"], True),
+        (["git", "config", "--file", "/x/config", "--get-regexp", "core"], True),
+        (["git", "-C", "/x", "symbolic-ref", "--short", "HEAD"], True),
+        (["git", "-C", "/x", "-C", "y", "rev-parse"], True),
+        (["git", "-C", "/x", "fetch", "origin"], False),
+        (["git"], False),
+        (["claude", "-p", "title"], False),
+        ("git rev-parse", False),
+    ],
+)
+def test_surf_165_the_egress_fixture_lets_only_local_git_reads_run(
+    argv: list[str] | str, runs: bool
+) -> None:
+    """The fixture refuses every spawn but a local git read, so a model CLI still trips it."""
+    assert _local_git_probe(argv) is runs
+
+
+def test_surf_165_prices_check_offline_makes_no_network_call(
+    tree: Path, refuse_egress: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without --online the check reads only the shipped files and fetches no page."""
+    fetched: list[str] = []
+    monkeypatch.setattr(pc, "fetch_page", lambda url: fetched.append(url) or "")
+    before = _canonical(tree)
+    result = _invoke(tree, "prices", "check")
+    assert result.exit_code == 0, result.output
+    assert "offline" in result.output
+    assert fetched == []
+    assert refuse_egress == []
+    assert _canonical(tree) == before
+
+
+def test_surf_165_prices_check_online_fetches_only_the_vendor_pages(
+    tree: Path, refuse_egress: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With --online the check calls out, to the files' https pricing pages and nowhere else."""
+    fetched: list[str] = []
+
+    def fetch(url: str) -> str:
+        fetched.append(url)
+        raise OSError("refused by the test")
+
+    monkeypatch.setattr(pc, "fetch_page", fetch)
+    before = _canonical(tree)
+    result = _invoke(tree, "prices", "check", "--online")
+    assert result.exit_code == 2, result.output
+    assert fetched
+    assert all(url.startswith("https://") for url in fetched)
+    assert refuse_egress == []
+    assert _canonical(tree) == before
 
 
 def test_surf_170_the_group_is_mounted_under_the_verb_contract() -> None:

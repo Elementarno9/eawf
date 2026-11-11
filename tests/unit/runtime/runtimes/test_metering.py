@@ -20,8 +20,9 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.config.schema import PriceRates
 from eawf.observability.telemetry.models import PriceSourceKind
-from eawf.observability.telemetry.pricing import PRICING_VERSION, lookup_pricing
+from eawf.observability.telemetry.pricing import active_price_book, request_date
 from eawf.runtime.runtimes.adapter import SpawnResult
 from eawf.runtime.runtimes.metering import (
     MeteredCost,
@@ -31,6 +32,26 @@ from eawf.runtime.runtimes.metering import (
 
 _T0 = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
 _T1 = datetime(2026, 6, 1, 12, 0, 5, tzinfo=UTC)
+PRICING_VERSION = active_price_book().version
+_PER_MILLION = Decimal(1_000_000)
+
+
+def _listed(model: str) -> PriceRates:
+    rates = active_price_book().list_rates(model, on=request_date(None))
+    assert rates is not None, model
+    return rates
+
+
+def _expected_cost(model: str, *, i: int, o: int, w5: int, w1: int, r: int) -> Decimal:
+    rates = _listed(model)
+    assert rates.input is not None and rates.output is not None and rates.cache_read is not None
+    return (
+        i * rates.input
+        + o * rates.output
+        + w5 * (rates.cache_write["5m"] or 0)
+        + w1 * (rates.cache_write["1h"] or 0)
+        + r * rates.cache_read
+    ) / _PER_MILLION
 
 
 def _spawn_result(**overrides: object) -> SpawnResult:
@@ -69,15 +90,7 @@ def _spawn_result(**overrides: object) -> SpawnResult:
 def test_price_spawn_result_computes_cost_from_tokens_times_pricing() -> None:
     """The cost is the exact Decimal sum of every token class x its rate."""
     result = _spawn_result()
-    pricing = lookup_pricing("claude-opus-4-8")
-    assert pricing is not None
-    expected = (
-        100 * pricing.input_per_token
-        + 42 * pricing.output_per_token
-        + 50 * pricing.cache_write_5m_per_token
-        + 30 * pricing.cache_write_1h_per_token
-        + 200 * pricing.cache_read_per_token
-    )
+    expected = _expected_cost("claude-opus-4-8", i=100, o=42, w5=50, w1=30, r=200)
 
     metered = price_spawn_result(result)
 
@@ -95,8 +108,6 @@ def test_price_spawn_result_cost_is_decimal_not_float() -> None:
 
 def test_price_spawn_result_prices_cache_write_tiers_independently() -> None:
     """5m and 1h cache-write tokens price against their own distinct rates."""
-    pricing = lookup_pricing("claude-opus-4-8")
-    assert pricing is not None
     # Same total cache-write tokens, opposite TTL split -> different cost,
     # because the 1h rate (2x base input) exceeds the 5m rate (1.25x).
     mostly_5m = price_spawn_result(
@@ -118,8 +129,8 @@ def test_price_spawn_result_prices_cache_write_tiers_independently() -> None:
         )
     )
     assert mostly_1h.cost_usd > mostly_5m.cost_usd
-    assert mostly_5m.cost_usd == 100 * pricing.cache_write_5m_per_token
-    assert mostly_1h.cost_usd == 100 * pricing.cache_write_1h_per_token
+    assert mostly_5m.cost_usd == _expected_cost("claude-opus-4-8", i=0, o=0, w5=100, w1=0, r=0)
+    assert mostly_1h.cost_usd == _expected_cost("claude-opus-4-8", i=0, o=0, w5=0, w1=100, r=0)
 
 
 def test_price_spawn_result_combines_cache_creation_total_for_payload() -> None:
@@ -148,30 +159,21 @@ def test_price_spawn_result_prices_against_resolved_model() -> None:
 
 
 def test_price_spawn_result_falls_back_to_requested_model_alias() -> None:
-    """With no resolved_model, a bare alias still resolves via prefix fallback."""
-    result = _spawn_result(model="opus", resolved_model=None)
-    pricing = lookup_pricing("opus")
-    assert pricing is not None
+    """With no resolved_model, a bare alias resolves through the dated alias in effect."""
+    moment = datetime(2026, 11, 10, 12, 0, tzinfo=UTC)
+    result = _spawn_result(model="opus", resolved_model=None, started_at=moment, ended_at=moment)
     metered = price_spawn_result(result)
     assert metered.model == "opus"
     assert metered.priced is True
-    expected = (
-        100 * pricing.input_per_token
-        + 42 * pricing.output_per_token
-        + 50 * pricing.cache_write_5m_per_token
-        + 30 * pricing.cache_write_1h_per_token
-        + 200 * pricing.cache_read_per_token
-    )
-    assert metered.cost_usd == expected
+    assert metered.cost_usd == _expected_cost("opus", i=100, o=42, w5=50, w1=30, r=200)
 
 
-def test_price_spawn_result_prices_dated_variant_via_longest_prefix() -> None:
-    """A dated model id with no exact row prices via the family prefix row."""
+def test_price_spawn_result_leaves_an_unlisted_dated_variant_unpriced() -> None:
+    """A dated id no row lists is unpriced: no prefix row lends it a rate."""
     result = _spawn_result(model="claude-opus-4-8", resolved_model="claude-opus-4-8-20260101")
     metered = price_spawn_result(result)
-    # The longest-prefix resolver binds the dated id to the claude-opus-4-8 row.
-    assert metered.priced is True
-    assert metered.cost_usd > Decimal("0")
+    assert metered.priced is False
+    assert metered.cost_usd is None
 
 
 # --------------------------------------------------------------------------- #
@@ -203,8 +205,8 @@ def test_price_spawn_result_zero_tokens_is_genuine_zero_cost() -> None:
 
 def test_price_spawn_result_unknown_model_records_null_cost() -> None:
     """An unpriceable model yields a null cost with priced=False (no raise)."""
-    # A model id that matches no PRICING key nor any prefix alias.
-    assert lookup_pricing("totally-unknown-model-xyz") is None
+    # A model id no price row lists.
+    assert active_price_book().resolve("totally-unknown-model-xyz", on=request_date(None)) is None
     result = _spawn_result(model="totally-unknown-model-xyz", resolved_model=None)
     metered = price_spawn_result(result)
     assert metered.cost_usd is None
@@ -230,65 +232,49 @@ def test_price_spawn_result_surfaces_session_id_for_correlation() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Cross-vendor pricing: a real codex / opencode spawn must price
-# honestly (priced=True) rather than silently fall back to priced=False / $0.
+# Cross-vendor pricing: an opencode spawn prices at the Anthropic row; a codex
+# spawn prices exactly when its price row states rates.
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize(
-    ("runtime", "model"),
-    [
-        ("codex", "gpt-5-codex"),
-        ("codex", "gpt-5"),
-        ("codex", "gpt-5-mini"),
-        ("opencode", "anthropic/claude-opus-4-8"),
-        ("opencode", "anthropic/claude-sonnet-4-6"),
-    ],
-)
-def test_price_spawn_result_prices_cross_vendor_models_honestly(runtime: str, model: str) -> None:
-    """A codex / opencode spawn prices priced=True against its own vendor model.
-
-    Boundary: each runtime resolves its OWN model id to a real pricing row, so
-    ``price_spawn_result`` no longer silently returns priced=False for a real
-    cross-vendor spawn.
-    """
-    pricing = lookup_pricing(model)
-    assert pricing is not None
-    result = _spawn_result(runtime=runtime, model=model, resolved_model=None)
+@pytest.mark.parametrize("model", ["anthropic/claude-opus-4-8", "anthropic/claude-sonnet-4-6"])
+def test_price_spawn_result_prices_opencode_ids_at_the_anthropic_row(model: str) -> None:
+    """Boundary: the opencode provider/model form prices at its bare id's rates."""
+    result = _spawn_result(runtime="opencode", model=model, resolved_model=None)
     metered = price_spawn_result(result)
 
     assert metered.priced is True
     assert metered.model == model
-    assert metered.cost_usd > Decimal("0")
-    expected = (
-        100 * pricing.input_per_token
-        + 42 * pricing.output_per_token
-        + 50 * pricing.cache_write_5m_per_token
-        + 30 * pricing.cache_write_1h_per_token
-        + 200 * pricing.cache_read_per_token
-    )
-    assert metered.cost_usd == expected
+    bare = model.removeprefix("anthropic/")
+    assert metered.cost_usd == _expected_cost(bare, i=100, o=42, w5=50, w1=30, r=200)
 
 
-def test_price_spawn_result_codex_dated_model_prices_via_prefix() -> None:
-    """A suffixed codex id prices via its longest-prefix tier row (priced)."""
+@pytest.mark.parametrize("model", ["gpt-6.1-sol", "gpt-6-luna", "gpt-5", "gpt-5-mini"])
+def test_price_spawn_result_prices_a_codex_id_only_when_its_row_states_rates(model: str) -> None:
+    """A codex id named in the price file prices exactly when its row carries rates."""
+    row = active_price_book().resolve(model, on=request_date(None))
+    assert row is not None
     result = _spawn_result(
-        runtime="codex", model="gpt-5-codex", resolved_model="gpt-5-codex-preview"
+        runtime="codex",
+        model=model,
+        resolved_model=None,
+        cache_creation_input_tokens=0,
+        cache_creation_5m_input_tokens=0,
+        cache_creation_1h_input_tokens=0,
     )
-    metered = price_spawn_result(result)
-    assert metered.priced is True
-    assert metered.cost_usd > Decimal("0")
+
+    assert price_spawn_result(result).priced is (row.rates is not None)
 
 
-def test_price_spawn_result_unknown_codex_model_still_degrades_honestly() -> None:
-    """Error path: an unknown OpenAI id (no tier row) degrades to priced=False.
+@pytest.mark.parametrize("model", ["gpt-4o", "gpt-5-codex", "gpt-5-codex-preview"])
+def test_price_spawn_result_unknown_codex_model_still_degrades_honestly(model: str) -> None:
+    """Error path: an OpenAI id no row lists degrades to priced=False.
 
-    The honest-degrade contract holds for the cross-vendor lane too: a model id
-    that matches no pricing row yields a null cost with priced=False (no raise, no
-    pretend-billed zero), distinct from a real codex spawn that now prices.
+    A model id that matches no price row yields a null cost with priced=False
+    (no raise, no pretend-billed zero), and no neighbour's row lends it a rate.
     """
-    assert lookup_pricing("gpt-4o") is None
-    result = _spawn_result(runtime="codex", model="gpt-4o", resolved_model=None)
+    assert active_price_book().resolve(model, on=request_date(None)) is None
+    result = _spawn_result(runtime="codex", model=model, resolved_model=None)
     metered = price_spawn_result(result)
     assert metered.cost_usd is None
     assert metered.priced is False

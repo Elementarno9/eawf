@@ -262,6 +262,18 @@ def test_hook_copies_only_markdown_and_drops_stale_topics(bundle_hook: Any, tmp_
     assert sorted(p.name for p in help_out.iterdir()) == ["a.md", "b.md"]
 
 
+def test_hook_keeps_the_committed_price_files(bundle_hook: Any, tmp_path: Path) -> None:
+    """A wheel build rebuilds its own subtrees and leaves ``_data/pricing`` as it is."""
+    config = _hook_tree(tmp_path, ["a.md"])
+    prices = tmp_path / "src" / "eawf" / "_data" / "pricing" / "anthropic.yaml"
+    prices.parent.mkdir(parents=True)
+    prices.write_text("vendor: anthropic\n", encoding="utf-8")
+
+    bundle_hook.populate_data_tree(tmp_path, config)
+
+    assert prices.read_text(encoding="utf-8") == "vendor: anthropic\n"
+
+
 def test_hook_fails_fast_on_an_empty_help_dir(bundle_hook: Any, tmp_path: Path) -> None:
     """A help directory with no topic reds the build instead of shipping none."""
     config = _hook_tree(tmp_path, [])

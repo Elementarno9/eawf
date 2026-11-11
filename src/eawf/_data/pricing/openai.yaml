@@ -1,0 +1,82 @@
+# OpenAI list prices, USD per million tokens. Write classes are 30m and 12h.
+# A null class rate is not stated by the vendor: tokens of that class stay
+# unpriced. A tier applies when input + cache read + cache write exceeds its
+# threshold; the vendor page says "input tokens" and does not state whether
+# cached tokens count, so the shared rule is kept.
+vendor: openai
+aliases: []
+models:
+  - id: gpt-6.1-sol
+    match: [gpt-6.1-sol]
+    effective_from: null
+    effective_to: null
+    source_url: https://developers.openai.com/api/docs/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 2, output: 10, cache_read: 0.10, cache_write: {"30m": 2.50, "12h": 5}}
+    tiers:
+      - above_prompt_tokens: 272000
+        rates: {input: 4, output: 15, cache_read: 0.20, cache_write: {"30m": 5, "12h": 10}}
+    modifiers: {fast: null, geo_us: null}
+    note: Rates agree between the OpenAI pricing page and the LiteLLM price file.
+  - id: gpt-6-astra
+    match: [gpt-6-astra]
+    effective_from: null
+    effective_to: null
+    source_url: https://developers.openai.com/api/docs/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 10, output: 50, cache_read: 1, cache_write: {"30m": 12.50, "12h": 25}}
+    tiers:
+      - above_prompt_tokens: 272000
+        rates: {input: 20, output: 75, cache_read: 2, cache_write: {"30m": 25, "12h": 50}}
+    modifiers: {fast: null, geo_us: null}
+    note: Rates agree between the OpenAI pricing page and the LiteLLM price file.
+  - id: gpt-6-luna
+    match: [gpt-6-luna]
+    effective_from: null
+    effective_to: null
+    source_url: https://developers.openai.com/api/docs/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 0.10, output: 0.50, cache_read: 0.01, cache_write: {"30m": 0.125, "12h": 0.25}}
+    tiers:
+      - above_prompt_tokens: 272000
+        rates: {input: 0.20, output: 0.75, cache_read: 0.02, cache_write: {"30m": 0.25, "12h": 0.50}}
+    modifiers: {fast: null, geo_us: null}
+    note: Rates agree between the OpenAI pricing page and the LiteLLM price file.
+  - id: gpt-5.5
+    match: [gpt-5.5]
+    effective_from: null
+    effective_to: null
+    source_url: https://developers.openai.com/api/docs/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 5, output: 30, cache_read: 0.50, cache_write: {"30m": null, "12h": null}}
+    tiers:
+      - above_prompt_tokens: 272000
+        rates: {input: 10, output: 45, cache_read: 1, cache_write: {"30m": null, "12h": null}}
+    modifiers: {fast: null, geo_us: null}
+    note: Rates agree between the OpenAI pricing page and the LiteLLM price file; neither states writes.
+  - id: gpt-5
+    match: [gpt-5]
+    effective_from: null
+    effective_to: null
+    source_url: https://developers.openai.com/api/docs/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 1.25, output: 10, cache_read: 0.125, cache_write: {"30m": null, "12h": null}}
+    tiers: []
+    modifiers: {fast: null, geo_us: null}
+    note: Rates agree between the OpenAI pricing page and the LiteLLM price file; neither states writes.
+  - id: gpt-5-mini
+    match: [gpt-5-mini]
+    effective_from: null
+    effective_to: null
+    source_url: https://developers.openai.com/api/docs/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 0.25, output: 2, cache_read: 0.025, cache_write: {"30m": null, "12h": null}}
+    tiers: []
+    modifiers: {fast: null, geo_us: null}
+    note: Rates agree between the OpenAI pricing page and the LiteLLM price file; neither states writes.

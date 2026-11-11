@@ -1,0 +1,84 @@
+name: Price check
+
+# Compares the shipped price files with the vendor pricing pages once a week.
+# It reports only: it never edits or commits the price files, and no other
+# workflow needs it, so a vendor page change never blocks a merge. A page or
+# price the runner cannot check, and a crash of the check, are reported like a
+# difference, never as current.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  price-check:
+    name: Compare price files with vendor pages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Compare with the vendor pages
+        id: check
+        shell: bash
+        run: |
+          set +e
+          uv run eawf reflect prices check --online > price-check.md 2> price-check.err
+          status=$?
+          set -e
+          # A finished check exits 0, 1 or 2 and its report opens with
+          # "Prices:". A crash also exits 1, so the report tells them apart.
+          if [ "${status}" -le 2 ] && [[ "$(head -n 1 price-check.md)" == "Prices: "* ]]; then
+            case "${status}" in
+              0) outcome=current ;;
+              1) outcome=differs ;;
+              *) outcome=unchecked ;;
+            esac
+          else
+            outcome=crashed
+            {
+              echo "Prices: the price check crashed (exit ${status}) and compared nothing; the file is not confirmed current."
+              echo
+              echo '```text'
+              tail -n 40 price-check.err
+              echo '```'
+            } > price-check.md
+          fi
+          cat price-check.md >> "${GITHUB_STEP_SUMMARY}"
+          echo "status=${status}" >> "${GITHUB_OUTPUT}"
+          echo "outcome=${outcome}" >> "${GITHUB_OUTPUT}"
+
+      - name: Open or comment on the price issue
+        if: steps.check.outputs.outcome != 'current'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: Price file differs from vendor pages
+        run: |
+          number=$(gh issue list --state open --limit 100 --json number,title \
+            --jq '[.[] | select(.title == $ENV.TITLE)][0].number // empty')
+          if [ -n "${number}" ]; then
+            gh issue comment "${number}" --body-file price-check.md
+          else
+            gh issue create --title "${TITLE}" --body-file price-check.md
+          fi
+
+      - name: Fail when the check did not report current
+        if: steps.check.outputs.outcome != 'current'
+        run: exit 1

@@ -173,14 +173,35 @@ class EgressError(AssertionError):
     """A reflection verb tried to reach off this machine."""
 
 
+_LOCAL_GIT_PROBES = frozenset({"rev-parse", "config", "symbolic-ref"})
+
+
+def _local_git_probe(argv: Any) -> bool:
+    """Return whether *argv* is a ``git`` call that only reads the repository on disk.
+
+    State resolution asks git which checkout a ``-w`` directory belongs to, and the
+    layered config asks for the current branch; both read ``.git`` and never leave
+    the machine, unlike ``fetch`` or a model CLI.
+    """
+    if not isinstance(argv, list | tuple) or not argv or argv[0] != "git":
+        return False
+    words = [str(word) for word in argv[1:]]
+    while words[:1] == ["-C"]:
+        words = words[2:]
+    return bool(words) and words[0] in _LOCAL_GIT_PROBES
+
+
 @pytest.fixture
 def refuse_egress(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
     """Refuse every outbound connection and every spawned process, recording each try.
 
-    Loopback connections stay open so a test can talk to a server it started itself.
+    Loopback connections stay open so a test can talk to a server it started itself,
+    and a local git read (``rev-parse``, ``config``, ``symbolic-ref``) runs, since
+    resolving the state path and the config layers asks git about the checkout.
     """
     attempts: list[str] = []
     real_connect = socket.socket.connect
+    real_popen = subprocess.Popen
 
     def connect(self: socket.socket, address: Any) -> Any:
         host = address[0] if isinstance(address, tuple) else str(address)
@@ -190,7 +211,10 @@ def refuse_egress(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
         return real_connect(self, address)
 
     def popen(*args: Any, **kwargs: Any) -> Any:
-        attempts.append(f"spawn {args[0] if args else kwargs.get('args')}")
+        argv = args[0] if args else kwargs.get("args")
+        if _local_git_probe(argv):
+            return real_popen(*args, **kwargs)
+        attempts.append(f"spawn {argv}")
         raise EgressError("a spawned process")
 
     monkeypatch.setattr(socket.socket, "connect", connect)

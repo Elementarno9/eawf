@@ -86,8 +86,10 @@ from eawf.observability.telemetry.models import (
     TelemetryDispatchCost,
     TelemetryFileMeta,
     TelemetryIncident,
+    TelemetrySchemaMeta,
     TelemetrySession,
 )
+from eawf.observability.telemetry.pricing import PriceBook, active_price_book
 from eawf.observability.telemetry.sources.base import SessionSource
 from eawf.observability.telemetry.sources.session_history import (
     HistoryFile,
@@ -103,6 +105,7 @@ from eawf.observability.telemetry.sources.session_history import (
     history_path_digest,
     observed_rows,
     read_session_detail,
+    reprice_request,
 )
 from eawf.observability.telemetry.store.base import AbstractMetricsStore
 from eawf.runtime.lock import portalock
@@ -118,6 +121,9 @@ _OBSERVED_SESSIONS_TABLE = "telemetry_observed_sessions"
 _OBSERVED_DURATIONS_TABLE = "telemetry_observed_durations"
 _OBSERVED_REQUESTS_TABLE = "telemetry_observed_requests"
 _HISTORY_INDEX_TABLE = "telemetry_history_index"
+_SCHEMA_META_TABLE = "telemetry_schema_meta"
+#: The schema-meta key holding the digest of the prices the stored costs were priced with.
+_PRICE_DIGEST_KEY = "price_file_digest"
 
 #: Source adapters whose files are line-independent: every line parses to a
 #: complete, self-contained row, so the incremental tail slice (bytes past the
@@ -683,6 +689,7 @@ def index_session_history(
     *,
     project_id: str,
     progress: IndexProgress | None = None,
+    prices: PriceBook | None = None,
 ) -> SweepFunnel:
     """Bring the observed collection up to date with *files*, reading only what changed.
 
@@ -710,10 +717,15 @@ def index_session_history(
         project_id: Scope label stamped on each session row this sweep
             writes; reflect scopes match projects by ``cwd_digest`` instead.
         progress: Called at the start, the end and about every tenth file.
+        prices: The prices to bill with; the process's active book by default.
+            When their digest differs from the one the index stored, every
+            stored request is re-priced from its token classes first, with no
+            transcript read.
 
     Returns:
         The coverage funnel over every file in *files*.
     """
+    book = prices if prices is not None else active_price_book()
     index = {
         row.path_digest: row
         for row in store.fetch_all(_HISTORY_INDEX_TABLE, HistoryIndexEntry)
@@ -723,13 +735,15 @@ def index_session_history(
     total = len(files)
     _report_progress(progress, 0, total)
     digests: list[str] = []
-    touched: set[tuple[str, str]] = set()
+    touched = _reprice_if_stale(store, book)
     owners = _RequestOwners(store)
     for done, file in enumerate(files, start=1):
         digest = history_path_digest(file.path)
         digests.append(digest)
         held = index.get(digest)
-        entry = _index_file(store, file, held, digest=digest, funnel=funnel, owners=owners)
+        entry = _index_file(
+            store, file, held, digest=digest, funnel=funnel, owners=owners, prices=book
+        )
         if entry is not None and entry is not held:
             index[digest] = entry
             touched.update(
@@ -764,6 +778,29 @@ def index_session_history(
         f"shared={funnel.requests_shared} drops={len(funnel.drops)}"
     )
     return funnel
+
+
+def _reprice_if_stale(store: AbstractMetricsStore, prices: PriceBook) -> set[tuple[str, str]]:
+    """Re-price every stored request when the prices changed since they were billed.
+
+    Returns:
+        The ``(runtime, vendor_session_ref)`` of every session whose requests
+        were re-priced, so its session row is rebuilt; empty when the stored
+        digest matches.
+    """
+    stored = store.fetch_where(_SCHEMA_META_TABLE, TelemetrySchemaMeta, key=_PRICE_DIGEST_KEY)
+    if any(isinstance(row, TelemetrySchemaMeta) and row.value == prices.digest for row in stored):
+        return set()
+    touched: set[tuple[str, str]] = set()
+    for row in store.fetch_all(_OBSERVED_REQUESTS_TABLE, ObservedRequest):
+        if isinstance(row, ObservedRequest):
+            store.upsert(_OBSERVED_REQUESTS_TABLE, reprice_request(row, prices))
+            touched.add((row.runtime, row.vendor_session_ref))
+    store.upsert(
+        _SCHEMA_META_TABLE, TelemetrySchemaMeta(key=_PRICE_DIGEST_KEY, value=prices.digest)
+    )
+    logger.info(f"_reprice_if_stale sessions={len(touched)} digest={prices.version}")
+    return touched
 
 
 def _project_sessions(
@@ -881,9 +918,12 @@ class LocalHistory:
         *,
         project_id: str,
         progress: IndexProgress | None = None,
+        prices: PriceBook | None = None,
     ) -> SweepFunnel:
         """Index the files into *store*; see :func:`index_session_history`."""
-        return index_session_history(store, self.files, project_id=project_id, progress=progress)
+        return index_session_history(
+            store, self.files, project_id=project_id, progress=progress, prices=prices
+        )
 
     def detail(self, store: AbstractMetricsStore, vendor_session_ref: str) -> SessionDetail | None:
         """Return one indexed session's detail; see :func:`load_session_detail`."""
@@ -916,6 +956,7 @@ def _index_file(
     digest: str,
     funnel: SweepFunnel,
     owners: _RequestOwners,
+    prices: PriceBook,
 ) -> HistoryIndexEntry | None:
     """Bring one file's request rows and index row up to date.
 
@@ -937,7 +978,9 @@ def _index_file(
         return entry
     try:
         with file.path.open("rb") as handle:
-            fold, ledger, start = _resume_or_restart(store, owners, handle, file, entry, stat)
+            fold, ledger, start = _resume_or_restart(
+                store, owners, handle, file, entry, stat, prices
+            )
             handle.seek(start)
             consumed, decoded = fold_history_lines(
                 handle, fold, ledger, fallback_session_id=file.fallback_session_id
@@ -1051,6 +1094,7 @@ def _resume_or_restart(
     file: HistoryFile,
     entry: HistoryIndexEntry | None,
     stat: os.stat_result,
+    prices: PriceBook,
 ) -> tuple[TranscriptFold, RequestLedger, int]:
     """Return the fold, request rows and byte offset the read starts from.
 
@@ -1066,7 +1110,7 @@ def _resume_or_restart(
         and _resumable(handle, entry, size=stat.st_size, mtime=stat.st_mtime)
     ):
         fold = TranscriptFold.model_validate_json(entry.fold)
-        ledger = RequestLedger()
+        ledger = RequestLedger(prices=prices)
         if entry.vendor_session_ref is not None:
             ledger.rows = {
                 row.request_ref: row
@@ -1096,7 +1140,8 @@ def _resume_or_restart(
     ledger = RequestLedger(
         foreign=owners.foreign(
             file.runtime, hash_vendor_session_id(file.fallback_session_id), lane=file.lane
-        )
+        ),
+        prices=prices,
     )
     return TranscriptFold(runtime=file.runtime, lane=file.lane), ledger, 0
 

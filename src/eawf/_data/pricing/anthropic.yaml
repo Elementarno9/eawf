@@ -1,0 +1,228 @@
+# Anthropic list prices, USD per million tokens.
+# A price change closes the old row (effective_to) and adds a new one; a row
+# is never edited in place, so history keeps the price it was billed at.
+# Lookup: exact id, then `match` after stripping "[1m]", then the alias in effect.
+vendor: anthropic
+aliases:
+  - {alias: opus, target: claude-opus-5-5, from: 2026-11-10, to: null}
+  - {alias: sonnet, target: claude-sonnet-5-5, from: 2026-11-10, to: null}
+  - {alias: haiku, target: claude-haiku-5-5, from: 2026-11-10, to: null}
+models:
+  - id: claude-opus-5-5
+    match: [claude-opus-5-5]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 4, output: 20, cache_read: 0.20, cache_write: {"5m": 5, "1h": 8}}
+    tiers: []
+    modifiers: {fast: {input: 8, output: 40}, geo_us: 1.1}
+  - id: claude-sonnet-5-5
+    match: [claude-sonnet-5-5]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 2, output: 10, cache_read: 0.10, cache_write: {"5m": 2.50, "1h": 4}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+  - id: claude-sonnet-5
+    match: [claude-sonnet-5]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 2, output: 10, cache_read: 0.20, cache_write: {"5m": 2.50, "1h": 4}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+  - id: claude-fable-5-2
+    match: [claude-fable-5-2]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 8, output: 40, cache_read: 0.20, cache_write: {"5m": 10, "1h": 16}}
+    tiers: []
+    modifiers: {fast: {input: 16, output: 80}, geo_us: 1.1}
+  - id: claude-mythos-5-2
+    match: [claude-mythos-5-2]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 8, output: 40, cache_read: 0.20, cache_write: {"5m": 10, "1h": 16}}
+    tiers: []
+    modifiers: {fast: {input: 16, output: 80}, geo_us: 1.1}
+  - id: claude-fable-5-1
+    match: [claude-fable-5-1]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 10, output: 50, cache_read: 0.25, cache_write: {"5m": 12.50, "1h": 20}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+    note: Model id spelling unverified.
+  - id: claude-mythos-5-1
+    match: [claude-mythos-5-1]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 10, output: 50, cache_read: 0.25, cache_write: {"5m": 12.50, "1h": 20}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+    note: Model id spelling unverified.
+  - id: claude-fable-5
+    match: [claude-fable-5]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 10, output: 50, cache_read: 1, cache_write: {"5m": 12.50, "1h": 20}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+    note: Model id spelling unverified.
+  - id: claude-mythos-5
+    match: [claude-mythos-5]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 10, output: 50, cache_read: 1, cache_write: {"5m": 12.50, "1h": 20}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+    note: Model id spelling unverified.
+  - id: claude-opus-5
+    match: [claude-opus-5]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 5, output: 25, cache_read: 0.50, cache_write: {"5m": 6.25, "1h": 10}}
+    tiers: []
+    modifiers: {fast: {input: 10, output: 50}, geo_us: 1.1}
+  - id: claude-opus-4-8
+    match: [claude-opus-4-8, anthropic/claude-opus-4-8]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 5, output: 25, cache_read: 0.50, cache_write: {"5m": 6.25, "1h": 10}}
+    tiers: []
+    modifiers: {fast: {input: 10, output: 50}, geo_us: 1.1}
+  - id: claude-opus-4-7
+    match: [claude-opus-4-7]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 5, output: 25, cache_read: 0.50, cache_write: {"5m": 6.25, "1h": 10}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+  - id: claude-opus-4-6
+    match: [claude-opus-4-6]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 5, output: 25, cache_read: 0.50, cache_write: {"5m": 6.25, "1h": 10}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+  - id: claude-opus-4-5
+    match: [claude-opus-4-5, claude-opus-4-5-20251101]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 5, output: 25, cache_read: 0.50, cache_write: {"5m": 6.25, "1h": 10}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+  - id: claude-opus-4-1
+    match: [claude-opus-4-1, claude-opus-4-1-20250805]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 15, output: 75, cache_read: 1.50, cache_write: {"5m": 18.75, "1h": 30}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+    note: Retired.
+  - id: claude-opus-4
+    match: [claude-opus-4, claude-opus-4-20250514]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 15, output: 75, cache_read: 1.50, cache_write: {"5m": 18.75, "1h": 30}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+    note: Retired.
+  - id: claude-sonnet-4-6
+    match: [claude-sonnet-4-6, anthropic/claude-sonnet-4-6]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 3, output: 15, cache_read: 0.30, cache_write: {"5m": 3.75, "1h": 6}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+  - id: claude-sonnet-4-5
+    match: [claude-sonnet-4-5, claude-sonnet-4-5-20250929]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 3, output: 15, cache_read: 0.30, cache_write: {"5m": 3.75, "1h": 6}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+  - id: claude-sonnet-4
+    match: [claude-sonnet-4, claude-sonnet-4-20250514]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 3, output: 15, cache_read: 0.30, cache_write: {"5m": 3.75, "1h": 6}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+  - id: claude-haiku-4-5
+    match: [claude-haiku-4-5, claude-haiku-4-5-20251001, anthropic/claude-haiku-4-5]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 1, output: 5, cache_read: 0.10, cache_write: {"5m": 1.25, "1h": 2}}
+    tiers: []
+    modifiers: {fast: null, geo_us: 1.1}
+  - id: claude-haiku-5-5
+    match: [claude-haiku-5-5]
+    effective_from: null
+    effective_to: null
+    source_url: https://platform.claude.com/docs/en/about-claude/pricing
+    verified_on: 2026-11-10
+    verified_by: fetch
+    rates: {input: 0.10, output: 0.50, cache_read: 0.01, cache_write: {"5m": 0.125, "1h": 0.20}}
+    tiers:
+      - above_prompt_tokens: 100000
+        rates: {input: 0.50, output: 2.50, cache_read: 0.05, cache_write: {"5m": 0.625, "1h": 1}}
+    modifiers: {fast: null, geo_us: 1.1}

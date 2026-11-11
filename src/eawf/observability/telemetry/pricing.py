@@ -1,538 +1,704 @@
-"""Embedded Decimal pricing snapshot + currency-drift detection.
+"""Dated list prices loaded from the shipped price files, and the pricing rules.
 
-Canonical Anthropic published rates fetched 2026-10-22 21:30 UTC from
-``https://docs.anthropic.com/en/docs/about-claude/pricing`` (served at
-``https://platform.claude.com/docs/en/about-claude/pricing``). This module
-is the cost-ledger source of truth committed at C09 vendor time; every
-cost metric (M02 ``eawf_cost_usd_total``, M08-M10 burn-rate gauges) prices
-tokens through :data:`PRICING`.
+The rates live in ``eawf/_data/pricing/<vendor>.yaml``, one file per vendor,
+in USD per million tokens as :class:`~decimal.Decimal`. Each model row is in
+effect from ``effective_from`` (``None``: since launch) up to, not including,
+``effective_to``; a price change closes the old row and adds a new one, so a
+request keeps the price of its own UTC date.
 
-All rates are :class:`~decimal.Decimal` in USD **per token** (not per
-million) so long-horizon ledger sums never accumulate float drift. Cache
-multipliers are encoded explicitly per model rather than derived, so a
-rounding change to one rate cannot silently shift the others.
+A model id resolves by exact row id, then by a row's ``match`` list after
+stripping the ``[1m]`` context suffix, then by the alias in effect. Nothing
+else matches: an id with no row is unpriced, never zero and never priced at a
+neighbour's rate. A row with ``rates: null`` names a model whose rate is not
+confirmed; it resolves, and prices none of its tokens.
 
-:func:`lookup_pricing` resolves a model id by exact match first, then by
-longest-prefix fallback (e.g. ``claude-opus-4-7-20260514`` →
-``claude-opus-4-7``). A model named in :data:`UNPRICED_MODELS` resolves to
-no row even when a shorter family alias would prefix-match it, and so does
-any Claude id whose generation differs from the one the matched key
-prices: the snapshot has no published rate for it, and pricing it at an
-older generation's rate would record a fabricated list price.
-
-:func:`check_pricing_currency` validates the embedded snapshot's shape and
-internal currency (the stated Anthropic cache multipliers) and returns a
-typed :class:`PricingDriftReport`; the weekly CI gate
-(``eawf telemetry pricing-currency-check``) consumes it.
+An operator's ``reflect.pricing.overrides.<model-id>`` in the layered config
+replaces the file's rates for that model and marks the price ``override``.
+:class:`PriceBook` holds the files and the overrides together with one digest,
+so an index can tell that its stored costs were priced under other rates.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
-import re
-from datetime import UTC, datetime
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
+from functools import cache
+from pathlib import Path
+from typing import Final, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from eawf.observability.telemetry.models import PriceSourceKind
+from eawf.kernel.config.schema import PriceOverride, PriceRates, ReflectConfig
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "CACHE_READ_MULTIPLIER",
-    "CACHE_READ_MULTIPLIER_BY_MODEL",
     "CACHE_WRITE_1H_MULTIPLIER",
     "CACHE_WRITE_5M_MULTIPLIER",
-    "FAMILY_ALIAS_GENERATION",
-    "PRICING",
-    "PRICING_FETCHED_AT",
-    "PRICING_VERSION",
-    "UNPRICED_MODELS",
-    "ModelPricing",
+    "LONG_CONTEXT_SUFFIX",
+    "OVERRIDE_RATE_VERSION",
+    "PRICE_FILE_DIR",
+    "FastRates",
+    "PriceAlias",
+    "PriceBook",
+    "PriceFile",
+    "PriceModifiers",
+    "PriceQuote",
+    "PriceRow",
+    "PriceTier",
     "PricingDriftFinding",
     "PricingDriftReport",
-    "UnpricedModel",
+    "TokenUsage",
+    "active_price_book",
     "check_pricing_currency",
-    "lookup_pricing",
-    "resolve_price_source",
-    "unpriced_model",
+    "load_price_book",
+    "load_price_file",
+    "price_overrides",
+    "request_date",
 ]
 
+#: The directory the shipped price files are read from.
+PRICE_FILE_DIR: Final = Path(__file__).resolve().parents[2] / "_data" / "pricing"
 
-class ModelPricing(BaseModel):
-    """Per-token USD prices for one model id.
+#: The context-window suffix Claude Code appends to a model id; it names no
+#: other price, so lookup strips it before reading a row's ``match`` list.
+LONG_CONTEXT_SUFFIX: Final = "[1m]"
 
-    Covers the claude family at published rates plus the cross-vendor codex /
-    opencode model ids the dispatch routing table emits: codex tier ids are
-    placeholder rates (no OpenAI rate is embedded in this Anthropic-sourced
-    snapshot), opencode ``provider/model`` ids price at the real anthropic
-    rates (the OAuth-Claude opencode lane).
+#: The rate-table version a cost priced by an operator override records.
+OVERRIDE_RATE_VERSION: Final = "override"
 
-    All values in USD per token (NOT per million). Decimal-quantised to
-    avoid float drift on long-horizon ledger sums.
-    """
+#: Anthropic's stated cache-write multipliers on base input, which the offline
+#: currency check holds every Anthropic row to.
+CACHE_WRITE_5M_MULTIPLIER: Final = Decimal("1.25")
+CACHE_WRITE_1H_MULTIPLIER: Final = Decimal("2")
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+_PER_MILLION: Final = Decimal(1_000_000)
 
-    input_per_token: Decimal
-    output_per_token: Decimal
-    cache_read_per_token: Decimal
-    cache_write_5m_per_token: Decimal
-    cache_write_1h_per_token: Decimal
-    pricing_version: str
-    fetched_at: datetime
+Vendor = Literal["anthropic", "openai"]
+VerifiedBy = Literal["fetch", "eye"]
+PriceSource = Literal["file", "override"]
 
-
-PRICING_VERSION = "2026.10.22"
-PRICING_FETCHED_AT = datetime(2026, 10, 22, 21, 30, 0, tzinfo=UTC)
-
-# Anthropic-stated cache multipliers on base input, encoded explicitly so the
-# currency check can confirm the embedded snapshot is internally consistent.
-CACHE_READ_MULTIPLIER = Decimal("0.1")
-CACHE_WRITE_5M_MULTIPLIER = Decimal("1.25")
-CACHE_WRITE_1H_MULTIPLIER = Decimal("2")
-
-#: Models whose published cache-read rate is not the standard 0.1x of input,
-#: by :data:`PRICING` key. The pricing page states 0.05x for Opus 5.5 and
-#: Sonnet 5.5.
-CACHE_READ_MULTIPLIER_BY_MODEL: dict[str, Decimal] = {
-    "claude-opus-5-5": Decimal("0.05"),
-    "claude-sonnet-5-5": Decimal("0.05"),
+#: The cache-write classes each vendor bills, which every rate of its file names.
+_VENDOR_WRITE_CLASSES: Final[dict[str, frozenset[str]]] = {
+    "anthropic": frozenset({"5m", "1h"}),
+    "openai": frozenset({"30m", "12h"}),
 }
 
 
-PRICING: dict[str, ModelPricing] = {
-    # Opus 5.5: $4 / $20 per MTok, cache read 0.05x input.
-    # Source: https://docs.anthropic.com/en/docs/about-claude/pricing read 2026-10-22
-    "claude-opus-5-5": ModelPricing(
-        input_per_token=Decimal("4e-6"),
-        output_per_token=Decimal("20e-6"),
-        cache_read_per_token=Decimal("0.2e-6"),
-        cache_write_5m_per_token=Decimal("5e-6"),
-        cache_write_1h_per_token=Decimal("8e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    # Sonnet 5.5: $2 / $10 per MTok, cache read 0.05x input. Its own row so
-    # the id never prefix-matches the Sonnet 5 row below and its cache rate.
-    # Source: https://docs.anthropic.com/en/docs/about-claude/pricing read 2026-10-22
-    "claude-sonnet-5-5": ModelPricing(
-        input_per_token=Decimal("2e-6"),
-        output_per_token=Decimal("10e-6"),
-        cache_read_per_token=Decimal("0.1e-6"),
-        cache_write_5m_per_token=Decimal("2.5e-6"),
-        cache_write_1h_per_token=Decimal("4e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    # Sonnet 5: $2 / $10 per MTok (the launch rate, since made standard).
-    # Source: https://docs.anthropic.com/en/docs/about-claude/pricing read 2026-10-22
-    "claude-sonnet-5": ModelPricing(
-        input_per_token=Decimal("2e-6"),
-        output_per_token=Decimal("10e-6"),
-        cache_read_per_token=Decimal("0.2e-6"),
-        cache_write_5m_per_token=Decimal("2.5e-6"),
-        cache_write_1h_per_token=Decimal("4e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    # Opus 4.x — $5 / $25 per MTok.
-    "claude-opus-4-8": ModelPricing(
-        input_per_token=Decimal("5e-6"),
-        output_per_token=Decimal("25e-6"),
-        cache_read_per_token=Decimal("0.5e-6"),
-        cache_write_5m_per_token=Decimal("6.25e-6"),
-        cache_write_1h_per_token=Decimal("10e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "claude-opus-4-7": ModelPricing(
-        input_per_token=Decimal("5e-6"),
-        output_per_token=Decimal("25e-6"),
-        cache_read_per_token=Decimal("0.5e-6"),
-        cache_write_5m_per_token=Decimal("6.25e-6"),
-        cache_write_1h_per_token=Decimal("10e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "claude-opus-4-6": ModelPricing(
-        input_per_token=Decimal("5e-6"),
-        output_per_token=Decimal("25e-6"),
-        cache_read_per_token=Decimal("0.5e-6"),
-        cache_write_5m_per_token=Decimal("6.25e-6"),
-        cache_write_1h_per_token=Decimal("10e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "claude-opus-4-5": ModelPricing(
-        input_per_token=Decimal("5e-6"),
-        output_per_token=Decimal("25e-6"),
-        cache_read_per_token=Decimal("0.5e-6"),
-        cache_write_5m_per_token=Decimal("6.25e-6"),
-        cache_write_1h_per_token=Decimal("10e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "claude-opus-4-1": ModelPricing(
-        input_per_token=Decimal("15e-6"),
-        output_per_token=Decimal("75e-6"),
-        cache_read_per_token=Decimal("1.5e-6"),
-        cache_write_5m_per_token=Decimal("18.75e-6"),
-        cache_write_1h_per_token=Decimal("30e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    # Sonnet 4.x — $3 / $15 per MTok.
-    "claude-sonnet-4-6": ModelPricing(
-        input_per_token=Decimal("3e-6"),
-        output_per_token=Decimal("15e-6"),
-        cache_read_per_token=Decimal("0.3e-6"),
-        cache_write_5m_per_token=Decimal("3.75e-6"),
-        cache_write_1h_per_token=Decimal("6e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "claude-sonnet-4-5": ModelPricing(
-        input_per_token=Decimal("3e-6"),
-        output_per_token=Decimal("15e-6"),
-        cache_read_per_token=Decimal("0.3e-6"),
-        cache_write_5m_per_token=Decimal("3.75e-6"),
-        cache_write_1h_per_token=Decimal("6e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    # Haiku 4.5 — $1 / $5 per MTok.
-    "claude-haiku-4-5-20251001": ModelPricing(
-        input_per_token=Decimal("1e-6"),
-        output_per_token=Decimal("5e-6"),
-        cache_read_per_token=Decimal("0.1e-6"),
-        cache_write_5m_per_token=Decimal("1.25e-6"),
-        cache_write_1h_per_token=Decimal("2e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "claude-haiku-4-5": ModelPricing(  # alias-only entry
-        input_per_token=Decimal("1e-6"),
-        output_per_token=Decimal("5e-6"),
-        cache_read_per_token=Decimal("0.1e-6"),
-        cache_write_5m_per_token=Decimal("1.25e-6"),
-        cache_write_1h_per_token=Decimal("2e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    # Bare family aliases. The longest-prefix resolver only matches a key
-    # that is a prefix of the queried id, so a bare token like "opus" (used
-    # on the dispatch / role-spec surface and by short-form runtime logs)
-    # cannot reach a dated "claude-opus-4-*" row — it must be its own key.
-    # Each alias prices to the current 4.x family rate so a short id resolves
-    # to a priced row instead of falling through unpriced. These keys never
-    # shadow a dated row: the resolver prefers the longest matching prefix,
-    # so "claude-opus-4-8-20260101" still binds to "claude-opus-4-8".
-    "opus": ModelPricing(
-        input_per_token=Decimal("5e-6"),
-        output_per_token=Decimal("25e-6"),
-        cache_read_per_token=Decimal("0.5e-6"),
-        cache_write_5m_per_token=Decimal("6.25e-6"),
-        cache_write_1h_per_token=Decimal("10e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "claude-opus": ModelPricing(
-        input_per_token=Decimal("5e-6"),
-        output_per_token=Decimal("25e-6"),
-        cache_read_per_token=Decimal("0.5e-6"),
-        cache_write_5m_per_token=Decimal("6.25e-6"),
-        cache_write_1h_per_token=Decimal("10e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "sonnet": ModelPricing(
-        input_per_token=Decimal("3e-6"),
-        output_per_token=Decimal("15e-6"),
-        cache_read_per_token=Decimal("0.3e-6"),
-        cache_write_5m_per_token=Decimal("3.75e-6"),
-        cache_write_1h_per_token=Decimal("6e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "claude-sonnet": ModelPricing(
-        input_per_token=Decimal("3e-6"),
-        output_per_token=Decimal("15e-6"),
-        cache_read_per_token=Decimal("0.3e-6"),
-        cache_write_5m_per_token=Decimal("3.75e-6"),
-        cache_write_1h_per_token=Decimal("6e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "haiku": ModelPricing(
-        input_per_token=Decimal("1e-6"),
-        output_per_token=Decimal("5e-6"),
-        cache_read_per_token=Decimal("0.1e-6"),
-        cache_write_5m_per_token=Decimal("1.25e-6"),
-        cache_write_1h_per_token=Decimal("2e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "claude-haiku": ModelPricing(
-        input_per_token=Decimal("1e-6"),
-        output_per_token=Decimal("5e-6"),
-        cache_read_per_token=Decimal("0.1e-6"),
-        cache_write_5m_per_token=Decimal("1.25e-6"),
-        cache_write_1h_per_token=Decimal("2e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    # Codex (OpenAI) — PLACEHOLDER RATE. No published OpenAI/codex rate is
-    # embedded in this Anthropic-sourced snapshot; this row uses the Opus 4.x
-    # input/output rate as the closest reasonable stand-in so codex sessions
-    # price to a non-zero, currency-consistent figure instead of $0. The
-    # exact codex rate needs operator confirmation before this is treated as
-    # authoritative. Cache rates are the standard 0.1x / 1.25x / 2x of input
-    # so check_pricing_currency stays green.
-    "codex": ModelPricing(
-        input_per_token=Decimal("5e-6"),
-        output_per_token=Decimal("25e-6"),
-        cache_read_per_token=Decimal("0.5e-6"),
-        cache_write_5m_per_token=Decimal("6.25e-6"),
-        cache_write_1h_per_token=Decimal("10e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    # Codex per-tier model ids the dispatch routing table emits for the codex
-    # runtime (cheapest -> most capable). PLACEHOLDER RATES, same provenance as
-    # the bare ``codex`` row above: no published OpenAI rate is embedded in this
-    # Anthropic-sourced snapshot, so each tier prices to a non-zero,
-    # currency-consistent stand-in (the matching claude tier's input/output
-    # rate) so a codex juror spawn prices honestly (priced=True) instead of
-    # silently $0. The exact OpenAI rates need operator confirmation before
-    # these are treated as authoritative. A dated/suffixed variant (e.g.
-    # ``gpt-5-codex-preview``) longest-prefix-matches the tier row.
-    "gpt-5-mini": ModelPricing(
-        input_per_token=Decimal("1e-6"),
-        output_per_token=Decimal("5e-6"),
-        cache_read_per_token=Decimal("0.1e-6"),
-        cache_write_5m_per_token=Decimal("1.25e-6"),
-        cache_write_1h_per_token=Decimal("2e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    # ``gpt-5-codex`` is listed before ``gpt-5`` only for readability; the
-    # longest-prefix resolver always prefers ``gpt-5-codex`` for that id
-    # regardless of dict order, and ``gpt-5`` never shadows it.
-    "gpt-5-codex": ModelPricing(
-        input_per_token=Decimal("5e-6"),
-        output_per_token=Decimal("25e-6"),
-        cache_read_per_token=Decimal("0.5e-6"),
-        cache_write_5m_per_token=Decimal("6.25e-6"),
-        cache_write_1h_per_token=Decimal("10e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "gpt-5": ModelPricing(
-        input_per_token=Decimal("3e-6"),
-        output_per_token=Decimal("15e-6"),
-        cache_read_per_token=Decimal("0.3e-6"),
-        cache_write_5m_per_token=Decimal("3.75e-6"),
-        cache_write_1h_per_token=Decimal("6e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    # The ids the default codex tier ladder routes to, which a ChatGPT-account
-    # codex serves: ``gpt-6.1-sol`` the workhorse (mid/top tiers) and
-    # ``gpt-6-luna`` the fast cheap tier. PLACEHOLDER RATES, same provenance
-    # caveat as the rows above: ``gpt-6.1-sol`` reuses the ``gpt-5`` stand-in
-    # and ``gpt-6-luna`` the cheaper ``gpt-5-mini`` stand-in; both need operator
-    # confirmation against published OpenAI rates before they are treated as
-    # authoritative.
-    "gpt-6.1-sol": ModelPricing(
-        input_per_token=Decimal("3e-6"),
-        output_per_token=Decimal("15e-6"),
-        cache_read_per_token=Decimal("0.3e-6"),
-        cache_write_5m_per_token=Decimal("3.75e-6"),
-        cache_write_1h_per_token=Decimal("6e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "gpt-6-luna": ModelPricing(
-        input_per_token=Decimal("1e-6"),
-        output_per_token=Decimal("5e-6"),
-        cache_read_per_token=Decimal("0.1e-6"),
-        cache_write_5m_per_token=Decimal("1.25e-6"),
-        cache_write_1h_per_token=Decimal("2e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    # Ids a ChatGPT-account codex served before it retired them. No ladder
-    # routes to them any more; the rows stay so a recorded session that ran on
-    # one still prices. PLACEHOLDER RATES, the same stand-ins as above, as
-    # exact keys so a spark session does not bill at the ``gpt-5`` prefix rate.
-    "gpt-5.5": ModelPricing(
-        input_per_token=Decimal("3e-6"),
-        output_per_token=Decimal("15e-6"),
-        cache_read_per_token=Decimal("0.3e-6"),
-        cache_write_5m_per_token=Decimal("3.75e-6"),
-        cache_write_1h_per_token=Decimal("6e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "gpt-5.3-codex-spark": ModelPricing(
-        input_per_token=Decimal("1e-6"),
-        output_per_token=Decimal("5e-6"),
-        cache_read_per_token=Decimal("0.1e-6"),
-        cache_write_5m_per_token=Decimal("1.25e-6"),
-        cache_write_1h_per_token=Decimal("2e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    # OpenCode per-tier model ids the dispatch routing table emits for the
-    # opencode runtime. OpenCode addresses models in ``provider/model`` form;
-    # the routing table routes the anthropic provider (the OAuth-Claude
-    # opencode lane), so these ids price at the REAL anthropic rates (not a
-    # placeholder) -- an opencode-via-anthropic spawn bills the same as the
-    # native claude lane. The ``provider/`` prefix keeps these keys disjoint
-    # from the bare claude ids, and a dated suffix longest-prefix-matches the
-    # tier row.
-    "anthropic/claude-haiku-4-5": ModelPricing(
-        input_per_token=Decimal("1e-6"),
-        output_per_token=Decimal("5e-6"),
-        cache_read_per_token=Decimal("0.1e-6"),
-        cache_write_5m_per_token=Decimal("1.25e-6"),
-        cache_write_1h_per_token=Decimal("2e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "anthropic/claude-sonnet-4-6": ModelPricing(
-        input_per_token=Decimal("3e-6"),
-        output_per_token=Decimal("15e-6"),
-        cache_read_per_token=Decimal("0.3e-6"),
-        cache_write_5m_per_token=Decimal("3.75e-6"),
-        cache_write_1h_per_token=Decimal("6e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-    "anthropic/claude-opus-4-8": ModelPricing(
-        input_per_token=Decimal("5e-6"),
-        output_per_token=Decimal("25e-6"),
-        cache_read_per_token=Decimal("0.5e-6"),
-        cache_write_5m_per_token=Decimal("6.25e-6"),
-        cache_write_1h_per_token=Decimal("10e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    ),
-}
-
-
-class UnpricedModel(BaseModel):
-    """A model id eawf dispatches to that deliberately resolves to no rate.
+class PriceTier(BaseModel):
+    """Rates that replace a row's own above a prompt size.
 
     Attributes:
-        model_id: The id, matched as a prefix of the queried model the same
-            way a :data:`PRICING` key is.
-        reason: Why no rate is recorded, carried into the unpriced log line
-            so a null cost says why it is null.
+        above_prompt_tokens: The tier applies when input, cache-read and
+            cache-write tokens together exceed this.
+        rates: The rates every class bills at inside the tier.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    model_id: str
-    reason: str
+    above_prompt_tokens: int = Field(gt=0)
+    rates: PriceRates
 
 
-UNPRICED_MODELS: dict[str, UnpricedModel] = {}
-"""Model ids eawf dispatches to that have no rate in this snapshot, by id.
+class FastRates(BaseModel):
+    """The input and output rates of a fast-mode request; other classes are not covered."""
 
-An id listed here resolves unpriced even when a shorter key (such as a
-family alias) would prefix-match it, so it never inherits a rate nobody
-published; add a real :data:`PRICING` row citing its source (and drop the
-id here) once a rate is sourced.
-"""
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
-#: The generation the bare family aliases (``opus``, ``claude-sonnet`` ...)
-#: price at. An alias carries no generation in its key, so the fallback
-#: needs this to tell that it would bill another generation's rate.
-FAMILY_ALIAS_GENERATION = 4
-
-_CLAUDE_GENERATION = re.compile(r"(?:^|/)claude-(?:opus|sonnet|haiku)-(\d+)")
+    input: Decimal = Field(ge=0)
+    output: Decimal = Field(ge=0)
 
 
-def _claude_generation(model_id: str) -> int | None:
-    """Return the Claude major generation *model_id* names, if it names one."""
-    found = _CLAUDE_GENERATION.search(model_id)
-    return int(found.group(1)) if found else None
+class PriceModifiers(BaseModel):
+    """What a request's speed and inference region do to a row's rates.
 
-
-def unpriced_model(model: str) -> UnpricedModel | None:
-    """Return the :data:`UNPRICED_MODELS` entry *model* falls under, if any.
-
-    Args:
-        model: Model identifier, possibly a dated variant of an entry.
-
-    Returns:
-        The entry with the longest id that prefixes *model*, or ``None``.
+    Attributes:
+        fast: Rates for ``usage.speed == "fast"``; ``None`` leaves a fast
+            request unpriced.
+        geo_us: Multiplier for ``usage.inference_geo == "us"``; ``None``
+            leaves such a request unpriced.
     """
-    matches = [entry for key, entry in UNPRICED_MODELS.items() if model.startswith(key)]
-    return max(matches, key=lambda entry: len(entry.model_id), default=None)
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    fast: FastRates | None
+    geo_us: Decimal | None = Field(gt=0)
 
 
-def lookup_pricing(model: str) -> ModelPricing | None:
-    """Look up pricing by exact model id, then longest-prefix fallback.
+class PriceRow(BaseModel):
+    """One model's prices over one date window, with where they were read.
 
-    Args:
-        model: Model identifier, e.g. ``claude-opus-4-7`` or a dated
-            variant like ``claude-opus-4-7-20260514``.
-
-    Returns:
-        The :class:`ModelPricing` row for an exact match; otherwise the row
-        whose key is the longest prefix of *model*; otherwise ``None`` when
-        no key matches, when an :data:`UNPRICED_MODELS` id is a longer
-        prefix of *model* than the best priced key, or when *model* names a
-        Claude generation other than the one the best key prices.
+    Attributes:
+        id: The model id the row prices.
+        match: Further ids, compared after stripping ``[1m]``, that price here.
+        effective_from: First UTC date in effect; ``None`` since launch.
+        effective_to: First UTC date no longer in effect; ``None`` open.
+        source_url: The vendor page the rates were read from.
+        verified_on: When they were last compared with that page.
+        verified_by: ``fetch`` for a fetched page, ``eye`` for a person's read.
+        rates: The rates, or ``None`` when the model is named but not priced.
+        tiers: Larger-prompt rates, by ascending threshold.
+        modifiers: Fast-mode and US-region pricing.
+        note: Why a row is unpriced, or any caveat on it.
     """
-    if model in PRICING:
-        return PRICING[model]
-    matches = sorted(
-        ((k, v) for k, v in PRICING.items() if model.startswith(k)),
-        key=lambda kv: len(kv[0]),
-        reverse=True,
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: str = Field(min_length=1)
+    match: tuple[str, ...]
+    effective_from: date | None
+    effective_to: date | None
+    source_url: str = Field(pattern=r"^https://\S+$")
+    verified_on: date | None
+    verified_by: VerifiedBy | None
+    rates: PriceRates | None
+    tiers: tuple[PriceTier, ...]
+    modifiers: PriceModifiers
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        """Hold the window, provenance and tiers together.
+
+        Raises:
+            ValueError: The window is empty; a priced row lacks ``verified_on``
+                or ``verified_by``; an unpriced row has tiers or no note; the
+                tier thresholds do not ascend.
+        """
+        if (
+            self.effective_from is not None
+            and self.effective_to is not None
+            and self.effective_to <= self.effective_from
+        ):
+            raise ValueError(f"{self.id}: effective_to must follow effective_from")
+        if self.rates is not None and (self.verified_on is None or self.verified_by is None):
+            raise ValueError(f"{self.id}: a priced row needs verified_on and verified_by")
+        if self.rates is None and (self.tiers or not self.note):
+            raise ValueError(f"{self.id}: an unpriced row carries a note and no tiers")
+        thresholds = [tier.above_prompt_tokens for tier in self.tiers]
+        if thresholds != sorted(set(thresholds)):
+            raise ValueError(f"{self.id}: tier thresholds must strictly ascend")
+        return self
+
+    def in_effect(self, on: date) -> bool:
+        """Return whether the row prices a request made on *on*."""
+        return (self.effective_from is None or self.effective_from <= on) and (
+            self.effective_to is None or on < self.effective_to
+        )
+
+
+class PriceAlias(BaseModel):
+    """A short model name and the id it stands for over one date window."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+    alias: str = Field(min_length=1)
+    target: str = Field(min_length=1)
+    from_: date = Field(alias="from")
+    to: date | None
+
+    def in_effect(self, on: date) -> bool:
+        """Return whether the alias names its target on *on*."""
+        return self.from_ <= on and (self.to is None or on < self.to)
+
+
+class PriceFile(BaseModel):
+    """One vendor's price file.
+
+    Attributes:
+        vendor: The vendor whose rates the file holds.
+        aliases: Short names and their dated targets.
+        models: The model rows.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    vendor: Vendor
+    aliases: tuple[PriceAlias, ...]
+    models: tuple[PriceRow, ...]
+
+    @model_validator(mode="after")
+    def _closed(self) -> Self:
+        """Refuse a foreign write class, overlapping rows or an alias to nothing.
+
+        Raises:
+            ValueError: A rate names write classes other than its vendor's; two
+                rows that answer one id are in effect on one date; an alias
+                targets an id no row prices.
+        """
+        classes = _VENDOR_WRITE_CLASSES[self.vendor]
+        for row in self.models:
+            for rates in (row.rates, *(tier.rates for tier in row.tiers)):
+                if rates is not None and set(rates.cache_write) != classes:
+                    raise ValueError(
+                        f"{row.id}: cache_write classes {sorted(rates.cache_write)} "
+                        f"are not {self.vendor}'s {sorted(classes)}"
+                    )
+        for index, row in enumerate(self.models):
+            names = {row.id, *row.match}
+            for other in self.models[index + 1 :]:
+                if names & {other.id, *other.match} and _overlap(row, other):
+                    raise ValueError(f"{row.id} and {other.id} answer one id on one date")
+        ids = {row.id for row in self.models}
+        for alias in self.aliases:
+            if alias.target not in ids:
+                raise ValueError(
+                    f"alias {alias.alias!r} targets {alias.target!r}, which no row prices"
+                )
+        return self
+
+
+def _overlap(first: PriceRow, second: PriceRow) -> bool:
+    """Return whether the two rows' date windows share a date."""
+    starts_before_end = second.effective_to is None or (
+        first.effective_from is None or first.effective_from < second.effective_to
     )
-    if not matches:
-        return None
-    best_key, best_row = matches[0]
-    unpriced = unpriced_model(model)
-    if unpriced is not None and len(unpriced.model_id) > len(best_key):
-        return None
-    generation = _claude_generation(model)
-    key_generation = _claude_generation(best_key) or FAMILY_ALIAS_GENERATION
-    if generation is not None and generation != key_generation:
-        return None
-    return best_row
+    ends_after_start = first.effective_to is None or (
+        second.effective_from is None or second.effective_from < first.effective_to
+    )
+    return starts_before_end and ends_after_start
 
 
-def resolve_price_source(model: str) -> tuple[PriceSourceKind, str | None]:
-    """Return the price provenance a cost priced for *model* carries.
+class TokenUsage(BaseModel):
+    """The token classes of one request and the usage fields that move its price.
+
+    Attributes:
+        input: Non-cached input tokens.
+        output: Output tokens, reasoning included.
+        cache_read: Prompt-cache read tokens.
+        cache_write: Prompt-cache write tokens by write class.
+        speed: ``usage.speed``; ``fast`` applies the fast-mode rates.
+        inference_geo: ``usage.inference_geo``; ``us`` applies ``geo_us``.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    input: int = Field(default=0, ge=0)
+    output: int = Field(default=0, ge=0)
+    cache_read: int = Field(default=0, ge=0)
+    cache_write: dict[str, int] = Field(default_factory=dict)
+    speed: str | None = None
+    inference_geo: str | None = None
+
+    @property
+    def prompt_tokens(self) -> int:
+        """Return input, cache-read and cache-write tokens together: what a tier measures."""
+        return self.input + self.cache_read + sum(self.cache_write.values())
+
+
+class PriceQuote(BaseModel):
+    """The price of one request's tokens.
+
+    Attributes:
+        model: The model id as the request named it.
+        source: ``file`` or ``override`` when a row or override resolved;
+            ``None`` when none did.
+        row_id: The id of the resolved row or overridden model.
+        verified_on: When the resolved rates were last checked; ``None`` for
+            an override or an unpriced row.
+        cost_usd: The summed cost of the priced classes; ``None`` when nothing
+            resolved or no class with tokens had a rate.
+        unpriced_tokens: Tokens of classes no rate covers.
+        reason: Why some tokens are unpriced; ``None`` when none are.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model: str
+    source: PriceSource | None
+    row_id: str | None
+    verified_on: date | None
+    cost_usd: Decimal | None
+    unpriced_tokens: int = Field(ge=0)
+    reason: str | None
+
+    @property
+    def priced(self) -> bool:
+        """Return whether every token of the request has a price."""
+        return self.source is not None and self.cost_usd is not None and not self.unpriced_tokens
+
+
+@dataclass(frozen=True, slots=True)
+class _ClassRates:
+    """The per-class rates one request bills at, after tiers and modifiers."""
+
+    input: Decimal | None
+    output: Decimal | None
+    cache_read: Decimal | None
+    cache_write: Mapping[str, Decimal | None]
+
+    @classmethod
+    def of(cls, rates: PriceRates) -> _ClassRates:
+        return cls(rates.input, rates.output, rates.cache_read, dict(rates.cache_write))
+
+    @classmethod
+    def none(cls) -> _ClassRates:
+        return cls(None, None, None, {})
+
+    def scaled(self, factor: Decimal) -> _ClassRates:
+        def scale(rate: Decimal | None) -> Decimal | None:
+            return None if rate is None else rate * factor
+
+        return _ClassRates(
+            scale(self.input),
+            scale(self.output),
+            scale(self.cache_read),
+            {key: scale(rate) for key, rate in self.cache_write.items()},
+        )
+
+
+def _rates_for_request(
+    rates: PriceRates,
+    tiers: Sequence[PriceTier],
+    modifiers: PriceModifiers | None,
+    usage: TokenUsage,
+) -> _ClassRates:
+    """Apply the tier, then fast mode, then the US region to a row's rates.
+
+    A tier applies when the prompt exceeds its threshold. A modifier the row
+    does not state, or a class a stated modifier does not cover, leaves the
+    class unpriced: fast mode states input and output only, and no tier states
+    fast-mode rates.
+    """
+    tier = next((t for t in reversed(tiers) if usage.prompt_tokens > t.above_prompt_tokens), None)
+    current = _ClassRates.of(tier.rates if tier is not None else rates)
+    if usage.speed == "fast":
+        fast = modifiers.fast if modifiers is not None else None
+        if fast is None or tier is not None:
+            return _ClassRates.none()
+        current = _ClassRates(fast.input, fast.output, None, {})
+    if usage.inference_geo == "us":
+        geo = modifiers.geo_us if modifiers is not None else None
+        if geo is None:
+            return _ClassRates.none()
+        current = current.scaled(geo)
+    return current
+
+
+def _cost(rates: _ClassRates, usage: TokenUsage) -> tuple[Decimal | None, int]:
+    """Return the cost of the classes with a rate and the tokens of those without."""
+    cost = Decimal(0)
+    priced_any = False
+    unpriced = 0
+    classes: list[tuple[int, Decimal | None]] = [
+        (usage.input, rates.input),
+        (usage.output, rates.output),
+        (usage.cache_read, rates.cache_read),
+        *((tokens, rates.cache_write.get(name)) for name, tokens in usage.cache_write.items()),
+    ]
+    for tokens, rate in classes:
+        if rate is None:
+            unpriced += tokens
+            continue
+        priced_any = True
+        cost += tokens * rate / _PER_MILLION
+    return (cost if priced_any or not unpriced else None), unpriced
+
+
+@dataclass(frozen=True, slots=True)
+class PriceBook:
+    """The price files and the operator's overrides, priced together.
+
+    Attributes:
+        files: The vendor price files.
+        overrides: Override by model id.
+        digest: SHA-256 over the files' bytes and the overrides; a stored cost
+            priced under another digest is stale.
+    """
+
+    files: tuple[PriceFile, ...]
+    overrides: Mapping[str, PriceOverride]
+    digest: str
+
+    @property
+    def version(self) -> str:
+        """Return the short digest a file-priced cost records as its rate-table version."""
+        return self.digest[:16]
+
+    @property
+    def rows(self) -> tuple[PriceRow, ...]:
+        """Return every model row of every file."""
+        return tuple(row for file in self.files for row in file.models)
+
+    def resolve(self, model: str, *, on: date) -> PriceRow | None:
+        """Return the row that prices *model* on *on*, or ``None``.
+
+        Args:
+            model: The model id as the request named it.
+            on: The request's UTC date.
+
+        Returns:
+            The row whose id is *model*, else whose ``match`` holds *model*
+            stripped of ``[1m]``, else the row of the alias in effect.
+        """
+        live = [row for row in self.rows if row.in_effect(on)]
+        exact = next((row for row in live if row.id == model), None)
+        if exact is not None:
+            return exact
+        stripped = model.removesuffix(LONG_CONTEXT_SUFFIX)
+        matched = next((row for row in live if stripped in row.match), None)
+        if matched is not None:
+            return matched
+        target = self._alias_target(stripped, on)
+        return None if target is None else next((row for row in live if row.id == target), None)
+
+    def _alias_target(self, name: str, on: date) -> str | None:
+        aliases = (alias for file in self.files for alias in file.aliases)
+        return next((a.target for a in aliases if a.alias == name and a.in_effect(on)), None)
+
+    def _override(self, model: str, on: date) -> tuple[str, PriceOverride] | None:
+        stripped = model.removesuffix(LONG_CONTEXT_SUFFIX)
+        target = self._alias_target(stripped, on)
+        for name in (model, stripped, *(() if target is None else (target,))):
+            found = self.overrides.get(name)
+            if found is not None and (found.effective_from is None or found.effective_from <= on):
+                return name, found
+        return None
+
+    def quote(self, model: str, usage: TokenUsage, *, on: date) -> PriceQuote:
+        """Price one request's tokens.
+
+        Args:
+            model: The model id as the request named it.
+            usage: The request's token classes and usage fields.
+            on: The request's UTC date, which picks the row in effect.
+
+        Returns:
+            The quote; an override wins over the file for its model.
+        """
+        override = self._override(model, on)
+        if override is not None:
+            name, found = override
+            cost, unpriced = _cost(_rates_for_request(found.rates, (), None, usage), usage)
+            return PriceQuote(
+                model=model,
+                source="override",
+                row_id=name,
+                verified_on=None,
+                cost_usd=cost,
+                unpriced_tokens=unpriced,
+                reason=f"override for {name} does not price every class" if unpriced else None,
+            )
+        row = self.resolve(model, on=on)
+        if row is None or row.rates is None:
+            tokens = _cost(_ClassRates.none(), usage)[1]
+            return PriceQuote(
+                model=model,
+                source=None if row is None else "file",
+                row_id=None if row is None else row.id,
+                verified_on=None,
+                cost_usd=None,
+                unpriced_tokens=tokens,
+                reason=row.note if row is not None else f"no price row for {model} on {on}",
+            )
+        cost, unpriced = _cost(
+            _rates_for_request(row.rates, row.tiers, row.modifiers, usage), usage
+        )
+        return PriceQuote(
+            model=model,
+            source="file",
+            row_id=row.id,
+            verified_on=row.verified_on,
+            cost_usd=cost,
+            unpriced_tokens=unpriced,
+            reason=f"{row.id} states no rate for some classes of this request"
+            if unpriced
+            else None,
+        )
+
+    def quote_totals(self, model: str, usage: TokenUsage, *, first: date, last: date) -> PriceQuote:
+        """Price the summed tokens of several requests, only where the sum prices exactly.
+
+        Pricing is linear in the tokens while every request bills at one set
+        of rates. That holds when one row, or one override, is in effect from
+        the first request's date to the last, and the summed prompt does not
+        exceed the row's lowest tier, so no single request reached a tier
+        either. Otherwise how the sum splits into requests decides the price,
+        and every token is unpriced.
+
+        Args:
+            model: The model id the requests named.
+            usage: The requests' summed token classes; speed and region apply
+                to every request alike.
+            first: The UTC date of the first request.
+            last: The UTC date of the last request.
+
+        Returns:
+            The quote of the sum when exact; else an unpriced quote saying why.
+
+        Raises:
+            ValueError: When *last* precedes *first*.
+        """
+        if last < first:
+            raise ValueError(f"last {last} precedes first {first}")
+        quote = self.quote(model, usage, on=first)
+        if quote.source is None:
+            return quote
+        reason: str | None = None
+        if self._rates_source(model, first) is not self._rates_source(model, last):
+            reason = f"the rates of {model} change between {first} and {last}"
+        elif quote.source == "file":
+            row = self.resolve(model, on=first)
+            tiers = row.tiers if row is not None else ()
+            if tiers and usage.prompt_tokens > tiers[0].above_prompt_tokens:
+                reason = (
+                    f"the summed prompt of {usage.prompt_tokens} tokens exceeds the "
+                    f"{tiers[0].above_prompt_tokens}-token tier of {model}; "
+                    "the requests' own prompts are unknown"
+                )
+        if reason is None:
+            return quote
+        return quote.model_copy(
+            update={
+                "verified_on": None,
+                "cost_usd": None,
+                "unpriced_tokens": _cost(_ClassRates.none(), usage)[1],
+                "reason": reason,
+            }
+        )
+
+    def _rates_source(self, model: str, on: date) -> PriceOverride | PriceRow | None:
+        """Return the override or row that prices *model* on *on*."""
+        override = self._override(model, on)
+        return override[1] if override is not None else self.resolve(model, on=on)
+
+    def list_rates(self, model: str, *, on: date) -> PriceRates | None:
+        """Return the standard rates *model* bills at on *on*, or ``None`` when unpriced.
+
+        Args:
+            model: The model id.
+            on: The UTC date.
+
+        Returns:
+            The override's rates, else the resolved row's base rates.
+        """
+        override = self._override(model, on)
+        if override is not None:
+            return override[1].rates
+        row = self.resolve(model, on=on)
+        return None if row is None else row.rates
+
+    def rate_version(self, quote: PriceQuote) -> str:
+        """Return the rate-table version a cost priced by *quote* records."""
+        return OVERRIDE_RATE_VERSION if quote.source == "override" else self.version
+
+
+def load_price_file(path: Path) -> PriceFile:
+    """Read and validate one price file.
 
     Args:
-        model: Model id the cost is priced against.
+        path: The YAML file.
 
     Returns:
-        ``(LIST_RECONSTRUCTED, <rate-table version>)`` when a rate row
-        resolves for *model*; ``(UNPRICED, None)`` when none does.
+        The validated file.
+
+    Raises:
+        OSError: The file cannot be read.
+        yaml.YAMLError: The file is not YAML.
+        pydantic.ValidationError: The file breaks the closed model.
     """
-    row = lookup_pricing(model)
-    if row is None:
-        return PriceSourceKind.UNPRICED, None
-    return PriceSourceKind.LIST_RECONSTRUCTED, row.pricing_version
+    return PriceFile.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+
+
+def price_overrides(repo_root: Path | None) -> dict[str, PriceOverride]:
+    """Return ``reflect.pricing.overrides`` from the layered config.
+
+    Args:
+        repo_root: The repository whose layers compose over the global one;
+            ``None`` outside a repository, where the global layer still applies.
+
+    Returns:
+        Override by model id; empty when no layer sets one.
+
+    Raises:
+        pydantic.ValidationError: The ``reflect`` block is malformed.
+    """
+    from eawf.kernel.config.layered import merge_config
+
+    merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
+    return dict(ReflectConfig.model_validate(merged.get("reflect") or {}).pricing.overrides)
+
+
+def load_price_book(
+    *,
+    repo_root: Path | None,
+    directory: Path = PRICE_FILE_DIR,
+    overrides: Mapping[str, PriceOverride] | None = None,
+) -> PriceBook:
+    """Load the price files and the overrides into one book.
+
+    Args:
+        repo_root: The repository whose config layers supply overrides;
+            ``None`` reads the global layer only. Ignored when *overrides*
+            is given.
+        directory: Where the ``*.yaml`` price files are.
+        overrides: Overrides to use instead of the layered config's.
+
+    Returns:
+        The book, with the digest of everything that went into it.
+
+    Raises:
+        FileNotFoundError: *directory* holds no price file.
+        pydantic.ValidationError: A file or the ``reflect`` block is malformed.
+    """
+    paths = sorted(directory.glob("*.yaml"))
+    if not paths:
+        raise FileNotFoundError(f"no price file under {directory}")
+    chosen = dict(overrides) if overrides is not None else price_overrides(repo_root)
+    hasher = hashlib.sha256()
+    for path in paths:
+        hasher.update(path.name.encode())
+        hasher.update(path.read_bytes())
+    hasher.update(
+        json.dumps(
+            {name: value.model_dump(mode="json") for name, value in sorted(chosen.items())},
+            sort_keys=True,
+        ).encode()
+    )
+    files = tuple(load_price_file(path) for path in paths)
+    logger.debug(f"load_price_book files={len(files)} overrides={len(chosen)}")
+    return PriceBook(files=files, overrides=chosen, digest=hasher.hexdigest())
+
+
+def _enclosing_repo(start: Path) -> Path | None:
+    """Return the nearest directory at or above *start* holding ``.git``, if any."""
+    return next((path for path in (start, *start.parents) if (path / ".git").exists()), None)
+
+
+@cache
+def active_price_book() -> PriceBook:
+    """Return the book this process prices with, loaded once.
+
+    The overrides come from the repository the process runs in, or from the
+    global layer alone outside one.
+    """
+    return load_price_book(repo_root=_enclosing_repo(Path.cwd()))
+
+
+def request_date(ts: datetime | None) -> date:
+    """Return the UTC date a request is priced on; today for one with no timestamp.
+
+    A naive timestamp is read as UTC.
+    """
+    if ts is None:
+        return datetime.now(tz=UTC).date()
+    return (ts if ts.tzinfo is not None else ts.replace(tzinfo=UTC)).astimezone(UTC).date()
 
 
 class PricingDriftFinding(BaseModel):
     """One drift finding for a single model row.
 
     Attributes:
-        model_id: The :data:`PRICING` key the finding pertains to.
-        field: The :class:`ModelPricing` field that drifted.
+        model_id: The row the finding pertains to.
+        field: The rate that drifted.
         expected: The value the currency check derived as correct.
-        actual: The value embedded in :data:`PRICING`.
+        actual: The value in the price file.
         detail: Human-readable explanation of the drift.
     """
 
@@ -549,9 +715,9 @@ class PricingDriftReport(BaseModel):
     """Typed result of a pricing-currency check.
 
     Attributes:
-        pricing_version: The embedded :data:`PRICING_VERSION` snapshot tag.
-        fetched_at: The embedded :data:`PRICING_FETCHED_AT` snapshot stamp.
-        model_count: Number of :data:`PRICING` rows checked.
+        pricing_version: The book's rate-table version.
+        fetched_at: The oldest ``verified_on`` among priced rows, at UTC midnight.
+        model_count: Number of model rows checked.
         is_current: ``True`` when no findings were raised.
         findings: Per-row drift findings (empty when current).
     """
@@ -565,66 +731,50 @@ class PricingDriftReport(BaseModel):
     findings: list[PricingDriftFinding] = Field(default_factory=list)
 
 
-def check_pricing_currency() -> PricingDriftReport:
-    """Validate the embedded pricing snapshot's shape and internal currency.
+def check_pricing_currency(book: PriceBook | None = None) -> PricingDriftReport:
+    """Hold every Anthropic rate to Anthropic's stated cache-write multipliers.
 
-    The check is offline: it confirms (a) every row carries the embedded
-    :data:`PRICING_VERSION`, and (b) each row's cache rates equal the
-    Anthropic-stated multipliers applied to that row's base input rate
-    (5m write = 1.25x, 1h write = 2x, cache read = 0.1x unless
-    :data:`CACHE_READ_MULTIPLIER_BY_MODEL` states the row's own). Either condition
-    failing produces a :class:`PricingDriftFinding`.
+    Offline: each priced Anthropic row, and each of its tiers, must bill a
+    5-minute write at 1.25x and a 1-hour write at 2x its own input rate. It
+    does not fetch the vendor pages.
 
-    The weekly CI gate may additionally fetch live rates; that network leg
-    is intentionally out of scope here so the verb stays deterministic in
-    CI and offline shells.
+    Args:
+        book: The book to check; the shipped files with no overrides by default.
 
     Returns:
-        A :class:`PricingDriftReport`; :attr:`PricingDriftReport.is_current`
-        is ``True`` and :attr:`PricingDriftReport.findings` empty when the
-        embedded snapshot is internally consistent.
+        The report; current when no rate drifts.
     """
+    checked = book if book is not None else load_price_book(repo_root=None, overrides={})
     findings: list[PricingDriftFinding] = []
-    for model_id, row in PRICING.items():
-        if row.pricing_version != PRICING_VERSION:
-            findings.append(
-                PricingDriftFinding(
-                    model_id=model_id,
-                    field="pricing_version",
-                    expected=PRICING_VERSION,
-                    actual=row.pricing_version,
-                    detail="row pricing_version does not match the embedded snapshot tag",
-                )
-            )
-        read_multiplier = CACHE_READ_MULTIPLIER_BY_MODEL.get(model_id, CACHE_READ_MULTIPLIER)
-        _check_multiplier(
-            findings,
-            model_id=model_id,
-            field="cache_read_per_token",
-            actual=row.cache_read_per_token,
-            expected=row.input_per_token * read_multiplier,
-            multiplier=read_multiplier,
-        )
-        _check_multiplier(
-            findings,
-            model_id=model_id,
-            field="cache_write_5m_per_token",
-            actual=row.cache_write_5m_per_token,
-            expected=row.input_per_token * CACHE_WRITE_5M_MULTIPLIER,
-            multiplier=CACHE_WRITE_5M_MULTIPLIER,
-        )
-        _check_multiplier(
-            findings,
-            model_id=model_id,
-            field="cache_write_1h_per_token",
-            actual=row.cache_write_1h_per_token,
-            expected=row.input_per_token * CACHE_WRITE_1H_MULTIPLIER,
-            multiplier=CACHE_WRITE_1H_MULTIPLIER,
-        )
+    for file in checked.files:
+        if file.vendor != "anthropic":
+            continue
+        for row in file.models:
+            for rates in (row.rates, *(tier.rates for tier in row.tiers)):
+                if rates is None or rates.input is None:
+                    continue
+                for name, multiplier in (
+                    ("5m", CACHE_WRITE_5M_MULTIPLIER),
+                    ("1h", CACHE_WRITE_1H_MULTIPLIER),
+                ):
+                    expected = rates.input * multiplier
+                    actual = rates.cache_write.get(name)
+                    if actual != expected:
+                        findings.append(
+                            PricingDriftFinding(
+                                model_id=row.id,
+                                field=f"cache_write.{name}",
+                                expected=expected,
+                                actual=str(actual) if actual is None else actual,
+                                detail=f"expected input x {multiplier} cache multiplier",
+                            )
+                        )
+    verified = [row.verified_on for row in checked.rows if row.verified_on is not None]
+    oldest = min(verified, default=datetime.now(tz=UTC).date())
     report = PricingDriftReport(
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-        model_count=len(PRICING),
+        pricing_version=checked.version,
+        fetched_at=datetime.combine(oldest, time.min, tzinfo=UTC),
+        model_count=len(checked.rows),
         is_current=not findings,
         findings=findings,
     )
@@ -633,25 +783,3 @@ def check_pricing_currency() -> PricingDriftReport:
         f"current={report.is_current} findings={len(report.findings)}"
     )
     return report
-
-
-def _check_multiplier(
-    findings: list[PricingDriftFinding],
-    *,
-    model_id: str,
-    field: str,
-    actual: Decimal,
-    expected: Decimal,
-    multiplier: Decimal,
-) -> None:
-    """Append a finding when *actual* drifts from the derived *expected* rate."""
-    if actual != expected:
-        findings.append(
-            PricingDriftFinding(
-                model_id=model_id,
-                field=field,
-                expected=expected,
-                actual=actual,
-                detail=f"expected input_per_token x {multiplier} cache multiplier",
-            )
-        )

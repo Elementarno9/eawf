@@ -28,6 +28,8 @@ from pathlib import Path
 from typing import Any
 
 from eawf.observability.telemetry.models import TelemetrySession
+from eawf.observability.telemetry.pricing import active_price_book
+from eawf.observability.telemetry.sources.session_history import HistoryFile, history_file_cost
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +126,9 @@ class ClaudeSessionSource:
 
         if not record_seen:
             return
-        yield _session_from_accumulator(acc, jsonl_path=path)
+        session = _session_from_accumulator(acc, jsonl_path=path)
+        cost = history_file_cost(HistoryFile(runtime="claude", path=path), active_price_book())
+        yield session.model_copy(update={"total_cost_usd": cost})
 
 
 def _coerce_str(raw: object) -> str | None:

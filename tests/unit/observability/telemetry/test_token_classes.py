@@ -34,18 +34,14 @@ from eawf.observability.telemetry.models import (
     check_token_identity,
     null_unpriced_zero_cost,
 )
-from eawf.observability.telemetry.pricing import (
-    PRICING_VERSION,
-    UNPRICED_MODELS,
-    lookup_pricing,
-    resolve_price_source,
-)
+from eawf.observability.telemetry.pricing import TokenUsage, active_price_book, request_date
 from eawf.observability.telemetry.sources.dispatch_cost import DispatchCostSessionSource
 from eawf.observability.telemetry.store import SqliteMetricsStore
 from eawf.runtime.runtimes.adapter import SpawnResult
 from eawf.runtime.runtimes.metering import price_spawn_result
 
 _TS = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
+PRICING_VERSION = active_price_book().version
 
 
 def _classes(**overrides: Any) -> dict[str, Any]:
@@ -104,7 +100,7 @@ def _spawn(**overrides: Any) -> SpawnResult:
     base: dict[str, Any] = {
         "session_id": "sess-1",
         "runtime": "codex",
-        "model": "gpt-5",
+        "model": "claude-opus-4-7",
         "subprocess_pid": 4242,
         "exit_status": 0,
         "text": "done",
@@ -365,31 +361,22 @@ def test_dispatch_cost_payload_total_without_price_source_raises() -> None:
 # -- pricing ----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("model", ["claude-opus-5", "claude-haiku-5", "claude-opus-5-2026"])
-def test_lookup_pricing_unpriced_generation_resolves_none(model: str) -> None:
-    assert lookup_pricing(model) is None
+def _priced(model: str) -> bool:
+    return active_price_book().quote(model, TokenUsage(input=1), on=request_date(None)).priced
 
 
-def test_lookup_pricing_priced_generation_still_resolves() -> None:
-    row = lookup_pricing("claude-opus-4-7-20260514")
-    assert row is not None
-    assert row.input_per_token == Decimal("5e-6")
-    assert lookup_pricing("claude-opus") is not None
+@pytest.mark.parametrize("model", ["claude-opus-5-9", "claude-haiku-5", "claude-opus-5-2026"])
+def test_an_unlisted_generation_resolves_no_row(model: str) -> None:
+    assert active_price_book().resolve(model, on=request_date(None)) is None
+    assert not _priced(model)
 
 
-def test_unpriced_models_have_no_pricing_row() -> None:
-    from eawf.observability.telemetry.pricing import PRICING
-
-    assert not set(UNPRICED_MODELS) & set(PRICING)
-
-
-def test_resolve_price_source_priced_and_unpriced() -> None:
-    assert resolve_price_source("claude-opus-4-7") == (
-        PriceSourceKind.LIST_RECONSTRUCTED,
-        PRICING_VERSION,
-    )
-    assert resolve_price_source("claude-opus-5") == (PriceSourceKind.UNPRICED, None)
-    assert resolve_price_source("") == (PriceSourceKind.UNPRICED, None)
+def test_a_listed_id_and_its_long_context_form_resolve() -> None:
+    listed = active_price_book().list_rates("claude-opus-4-7[1m]", on=request_date(None))
+    assert listed is not None
+    assert listed.input == Decimal(5)
+    assert _priced("claude-opus-4-7")
+    assert not _priced("")
 
 
 # -- producer: metering -----------------------------------------------------
@@ -403,7 +390,7 @@ def test_price_spawn_result_carries_reasoning_and_source() -> None:
 
 
 def test_price_spawn_result_unknown_model_is_unpriced() -> None:
-    metered = price_spawn_result(_spawn(runtime="claude-code", model="claude-opus-5"))
+    metered = price_spawn_result(_spawn(runtime="claude-code", model="claude-opus-5-9"))
     assert metered.price_source is PriceSourceKind.UNPRICED
     assert metered.cost_usd is None
     assert metered.priced is False
@@ -435,7 +422,9 @@ def _append_dispatch_cost(
     price_source: PriceSourceKind | None = None,
 ) -> None:
     """Append one ``dispatch_cost`` row shaped like the ones event stores already hold."""
-    source = price_source if price_source is not None else resolve_price_source(model)[0]
+    source = price_source
+    if source is None:
+        source = PriceSourceKind.LIST_RECONSTRUCTED if _priced(model) else PriceSourceKind.UNPRICED
     payload = DispatchCostPayload.model_validate(
         {
             "event_type": "dispatch_cost",
@@ -515,7 +504,7 @@ def test_dispatch_cost_source_legacy_line_derives_source(tmp_path: Path) -> None
 def test_build_snapshot_emits_token_class_and_price_source_families(tmp_path: Path) -> None:
     event_path = tmp_path / "store" / "event.jsonl"
     _append_from_spawn(event_path, _spawn())
-    _append_from_spawn(event_path, _spawn(model="claude-opus-5", reasoning_output_tokens=None))
+    _append_from_spawn(event_path, _spawn(model="claude-opus-5-9", reasoning_output_tokens=None))
     store = SqliteMetricsStore(tmp_path / "telemetry.db")
     store.init_schema()
     for row in DispatchCostSessionSource().iter_rows(event_path):

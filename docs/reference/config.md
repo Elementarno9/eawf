@@ -77,6 +77,13 @@ Type is the value shape; Layers names the layers that may write the leaf.
 | `telemetry.enabled` | true or false | `true` | global, workspace, repo | Whether the `eawf metrics` commands open the machine-local telemetry store. |
 | `telemetry.db_kind` | literal | `sqlite` | global | Database engine of the machine-local telemetry store: `sqlite` or `duckdb`. |
 
+### Reflect
+
+| Key | Type | Default | Layers | What it does |
+| --- | --- | --- | --- | --- |
+| `reflect.pricing.overrides` | mapping | unset | global, workspace, repo | Per-model price overrides: under `<model-id>`, `rates` (`input`, `output`, `cache_read`, `cache_write` by class, USD per million tokens), `effective_from` and `note`. An override replaces the shipped price files' rates and marks the model `override`; the global layer applies outside a repository. |
+| `reflect.headline` | literal | `api_equivalent` | global, workspace, repo | What the reflect overview leads with: `api_equivalent` shows list-price dollars labelled API-equivalent with the price date; `tokens` shows effective tokens and puts the dollars in the subline. The page switch starts on this choice. |
+
 ### Agents and economics
 
 | Key | Type | Default | Layers | What it does |

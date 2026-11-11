@@ -350,7 +350,7 @@ def test_parse_transcript_falls_back_to_file_stem_for_session_id(tmp_path: Path)
     ("model", "source"),
     [
         (_PRICED_MODEL, PriceSourceKind.LIST_RECONSTRUCTED),
-        ("claude-opus-5", PriceSourceKind.UNPRICED),
+        ("claude-opus-5-9", PriceSourceKind.UNPRICED),
         ("vendor-unknown-1", PriceSourceKind.UNPRICED),
     ],
 )

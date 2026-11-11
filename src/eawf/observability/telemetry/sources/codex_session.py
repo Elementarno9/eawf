@@ -41,6 +41,7 @@ from typing import Any, Final
 from pydantic import BaseModel, ConfigDict
 
 from eawf.observability.telemetry.models import TelemetrySession
+from eawf.observability.telemetry.pricing import active_price_book
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,12 @@ _TOKEN_COUNT = "token_count"
 #: its parent, not work the thread itself did.
 _MAX_SINGLE_REQUEST_TOKENS: Final = 2_000_000
 
+#: The write class Codex cache writes are priced under. A rollout reports
+#: ``cache_write_input_tokens`` without saying whether they are 30-minute or
+#: 12-hour writes, so they carry a class no price file states and stay
+#: unpriced rather than billed at a guessed rate.
+CODEX_WRITE_CLASS: Final = "unnamed"
+
 
 class _CodexAccumulator(BaseModel):
     """Running fold of one Codex rollout transcript into a session row.
@@ -66,6 +73,7 @@ class _CodexAccumulator(BaseModel):
             request bills against.
         last_total: The latest cumulative reading as ``(input, cached,
             output, reasoning)``; a repeated reading is no new request.
+        total_cache_write: The latest cumulative cache-write count.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -81,6 +89,7 @@ class _CodexAccumulator(BaseModel):
     total_output_tokens: int = 0
     total_reasoning_output_tokens: int = 0
     total_cache_read: int = 0
+    total_cache_write: int = 0
     turn_count: int = 0
     last_total: tuple[int, int, int, int] | None = None
 
@@ -95,8 +104,9 @@ class CodexRequestUsage:
 
     Attributes:
         model: Model the request billed against, or ``None``.
-        input_tokens: Non-cached input tokens.
+        input_tokens: Input tokens neither read from nor written to the cache.
         cache_read_tokens: Cached input tokens.
+        cache_write_tokens: Input tokens written to the cache.
         output_tokens: Output tokens, reasoning included.
         reasoning_tokens: Reasoning slice of the output.
     """
@@ -104,6 +114,7 @@ class CodexRequestUsage:
     model: str | None
     input_tokens: int
     cache_read_tokens: int
+    cache_write_tokens: int
     output_tokens: int
     reasoning_tokens: int
 
@@ -183,7 +194,16 @@ class CodexSessionSource:
 
         if not record_seen:
             return
-        yield _session_from_accumulator(acc, jsonl_path=path)
+        # The session-history fold imports this module for the rollout fold,
+        # so its pricing entry point is imported here rather than at the top.
+        from eawf.observability.telemetry.sources.session_history import (
+            HistoryFile,
+            history_file_cost,
+        )
+
+        session = _session_from_accumulator(acc, jsonl_path=path)
+        cost = history_file_cost(HistoryFile(runtime="codex", path=path), active_price_book())
+        yield session.model_copy(update={"total_cost_usd": cost})
 
 
 def fold_codex_record(acc: _CodexAccumulator, record: dict[str, Any]) -> CodexRequestUsage | None:
@@ -277,7 +297,13 @@ def _fold_token_count(acc: _CodexAccumulator, payload: dict[str, Any]) -> CodexR
         return None
     current = _usage_tuple(totals)
     input_tokens, cached_input, output_tokens, reasoning_tokens = current
-    acc.total_input_tokens = max(input_tokens - cached_input, 0)
+    # Cache writes, like cache reads, are a slice of the gross input count:
+    # the vendor's total_tokens is input plus output alone.
+    writes_total = _cache_writes(totals)
+    previous_writes = acc.total_cache_write
+    uncached = max(input_tokens - cached_input, 0)
+    acc.total_cache_write = min(writes_total, uncached)
+    acc.total_input_tokens = uncached - acc.total_cache_write
     acc.total_cache_read = cached_input
     acc.total_output_tokens = output_tokens
     acc.total_reasoning_output_tokens = reasoning_tokens
@@ -286,19 +312,31 @@ def _fold_token_count(acc: _CodexAccumulator, payload: dict[str, Any]) -> CodexR
         return None
     acc.last_total = current
     last = info.get("last_token_usage")
-    usage = _usage_tuple(last) if isinstance(last, dict) else _movement(previous, current)
+    moved_writes = max(writes_total - previous_writes, 0)
+    if isinstance(last, dict):
+        usage, writes = _usage_tuple(last), _cache_writes(last)
+    else:
+        usage, writes = _movement(previous, current), moved_writes
     if usage[0] + usage[2] > _MAX_SINGLE_REQUEST_TOKENS:
         if previous is None:
             return None
-        usage = _movement(previous, current)
+        usage, writes = _movement(previous, current), moved_writes
     gross, cached, output, reasoning = usage
+    cache_read = min(cached, gross)
+    cache_write = min(writes, gross - cache_read)
     return CodexRequestUsage(
         model=acc.model_current,
-        input_tokens=max(gross - cached, 0),
-        cache_read_tokens=min(cached, gross),
+        input_tokens=gross - cache_read - cache_write,
+        cache_read_tokens=cache_read,
+        cache_write_tokens=cache_write,
         output_tokens=output,
         reasoning_tokens=min(reasoning, output),
     )
+
+
+def _cache_writes(raw: dict[str, Any]) -> int:
+    """Return the ``cache_write_input_tokens`` of one Codex usage mapping."""
+    return max(_coerce_int(raw.get("cache_write_input_tokens")), 0)
 
 
 def _usage_tuple(raw: dict[str, Any]) -> tuple[int, int, int, int]:
@@ -341,11 +379,17 @@ def _session_from_accumulator(acc: _CodexAccumulator, *, jsonl_path: Path) -> Te
         total_input_tokens=acc.total_input_tokens,
         total_output_tokens=acc.total_output_tokens,
         total_cache_read=acc.total_cache_read,
-        total_cache_write=0,
+        total_cache_write=acc.total_cache_write,
         turn_count=acc.turn_count,
         end_marker="other",
         git_branch_first=acc.git_branch_first,
     )
 
 
-__all__ = ["CodexFold", "CodexRequestUsage", "CodexSessionSource", "fold_codex_record"]
+__all__ = [
+    "CODEX_WRITE_CLASS",
+    "CodexFold",
+    "CodexRequestUsage",
+    "CodexSessionSource",
+    "fold_codex_record",
+]

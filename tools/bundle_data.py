@@ -64,8 +64,9 @@ def _bundle_config(metadata_config: dict[str, Any]) -> dict[str, Any]:
 def populate_data_tree(root: Path, config: dict[str, Any]) -> list[Path]:
     """Copy the service templates and help topics into ``src/eawf/_data``.
 
-    The destination tree is rebuilt from scratch on every call so a
-    stale file from a prior build never lingers in the wheel.
+    The generated subtrees are rebuilt from scratch on every call so a
+    stale file from a prior build never lingers in the wheel; the committed
+    ``pricing/`` tree beside them is left as it is.
 
     Args:
         root: Repository root (the build hook's ``self.root``).
@@ -84,8 +85,11 @@ def populate_data_tree(root: Path, config: dict[str, Any]) -> list[Path]:
     dest_root = root / "src" / "eawf" / _DATA_DIRNAME
     dest_service_dir = dest_root / _SERVICE_TEMPLATES_SUBDIR
 
-    if dest_root.exists():
-        shutil.rmtree(dest_root)
+    # Only the generated subtrees are rebuilt: the committed price files share
+    # ``_data/`` and a wheel build must neither delete nor drop them.
+    for generated in (dest_service_dir, dest_root / _HELP_SUBDIR):
+        if generated.exists():
+            shutil.rmtree(generated)
     dest_service_dir.mkdir(parents=True, exist_ok=True)
 
     written: list[Path] = []

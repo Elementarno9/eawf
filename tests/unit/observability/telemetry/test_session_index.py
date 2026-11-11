@@ -317,9 +317,13 @@ def test_append_only(
         (90, 60, 20, 3),
     ]
     assert [r.model for r in codex_requests] == ["gpt-5-codex", "gpt-5-codex", "gpt-5"]
-    assert all(
-        r.cost_usd is None and r.price_source is PriceSourceKind.UNPRICED for r in codex_requests
-    )
+    # A Codex request prices only when the price file has a row for its model.
+    assert [r.price_source for r in codex_requests] == [
+        PriceSourceKind.UNPRICED,
+        PriceSourceKind.UNPRICED,
+        PriceSourceKind.LIST_RECONSTRUCTED,
+    ]
+    assert [r.cost_usd is None for r in codex_requests] == [True, True, False]
 
 
 def test_append_only_unchanged_sweep_opens_nothing(

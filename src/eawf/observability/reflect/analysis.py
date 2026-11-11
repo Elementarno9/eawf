@@ -789,7 +789,7 @@ def history_sessions(
                 orchestrated=metrics.get(Metric.CHILD_COUNT, 0.0) > 0,
                 metrics=metrics,
                 cost_usd=row.cost_usd,
-                pricing_quality=pricing_quality(row.runtime, row.model),
+                pricing_quality=pricing_quality(row.model),
                 first_input_chars=None if detail is None else _first_input_chars(detail),
                 issues=_issues(row, requests[ref]),
                 context=context,

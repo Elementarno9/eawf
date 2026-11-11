@@ -11,10 +11,10 @@ This module turns that file into the same
 :class:`~eawf.runtime.runtimes.claude.runtime_counters.RuntimeCounters` shape the
 statusline parser emits, so the runtime-capture path has one counter contract
 regardless of which surface fed it. Cost is *derived* rather than read: the
-transcript ships no cost figure, so the aggregated token classes are priced
-through :func:`~eawf.runtime.runtimes.metering.price_token_counts` -- the same
-Decimal pricing table a headless spawn is billed against, keeping interactive
-and headless cost attribution consistent.
+transcript ships no cost figure, so each billed message is priced on its own
+through the shipped price files -- at its own date, tier and write classes --
+and the session's cost is the sum. Pricing the summed tallies as one request
+would cross tiers no request reached.
 
 Two transcript quirks the aggregator must handle:
 
@@ -67,6 +67,7 @@ import json
 import logging
 import os
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -328,30 +329,58 @@ def _transcript_span_ms(rows: list[dict[str, Any]]) -> int:
     return max(0, int(span.total_seconds() * 1000))
 
 
-def _price(model: str | None, tally: _TokenTally) -> Decimal | None:
-    """Return the token-derived cost for *tally* under *model*, or ``None``.
+@dataclass(frozen=True, slots=True)
+class _BilledMessage:
+    """One billed message: its usage block, model and timestamp."""
 
-    An unknown or unpriced model yields ``None`` so the counters still capture
-    duration and tokens with a null cost rather than reporting a fabricated
-    ``$0``.
+    usage: dict[str, Any]
+    model: str | None
+    ts: datetime | None
+
+
+def _price_messages(messages: Sequence[_BilledMessage]) -> Decimal | None:
+    """Return the summed cost of the priced messages, or ``None`` when none is priced.
+
+    Each message is one request and is priced on its own: at the row in
+    effect on its UTC date, under the tier its own prompt reaches, with its
+    own model, speed, region and write classes. A cache write the row does
+    not split into the 1-hour class bills at the 5-minute rate, as the
+    session-history fold bills it. A message with any unpriced token adds
+    nothing, so the sum is a lower bound when some message is unpriced.
     """
-    if model is None:
-        return None
-    from eawf.runtime.runtimes.metering import price_token_counts
+    from eawf.observability.telemetry.pricing import TokenUsage, active_price_book, request_date
 
-    # The TTL split only appears on newer transcript rows; when it is absent the
-    # whole cache-creation tally prices at the 5-minute rate rather than
-    # vanishing from the bill.
-    split_total = tally.cache_creation_5m_input_tokens + tally.cache_creation_1h_input_tokens
-    unsplit = max(0, tally.cache_creation_input_tokens - split_total)
-    return price_token_counts(
-        model,
-        input_tokens=tally.input_tokens,
-        output_tokens=tally.output_tokens,
-        cache_creation_5m_input_tokens=tally.cache_creation_5m_input_tokens + unsplit,
-        cache_creation_1h_input_tokens=tally.cache_creation_1h_input_tokens,
-        cache_read_input_tokens=tally.cache_read_input_tokens,
-    )
+    book = active_price_book()
+    total = Decimal(0)
+    priced_any = False
+    for message in messages:
+        if message.model is None:
+            continue
+        usage = message.usage
+        writes = _non_negative_int(usage.get("cache_creation_input_tokens"))
+        split = usage.get("cache_creation")
+        one_hour = (
+            min(_non_negative_int(split.get("ephemeral_1h_input_tokens")), writes)
+            if isinstance(split, dict)
+            else 0
+        )
+        speed, geo = usage.get("speed"), usage.get("inference_geo")
+        quote = book.quote(
+            message.model,
+            TokenUsage(
+                input=_non_negative_int(usage.get("input_tokens")),
+                output=_non_negative_int(usage.get("output_tokens")),
+                cache_read=_non_negative_int(usage.get("cache_read_input_tokens")),
+                cache_write={"5m": writes - one_hour, "1h": one_hour},
+                speed=speed if isinstance(speed, str) and speed else None,
+                inference_geo=geo if isinstance(geo, str) and geo else None,
+            ),
+            on=request_date(message.ts),
+        )
+        if quote.priced and quote.cost_usd is not None:
+            total += quote.cost_usd
+            priced_any = True
+    return total if priced_any else None
 
 
 @dataclass
@@ -367,6 +396,8 @@ class TranscriptScan:
         turn_duration_ms: The unclamped turn-duration sum, kept for the debug log
             so a zero (the Stop-hook race) and a clamp are both legible.
         model: The last billed model id seen, or ``None``.
+        cost_usd: The summed cost of the priced messages, each priced on its
+            own (:func:`_price_messages`); ``None`` when none is priced.
         messages: How many distinct billed messages the tally covers.
         measured_turns: How many completed turns the duration sums, so a
             duration no turn reported reads as unmeasured rather than zero.
@@ -380,6 +411,7 @@ class TranscriptScan:
     duration_ms: int
     turn_duration_ms: int
     model: str | None
+    cost_usd: Decimal | None
     messages: int
     measured_turns: int = 0
     straddled: bool = False
@@ -534,25 +566,28 @@ def _scan_rows(rows: list[dict[str, Any]], *, as_of: datetime | None = None) -> 
     model: str | None = None
     # One entry per billed message, overwritten by each later row of it, so a
     # message's usage is the one its completing row carries.
-    completing: dict[str, dict[str, Any]] = {}
-    keyless: list[dict[str, Any]] = []
+    completing: dict[str, _BilledMessage] = {}
+    keyless: list[_BilledMessage] = []
     for row in counted:
         message = row.get("message")
         if not isinstance(message, dict):
             continue
         model_id = message.get("model")
-        if isinstance(model_id, str) and model_id:
-            model = model_id
+        own_model = model_id if isinstance(model_id, str) and model_id else None
+        if own_model is not None:
+            model = own_model
         usage = message.get("usage")
         if not isinstance(usage, dict):
             continue
+        billed = _BilledMessage(usage=usage, model=own_model, ts=_utc_timestamp(row))
         key = _usage_key(row, message)
         if key is None:
-            keyless.append(usage)
+            keyless.append(billed)
         else:
-            completing[key] = usage
-    for usage in (*completing.values(), *keyless):
-        _add_usage(tally, usage)
+            completing[key] = billed
+    messages = (*completing.values(), *keyless)
+    for billed in messages:
+        _add_usage(tally, billed.usage)
 
     # Claude measures each completed turn itself and writes it as a `turn_duration`
     # row, and -- crucially -- its figure EXCLUDES the time the agent spent waiting
@@ -602,7 +637,8 @@ def _scan_rows(rows: list[dict[str, Any]], *, as_of: datetime | None = None) -> 
         duration_ms=duration_ms,
         turn_duration_ms=turn_duration_ms,
         model=model,
-        messages=len(completing) + len(keyless),
+        cost_usd=_price_messages(messages),
+        messages=len(messages),
         measured_turns=turns.measured,
         straddled=turns.straddled,
         unmeasurable=unmeasurable,
@@ -635,7 +671,7 @@ def _counters_of(scan: TranscriptScan) -> RuntimeCounters | None:
         measure_version=MEASURE_VERSION,
         api_duration_ms=duration_ms,
         total_duration_ms=duration_ms,
-        cost_usd=_price(scan.model, tally),
+        cost_usd=scan.cost_usd,
         input_tokens=tally.input_tokens,
         output_tokens=tally.output_tokens,
         cache_creation_input_tokens=tally.cache_creation_input_tokens,

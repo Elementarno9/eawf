@@ -8,8 +8,8 @@ undefined rather than zero.
 
 from __future__ import annotations
 
-import inspect
 import re
+from datetime import date
 from decimal import Decimal
 from itertools import count
 
@@ -19,13 +19,6 @@ from pydantic import ValidationError
 from eawf.observability.measurement.coverage import Coverage, PricingCoverage, pricing_coverage
 from eawf.observability.telemetry import pricing
 from eawf.observability.telemetry.models import ObservedSession, PriceSourceKind
-from eawf.observability.telemetry.pricing import (
-    PRICING,
-    UNPRICED_MODELS,
-    lookup_pricing,
-    resolve_price_source,
-    unpriced_model,
-)
 
 _REF = count(1)
 
@@ -36,7 +29,8 @@ _CLAUDE_5_RATES = {
     "claude-sonnet-5-5": ("2", "10", "2.50", "4", "0.10"),
     "claude-sonnet-5": ("2", "10", "2.50", "4", "0.20"),
 }
-_SOURCE_LINE = re.compile(r"#.*https://[\w.]*anthropic\.com/\S+.*\b\d{4}-\d{2}-\d{2}\b")
+_SOURCE_URL = re.compile(r"^https://[\w.]*claude\.com/\S+$")
+_ON = date(2026, 11, 10)
 
 
 def _session(
@@ -148,39 +142,37 @@ def test_meas_061_breakdowns_that_do_not_reconcile_are_refused() -> None:
 
 @pytest.mark.parametrize("model", sorted(_CLAUDE_5_RATES))
 def test_claude_5_models_are_priced(model: str) -> None:
-    """Each Claude 5 id and a dated id of it price at the published rate row."""
-    per_mtok = [Decimal(rate) / 1_000_000 for rate in _CLAUDE_5_RATES[model]]
-    row = PRICING[model]
+    """Each Claude 5 id and its ``[1m]`` form price at the published rate row."""
+    expected = tuple(Decimal(rate) for rate in _CLAUDE_5_RATES[model])
+    book = pricing.load_price_book(repo_root=None, overrides={})
+    rates = book.list_rates(model, on=_ON)
 
+    assert rates is not None
     assert (
-        row.input_per_token,
-        row.output_per_token,
-        row.cache_write_5m_per_token,
-        row.cache_write_1h_per_token,
-        row.cache_read_per_token,
-    ) == tuple(per_mtok)
-    for queried in (model, f"{model}-20261001"):
-        assert lookup_pricing(queried) is row, queried
-        assert unpriced_model(queried) is None, queried
-        assert resolve_price_source(queried) == (
-            PriceSourceKind.LIST_RECONSTRUCTED,
-            pricing.PRICING_VERSION,
-        )
-    assert UNPRICED_MODELS == {}
+        rates.input,
+        rates.output,
+        rates.cache_write["5m"],
+        rates.cache_write["1h"],
+        rates.cache_read,
+    ) == expected
+    for queried in (model, f"{model}[1m]"):
+        row = book.resolve(queried, on=_ON)
+        assert row is not None and row.id == model, queried
 
 
 @pytest.mark.parametrize("model", sorted(_CLAUDE_5_RATES))
 def test_claude_5_row_cites_its_published_source(model: str) -> None:
-    """The comment line above each Claude 5 row names an anthropic.com URL and a read date."""
-    lines = inspect.getsource(pricing).splitlines()
-    row_at = next(
-        i for i, line in enumerate(lines) if line.strip().startswith(f'"{model}": ModelPricing(')
-    )
+    """Each Claude 5 row names the vendor pricing page and the date it was read."""
+    row = pricing.load_price_book(repo_root=None, overrides={}).resolve(model, on=_ON)
 
-    assert _SOURCE_LINE.search(lines[row_at - 1]), lines[row_at - 1]
+    assert row is not None
+    assert _SOURCE_URL.match(row.source_url), row.source_url
+    assert row.verified_on is not None
 
 
-@pytest.mark.parametrize("model", ["claude-opus-5", "claude-haiku-5"])
+@pytest.mark.parametrize("model", ["claude-opus-5-9", "claude-haiku-5", "claude-opus-5-5-20261001"])
 def test_unlisted_claude_5_ids_stay_unpriced(model: str) -> None:
     """Boundary: a Claude 5 id with no row of its own never takes another row's rate."""
-    assert lookup_pricing(model) is None
+    book = pricing.load_price_book(repo_root=None, overrides={})
+
+    assert book.resolve(model, on=_ON) is None

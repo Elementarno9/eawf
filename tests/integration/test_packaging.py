@@ -315,12 +315,18 @@ def test_wheel_metadata_version_matches_single_source(tmp_path: Path) -> None:
 # --- Generated-data delivery ------------------------------------------------
 
 
+# Committed beside the generated subtrees and read at runtime to price usage;
+# named, not globbed, so an emptied directory cannot pass as an empty match.
+_PRICE_FILES = ("anthropic.yaml", "openai.yaml")
+
+
 def _expected_data_members() -> list[str]:
     """Return the ``eawf/_data/`` members a correct wheel carries."""
     config = _bundle_config()
     templates = [f"eawf/_data/service_templates/{name}" for name in config["service_templates"]]
     topics = [f"eawf/_data/help/{p.name}" for p in (_REPO_ROOT / config["help_dir"]).glob("*.md")]
-    return sorted(templates + topics)
+    prices = [f"eawf/_data/pricing/{name}" for name in _PRICE_FILES]
+    return sorted(templates + topics + prices)
 
 
 def _seed_data_tree() -> None:

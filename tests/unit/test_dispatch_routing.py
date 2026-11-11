@@ -29,7 +29,7 @@ import dataclasses
 import pytest
 
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
-from eawf.observability.telemetry.pricing import lookup_pricing
+from eawf.observability.telemetry.pricing import active_price_book, request_date
 from eawf.workflow.dispatch import (
     DEFAULT_ROUTING_TABLE,
     RoutingDecision,
@@ -46,6 +46,11 @@ _RUNTIME_TRIPLE = {"claude", "codex", "opencode"}
 #: shape the routing table commits to rather than the (not-yet-landed)
 #: pricing row.
 _ROUTED_MODELS = {"claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8"}
+
+
+def _named(model: str) -> bool:
+    """Return whether a price file names *model*, priced or awaiting its rate."""
+    return active_price_book().resolve(model, on=request_date(None)) is not None
 
 
 # --- Total coverage over the enum product ------------------------------------
@@ -138,7 +143,7 @@ def test_bump_roles_never_route_below_executor(role: AgentSessionRole) -> None:
 def test_every_routed_model_is_a_canonical_id() -> None:
     """Each emitted model is one of the canonical pricing-table ids.
 
-    The cost ledger prices a routed wave through ``lookup_pricing`` on
+    The cost ledger prices a routed wave through the price files on
     these exact ids; the ``claude-opus-4-8`` pricing row lands via a
     sibling P29-I01 wave, so this test pins the id the routing table emits
     rather than the not-yet-present pricing row.
@@ -241,17 +246,17 @@ def test_model_for_runtime_preserves_tier_across_vendors() -> None:
 
 
 @pytest.mark.parametrize("runtime", ["claude", "codex", "opencode"])
-def test_every_per_runtime_model_is_priced(runtime: str) -> None:
-    """Each runtime's per-tier model id resolves to a pricing row (priced).
+def test_every_per_runtime_model_is_named_in_a_price_file(runtime: str) -> None:
+    """Each runtime's per-tier model id resolves to a price row.
 
     The cross-vendor metering floor: a juror spawn on any of the three runtimes
-    must price honestly, so every model the resolver can emit is a pricing-table
-    key. Covers the whole role x effort grid for the runtime.
+    prices honestly, at its row's rates or as named-but-unpriced tokens while
+    the row awaits its rate. Covers the whole role x effort grid for the runtime.
     """
     for role in AgentSessionRole:
         for effort in EffortBucket:
             model = model_for_runtime(role, effort, runtime)
-            assert lookup_pricing(model) is not None, (runtime, model)
+            assert _named(model), (runtime, model)
 
 
 def test_model_for_runtime_unknown_runtime_raises() -> None:
@@ -295,7 +300,7 @@ def test_model_for_runtime_off_tier_override_falls_back_to_mid_tier() -> None:
     }
     model = model_for_runtime(AgentSessionRole.EXECUTOR, EffortBucket.S, "codex", table=override)
     assert model == "gpt-6.1-sol"
-    assert lookup_pricing(model) is not None
+    assert _named(model)
 
 
 def test_model_for_runtime_runtime_models_override_wins() -> None:

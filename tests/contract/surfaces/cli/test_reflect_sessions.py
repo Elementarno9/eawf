@@ -138,9 +138,10 @@ def test_reflect_run_sessions_writes_the_history_analysis(tree: Path) -> None:
     assert len(sessions) == 3
     assert {row["runtime"] for row in sessions} == {"claude", "codex"}
     codex = next(row for row in analysis["rates"] if row["model"] == "gpt-6.1-sol")
-    assert codex["cost_usd"] is None
-    assert codex["rates"] is None
-    assert all(row["model"] != "gpt-6.1-sol" for row in analysis["model_cost_ranking"])
+    # The price file has a row for the Codex model, so its cost counts and ranks.
+    assert codex["cost_usd"] is not None
+    assert codex["quality"] == "verified"
+    assert any(row["model"] == "gpt-6.1-sol" for row in analysis["model_cost_ranking"])
     own = [row for row in sessions if row["title"] is not None]
     assert len(own) == 1
     assert own[0]["title"]["source"] == "structural"

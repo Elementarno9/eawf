@@ -201,6 +201,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "reflect export": _read(),
     "reflect serve": _read(),
     "reflect prune": _read(),
+    "reflect prices check": _read(),
     "follow": _read(),
     "verbs": _read(),
     "plan submit": _create("planning.plan_revision.submit"),

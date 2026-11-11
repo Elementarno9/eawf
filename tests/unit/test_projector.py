@@ -35,7 +35,6 @@ from eawf.observability.telemetry.models import (
     TelemetryIncident,
     TelemetrySession,
 )
-from eawf.observability.telemetry.pricing import PRICING
 from eawf.observability.telemetry.projector import (
     RebuildMode,
     SourceSpec,
@@ -45,6 +44,9 @@ from eawf.observability.telemetry.projector import (
 from eawf.observability.telemetry.store import SqliteMetricsStore
 
 _TS = datetime(2026, 5, 22, 12, 0, tzinfo=UTC)
+
+#: The cost the in-test adapter priced from its requests.
+_ADAPTER_COST = Decimal("0.0123")
 
 
 def _event_line(env_id: str, event_type: str, cause: str = "RUNTIME_TIMEOUT") -> str:
@@ -159,6 +161,7 @@ class _PricedSessionSource:
             total_output_tokens=500,
             total_cache_read=2000,
             total_cache_write=800,
+            total_cost_usd=_ADAPTER_COST,
             end_marker="other",
         )
 
@@ -321,9 +324,9 @@ def test_full_rebuild_projects_sessions(tmp_path: Path) -> None:
     store.close()
 
 
-def test_full_rebuild_prices_session_cost(tmp_path: Path) -> None:
-    # End-to-end: a projected session with known tokens + a snapshot model
-    # lands a non-zero total_cost_usd in the store (cost is no longer inert).
+def test_full_rebuild_stores_the_cost_the_adapter_priced(tmp_path: Path) -> None:
+    # The adapter priced each request; the projector stores its sum and never
+    # re-prices the session's totals as one request.
     (tmp_path / "priced.session").write_text("x", encoding="utf-8")
     store = _open_store(tmp_path)
     spec = SourceSpec(source=_PricedSessionSource(), root=tmp_path, project_id="proj-9")
@@ -331,15 +334,7 @@ def test_full_rebuild_prices_session_cost(tmp_path: Path) -> None:
     rebuild(store, [spec], mode=RebuildMode.FULL)
 
     (session,) = _sessions(store)
-    row = PRICING["claude-opus-4-7"]
-    expected = (
-        Decimal(1000) * row.input_per_token
-        + Decimal(500) * row.output_per_token
-        + Decimal(2000) * row.cache_read_per_token
-        + Decimal(800) * row.cache_write_5m_per_token
-    )
-    assert session.total_cost_usd == expected
-    assert session.total_cost_usd > Decimal("0")
+    assert session.total_cost_usd == _ADAPTER_COST
     store.close()
 
 

@@ -52,7 +52,7 @@ def _session_closed_line(session_id: str, duration: timedelta, *, env_id: str) -
         session_log_handle=f"urn:eawf:v1:session-log:claude:{session_id}",
         wave_id="W31",
         attempt_id=f"att-{session_id}",
-        model="claude-opus",
+        model="claude-opus-4-7",
         end_marker="clean_stop",
         input_tokens=100,
         output_tokens=20,
@@ -186,8 +186,8 @@ def test_rebuild_over_fixture_log_yields_sessions(tmp_path: Path) -> None:
         assert row.project_id == _PROJECT_ID
 
 
-def test_rebuild_over_fixture_log_prices_each_session(tmp_path: Path) -> None:
-    """Derived rows go through the aggregator, so their cost is priced."""
+def test_rebuild_over_fixture_log_leaves_closed_sessions_unpriced(tmp_path: Path) -> None:
+    """A close event carries totals, not requests, so its session records no cost, never a guess."""
     state_path = _write_event_log(tmp_path, _fixture_log_body())
     store = _open_store(tmp_path)
     try:
@@ -196,7 +196,8 @@ def test_rebuild_over_fixture_log_prices_each_session(tmp_path: Path) -> None:
     finally:
         store.close()
 
-    assert all(row.total_cost_usd > 0 for row in rows)
+    assert rows
+    assert all(row.total_cost_usd is None for row in rows)
 
 
 def test_rebuild_over_fixture_log_is_idempotent(tmp_path: Path) -> None:

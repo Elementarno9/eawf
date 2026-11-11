@@ -36,7 +36,7 @@ import os
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import IO, Any, Final, Literal
@@ -52,9 +52,17 @@ from eawf.observability.telemetry.models import (
     ObservedSession,
     PriceSourceKind,
 )
-from eawf.observability.telemetry.pricing import resolve_price_source
-from eawf.observability.telemetry.sources.codex_session import CodexFold, fold_codex_record
-from eawf.runtime.runtimes.metering import price_token_counts
+from eawf.observability.telemetry.pricing import (
+    PriceBook,
+    TokenUsage,
+    active_price_book,
+    request_date,
+)
+from eawf.observability.telemetry.sources.codex_session import (
+    CODEX_WRITE_CLASS,
+    CodexFold,
+    fold_codex_record,
+)
 from eawf.runtime.session.vendor_id import hash_vendor_session_id
 
 logger = logging.getLogger(__name__)
@@ -81,11 +89,13 @@ __all__ = [
     "discover_history",
     "discover_history_files",
     "fold_history_lines",
+    "history_file_cost",
     "history_lines",
     "history_path_digest",
     "observed_rows",
     "project_history_lines",
     "read_session_detail",
+    "reprice_request",
     "working_dir_digest",
 ]
 
@@ -421,6 +431,15 @@ def _claude_labels(name: object, tool_input: object) -> tuple[tuple[DurationKind
     return tuple(labels)
 
 
+def _thinking_tokens(usage: dict[str, Any]) -> int | None:
+    """Return ``usage.output_tokens_details.thinking_tokens``, or ``None`` when not reported."""
+    details = usage.get("output_tokens_details")
+    raw = details.get("thinking_tokens") if isinstance(details, dict) else None
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
+        return None
+    return raw
+
+
 def _non_negative_int(raw: object) -> int:
     """Return *raw* when it is a non-negative JSON integer, else ``0``."""
     if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
@@ -486,11 +505,13 @@ class RequestLedger:
         changed: Refs of the rows added or replaced since the ledger loaded.
         foreign: Refs another file of the same session already billed; a
             request among them is skipped, never billed twice.
+        prices: The price files and overrides the rows are priced with.
     """
 
     rows: dict[str, ObservedRequest] = field(default_factory=dict)
     changed: set[str] = field(default_factory=set)
     foreign: frozenset[str] = frozenset()
+    prices: PriceBook = field(default_factory=active_price_book)
 
     def put(self, row: ObservedRequest) -> None:
         """Add or replace *row* and mark it changed."""
@@ -499,34 +520,55 @@ class RequestLedger:
 
 
 def _priced(
-    model: str | None,
-    *,
-    input_tokens: int,
-    output_tokens: int,
-    cache_read_tokens: int,
-    cache_write_5m_tokens: int,
-    cache_write_1h_tokens: int,
+    prices: PriceBook, model: str | None, usage: TokenUsage, ts: datetime | None
 ) -> tuple[Decimal | None, PriceSourceKind, str | None]:
-    """Price one request's token classes against the embedded rate table.
+    """Price one request at the rates in effect on its UTC date.
 
-    An unpriced request records a null cost, never a zero.
+    A request with any unpriced token records a null cost, never a zero.
     """
     if model is None:
         return None, PriceSourceKind.UNPRICED, None
-    source, version = resolve_price_source(model)
-    if source is PriceSourceKind.UNPRICED:
-        return None, source, None
-    cost = price_token_counts(
-        model,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        cache_creation_5m_input_tokens=cache_write_5m_tokens,
-        cache_creation_1h_input_tokens=cache_write_1h_tokens,
-        cache_read_input_tokens=cache_read_tokens,
-    )
-    if cost is None:
+    quote = prices.quote(model, usage, on=request_date(ts))
+    if not quote.priced:
         return None, PriceSourceKind.UNPRICED, None
-    return cost, source, version
+    return quote.cost_usd, PriceSourceKind.LIST_RECONSTRUCTED, prices.rate_version(quote)
+
+
+def _stored_usage(row: ObservedRequest) -> TokenUsage:
+    """Return the token classes and usage fields an indexed request row holds."""
+    if not row.cache_write_tokens:
+        writes: dict[str, int] = {}
+    elif row.runtime == "codex":
+        writes = {CODEX_WRITE_CLASS: row.cache_write_tokens}
+    else:
+        writes = {
+            "5m": row.cache_write_tokens - row.cache_write_1h_tokens,
+            "1h": row.cache_write_1h_tokens,
+        }
+    return TokenUsage(
+        input=row.input_tokens,
+        output=row.output_tokens,
+        cache_read=row.cache_read_tokens,
+        cache_write=writes,
+        speed=row.speed,
+        inference_geo=row.inference_geo,
+    )
+
+
+def reprice_request(row: ObservedRequest, prices: PriceBook) -> ObservedRequest:
+    """Return *row* priced again from its stored token classes, with no transcript read.
+
+    Args:
+        row: An indexed request row.
+        prices: The price files and overrides to price it with.
+
+    Returns:
+        A copy carrying the new cost, price source and rate-table version.
+    """
+    cost, source, version = _priced(prices, row.model, _stored_usage(row), row.ts)
+    return row.model_copy(
+        update={"cost_usd": cost, "price_source": source, "rate_table_version": version}
+    )
 
 
 class PendingCodexRequest(BaseModel):
@@ -538,6 +580,7 @@ class PendingCodexRequest(BaseModel):
     model: str | None
     input_tokens: int
     cache_read_tokens: int
+    cache_write_tokens: int = 0
     output_tokens: int
     reasoning_tokens: int
 
@@ -723,13 +766,31 @@ class TranscriptFold(BaseModel):
         one_hour = min(one_hour, write_total)
         input_tokens = _non_negative_int(usage.get("input_tokens"))
         cache_read = _non_negative_int(usage.get("cache_read_input_tokens"))
+        speed = _nonempty(usage.get("speed"))
+        geo = _nonempty(usage.get("inference_geo"))
+        stamp = held.ts if held is not None else ts
+        # A row written before the thinking counter appeared keeps the
+        # counter an earlier row of the message reported, else none.
+        thinking = _thinking_tokens(usage)
+        reasoning = (
+            min(thinking, output)
+            if thinking is not None
+            else held.reasoning_tokens
+            if held is not None
+            else None
+        )
         cost, source, version = _priced(
+            ledger.prices,
             model,
-            input_tokens=input_tokens,
-            output_tokens=output,
-            cache_read_tokens=cache_read,
-            cache_write_5m_tokens=write_total - one_hour,
-            cache_write_1h_tokens=one_hour,
+            TokenUsage(
+                input=input_tokens,
+                output=output,
+                cache_read=cache_read,
+                cache_write={"5m": write_total - one_hour, "1h": one_hour},
+                speed=speed,
+                inference_geo=geo,
+            ),
+            stamp,
         )
         ledger.put(
             ObservedRequest(
@@ -738,18 +799,20 @@ class TranscriptFold(BaseModel):
                 lane=self.lane,
                 request_ref=request_ref,
                 ordinal=held.ordinal if held is not None else len(ledger.rows) + 1,
-                ts=held.ts if held is not None else ts,
+                ts=stamp,
                 model=model,
                 input_tokens=input_tokens,
                 output_tokens=output,
                 cache_read_tokens=cache_read,
                 cache_write_tokens=write_total,
                 cache_write_1h_tokens=one_hour,
-                reasoning_tokens=None,
+                reasoning_tokens=reasoning,
                 total_tokens=input_tokens + output + cache_read + write_total,
                 cost_usd=cost,
                 price_source=source,
                 rate_table_version=version,
+                speed=speed,
+                inference_geo=geo,
             )
         )
 
@@ -797,6 +860,7 @@ class TranscriptFold(BaseModel):
             model=usage.model,
             input_tokens=usage.input_tokens,
             cache_read_tokens=usage.cache_read_tokens,
+            cache_write_tokens=usage.cache_write_tokens,
             output_tokens=usage.output_tokens,
             reasoning_tokens=usage.reasoning_tokens,
         )
@@ -840,6 +904,21 @@ class TranscriptFold(BaseModel):
         if self.model is None:
             self.model = reading.model
         ordinal = len(ledger.rows) + 1
+        cost, source, version = _priced(
+            ledger.prices,
+            reading.model,
+            TokenUsage(
+                input=reading.input_tokens,
+                output=reading.output_tokens,
+                cache_read=reading.cache_read_tokens,
+                cache_write=(
+                    {CODEX_WRITE_CLASS: reading.cache_write_tokens}
+                    if reading.cache_write_tokens
+                    else {}
+                ),
+            ),
+            reading.ts,
+        )
         ledger.put(
             ObservedRequest(
                 vendor_session_ref=ref_text,
@@ -852,15 +931,15 @@ class TranscriptFold(BaseModel):
                 input_tokens=reading.input_tokens,
                 output_tokens=reading.output_tokens,
                 cache_read_tokens=reading.cache_read_tokens,
-                cache_write_tokens=0,
+                cache_write_tokens=reading.cache_write_tokens,
                 reasoning_tokens=reading.reasoning_tokens,
                 total_tokens=reading.input_tokens
                 + reading.output_tokens
-                + reading.cache_read_tokens,
-                # Codex rows in the rate table are placeholders, not OpenAI's
-                # published rates, so a request records its tokens and no cost.
-                cost_usd=None,
-                price_source=PriceSourceKind.UNPRICED,
+                + reading.cache_read_tokens
+                + reading.cache_write_tokens,
+                cost_usd=cost,
+                price_source=source,
+                rate_table_version=version,
             )
         )
 
@@ -1038,9 +1117,9 @@ def observed_rows(
     """Build the observed session row and its duration rows.
 
     The session's token classes are the sums of its requests. Its cost is
-    their summed cost when every request that counted a token was priced;
-    otherwise the session is unpriced, so a partial sum never reads as the
-    whole.
+    the summed cost of its priced requests, a lower bound when some request
+    is unpriced; it is null only when no request is priced. A reader tells
+    the two apart from the request rows, whose unpriced ones carry no cost.
 
     Args:
         parsed: A transcript with operator work.
@@ -1098,14 +1177,38 @@ def observed_rows(
 def _session_price(
     requests: tuple[ObservedRequest, ...],
 ) -> tuple[Decimal | None, PriceSourceKind, str | None]:
-    """Sum the request costs, or return unpriced when any counted request is."""
+    """Sum the costs of the priced requests; unpriced only when none is priced."""
     priced = [row for row in requests if row.price_source is not PriceSourceKind.UNPRICED]
-    if not priced or any(
-        row.total_tokens and row.price_source is PriceSourceKind.UNPRICED for row in requests
-    ):
+    if not priced:
         return None, PriceSourceKind.UNPRICED, None
     cost = sum((row.cost_usd or Decimal(0) for row in priced), Decimal(0))
     return cost, priced[0].price_source, priced[0].rate_table_version
+
+
+def history_file_cost(file: HistoryFile, prices: PriceBook) -> Decimal | None:
+    """Return the summed cost of one history file's priced requests.
+
+    Each request is priced on its own: at the row in effect on its UTC date,
+    under the tier its own prompt reaches and with its own write classes, by
+    the fold the sweep bills with. Summing first and pricing the sum would
+    cross a tier no request reached.
+
+    Args:
+        file: The history file.
+        prices: The price files and overrides to price with.
+
+    Returns:
+        The cost, a lower bound when some request is unpriced; ``None`` when
+        no request is priced.
+
+    Raises:
+        OSError: The file cannot be read.
+    """
+    fold = TranscriptFold(runtime=file.runtime, lane=file.lane)
+    ledger = RequestLedger(prices=prices)
+    with file.path.open("rb") as handle:
+        fold_history_lines(handle, fold, ledger, fallback_session_id=file.fallback_session_id)
+    return _session_price(tuple(ledger.rows.values()))[0]
 
 
 # ---- one session's detail --------------------------------------------------------------
@@ -1215,6 +1318,8 @@ class SessionDetail(BaseModel):
         compactions: Compaction boundaries, in order.
         runtime_version: The first ``major.minor.patch`` runtime version a
             record named, or ``None``; the preamble rebuild is keyed by it.
+        thinking_spans: One span for each message whose record states
+            ``thinkingDurationMs``, ending at that record's timestamp.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -1227,6 +1332,7 @@ class SessionDetail(BaseModel):
     blocks: tuple[ContentBlock, ...]
     compactions: tuple[CompactionBoundary, ...]
     runtime_version: str | None = Field(default=None, pattern=_VERSION_PATTERN)
+    thinking_spans: tuple[ToolSpan, ...] = ()
 
 
 def _runtime_version(record: dict[str, Any]) -> str | None:
@@ -1267,6 +1373,7 @@ class _DetailBuilder:
     open_spans: dict[str, tuple[DurationKind, str, datetime | None]] = field(default_factory=dict)
     spans: dict[DurationKind, list[ToolSpan]] = field(default_factory=dict)
     runtime_version: str | None = None
+    thinking: dict[str, ToolSpan] = field(default_factory=dict)
 
     def observe(self, record: dict[str, Any], requests: int) -> None:
         if self.runtime_version is None:
@@ -1342,12 +1449,40 @@ class _DetailBuilder:
             return []
         message = record.get("message")
         content = message.get("content") if isinstance(message, dict) else None
+        if row_type == "user" and record.get("isCompactSummary") is True:
+            # The summary a compaction carries forward is written as a user
+            # record right after the boundary, not as a summary row.
+            return [("compaction_summary", content or "")]
+        if row_type == "assistant":
+            self._thinking(record, message, ts)
         role: BlockKind = "user" if row_type == "user" else "assistant"
         if isinstance(content, str):
             return [(role, content)]
         if not isinstance(content, list):
             return []
         return self._claude_content(content, role, ts)
+
+    def _thinking(self, record: dict[str, Any], message: object, ts: datetime | None) -> None:
+        """Record the thinking span a Claude record's ``thinkingDurationMs`` states.
+
+        Each content block of one message is its own record; the span is keyed
+        by the message so a repeated duration is counted once.
+        """
+        raw = record.get("thinkingDurationMs")
+        if ts is None or isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
+            return
+        key = (
+            (_nonempty(message.get("id")) if isinstance(message, dict) else None)
+            or _nonempty(record.get("requestId"))
+            or _nonempty(record.get("uuid"))
+            or f"thinking:{len(self.thinking)}"
+        )
+        self.thinking[key] = ToolSpan(
+            label="thinking",
+            started_at=ts - timedelta(milliseconds=raw),
+            ended_at=ts,
+            duration_ms=raw,
+        )
 
     def _claude_content(
         self, content: list[Any], role: BlockKind, ts: datetime | None
@@ -1480,4 +1615,5 @@ def read_session_detail(file: HistoryFile) -> SessionDetail | None:
         blocks=tuple(builder.blocks),
         compactions=tuple(builder.compactions),
         runtime_version=builder.runtime_version,
+        thinking_spans=tuple(builder.thinking.values()),
     )

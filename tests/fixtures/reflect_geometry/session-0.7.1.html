@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>01/09/26 · SYN · Claude session · 01/09/26…</title><style>/* Eä reflect pages. Inlined into every page: no network fonts, no imports, no remote urls.
+   The palette follows the system colour scheme; dark is the default. */
+:root{color-scheme:light dark;--void:#07090b;--surface:#0c1110;--panel:#111715;--panel-2:#161e1b;--border:#1e2823;--border-soft:#182019;--border-lit:#2c3a32;--text:#d8e2dc;--muted:#7d8d85;--faint:#4a564f;--ghost:#313b36;--accent:#16b384;--accent-deep:#009e73;--accent-glow:rgba(22,179,132,.22);--accent-dim:#0c5a44;--ok:#16b384;--info:#56b6c2;--warn:#e69f00;--err:#d55e00;--on-warn:#22190a;--on-err:#ffffff;--shadow:0 1px 0 rgba(255,255,255,.02),0 18px 40px -24px rgba(0,0,0,.9)}
+@media (prefers-color-scheme: light){:root{--void:#e7ebe7;--surface:#f3f6f3;--panel:#fff;--panel-2:#f6f9f6;--border:#d6ddd8;--border-soft:#e2e8e3;--border-lit:#b9c5bd;--text:#18211d;--muted:#56635b;--faint:#8d9890;--ghost:#c2cbc5;--accent:#007a52;--accent-deep:#007a52;--accent-glow:rgba(0,122,82,.12);--accent-dim:#bfe0d2;--ok:#007a52;--info:#007a87;--warn:#a35b00;--err:#a8331a;--on-warn:#ffffff;--on-err:#ffffff;--shadow:0 1px 0 rgba(255,255,255,.6),0 16px 34px -26px rgba(20,40,30,.4)}}
+:root{--mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;--sans:system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;--r:10px;--pad:clamp(16px,3.2vw,34px)}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{margin:0;background:var(--void);color:var(--text);font:14px/1.55 var(--mono);-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+h1{font-size:25px;margin-top:8px}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+p{margin:0}
+.num{font-variant-numeric:tabular-nums}
+.prose{font-family:var(--sans);line-height:1.62}
+.eyebrow{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.faint{color:var(--muted)}.deco{color:var(--faint)}
+.wrap{max-width:1220px;margin:0 auto;padding:0 var(--pad) 120px}
+.skip{position:absolute;left:-999px}.skip:focus{left:12px;top:8px;z-index:99;background:var(--panel);border:1px solid var(--accent);padding:6px 10px;border-radius:6px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* header */
+.hd{position:sticky;top:0;z-index:30;background:var(--surface);border-bottom:1px solid var(--border)}
+.hd-in{max-width:1220px;margin:0 auto;padding:10px var(--pad);display:flex;align-items:center;gap:18px;min-height:48px}
+.brand{display:flex;align-items:baseline;gap:9px;font-weight:600;white-space:nowrap}
+.brand b{color:var(--accent)}.brand .slash{color:var(--faint)}
+.hd nav{display:flex;gap:2px;margin-left:6px;align-items:center;font-size:12.5px;color:var(--muted);min-width:0}
+.hd nav a{padding:5px 11px;border-radius:7px;color:var(--muted);white-space:nowrap}
+.hd nav a[aria-current="page"]{background:var(--panel-2);color:var(--text);box-shadow:inset 0 0 0 1px var(--border-lit)}
+.hd-r{margin-left:auto;display:flex;align-items:center;gap:10px}
+.btn{font:inherit;font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:5px 10px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--border-lit);color:var(--text)}
+.btn[aria-pressed="true"]{color:var(--accent);border-color:var(--accent-dim)}
+.btn[disabled]{opacity:.4;cursor:default}
+
+/* chips, severity and outcome marks: shape and fill, never colour alone */
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--border);border-radius:999px;padding:3px 9px;white-space:nowrap}
+.chip.on{color:var(--text);border-color:var(--border-lit)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.sv{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;border-radius:5px;padding:2px 8px;white-space:nowrap}
+.sv:before{font-size:11px;line-height:1}
+.sv-issue{background:var(--err);color:var(--on-err)}.sv-issue:before{content:"\25B2"}
+.sv-inv{background:var(--warn);color:var(--on-warn)}.sv-inv:before{content:"\25C6"}
+.sv-anom{color:var(--info);box-shadow:inset 0 0 0 1px currentColor}.sv-anom:before{content:"\25CF"}
+.sv-notice{color:var(--muted);box-shadow:inset 0 0 0 1px var(--border-lit)}.sv-notice:before{content:"\25CB"}
+.q{color:var(--muted);border-bottom:1px dotted var(--ghost);cursor:help}
+.unk{color:var(--muted);border-bottom:1px dotted currentColor;cursor:help}
+.hint{border-bottom:1px dotted var(--border-lit);cursor:help}
+
+/* sections */
+.sec{padding-top:32px;margin-top:32px;border-top:1px solid var(--border-soft)}
+.sec:first-of-type{border-top:0;margin-top:0}
+.sec-h{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+.sec-h h2{font-size:19px}
+.grid{display:grid;gap:12px;margin-top:12px}
+.note{font-size:12px;color:var(--muted);margin-top:12px;max-width:92ch;font-family:var(--sans);line-height:1.6}
+.callout{margin-top:18px;border:1px dashed var(--border-lit);border-radius:var(--r);padding:12px 16px;font-family:var(--sans);font-size:13px}
+.callout ul{margin:6px 0 0;padding-left:18px}
+
+/* hero */
+.hero{margin-top:18px;background:var(--panel);border:1px solid var(--border-lit);border-radius:14px;padding:18px 22px;box-shadow:var(--shadow)}
+.hero-top{display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap}
+.hero-val{font-size:clamp(32px,4.4vw,46px);line-height:1;letter-spacing:-.03em;font-weight:600;display:flex;align-items:baseline;gap:12px}
+.hero-val small{font-size:.34em;letter-spacing:0;color:var(--muted);font-weight:400}
+.hero-lbl{margin-top:10px;font-size:13px}
+.hero-sub{margin-top:6px;font-size:12.5px;color:var(--muted);max-width:70ch}
+.hero-side{margin-left:auto;display:grid;gap:8px;min-width:230px}
+.hero-side .money{font-size:30px;font-weight:600;letter-spacing:-.02em}
+.hero-secondary{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;margin:16px 0 0;background:var(--border-soft);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.hero-secondary div{background:var(--panel);padding:11px 13px}
+.hero-secondary dt{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.hero-secondary dd{margin:4px 0 0;font-size:17px;font-weight:600}
+.hero-secondary dd small{font-size:11px;font-weight:400;color:var(--muted);margin-left:5px}
+
+/* distribution: log track, decade grid, line-style reference marks */
+.dist{margin-top:22px}
+.dist-track{position:relative;overflow:hidden;height:66px;margin-top:12px;background:var(--panel);border:1px solid var(--border);border-radius:10px}
+.dist-grid{position:absolute;inset:0;pointer-events:none}
+.dist-grid i{position:absolute;top:0;bottom:0;width:1px;background:var(--border-soft)}
+.dist-grid i.mj{background:var(--border)}
+.dist-dot{position:absolute;top:58%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--accent-dim);border:1px solid var(--accent-deep)}
+.dist-dot.hi{top:38%;background:var(--warn);border-color:var(--warn);width:9px;height:9px;margin:-4.5px 0 0 -4.5px;z-index:2}
+.dist-dot:hover,.dist-dot:focus-visible{background:var(--accent);z-index:3}
+.dist-mark{position:absolute;top:0;bottom:0;width:0}
+.dist-mark span{position:absolute;top:4px;left:5px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.dist-mark span:before{content:"";width:14px;height:0;border-top:2px solid currentColor}
+.dist-mark.flip span{left:auto;right:5px}
+.dist-mark.p50{border-left:2px solid var(--accent)}.dist-mark.p50 span{color:var(--accent)}
+.dist-mark.p95{border-left:2px dashed var(--info)}.dist-mark.p95 span{color:var(--info);top:22px}.dist-mark.p95 span:before{border-top-style:dashed}
+.dist-mark.max{border-left:2px dotted var(--warn)}.dist-mark.max span{color:var(--warn);top:40px}.dist-mark.max span:before{border-top-style:dotted}
+.axis{position:relative;height:19px;margin-top:5px}
+.axis i{position:absolute;top:0;width:1px;height:5px;background:var(--ghost)}
+.axis i.mj{height:8px;background:var(--border-lit)}
+.axis b{position:absolute;top:9px;font-size:10.5px;font-weight:400;color:var(--muted);transform:translateX(-50%);white-space:nowrap}
+
+/* ranked must-see list */
+.rank{display:grid;gap:1px;background:var(--border-soft);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-top:16px}
+.rank a{display:grid;grid-template-columns:3.2ch minmax(0,1fr) auto;gap:0 14px;align-items:start;background:var(--panel);padding:13px 16px;color:inherit}
+.rank a:hover{background:var(--panel-2);text-decoration:none}
+.rank .no{font-size:12px;color:var(--faint);padding-top:2px}
+.rank h3{font-size:13px;font-family:var(--sans);letter-spacing:0;line-height:1.4}
+.rank .id{font-size:10.5px;color:var(--muted);letter-spacing:.06em;margin-top:5px;display:flex;gap:8px;flex-wrap:wrap}
+.rank .why{display:block;margin-top:6px;font-family:var(--sans);font-size:12px;color:var(--muted)}
+.rank .amt{text-align:right;display:grid;gap:4px;justify-items:end}
+.rank .money{font-size:16px;font-weight:600}
+.rank .sub{font-size:11px;color:var(--muted)}
+
+/* finding cards */
+.find{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--border-lit);border-radius:var(--r);padding:15px 17px}
+.find.is-issue{border-left-color:var(--err)}.find.is-inv{border-left-color:var(--warn)}.find.is-anom{border-left-color:var(--info)}.find.is-notice{border-left-color:var(--ghost)}
+.find-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.find-h h3{font-size:14px;font-family:var(--sans);letter-spacing:0}
+.find-say{margin-top:9px;font-size:13.5px}
+.find-meta{margin-top:11px;font-size:12px;color:var(--muted)}
+.find-meta b{color:var(--text)}
+.find details{margin-top:11px}
+.find summary{font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:5px 16px;margin:10px 0 0;font-size:12px}
+.kv dt{font-weight:600;white-space:nowrap}
+.kv dd{margin:0;color:var(--muted)}
+.also{font-size:11.5px;color:var(--muted);margin-top:9px}
+
+/* coverage, funnel */
+.funnel,.cov-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;margin:14px 0 0;background:var(--border-soft);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.funnel div,.cov-grid div{background:var(--panel);padding:11px 13px;min-width:0}
+.funnel dt,.cov-grid dt{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.funnel dd,.cov-grid dd{margin:3px 0 0;font-size:15px;font-weight:600}
+.funnel dd small{display:block;font-size:10.5px;font-weight:400;color:var(--muted);margin-top:3px;white-space:normal}
+
+/* tables: sticky header, sticky first column, horizontal scroll only */
+.tbl-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0 0}
+.tbl-tools input{font:inherit;font-size:12px;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:7px;padding:5px 10px;min-width:24ch}
+.tbl-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--panel);margin-top:12px}
+table.rt{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
+table.rt th,table.rt td{padding:10px 12px;text-align:left;white-space:nowrap;vertical-align:middle}
+table.rt thead th{position:sticky;top:0;z-index:10;background:var(--panel-2);color:var(--muted);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;border-bottom:1px solid var(--border)}
+table.rt thead th button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;letter-spacing:inherit;text-transform:inherit}
+table.rt thead th[aria-sort] button{color:var(--accent)}
+table.rt tbody td{border-bottom:1px solid var(--border-soft)}
+table.rt tbody tr:hover td{background:var(--panel-2)}
+table.rt td.t{white-space:normal;min-width:26ch;max-width:46ch;font-family:var(--sans);line-height:1.45}
+table.rt td.t small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+table.rt td.n,table.rt th.n{text-align:right;font-variant-numeric:tabular-nums}
+table.rt td.stick,table.rt th.stick{position:sticky;left:0;background:var(--panel);z-index:5}
+table.rt thead th.stick{z-index:12;background:var(--panel-2)}
+.pager{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
+
+/* session summary */
+.cells{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;margin:18px 0 0;background:var(--border-soft);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.cells div{background:var(--panel);padding:11px 13px}
+.cells div:first-child,.cells div:nth-child(2){background:var(--panel-2)}
+.cells dt{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.cells dd{margin:4px 0 0;font-size:17px;font-weight:600}
+
+/* timeline: one lane per agent */
+.tl{margin-top:14px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel);overflow:hidden;--lane:26ch}
+.tl-head,.tl-foot{display:flex;align-items:center;gap:14px;padding:10px 14px;background:var(--panel-2);flex-wrap:wrap;font-size:11.5px;color:var(--muted)}
+.tl-head{border-bottom:1px solid var(--border)}.tl-foot{border-top:1px solid var(--border-soft)}
+.tl-head b,.tl-foot b{color:var(--text)}
+.tl-legend{display:flex;flex-wrap:wrap;gap:9px 15px;padding:9px 14px;border-bottom:1px solid var(--border-soft);font-size:11px;color:var(--muted)}
+.tl-legend span{display:inline-flex;align-items:center;gap:6px}
+.tl-legend i{width:14px;height:9px;border-radius:2px;display:inline-block}
+.tl-ruler,.tl-row{display:grid;grid-template-columns:var(--lane) 1fr;border-bottom:1px solid var(--border-soft)}
+.tl-ruler{background:var(--panel-2)}
+.tl-ruler .sp{border-right:1px solid var(--border-soft);font-size:10.5px;color:var(--muted);padding:5px 12px}
+.tl-ruler .rl{position:relative;height:24px}
+.tl-ruler .rl i{position:absolute;top:0;width:1px;height:9px;background:var(--border-lit)}
+.tl-ruler .rl b{position:absolute;top:10px;font-size:10px;font-weight:400;color:var(--muted);transform:translateX(-50%);white-space:nowrap}
+.tl-lane{padding:9px 12px;font-size:11.5px;color:var(--muted);border-right:1px solid var(--border-soft);overflow-wrap:break-word}
+.tl-lane b{color:var(--text)}
+.tl-track{position:relative;height:38px;background-image:linear-gradient(90deg,var(--border-soft) 0 1px,transparent 1px);background-size:var(--gridw,10%) 100%}
+.tl-bar{position:absolute;top:9px;height:20px;min-width:2px;border-radius:3px;background:var(--ghost)}
+.tl-bar:hover,.tl-bar:focus-visible{filter:brightness(1.3);z-index:4}
+.ph-think{background:#56b6c2}.ph-tool{background:#16b384}.ph-write{background:#8f7ae6}.ph-agent{background:#3f7f8c}
+.ph-idle{background:repeating-linear-gradient(135deg,var(--ghost) 0 3px,transparent 3px 7px);height:8px;top:15px}
+.tl-mark{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed var(--warn);z-index:3}
+.tl-mark b{position:absolute;top:2px;left:5px;font-size:9.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--warn);white-space:nowrap}
+
+/* compaction Sankey */
+.wf{margin-top:14px;border:1px solid var(--border);border-radius:var(--r);background:var(--panel);overflow:hidden}
+.wf-h{display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--panel-2);border-bottom:1px solid var(--border);flex-wrap:wrap;font-size:11.5px;color:var(--muted)}
+.wf-h h3{font-size:12.5px;color:var(--text)}
+.wf svg{display:block;width:100%;height:auto;padding:14px}
+.wf svg .flow{opacity:.42}.wf svg .flow:hover{opacity:.72}
+.wf svg text{font:10.5px var(--mono);fill:var(--muted)}
+.wf svg .gate-carried{fill:var(--accent)}.wf svg .gate-dropped{fill:var(--ghost)}
+
+/* context generations */
+.gen{border:1px solid var(--border);border-radius:var(--r);background:var(--panel);overflow:hidden;margin-top:12px}
+.gen-h{display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--panel-2);border-bottom:1px solid var(--border);flex-wrap:wrap;font-size:11.5px;color:var(--muted)}
+.gen-h h3{font-size:12.5px;color:var(--text)}
+.gen-h label{margin-left:auto;display:flex;gap:8px;align-items:center}
+.gen-h input[type="range"]{accent-color:var(--accent);width:150px}
+.strip-vp{margin:12px 14px 0;overflow-x:auto}
+.strip-in{width:100%}
+.strip{display:flex;height:30px;border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+.strip>button{border:0;border-right:1px solid var(--void);padding:0 0 0 5px;cursor:pointer;font:inherit;font-size:9.5px;color:#06100c;overflow:hidden;white-space:nowrap;text-align:left;text-overflow:ellipsis;min-width:1px}
+.strip>button.binned{background-image:repeating-linear-gradient(90deg,rgba(0,0,0,.22) 0 2px,transparent 2px 5px)}
+.tokaxis{position:relative;height:20px;margin-top:5px}
+.tokaxis i{position:absolute;top:0;width:1px;height:8px;background:var(--border-lit)}
+.tokaxis b{position:absolute;top:9px;font-size:10px;font-weight:400;color:var(--muted);transform:translateX(-50%);white-space:nowrap}
+.strip-legend{display:flex;flex-wrap:wrap;gap:10px 16px;padding:12px 14px;font-size:11px;color:var(--muted)}
+.strip-legend span{display:inline-flex;align-items:center;gap:6px}
+.strip-legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.gen details{padding:0 14px 14px;font-size:12px}
+.gen summary{cursor:pointer;color:var(--muted);font-weight:600}
+.k-tool{background:#16b384}.k-reason{background:#56b6c2}.k-compact{background:#e69f00}.k-user{background:#cc79a7}.k-asst{background:#8f7ae6}.k-call{background:#0f8a67}.k-def{background:#3f7f8c}.k-sys{background:#6b7f76}.k-other{background:#4a564f}
+svg .k-tool{fill:#16b384}svg .k-reason{fill:#56b6c2}svg .k-compact{fill:#e69f00}svg .k-user{fill:#cc79a7}svg .k-asst{fill:#8f7ae6}svg .k-call{fill:#0f8a67}svg .k-def{fill:#3f7f8c}svg .k-sys{fill:#6b7f76}svg .k-other{fill:#4a564f}
+
+@media (max-width: 720px){.cells{grid-template-columns:repeat(2,minmax(0,1fr))}.hero-side{margin-left:0;min-width:0}.tl{--lane:auto}.tl-row,.tl-ruler{grid-template-columns:1fr}.tl-ruler .sp{display:none}.rank a{grid-template-columns:2.6ch minmax(0,1fr)}.rank .amt{grid-column:2;justify-items:start}}
+@media print{body{background:#fff;color:#000}.hd,.pager,.tbl-tools,.btn,.gen-h label{display:none}.wrap{padding:0}.sec{break-inside:avoid}.tbl-scroll{overflow:visible;border:0}}
+@media (forced-colors: active){.sv,.chip,.btn,.tl-bar,.strip>button{border:1px solid ButtonText}}
+</style></head><body><a class="skip" href="#main">Skip to report</a><header class="hd"><div class="hd-in"><div class="brand"><b>Eä</b><span class="slash">/</span>reflect</div><nav aria-label="Pages"><a href="index.html">Overview</a><span class="deco">&rsaquo;</span><a href="sessions.html">Sessions</a><span class="deco">&rsaquo;</span><b>this session</b></nav><div class="hd-r"><span class="chip on">SYN</span><span class="chip">3 sessions</span></div></div></header><main class="wrap" id="main"><section class="sec" data-section="identity"><div class="eyebrow">Session #00000000 · stable across re-runs</div><h1>Claude session · 01/09/26 · claude-opus-4-7</h1><div class="chips"><span class="chip">2026-09-01 09:00 UTC</span><span class="chip">SYN</span><span class="chip">claude</span><span class="chip">claude-opus-4-7</span><span class="chip">single agent</span></div><dl class="cells"><div><dt>Effective tokens</dt><dd class="num">200k</dd></div><div><dt>Estimated cost</dt><dd class="num">$1.00</dd></div><div><dt>Context handled</dt><dd class="num">10.0k</dd></div><div><dt>Wall-clock</dt><dd class="num">1.0h</dd></div><div><dt>Requests</dt><dd class="num">12</dd></div><div><dt>Tool calls</dt><dd class="num">5</dd></div><div><dt>Compactions</dt><dd class="num">1</dd></div><div><dt>Subagents</dt><dd class="num">0</dd></div></dl><div class="callout"><b>Read this first</b><ul><li>The context was compacted 1 time; history before each boundary was rewritten and sent again.</li><li>Fewer than eight comparable earlier sessions exist, so only notices are raised.</li></ul></div></section><section class="sec" id="timeline" data-section="timeline"><div class="sec-h"><h2>Timeline</h2></div><div class="tl"><div class="tl-head"><b>3 lanes</b><span>09:00:30 → 09:06:00 UTC</span><span>main lane busy 100.0% of wall-clock</span></div><div class="tl-legend"><span title="Model reasoning before it acted, billed as output tokens"><i class="ph-think"></i>Thinking 2:20</span><span title="Model producing a message or a patch"><i class="ph-write"></i>Writing 2:53</span><span title="Shell, search or file read running outside the model"><i class="ph-tool"></i>Tool call 0:16</span><span title="A subagent working on what it was asked to do"><i class="ph-agent"></i>Delegated work 5:38</span><span title="No recorded activity in this lane"><i class="ph-idle"></i>Idle 0:00</span></div><div class="tl-ruler"><div class="sp">elapsed</div><div class="rl"><i style="left:0.00%"></i><b style="left:0.00%">0:00</b><i style="left:18.18%"></i><b style="left:18.18%">1:00</b><i style="left:36.36%"></i><b style="left:36.36%">2:00</b><i style="left:54.55%"></i><b style="left:54.55%">3:00</b><i style="left:72.73%"></i><b style="left:72.73%">4:00</b><i style="left:90.91%"></i><b style="left:90.91%">5:00</b></div></div><div class="tl-row"><div class="tl-lane"><b>Main session</b></div><div class="tl-track" style="--gridw:18.18%"><span class="tl-bar ph-write" tabindex="0" style="left:0.00%;width:10.00%" title="Writing · 0:00 → 0:33 · 0:33. Model producing a message or a patch."></span><span class="tl-bar ph-think" tabindex="0" style="left:10.00%;width:7.50%" title="Thinking · 0:33 → 0:58 · 0:25. Model reasoning before it acted, billed as output tokens."></span><span class="tl-bar ph-write" tabindex="0" style="left:17.50%;width:2.50%" title="Writing · 0:58 → 1:06 · 0:08. Model producing a message or a patch."></span><span class="tl-bar ph-tool" tabindex="0" style="left:20.00%;width:2.50%" title="Tool call · 1:06 → 1:14 · 0:08. Shell, search or file read running outside the model."></span><span class="tl-bar ph-write" tabindex="0" style="left:22.50%;width:5.00%" title="Writing · 1:14 → 1:31 · 0:16. Model producing a message or a patch."></span><span class="tl-bar ph-think" tabindex="0" style="left:27.50%;width:10.00%" title="Thinking · 1:31 → 2:04 · 0:33. Model reasoning before it acted, billed as output tokens."></span><span class="tl-bar ph-write" tabindex="0" style="left:37.50%;width:7.50%" title="Writing · 2:04 → 2:28 · 0:25. Model producing a message or a patch."></span><span class="tl-bar ph-think" tabindex="0" style="left:45.00%;width:2.50%" title="Thinking · 2:28 → 2:37 · 0:08. Model reasoning before it acted, billed as output tokens."></span><span class="tl-bar ph-tool" tabindex="0" style="left:47.50%;width:2.50%" title="Tool call · 2:37 → 2:45 · 0:08. Shell, search or file read running outside the model."></span><span class="tl-bar ph-think" tabindex="0" style="left:50.00%;width:5.00%" title="Thinking · 2:45 → 3:02 · 0:16. Model reasoning before it acted, billed as output tokens."></span><span class="tl-bar ph-write" tabindex="0" style="left:55.00%;width:7.50%" title="Writing · 3:02 → 3:26 · 0:25. Model producing a message or a patch."></span><span class="tl-bar ph-think" tabindex="0" style="left:62.50%;width:10.00%" title="Thinking · 3:26 → 3:59 · 0:33. Model reasoning before it acted, billed as output tokens."></span><span class="tl-bar ph-write" tabindex="0" style="left:72.50%;width:10.00%" title="Writing · 3:59 → 4:32 · 0:33. Model producing a message or a patch."></span><span class="tl-bar ph-think" tabindex="0" style="left:82.50%;width:7.50%" title="Thinking · 4:32 → 4:57 · 0:25. Model reasoning before it acted, billed as output tokens."></span><span class="tl-bar ph-write" tabindex="0" style="left:90.00%;width:10.00%" title="Writing · 4:57 → 5:30 · 0:33. Model producing a message or a patch."></span><span class="tl-mark" style="left:48.48%" title="Compaction at 09:03:10 UTC, auto, 40,000 tokens before"><b>compaction</b></span></div></div><div class="tl-row"><div class="tl-lane">↳ Explore subagent</div><div class="tl-track" style="--gridw:18.18%"><span class="tl-bar ph-idle" tabindex="0" style="left:0.00%;width:7.50%" title="Idle · 0:00 → 0:25 · 0:25. No recorded activity in this lane."></span><span class="tl-bar ph-agent" tabindex="0" style="left:7.50%;width:45.00%" title="Delegated work · 0:25 → 2:53 · 2:28. A subagent working on what it was asked to do."></span><span class="tl-bar ph-idle" tabindex="0" style="left:52.50%;width:47.50%" title="Idle · 2:53 → 5:30 · 2:37. No recorded activity in this lane."></span></div></div><div class="tl-row"><div class="tl-lane">↳ general-purpose subagent</div><div class="tl-track" style="--gridw:18.18%"><span class="tl-bar ph-idle" tabindex="0" style="left:0.00%;width:25.00%" title="Idle · 0:00 → 1:22 · 1:22. No recorded activity in this lane."></span><span class="tl-bar ph-agent" tabindex="0" style="left:25.00%;width:57.50%" title="Delegated work · 1:22 → 4:32 · 3:10. A subagent working on what it was asked to do."></span><span class="tl-bar ph-idle" tabindex="0" style="left:82.50%;width:17.50%" title="Idle · 4:32 → 5:30 · 0:58. No recorded activity in this lane."></span></div></div><div class="tl-foot"><span>Delegated work <b>5:38</b></span><span>Thinking <b>2:20</b></span><span>Tool call <b>0:16</b></span><span>Writing <b>2:53</b></span><span>compaction at <b>09:03:10</b> UTC</span></div></div></section><section class="sec" id="compaction" data-section="compaction"><div class="sec-h"><h2>What compaction carried forward</h2><span class="chip">1 compaction</span></div><div class="wf"><div class="wf-h"><h3>Generation 1 → generation 2</h3><span>1.0k carried, 17.7k dropped, one scale on both sides · re-sending the carried band costs $0.0050 at base input rates</span></div><svg viewBox="0 0 716 232" role="img" aria-label="Generation 1 → generation 2"><rect class="k-tool" x="170.0" y="0.0" width="12.0" height="123.0"><title>Tool results: 12,000 tokens, 64.1% of generation 1</title></rect><text x="164.0" y="65.5" text-anchor="end">Tool results 12.0k</text><path class="flow k-tool" d="M182.0,0.0C306.0,0.0 306.0,0.0 430.0,0.0L430.0,6.6C306.0,6.6 306.0,6.6 182.0,6.6Z"><title>Tool results: 641 carried</title></path><path class="flow k-tool" d="M182.0,6.6C306.0,6.6 306.0,24.3 430.0,24.3L430.0,140.7C306.0,140.7 306.0,123.0 182.0,123.0Z"><title>Tool results: 11.4k dropped</title></path><rect class="k-sys" x="170.0" y="127.0" width="12.0" height="30.8"><title>System prompt: 3,000 tokens, 16.0% of generation 1</title></rect><text x="164.0" y="146.4" text-anchor="end">System prompt 3.0k</text><path class="flow k-sys" d="M182.0,127.0C306.0,127.0 306.0,6.6 430.0,6.6L430.0,8.2C306.0,8.2 306.0,128.7 182.0,128.7Z"><title>System prompt: 160 carried</title></path><path class="flow k-sys" d="M182.0,128.7C306.0,128.7 306.0,140.7 430.0,140.7L430.0,169.8C306.0,169.8 306.0,157.8 182.0,157.8Z"><title>System prompt: 2.8k dropped</title></path><rect class="k-def" x="170.0" y="161.8" width="12.0" height="23.1"><title>Tool definitions: 2,250 tokens, 12.0% of generation 1</title></rect><text x="164.0" y="177.3" text-anchor="end">Tool definitions 2.2k</text><path class="flow k-def" d="M182.0,161.8C306.0,161.8 306.0,8.2 430.0,8.2L430.0,9.4C306.0,9.4 306.0,163.0 182.0,163.0Z"><title>Tool definitions: 120 carried</title></path><path class="flow k-def" d="M182.0,163.0C306.0,163.0 306.0,169.8 430.0,169.8L430.0,191.6C306.0,191.6 306.0,184.8 182.0,184.8Z"><title>Tool definitions: 2.1k dropped</title></path><rect class="k-def" x="170.0" y="188.8" width="12.0" height="7.7"><title>Project instructions: 750 tokens, 4.0% of generation 1</title></rect><text x="164.0" y="196.7" text-anchor="end">Project instructions 750</text><path class="flow k-def" d="M182.0,188.8C306.0,188.8 306.0,9.4 430.0,9.4L430.0,9.9C306.0,9.9 306.0,189.2 182.0,189.2Z"><title>Project instructions: 40 carried</title></path><path class="flow k-def" d="M182.0,189.2C306.0,189.2 306.0,191.6 430.0,191.6L430.0,198.9C306.0,198.9 306.0,196.5 182.0,196.5Z"><title>Project instructions: 710 dropped</title></path><rect class="k-asst" x="170.0" y="200.5" width="12.0" height="3.1"><title>Model replies: 300 tokens, 1.6% of generation 1</title></rect><text x="164.0" y="206.1" text-anchor="end">Model replies 300</text><path class="flow k-asst" d="M182.0,200.5C306.0,200.5 306.0,9.9 430.0,9.9L430.0,10.0C306.0,10.0 306.0,200.7 182.0,200.7Z"><title>Model replies: 16 carried</title></path><path class="flow k-asst" d="M182.0,200.7C306.0,200.7 306.0,198.9 430.0,198.9L430.0,201.8C306.0,201.8 306.0,203.6 182.0,203.6Z"><title>Model replies: 284 dropped</title></path><rect class="k-call" x="170.0" y="207.6" width="12.0" height="1.8"><title>Tool calls: 180 tokens, 1.0% of generation 1</title></rect><text x="164.0" y="212.5" text-anchor="end">Tool calls 180</text><path class="flow k-call" d="M182.0,207.6C306.0,207.6 306.0,10.0 430.0,10.0L430.0,10.1C306.0,10.1 306.0,207.7 182.0,207.7Z"><title>Tool calls: 10 carried</title></path><path class="flow k-call" d="M182.0,207.7C306.0,207.7 306.0,201.8 430.0,201.8L430.0,203.6C306.0,203.6 306.0,209.4 182.0,209.4Z"><title>Tool calls: 170 dropped</title></path><rect class="k-sys" x="170.0" y="213.4" width="12.0" height="1.5"><title>Runtime injections: 150 tokens, 0.8% of generation 1</title></rect><text x="164.0" y="218.2" text-anchor="end">Runtime injections 150</text><path class="flow k-sys" d="M182.0,213.4C306.0,213.4 306.0,10.1 430.0,10.1L430.0,10.2C306.0,10.2 306.0,213.5 182.0,213.5Z"><title>Runtime injections: 8 carried</title></path><path class="flow k-sys" d="M182.0,213.5C306.0,213.5 306.0,203.6 430.0,203.6L430.0,205.0C306.0,205.0 306.0,215.0 182.0,215.0Z"><title>Runtime injections: 142 dropped</title></path><rect class="k-user" x="170.0" y="219.0" width="12.0" height="1.0"><title>Your messages: 100 tokens, 0.5% of generation 1</title></rect><text x="164.0" y="223.5" text-anchor="end">Your messages 100</text><path class="flow k-user" d="M182.0,219.0C306.0,219.0 306.0,10.2 430.0,10.2L430.0,10.3C306.0,10.3 306.0,219.0 182.0,219.0Z"><title>Your messages: 5 carried</title></path><path class="flow k-user" d="M182.0,219.0C306.0,219.0 306.0,205.0 430.0,205.0L430.0,206.0C306.0,206.0 306.0,220.0 182.0,220.0Z"><title>Your messages: 95 dropped</title></path><rect class="gate-carried" x="430.0" y="0" width="12.0" height="10.3"><title>Carried into generation 2: 1,000 tokens, 5.3%</title></rect><rect class="gate-dropped" x="430.0" y="24.3" width="12.0" height="181.7"><title>Dropped at compaction: 17,730 tokens, 94.7%</title></rect><text x="448.0" y="10.0">carried 1.0k (5.3%)</text><text x="448.0" y="119.1">dropped 17.7k</text><path class="flow k-compact" d="M442.0,0.0C571.0,0.0 571.0,0.0 700.0,0.0L700.0,10.3C571.0,10.3 571.0,10.3 442.0,10.3Z"><title>1.0k compacted history</title></path><rect class="k-compact" x="700.0" y="0" width="12.0" height="10.3"><title>Generation 2 compacted history: 1,000 tokens</title></rect><text x="696.0" y="24.0" text-anchor="end">generation 2</text></svg></div></section><section class="sec" id="generations" data-section="generations"><div class="sec-h"><h2>Context generations</h2><span class="chip">peak request input 1.3k</span></div><div class="gen"><div class="gen-h"><h3>Generation 1 · before compaction 1</h3><span>18.7k tokens appended · 6 requests · last request read 1.3k</span><label>zoom <input type="range" min="1" max="12" step="1" value="1" data-zoom="zoom-1"></label></div><div class="strip-vp"><div class="strip-in" id="zoom-1"><div class="strip"><button type="button" class="k-sys" style="width:16.017%" title="System prompt · 3,000 tokens · 16.0% of the generation">System prompt</button><button type="button" class="k-def" style="width:12.013%" title="Tool definitions · 2,250 tokens · 12.0% of the generation">Tool definitions</button><button type="button" class="k-def binned" style="width:5.339%" title="Project instructions · 1,000 tokens · 5.3% of the generation · 3 blocks binned"></button><button type="button" class="k-asst binned" style="width:0.427%" title="Model replies · 80 tokens · 0.4% of the generation · 2 blocks binned"></button><button type="button" class="k-tool" style="width:10.678%" title="Tool results · 2,000 tokens · 10.7% of the generation">Tool results</button><button type="button" class="k-asst binned" style="width:0.427%" title="Model replies · 80 tokens · 0.4% of the generation · 2 blocks binned"></button><button type="button" class="k-tool" style="width:10.678%" title="Tool results · 2,000 tokens · 10.7% of the generation">Tool results</button><button type="button" class="k-asst binned" style="width:0.427%" title="Model replies · 80 tokens · 0.4% of the generation · 2 blocks binned"></button><button type="button" class="k-tool" style="width:10.678%" title="Tool results · 2,000 tokens · 10.7% of the generation">Tool results</button><button type="button" class="k-asst binned" style="width:0.427%" title="Model replies · 80 tokens · 0.4% of the generation · 2 blocks binned"></button><button type="button" class="k-tool" style="width:10.678%" title="Tool results · 2,000 tokens · 10.7% of the generation">Tool results</button><button type="button" class="k-asst binned" style="width:0.427%" title="Model replies · 80 tokens · 0.4% of the generation · 2 blocks binned"></button><button type="button" class="k-tool" style="width:10.678%" title="Tool results · 2,000 tokens · 10.7% of the generation">Tool results</button><button type="button" class="k-asst binned" style="width:0.427%" title="Model replies · 80 tokens · 0.4% of the generation · 2 blocks binned"></button><button type="button" class="k-tool" style="width:10.678%" title="Tool results · 2,000 tokens · 10.7% of the generation">Tool results</button></div><div class="tokaxis"><i style="left:0.00%"></i><b style="left:0.00%">0</b><i style="left:26.70%"></i><b style="left:26.70%">5.0k</b><i style="left:53.39%"></i><b style="left:53.39%">10.0k</b><i style="left:80.09%"></i><b style="left:80.09%">15.0k</b></div></div></div><div class="strip-legend"><span><i class="k-tool"></i>Tool results 12.0k</span><span><i class="k-sys"></i>System prompt 3.0k</span><span><i class="k-def"></i>Tool definitions 2.2k</span><span><i class="k-def"></i>Project instructions 750</span><span><i class="k-asst"></i>Model replies 300</span><span><i class="k-call"></i>Tool calls 180</span><span><i class="k-sys"></i>Runtime injections 150</span><span><i class="k-user"></i>Your messages 100</span></div><details><summary>10 largest blocks</summary><div class="tbl-scroll"><table class="rt"><thead><tr><th class="n">Block</th><th>Kind</th><th class="n">Request</th><th class="n">Tokens</th><th class="n">Share</th></tr></thead><tbody><tr><td class="n">1</td><td>System prompt</td><td class="n">0</td><td class="n">3,000</td><td class="n">16.0%</td></tr><tr><td class="n">2</td><td>Tool definitions</td><td class="n">0</td><td class="n">2,250</td><td class="n">12.0%</td></tr><tr><td class="n">8</td><td>Tool results</td><td class="n">1</td><td class="n">2,000</td><td class="n">10.7%</td></tr><tr><td class="n">11</td><td>Tool results</td><td class="n">2</td><td class="n">2,000</td><td class="n">10.7%</td></tr><tr><td class="n">14</td><td>Tool results</td><td class="n">3</td><td class="n">2,000</td><td class="n">10.7%</td></tr><tr><td class="n">17</td><td>Tool results</td><td class="n">4</td><td class="n">2,000</td><td class="n">10.7%</td></tr><tr><td class="n">20</td><td>Tool results</td><td class="n">5</td><td class="n">2,000</td><td class="n">10.7%</td></tr><tr><td class="n">23</td><td>Tool results</td><td class="n">6</td><td class="n">2,000</td><td class="n">10.7%</td></tr><tr><td class="n">3</td><td>Project instructions</td><td class="n">0</td><td class="n">750</td><td class="n">4.0%</td></tr><tr><td class="n">4</td><td>Runtime injections</td><td class="n">0</td><td class="n">150</td><td class="n">0.8%</td></tr></tbody></table></div></details></div><div class="gen"><div class="gen-h"><h3>Generation 2 · after compaction 1</h3><span>5.9k tokens appended · 6 requests · last request read 1.3k</span><label>zoom <input type="range" min="1" max="12" step="1" value="1" data-zoom="zoom-2"></label></div><div class="strip-vp"><div class="strip-in" id="zoom-2"><div class="strip"><button type="button" class="k-compact" style="width:17.021%" title="Compacted history · 1,000 tokens · 17.0% of the generation">Compacted history</button><button type="button" class="k-user binned" style="width:2.128%" title="Your messages · 125 tokens · 2.1% of the generation · 2 blocks binned"></button><button type="button" class="k-tool" style="width:12.766%" title="Tool results · 750 tokens · 12.8% of the generation">Tool results</button><button type="button" class="k-asst" style="width:0.851%" title="Model replies · 50 tokens · 0.9% of the generation"></button><button type="button" class="k-tool" style="width:12.766%" title="Tool results · 750 tokens · 12.8% of the generation">Tool results</button><button type="button" class="k-asst" style="width:0.851%" title="Model replies · 50 tokens · 0.9% of the generation"></button><button type="button" class="k-tool" style="width:12.766%" title="Tool results · 750 tokens · 12.8% of the generation">Tool results</button><button type="button" class="k-asst" style="width:0.851%" title="Model replies · 50 tokens · 0.9% of the generation"></button><button type="button" class="k-tool" style="width:12.766%" title="Tool results · 750 tokens · 12.8% of the generation">Tool results</button><button type="button" class="k-asst" style="width:0.851%" title="Model replies · 50 tokens · 0.9% of the generation"></button><button type="button" class="k-tool" style="width:12.766%" title="Tool results · 750 tokens · 12.8% of the generation">Tool results</button><button type="button" class="k-asst" style="width:0.851%" title="Model replies · 50 tokens · 0.9% of the generation"></button><button type="button" class="k-tool" style="width:12.766%" title="Tool results · 750 tokens · 12.8% of the generation">Tool results</button></div><div class="tokaxis"><i style="left:0.00%"></i><b style="left:0.00%">0</b><i style="left:17.02%"></i><b style="left:17.02%">1.0k</b><i style="left:34.04%"></i><b style="left:34.04%">2.0k</b><i style="left:51.06%"></i><b style="left:51.06%">3.0k</b><i style="left:68.09%"></i><b style="left:68.09%">4.0k</b><i style="left:85.11%"></i><b style="left:85.11%">5.0k</b></div></div></div><div class="strip-legend"><span><i class="k-tool"></i>Tool results 4.5k</span><span><i class="k-compact"></i>Compacted history 1.0k</span><span><i class="k-asst"></i>Model replies 300</span><span><i class="k-user"></i>Your messages 75</span></div><details><summary>10 largest blocks</summary><div class="tbl-scroll"><table class="rt"><thead><tr><th class="n">Block</th><th>Kind</th><th class="n">Request</th><th class="n">Tokens</th><th class="n">Share</th></tr></thead><tbody><tr><td class="n">25</td><td>Compacted history</td><td class="n">6</td><td class="n">1,000</td><td class="n">17.0%</td></tr><tr><td class="n">28</td><td>Tool results</td><td class="n">7</td><td class="n">750</td><td class="n">12.8%</td></tr><tr><td class="n">30</td><td>Tool results</td><td class="n">8</td><td class="n">750</td><td class="n">12.8%</td></tr><tr><td class="n">32</td><td>Tool results</td><td class="n">9</td><td class="n">750</td><td class="n">12.8%</td></tr><tr><td class="n">34</td><td>Tool results</td><td class="n">10</td><td class="n">750</td><td class="n">12.8%</td></tr><tr><td class="n">36</td><td>Tool results</td><td class="n">11</td><td class="n">750</td><td class="n">12.8%</td></tr><tr><td class="n">38</td><td>Tool results</td><td class="n">12</td><td class="n">750</td><td class="n">12.8%</td></tr><tr><td class="n">26</td><td>Your messages</td><td class="n">6</td><td class="n">75</td><td class="n">1.3%</td></tr><tr><td class="n">27</td><td>Model replies</td><td class="n">7</td><td class="n">50</td><td class="n">0.9%</td></tr><tr><td class="n">29</td><td>Model replies</td><td class="n">8</td><td class="n">50</td><td class="n">0.9%</td></tr></tbody></table></div></details></div></section></main></body></html>

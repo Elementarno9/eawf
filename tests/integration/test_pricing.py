@@ -1,13 +1,10 @@
-"""Unit tests for the telemetry pricing snapshot, drift check, and CLI verb.
+"""Telemetry price files, drift check and CLI verb.
 
-Covers (C09 §5.9.6.1):
+Covers:
 
-- :data:`PRICING` snapshot shape — Decimal per-token rates, the
-  ``2026.10.22`` ``pricing_version`` literal, and the explicit cache
-  multipliers stated by Anthropic (5m = 1.25x, 1h = 2x, read = 0.1x, or
-  the row's own published read multiplier).
-- :func:`lookup_pricing` exact match, longest-prefix fallback, and miss.
-- ``extra="forbid"`` on the row models and ``ModelPricing``.
+- The shipped price files: Decimal rates, the Anthropic-stated cache-write
+  multipliers, exact lookup and the ids the dispatch routing table emits.
+- ``extra="forbid"`` on the telemetry row models.
 - :func:`check_pricing_currency` -> :class:`PricingDriftReport`.
 - ``eawf telemetry pricing-currency-check`` text / JSON / ``--strict``.
 """
@@ -15,13 +12,17 @@ Covers (C09 §5.9.6.1):
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
+from pathlib import Path
+from typing import Any
 
 import pytest
+import yaml
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
+import eawf.observability.telemetry.pricing as pricing
 from eawf.observability.telemetry.models import (
     EndMarker,
     RuntimeErrorClass,
@@ -30,17 +31,13 @@ from eawf.observability.telemetry.models import (
     ToolCallErrorKind,
 )
 from eawf.observability.telemetry.pricing import (
-    CACHE_READ_MULTIPLIER,
-    CACHE_READ_MULTIPLIER_BY_MODEL,
     CACHE_WRITE_1H_MULTIPLIER,
     CACHE_WRITE_5M_MULTIPLIER,
-    PRICING,
-    PRICING_FETCHED_AT,
-    PRICING_VERSION,
-    ModelPricing,
+    PriceBook,
     PricingDriftReport,
+    TokenUsage,
     check_pricing_currency,
-    lookup_pricing,
+    load_price_book,
 )
 from eawf.surfaces.cli.app import app
 
@@ -48,293 +45,75 @@ pytestmark = pytest.mark.unit
 
 runner = CliRunner()
 
+_ON = date(2026, 11, 10)
+_BOOK = load_price_book(repo_root=None, overrides={})
+
 
 # --------------------------------------------------------------------------
-# Snapshot shape: pricing_version, Decimal rates, cache multipliers.
+# Shipped rates: Decimal, cache-write multipliers, exact lookup.
 # --------------------------------------------------------------------------
 
 
-def test_pricing_version_literal() -> None:
-    assert PRICING_VERSION == "2026.10.22"
-    assert datetime(2026, 10, 22, 21, 30, 0, tzinfo=UTC) == PRICING_FETCHED_AT
+def test_every_priced_rate_is_decimal_not_float() -> None:
+    for row in _BOOK.rows:
+        if row.rates is None:
+            continue
+        for value in (row.rates.input, row.rates.output, row.rates.cache_read):
+            assert isinstance(value, Decimal), row.id
 
 
-def test_pricing_version_stamped_on_every_row() -> None:
-    assert PRICING  # snapshot is non-empty
-    for model_id, row in PRICING.items():
-        assert row.pricing_version == PRICING_VERSION, model_id
-        assert row.fetched_at == PRICING_FETCHED_AT, model_id
-
-
-def test_pricing_rates_are_decimal_not_float() -> None:
-    for model_id, row in PRICING.items():
-        for field in (
-            "input_per_token",
-            "output_per_token",
-            "cache_read_per_token",
-            "cache_write_5m_per_token",
-            "cache_write_1h_per_token",
-        ):
-            value = getattr(row, field)
-            assert isinstance(value, Decimal), f"{model_id}.{field} is {type(value)}"
-
-
-def test_opus_4_7_rates_match_snapshot() -> None:
-    row = PRICING["claude-opus-4-7"]
-    assert row.input_per_token == Decimal("5e-6")
-    assert row.output_per_token == Decimal("25e-6")
-    assert row.cache_read_per_token == Decimal("0.5e-6")
-    assert row.cache_write_5m_per_token == Decimal("6.25e-6")
-    assert row.cache_write_1h_per_token == Decimal("10e-6")
-
-
-def test_haiku_4_5_rates_match_snapshot() -> None:
-    row = PRICING["claude-haiku-4-5-20251001"]
-    assert row.input_per_token == Decimal("1e-6")
-    assert row.output_per_token == Decimal("5e-6")
-    assert row.cache_read_per_token == Decimal("0.1e-6")
-
-
-def test_cache_multipliers_explicit_and_consistent() -> None:
-    # Anthropic-stated multipliers, encoded explicitly (not derived).
-    assert Decimal("0.1") == CACHE_READ_MULTIPLIER
+def test_cache_write_multipliers_explicit_and_held_by_every_anthropic_row() -> None:
     assert Decimal("1.25") == CACHE_WRITE_5M_MULTIPLIER
     assert Decimal("2") == CACHE_WRITE_1H_MULTIPLIER
-    for model_id, row in PRICING.items():
-        read = CACHE_READ_MULTIPLIER_BY_MODEL.get(model_id, CACHE_READ_MULTIPLIER)
-        assert row.cache_read_per_token == row.input_per_token * read, model_id
-        assert row.cache_write_5m_per_token == row.input_per_token * CACHE_WRITE_5M_MULTIPLIER, (
-            model_id
-        )
-        assert row.cache_write_1h_per_token == row.input_per_token * CACHE_WRITE_1H_MULTIPLIER, (
-            model_id
-        )
-
-
-# --------------------------------------------------------------------------
-# lookup_pricing: exact, longest-prefix, miss.
-# --------------------------------------------------------------------------
-
-
-def test_lookup_pricing_exact_match() -> None:
-    assert lookup_pricing("claude-opus-4-7") is PRICING["claude-opus-4-7"]
-
-
-def test_lookup_pricing_longest_prefix_fallback() -> None:
-    # Dated variant is not a key; falls back to the longest matching prefix.
-    result = lookup_pricing("claude-opus-4-7-20260514")
-    assert result is PRICING["claude-opus-4-7"]
-
-
-def test_lookup_pricing_prefers_longest_prefix() -> None:
-    # Both "claude-haiku-4-5" and "claude-haiku-4-5-20251001" are keys; a
-    # dated id must resolve to the longer (more specific) prefix.
-    result = lookup_pricing("claude-haiku-4-5-20251001-extra")
-    assert result is PRICING["claude-haiku-4-5-20251001"]
-
-
-def test_lookup_pricing_miss_returns_none() -> None:
-    assert lookup_pricing("gpt-4o") is None
-
-
-def test_lookup_pricing_empty_string_returns_none() -> None:
-    assert lookup_pricing("") is None
-
-
-# --------------------------------------------------------------------------
-# claude-opus-4-8 row + bare-alias resolution + codex row.
-# --------------------------------------------------------------------------
-
-
-def test_opus_4_8_row_present_and_priced() -> None:
-    row = PRICING["claude-opus-4-8"]
-    assert row.input_per_token == Decimal("5e-6")
-    assert row.output_per_token == Decimal("25e-6")
-    assert row.cache_read_per_token == Decimal("0.5e-6")
-    assert row.cache_write_5m_per_token == Decimal("6.25e-6")
-    assert row.cache_write_1h_per_token == Decimal("10e-6")
-
-
-def test_opus_4_8_row_mirrors_opus_4_7() -> None:
-    new = PRICING["claude-opus-4-8"]
-    prior = PRICING["claude-opus-4-7"]
-    for field in (
-        "input_per_token",
-        "output_per_token",
-        "cache_read_per_token",
-        "cache_write_5m_per_token",
-        "cache_write_1h_per_token",
-    ):
-        assert getattr(new, field) == getattr(prior, field), field
-
-
-def test_lookup_pricing_opus_4_8_dated_variant_resolves() -> None:
-    # A dated/bracketed runtime id falls back to the longest matching prefix.
-    result = lookup_pricing("claude-opus-4-8-20260101")
-    assert result is PRICING["claude-opus-4-8"]
-
-
-def test_lookup_pricing_opus_4_8_bracket_variant_resolves() -> None:
-    # The live runtime id form (e.g. "claude-opus-4-8[1m]") prefix-matches.
-    result = lookup_pricing("claude-opus-4-8[1m]")
-    assert result is PRICING["claude-opus-4-8"]
+    anthropic = next(file for file in _BOOK.files if file.vendor == "anthropic")
+    for row in anthropic.models:
+        assert row.rates is not None and row.rates.input is not None, row.id
+        assert row.rates.cache_write["5m"] == row.rates.input * CACHE_WRITE_5M_MULTIPLIER, row.id
+        assert row.rates.cache_write["1h"] == row.rates.input * CACHE_WRITE_1H_MULTIPLIER, row.id
 
 
 @pytest.mark.parametrize(
-    ("alias", "expected_input"),
+    ("model", "row_id"),
     [
-        ("opus", Decimal("5e-6")),
-        ("claude-opus", Decimal("5e-6")),
-        ("sonnet", Decimal("3e-6")),
-        ("claude-sonnet", Decimal("3e-6")),
-        ("haiku", Decimal("1e-6")),
-        ("claude-haiku", Decimal("1e-6")),
-        ("codex", Decimal("5e-6")),
+        ("claude-opus-4-7", "claude-opus-4-7"),
+        ("claude-opus-4-8[1m]", "claude-opus-4-8"),
+        ("claude-haiku-4-5-20251001", "claude-haiku-4-5"),
+        ("anthropic/claude-haiku-4-5", "claude-haiku-4-5"),
+        ("anthropic/claude-sonnet-4-6", "claude-sonnet-4-6"),
+        ("anthropic/claude-opus-4-8", "claude-opus-4-8"),
     ],
 )
-def test_lookup_pricing_bare_alias_resolves_to_priced_row(
-    alias: str, expected_input: Decimal
-) -> None:
-    # Bare aliases used on the dispatch / role-spec surface (and short-form
-    # runtime logs) must price to a real row, not fall through unpriced.
-    row = lookup_pricing(alias)
-    assert row is not None, alias
-    assert row.input_per_token == expected_input
+def test_listed_ids_resolve_to_their_row(model: str, row_id: str) -> None:
+    row = _BOOK.resolve(model, on=_ON)
 
-
-def test_lookup_pricing_bare_alias_does_not_shadow_dated_row() -> None:
-    # The "claude-opus" alias is a prefix of "claude-opus-4-8"; the resolver
-    # must still bind the longer, more specific dated row.
-    assert lookup_pricing("claude-opus-4-8") is PRICING["claude-opus-4-8"]
-    assert lookup_pricing("claude-opus-4-7-20260514") is PRICING["claude-opus-4-7"]
-
-
-def test_codex_row_present_and_priced() -> None:
-    # Codex is net-new (placeholder rate pending operator confirmation); it
-    # must exist and price non-zero so codex sessions are not silently $0.
-    row = PRICING["codex"]
-    assert row.input_per_token > Decimal("0")
-    assert row.output_per_token > Decimal("0")
-
-
-def test_codex_row_currency_invariant_holds() -> None:
-    row = PRICING["codex"]
-    assert row.cache_read_per_token == row.input_per_token * CACHE_READ_MULTIPLIER
-    assert row.cache_write_5m_per_token == row.input_per_token * CACHE_WRITE_5M_MULTIPLIER
-    assert row.cache_write_1h_per_token == row.input_per_token * CACHE_WRITE_1H_MULTIPLIER
-
-
-def test_lookup_pricing_codex_dated_variant_resolves() -> None:
-    # A model-specific codex id (e.g. "codex-mini-latest") prefix-matches the
-    # placeholder codex row rather than returning None.
-    result = lookup_pricing("codex-mini-latest")
-    assert result is PRICING["codex"]
-
-
-def test_lookup_pricing_opencode_still_unpriced() -> None:
-    # The bare runtime id "opencode" is NOT a model id (opencode addresses
-    # models in provider/model form); no key is a prefix of it, so it stays
-    # unpriced (None), confirming the new keys did not widen the match set
-    # wrongly. The opencode MODEL ids ("anthropic/...") are priced separately.
-    assert lookup_pricing("opencode") is None
-
-
-# --------------------------------------------------------------------------
-# Cross-vendor per-tier model rows: codex bare ids + opencode
-# provider/model ids the dispatch routing table emits must all price.
-# --------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("model_id", ["gpt-5-mini", "gpt-5", "gpt-5-codex"])
-def test_codex_tier_rows_present_and_priced(model_id: str) -> None:
-    # Each codex per-tier id the routing table emits prices non-zero
-    # (placeholder rate pending operator confirmation) -- a codex juror spawn
-    # must not silently bill $0.
-    row = PRICING[model_id]
-    assert row.input_per_token > Decimal("0")
-    assert row.output_per_token > Decimal("0")
+    assert row is not None and row.id == row_id
 
 
 @pytest.mark.parametrize(
-    "model_id",
+    "model",
     [
-        "anthropic/claude-haiku-4-5",
-        "anthropic/claude-sonnet-4-6",
-        "anthropic/claude-opus-4-8",
+        "",
+        "gpt-4o",
+        "opencode",
+        "codex",
+        "codex-mini-latest",
+        "gpt-5-codex",
+        "gpt-5-2026",
+        "claude-opus",
+        "claude-opus-4-7-20260514",
+        "anthropic/claude-opus-4-8-20260101",
     ],
 )
-def test_opencode_provider_model_rows_present_and_priced(model_id: str) -> None:
-    # The opencode provider/model ids price at the REAL anthropic rates (the
-    # OAuth-Claude lane), so they mirror the bare claude row's input rate.
-    row = PRICING[model_id]
-    bare = model_id.removeprefix("anthropic/")
-    assert row.input_per_token == PRICING[bare].input_per_token
-    assert row.output_per_token == PRICING[bare].output_per_token
+def test_an_id_no_row_lists_is_unpriced(model: str) -> None:
+    quote = _BOOK.quote(model, TokenUsage(input=10), on=_ON)
 
-
-def test_lookup_pricing_gpt5_codex_prefers_longest_prefix_over_gpt5() -> None:
-    # Both "gpt-5" and "gpt-5-codex" are keys; the codex id must bind the
-    # longer, more specific row rather than the gpt-5 mid-tier row.
-    assert lookup_pricing("gpt-5-codex") is PRICING["gpt-5-codex"]
-    # A suffixed codex id still binds the codex row, not gpt-5.
-    assert lookup_pricing("gpt-5-codex-preview") is PRICING["gpt-5-codex"]
-
-
-def test_lookup_pricing_gpt5_dated_variant_resolves() -> None:
-    # A dated/suffixed gpt-5 id with no exact row prices via the gpt-5 prefix
-    # row (and NOT gpt-5-codex, which is not a prefix of "gpt-5-2026").
-    assert lookup_pricing("gpt-5-2026") is PRICING["gpt-5"]
-
-
-def test_lookup_pricing_opencode_model_dated_variant_resolves() -> None:
-    # A dated opencode provider/model id longest-prefix-matches its tier row.
-    result = lookup_pricing("anthropic/claude-opus-4-8-20260101")
-    assert result is PRICING["anthropic/claude-opus-4-8"]
-
-
-def test_lookup_pricing_gpt4o_still_miss() -> None:
-    # The new gpt-5* keys must not widen the match set to an unrelated OpenAI
-    # id: "gpt-5" is not a prefix of "gpt-4o", so it stays a miss.
-    assert lookup_pricing("gpt-4o") is None
-
-
-def test_cross_vendor_rows_keep_currency_check_green() -> None:
-    # The W15 codex + opencode additions must not introduce drift.
-    report = check_pricing_currency()
-    assert report.is_current is True
-    assert report.findings == []
-
-
-def test_new_rows_keep_currency_check_green() -> None:
-    # The W20 additions must not introduce drift in the snapshot.
-    report = check_pricing_currency()
-    assert report.is_current is True
-    assert report.findings == []
+    assert _BOOK.resolve(model, on=_ON) is None
+    assert quote.cost_usd is None and quote.unpriced_tokens == 10
 
 
 # --------------------------------------------------------------------------
 # extra="forbid" on the models.
 # --------------------------------------------------------------------------
-
-
-def test_model_pricing_rejects_unknown_field() -> None:
-    with pytest.raises(ValidationError):
-        ModelPricing(
-            input_per_token=Decimal("5e-6"),
-            output_per_token=Decimal("25e-6"),
-            cache_read_per_token=Decimal("0.5e-6"),
-            cache_write_5m_per_token=Decimal("6.25e-6"),
-            cache_write_1h_per_token=Decimal("10e-6"),
-            pricing_version=PRICING_VERSION,
-            fetched_at=PRICING_FETCHED_AT,
-            unexpected="boom",
-        )
-
-
-def test_model_pricing_is_frozen() -> None:
-    row = PRICING["claude-opus-4-7"]
-    with pytest.raises(ValidationError):
-        row.input_per_token = Decimal("1e-6")
 
 
 def test_telemetry_session_rejects_unknown_field() -> None:
@@ -355,22 +134,25 @@ def test_telemetry_session_rejects_unknown_field() -> None:
         )
 
 
-def test_telemetry_session_total_cost_usd_is_decimal() -> None:
-    session = TelemetrySession(
-        session_id="s1",
-        project_id="p1",
-        runtime="claude",
-        wave_id="W11",
-        attempt_id="a1",
-        session_log_path="log",
-        started_at=None,
-        ended_at=None,
-        duration_ms=None,
-        model_primary="claude-opus-4-7",
-        end_marker="clean_stop",
-    )
-    assert isinstance(session.total_cost_usd, Decimal)
-    assert session.total_cost_usd == Decimal("0")
+def test_telemetry_session_total_cost_usd_is_decimal_or_unpriced() -> None:
+    fields: dict[str, object] = {
+        "session_id": "s1",
+        "project_id": "p1",
+        "runtime": "claude",
+        "wave_id": "W11",
+        "attempt_id": "a1",
+        "session_log_path": "log",
+        "started_at": None,
+        "ended_at": None,
+        "duration_ms": None,
+        "model_primary": "claude-opus-4-7",
+        "end_marker": "clean_stop",
+    }
+    # A row nothing priced records no cost rather than a zero that reads as free.
+    assert TelemetrySession.model_validate(fields).total_cost_usd is None
+    priced = TelemetrySession.model_validate({**fields, "total_cost_usd": "0.017"})
+    assert isinstance(priced.total_cost_usd, Decimal)
+    assert priced.total_cost_usd == Decimal("0.017")
 
 
 def test_telemetry_session_rejects_unknown_runtime() -> None:
@@ -447,20 +229,49 @@ def test_runtime_switch_row_uses_typed_cause_enum() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_check_pricing_currency_clean_snapshot() -> None:
+def _drifted_book(tmp_path: Path, write_5m: float = 9) -> PriceBook:
+    body: dict[str, Any] = {
+        "vendor": "anthropic",
+        "aliases": [],
+        "models": [
+            {
+                "id": "claude-opus-4-7",
+                "match": ["claude-opus-4-7"],
+                "effective_from": None,
+                "effective_to": None,
+                "source_url": "https://example.invalid/pricing",
+                "verified_on": "2026-11-10",
+                "verified_by": "fetch",
+                "rates": {
+                    "input": 5,
+                    "output": 25,
+                    "cache_read": 0.5,
+                    "cache_write": {"5m": write_5m, "1h": 10},
+                },
+                "tiers": [],
+                "modifiers": {"fast": None, "geo_us": 1.1},
+            }
+        ],
+    }
+    (tmp_path / "anthropic.yaml").write_text(yaml.safe_dump(body), encoding="utf-8")
+    return load_price_book(repo_root=None, directory=tmp_path, overrides={})
+
+
+def test_check_pricing_currency_clean_files() -> None:
     report = check_pricing_currency()
     assert isinstance(report, PricingDriftReport)
     assert report.is_current is True
     assert report.findings == []
-    assert report.model_count == len(PRICING)
-    assert report.pricing_version == PRICING_VERSION
+    assert report.model_count == len(_BOOK.rows)
+    assert report.pricing_version == _BOOK.version
+    assert report.fetched_at == datetime(2026, 11, 10, tzinfo=UTC)
 
 
 def test_pricing_drift_report_rejects_unknown_field() -> None:
     with pytest.raises(ValidationError):
         PricingDriftReport(
-            pricing_version=PRICING_VERSION,
-            fetched_at=PRICING_FETCHED_AT,
+            pricing_version=_BOOK.version,
+            fetched_at=datetime(2026, 11, 10, tzinfo=UTC),
             model_count=1,
             is_current=True,
             findings=[],
@@ -468,63 +279,17 @@ def test_pricing_drift_report_rejects_unknown_field() -> None:
         )
 
 
-def test_check_pricing_currency_detects_injected_drift(monkeypatch: pytest.MonkeyPatch) -> None:
-    drifted = ModelPricing(
-        input_per_token=Decimal("5e-6"),
-        output_per_token=Decimal("25e-6"),
-        # cache read should be 0.5e-6 (0.1 x input); inject a stale value.
-        cache_read_per_token=Decimal("1.5e-6"),
-        cache_write_5m_per_token=Decimal("6.25e-6"),
-        cache_write_1h_per_token=Decimal("10e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    )
-    monkeypatch.setitem(PRICING, "claude-opus-4-7", drifted)
-    report = check_pricing_currency()
-    assert report.is_current is False
-    assert any(
-        f.model_id == "claude-opus-4-7" and f.field == "cache_read_per_token"
-        for f in report.findings
-    )
-
-
-def test_cache_read_multiplier_overrides_name_priced_rows() -> None:
-    """Boundary: every per-model read multiplier keys a real row and differs from the default."""
-    assert set(CACHE_READ_MULTIPLIER_BY_MODEL) <= set(PRICING)
-    assert CACHE_READ_MULTIPLIER not in CACHE_READ_MULTIPLIER_BY_MODEL.values()
-    assert CACHE_READ_MULTIPLIER_BY_MODEL["claude-opus-5-5"] == Decimal("0.05")
-
-
-def test_check_pricing_currency_holds_override_row_to_its_own_multiplier(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Error path: an Opus 5.5 row at the default 0.1x read rate is drift, not current."""
-    row = PRICING["claude-opus-5-5"]
-    standard_read = row.model_copy(
-        update={"cache_read_per_token": row.input_per_token * CACHE_READ_MULTIPLIER}
-    )
-    monkeypatch.setitem(PRICING, "claude-opus-5-5", standard_read)
-
-    report = check_pricing_currency()
+def test_check_pricing_currency_detects_a_drifted_write_rate(tmp_path: Path) -> None:
+    report = check_pricing_currency(_drifted_book(tmp_path))
 
     assert report.is_current is False
-    assert [(f.model_id, f.field) for f in report.findings] == [
-        ("claude-opus-5-5", "cache_read_per_token")
-    ]
-
-
-def test_check_pricing_currency_flags_a_row_on_a_stale_version(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Error path: a row left on the previous snapshot tag is reported as drift."""
-    stale = PRICING["claude-sonnet-5"].model_copy(update={"pricing_version": "2026.05.17"})
-    monkeypatch.setitem(PRICING, "claude-sonnet-5", stale)
-
-    report = check_pricing_currency()
-
     assert [(f.model_id, f.field, f.actual) for f in report.findings] == [
-        ("claude-sonnet-5", "pricing_version", "2026.05.17")
+        ("claude-opus-4-7", "cache_write.5m", Decimal(9))
     ]
+
+
+def test_check_pricing_currency_on_a_consistent_fixture_is_current(tmp_path: Path) -> None:
+    assert check_pricing_currency(_drifted_book(tmp_path, write_5m=6.25)).is_current
 
 
 # --------------------------------------------------------------------------
@@ -532,54 +297,40 @@ def test_check_pricing_currency_flags_a_row_on_a_stale_version(
 # --------------------------------------------------------------------------
 
 
+def _serve(monkeypatch: pytest.MonkeyPatch, book: PriceBook) -> None:
+    monkeypatch.setattr(pricing, "load_price_book", lambda **_kwargs: book)
+
+
 def test_cli_pricing_currency_check_text_ok() -> None:
     result = runner.invoke(app, ["telemetry", "pricing-currency-check"])
     assert result.exit_code == 0, result.output
     assert "CURRENT" in result.output
-    assert PRICING_VERSION in result.output
+    assert _BOOK.version in result.output
 
 
 def test_cli_pricing_currency_check_json_envelope() -> None:
     result = runner.invoke(app, ["--json", "telemetry", "pricing-currency-check"])
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["pricing_version"] == PRICING_VERSION
+    assert payload["pricing_version"] == _BOOK.version
     assert payload["is_current"] is True
-    assert payload["model_count"] == len(PRICING)
+    assert payload["model_count"] == len(_BOOK.rows)
     assert payload["findings"] == []
 
 
 def test_cli_pricing_currency_check_strict_exits_nonzero_on_drift(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    drifted = ModelPricing(
-        input_per_token=Decimal("5e-6"),
-        output_per_token=Decimal("25e-6"),
-        cache_read_per_token=Decimal("9e-6"),
-        cache_write_5m_per_token=Decimal("6.25e-6"),
-        cache_write_1h_per_token=Decimal("10e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    )
-    monkeypatch.setitem(PRICING, "claude-opus-4-7", drifted)
+    _serve(monkeypatch, _drifted_book(tmp_path))
     result = runner.invoke(app, ["telemetry", "pricing-currency-check", "--strict"])
     assert result.exit_code == 2, result.output
     assert "DRIFT" in result.output
 
 
 def test_cli_pricing_currency_check_drift_without_strict_exits_zero(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    drifted = ModelPricing(
-        input_per_token=Decimal("5e-6"),
-        output_per_token=Decimal("25e-6"),
-        cache_read_per_token=Decimal("9e-6"),
-        cache_write_5m_per_token=Decimal("6.25e-6"),
-        cache_write_1h_per_token=Decimal("10e-6"),
-        pricing_version=PRICING_VERSION,
-        fetched_at=PRICING_FETCHED_AT,
-    )
-    monkeypatch.setitem(PRICING, "claude-opus-4-7", drifted)
+    _serve(monkeypatch, _drifted_book(tmp_path))
     result = runner.invoke(app, ["telemetry", "pricing-currency-check"])
     assert result.exit_code == 0, result.output
     assert "DRIFT" in result.output

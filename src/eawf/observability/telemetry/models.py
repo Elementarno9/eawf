@@ -284,7 +284,9 @@ class TelemetrySession(BaseModel):
     total_output_tokens: int = 0
     total_cache_read: int = 0
     total_cache_write: int = 0
-    total_cost_usd: Decimal = Field(default=Decimal("0"))
+    # The sum of the session's priced requests, each at its own date, tier and
+    # write class; ``None`` when no request is priced.
+    total_cost_usd: Decimal | None = None
     turn_count: int = 0
     tool_call_count: int = 0
     error_count: int = 0
@@ -637,6 +639,10 @@ class ObservedRequest(BaseModel):
         price_source: Provenance of ``cost_usd``.
         rate_table_version: Rate-table revision behind a list-reconstructed
             cost.
+        speed: The request's ``usage.speed``, kept so a re-price applies
+            fast-mode rates without reading the transcript again.
+        inference_geo: The request's ``usage.inference_geo``, kept for the
+            same reason.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -658,6 +664,8 @@ class ObservedRequest(BaseModel):
     cost_usd: Decimal | None = Field(default=None, ge=Decimal("0"))
     price_source: PriceSourceKind
     rate_table_version: str | None = None
+    speed: str | None = None
+    inference_geo: str | None = None
 
     @model_validator(mode="after")
     def _usage_reconciles(self) -> Self:

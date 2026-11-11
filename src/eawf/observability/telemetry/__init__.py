@@ -1,8 +1,8 @@
 """Telemetry subsystem — vendored row models, pricing snapshot, projection.
 
 The telemetry package owns the observability projection (V7): Pydantic v2
-row models retyped from a vendored prototype's dataclasses, the embedded
-``PRICING`` snapshot used by the cost ledger, and the per-runtime / event
+row models retyped from a vendored prototype's dataclasses, the dated price
+files the cost ledger prices with, and the per-runtime / event
 projection that feeds ``eawf metrics``.
 
 This wave lands the foundation: the row models

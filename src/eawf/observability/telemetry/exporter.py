@@ -222,10 +222,15 @@ def _tokens_family(sessions: list[TelemetrySession], *, scope: str) -> MetricFam
 
 
 def _cost_family(sessions: list[TelemetrySession], *, scope: str) -> MetricFamily:
-    """Build the ``eawf_cost_usd_total`` counter (M02), summed per runtime."""
+    """Build the ``eawf_cost_usd_total`` counter (M02), summed per runtime.
+
+    An unpriced session adds nothing, and a runtime none of whose sessions is
+    priced has no sample, since a zero would read as free.
+    """
     totals: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
     for session in sessions:
-        totals[session.runtime] += session.total_cost_usd
+        if session.total_cost_usd is not None:
+            totals[session.runtime] += session.total_cost_usd
     samples = tuple(
         MetricSample(
             labels=(("runtime", runtime), ("scope", scope)),

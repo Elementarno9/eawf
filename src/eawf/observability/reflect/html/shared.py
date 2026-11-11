@@ -8,6 +8,7 @@ million, so sessions on different models and cache mixes compare on one scale.
 from __future__ import annotations
 
 import html
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -44,6 +45,12 @@ DASH: Final = chr(0x2013)
 
 #: Tokens per unit of a per-million rate.
 PER_MILLION: Final = Decimal(1_000_000)
+
+#: Advance width of one monospace glyph as a share of the font size.
+GLYPH_EM: Final = 0.6
+
+#: Compact count units, smallest first; :func:`compact` moves up while a value reaches 1000.
+_SCALES: Final = ((1e3, "k"), (1e6, "M"), (1e9, "B"))
 
 _TIMES: Final = chr(0xD7)
 _ABOUT: Final = chr(0x2248)
@@ -131,12 +138,31 @@ def esc(value: object) -> str:
 
 
 def compact(value: float) -> str:
-    """Return a count in compact form, such as ``1.8b`` or ``950``."""
-    for size, suffix in ((1e9, "b"), (1e6, "m"), (1e3, "k")):
-        if abs(value) >= size:
-            scaled = value / size
-            return f"{scaled:.0f}{suffix}" if scaled >= 100 else f"{scaled:.1f}{suffix}"
-    return f"{value:.0f}"
+    """Return a count in compact form: ``950``, ``50k``, ``1.3M`` or ``10B``.
+
+    One decimal below 100 of a unit, none from there, and never a trailing
+    ``.0``; a value that rounds up to 1000 of a unit moves to the next one, so
+    999,950 reads ``1M``, not ``1000k``.
+
+    Args:
+        value: The count; a negative count keeps its sign.
+
+    Returns:
+        The compact text.
+
+    Raises:
+        TypeError: When *value* is not a number.
+    """
+    magnitude = abs(value)
+    text = f"{magnitude:.0f}"
+    if float(text) >= 1000:
+        for size, suffix in _SCALES:
+            scaled = magnitude / size
+            shown = f"{scaled:.0f}" if scaled >= 100 else f"{round(scaled, 1):g}"
+            text = f"{shown}{suffix}"
+            if float(shown) < 1000 or suffix == _SCALES[-1][1]:
+                break
+    return f"-{text}" if value < 0 and text != "0" else text
 
 
 def exact(value: float) -> str:
@@ -168,17 +194,33 @@ def pct(part: float, whole: float) -> str:
 
 
 def duration(milliseconds: float | None) -> str:
-    """Return a span such as ``42s``, ``17m`` or ``6.5h``."""
+    """Return a span as ``45s``, ``12min``, ``3h 05m`` or ``2d 4h``.
+
+    Each form rounds to its smallest unit; a span that rounds up to the next
+    unit takes that unit's form, so 59.6 seconds reads ``1min``.
+
+    Args:
+        milliseconds: The span, or ``None`` when nothing recorded it.
+
+    Returns:
+        The span text, or the dash for ``None``.
+
+    Raises:
+        TypeError: When *milliseconds* is neither a number nor ``None``.
+    """
     if milliseconds is None:
         return DASH
     seconds = milliseconds / 1000
-    if seconds < 60:
-        return f"{seconds:.0f}s"
-    minutes = seconds / 60
+    if round(seconds) < 60:
+        return f"{round(seconds)}s"
+    minutes = round(seconds / 60)
     if minutes < 60:
-        return f"{minutes:.1f}m" if minutes < 10 else f"{minutes:.0f}m"
-    hours = minutes / 60
-    return f"{hours:.1f}h" if hours < 48 else f"{hours / 24:.1f}d"
+        return f"{minutes}min"
+    if minutes < 24 * 60:
+        hours, rest = divmod(minutes, 60)
+        return f"{hours}h {rest:02d}m"
+    days, hours = divmod(round(seconds / 3600), 24)
+    return f"{days}d {hours}h"
 
 
 def elapsed(seconds: float) -> str:
@@ -235,6 +277,65 @@ def trim(text: str, limit: int) -> str:
 def absent(reason: str) -> str:
     """Return the dash for an unrecorded value, with *reason* on hover."""
     return f'<span class="unk" title="{esc(reason)}">{DASH}</span>'
+
+
+# ---- chart geometry -------------------------------------------------------------------
+
+
+def label_width(text: str, font_px: float) -> float:
+    """Return the width in px of *text* set in the pages' monospace font.
+
+    Args:
+        text: The label.
+        font_px: The font size in px.
+
+    Returns:
+        The width: every monospace glyph advances by :data:`GLYPH_EM` of the font size.
+
+    Raises:
+        TypeError: When *text* is not a sized string.
+    """
+    return len(text) * GLYPH_EM * font_px
+
+
+def axis_side(labels: Sequence[str], font_px: float) -> int:
+    """Return a chart's side margin in px: half its widest tick label plus 4px.
+
+    Args:
+        labels: The tick labels.
+        font_px: Their font size in px.
+
+    Returns:
+        The margin, rounded up to a whole pixel; 4 with no labels.
+    """
+    widest = max((label_width(label, font_px) for label in labels), default=0.0)
+    return math.ceil(widest / 2 + 4)
+
+
+def axis_ticks(ticks: Sequence[tuple[float, str]]) -> str:
+    """Return an axis's tick marks and labels, the end labels anchored inward.
+
+    The first label starts at its tick (``t-first``) and the last ends at it
+    (``t-last``), so neither overhangs the axis box; inner labels centre.
+
+    Args:
+        ticks: Offsets in percent of the axis width with their labels, in order.
+
+    Returns:
+        The markup; empty with no ticks.
+
+    Raises:
+        ValueError: When an offset is not a number.
+    """
+    last = len(ticks) - 1
+    marks = []
+    for index, (at, label) in enumerate(ticks):
+        end = ' class="t-first"' if index == 0 else ' class="t-last"' if index == last else ""
+        marks.append(
+            f'<i class="mj" style="left:{at:.2f}%"></i><b{end} style="left:{at:.2f}%">'
+            f"{esc(label)}</b>"
+        )
+    return "".join(marks)
 
 
 # ---- session identity -----------------------------------------------------------------

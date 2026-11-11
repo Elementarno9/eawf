@@ -67,6 +67,7 @@ def test_built_in_defaults_hold_a_section_for_every_catalogued_leaf_with_a_value
         "runtime",
         "ui",
         "telemetry",
+        "reflect",
         "agents",
         "research",
         "preferences",

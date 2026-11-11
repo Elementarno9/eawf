@@ -17,10 +17,13 @@ import statistics
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
 
+from eawf.kernel.config.layered import merge_config
+from eawf.kernel.config.schema import PriceRates, ReflectConfig
 from eawf.observability.reflect.analysis import (
     RANKING_LIMIT,
     Finding,
@@ -29,17 +32,23 @@ from eawf.observability.reflect.analysis import (
     SessionClass,
     Severity,
 )
-from eawf.observability.reflect.html.session import session_page
+from eawf.observability.reflect.html.session import (
+    cost_text,
+    session_page,
+    unpriced_banner,
+    unpriced_tokens,
+)
 from eawf.observability.reflect.html.shared import (
     DASH,
     FINDER_FILENAME,
     OVERVIEW_FILENAME,
-    PER_MILLION,
     REFERENCE_RATE,
     SEVERITY,
     PageSources,
     Scope,
     absent,
+    axis_side,
+    axis_ticks,
     compact,
     compared,
     day,
@@ -68,8 +77,14 @@ from eawf.observability.reflect.html.shared import (
     trim,
     usd,
 )
-from eawf.observability.reflect.rates import ModelRates, RateRow, rate_table
+from eawf.observability.reflect.rates import ModelRates, rate_table
 from eawf.observability.telemetry.models import ObservedRequest
+from eawf.observability.telemetry.pricing import (
+    PriceBook,
+    TokenUsage,
+    active_price_book,
+    request_date,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +92,8 @@ logger = logging.getLogger(__name__)
 FINDER_PAGE_ROWS: Final = 40
 
 _DOT_COLUMNS_PER_PERCENT: Final = 4
+# The distribution axis label size in reflect.css, which its side margins hold.
+_AXIS_FONT_PX: Final = 10.5
 
 Progress = Callable[[str, int, int], None]
 """Receives ``("render", done, total)`` as the session pages are written."""
@@ -105,78 +122,235 @@ def _nav(current: str) -> str:
     )
 
 
+# ---- headline setting -----------------------------------------------------------------
+
+HeadlineMode = Literal["api_equivalent", "tokens"]
+"""What the overview leads with; the page switch starts on it."""
+
+
+def reflect_headline(repo_root: Path | None) -> HeadlineMode:
+    """Return ``reflect.headline`` from the layered config.
+
+    Args:
+        repo_root: The repository whose layers compose over the global one;
+            ``None`` outside a repository, where the global layer still applies.
+
+    Returns:
+        ``api_equivalent`` unless a layer sets ``tokens``.
+
+    Raises:
+        pydantic.ValidationError: The ``reflect`` block is malformed.
+    """
+    merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
+    return ReflectConfig.model_validate(merged.get("reflect") or {}).headline
+
+
 # ---- hero -----------------------------------------------------------------------------
 
 
-def _class_costs(rates: Sequence[RateRow]) -> dict[str, Decimal]:
+@dataclass(frozen=True, slots=True)
+class _Listed:
+    """The list rates and verification date one model resolves to on one day."""
+
+    rates: PriceRates | None
+    verified_on: date | None
+
+
+class _ListPrices:
+    """The price book's list rates per model and day, looked up once each."""
+
+    def __init__(self, book: PriceBook) -> None:
+        self._book = book
+        self._seen: dict[tuple[str, date], _Listed] = {}
+
+    def of(self, request: ObservedRequest) -> _Listed:
+        key = (request.model or "", request_date(request.ts))
+        found = self._seen.get(key)
+        if found is None:
+            model, on = key
+            quote = self._book.quote(model, TokenUsage(), on=on)
+            found = _Listed(self._book.list_rates(model, on=on), quote.verified_on)
+            self._seen[key] = found
+        return found
+
+
+def _scope_requests(scope: Scope) -> list[ObservedRequest]:
+    return [item for items in scope.requests.values() for item in items]
+
+
+def _priced_total(requests: Sequence[ObservedRequest]) -> Decimal | None:
+    priced = [item.cost_usd for item in requests if item.cost_usd is not None]
+    return sum(priced, Decimal(0)) if priced else None
+
+
+def _verified_on(requests: Sequence[ObservedRequest], prices: _ListPrices) -> date | None:
+    """Return the oldest ``verified_on`` among the price rows the priced requests used."""
+    dates = [
+        listed.verified_on
+        for item in requests
+        if item.cost_usd is not None and item.model
+        if (listed := prices.of(item)).verified_on is not None
+    ]
+    return min(dates, default=None)
+
+
+def _class_costs(requests: Sequence[ObservedRequest], prices: _ListPrices) -> dict[str, Decimal]:
+    """Split each priced request's recorded cost across its token classes.
+
+    Each class is weighed at the model's list rate, 5-minute and 1-hour writes
+    at their own, and the weights are scaled to the cost the request recorded,
+    so a tier or modifier moves every class alike and the strip sums to the hero.
+    """
     costs = dict.fromkeys(("fresh", "output", "write", "read"), Decimal(0))
-    for row in rates:
-        if row.rates is None:
+    for item in requests:
+        if item.cost_usd is None or not item.model:
             continue
-        costs["fresh"] += row.input_tokens * row.rates.input / PER_MILLION
-        costs["output"] += row.output_tokens * row.rates.output / PER_MILLION
-        costs["write"] += row.cache_write_tokens * row.rates.cache_write_5m / PER_MILLION
-        costs["read"] += row.cache_read_tokens * row.rates.cache_read / PER_MILLION
+        rates = prices.of(item).rates
+        if rates is None:
+            continue
+        writes = rates.cache_write
+        weights = {
+            "fresh": item.input_tokens * (rates.input or 0),
+            "output": item.output_tokens * (rates.output or 0),
+            "read": item.cache_read_tokens * (rates.cache_read or 0),
+            "write": (item.cache_write_tokens - item.cache_write_1h_tokens)
+            * (writes.get("5m") or 0)
+            + item.cache_write_1h_tokens * (writes.get("1h") or 0),
+        }
+        weighed = sum(weights.values(), Decimal(0))
+        if not weighed:
+            continue
+        for cls, weight in weights.items():
+            costs[cls] += item.cost_usd * weight / weighed
     return costs
 
 
+def _cache_read_copy(scope: Scope, prices: _ListPrices) -> str:
+    """Return how cache reads bill against base input across the models priced here."""
+    shares = {
+        float(rates.cache_read / rates.input * 100)
+        for item in _scope_requests(scope)
+        if item.cost_usd is not None and item.model
+        if (rates := prices.of(item).rates) is not None
+        and rates.input
+        and rates.cache_read is not None
+    }
+    if not shares:
+        return "Cache reads bill below base input"
+    low, high = min(shares), max(shares)
+    if low == high:
+        return f"Cache reads bill at {low:g}% of base input"
+    return f"Cache reads bill at {low:g}% to {high:g}% of base input, by model"
+
+
+_WRITE_MEANING: Final = "5-minute and 1-hour writes at their own rates"
+
 _CLASSES: Final = (
-    ("fresh-input", "Fresh input", Metric.FRESH_INPUT_TOKENS, "fresh", "New context sent"),
-    ("output", "Output", Metric.OUTPUT_TOKENS, "output", "Reasoning is billed as output"),
-    ("cache-writes", "Cache writes", Metric.CACHE_WRITE_TOKENS, "write", "Priced at 5 minutes"),
-    ("cache-reads", "Cache reads", Metric.CACHE_READ_TOKENS, "read", "A tenth of base input"),
+    ("fresh-input", "Fresh input", Metric.FRESH_INPUT_TOKENS, "fresh"),
+    ("output", "Output", Metric.OUTPUT_TOKENS, "output"),
+    ("cache-writes", "Cache writes", Metric.CACHE_WRITE_TOKENS, "write"),
+    ("cache-reads", "Cache reads", Metric.CACHE_READ_TOKENS, "read"),
 )
 
 
-def _class_strip(scope: Scope) -> str:
-    costs = _class_costs(scope.rates)
+def _class_strip(scope: Scope, prices: _ListPrices, read_copy: str) -> str:
+    costs = _class_costs(_scope_requests(scope), prices)
     spend = float(sum(costs.values(), Decimal(0)))
     reasoning = sum(measure(row, Metric.REASONING_TOKENS) for row in scope.rows)
+    meanings = {
+        "fresh": "New context sent",
+        "output": "Reasoning is billed as output",
+        "write": _WRITE_MEANING,
+        "read": read_copy,
+    }
     cells = []
-    for key, label, metric, cls, meaning in _CLASSES:
+    for key, label, metric, cls in _CLASSES:
         tokens = sum(measure(row, metric) for row in scope.rows)
         tip = (
             f"{exact(tokens)} tokens · {usd(costs[cls])} · "
-            f"{pct(float(costs[cls]), spend)} of spend. {meaning}."
+            f"{pct(float(costs[cls]), spend)} of spend. {meanings[cls]}."
         )
         sub = f" <small>{compact(reasoning)} reasoning</small>" if key == "output" else ""
         cells.append(
-            f'<div data-cls="{key}" title="{esc(tip)}"><dt>{label}</dt>'
+            f'<div data-cls="{key}" data-usd="{costs[cls]}" title="{esc(tip)}"><dt>{label}</dt>'
             f'<dd class="num">{compact(tokens)}{sub}</dd></div>'
         )
     return f'<dl class="hero-secondary">{"".join(cells)}</dl>'
 
 
-def _hero(scope: Scope) -> str:
-    priced = [row.cost_usd for row in scope.rows if row.cost_usd is not None]
-    cost = sum(priced, Decimal(0)) if priced else None
+def _switch(headline: HeadlineMode) -> str:
+    """Return the headline switch: a radio pair the stylesheet's sibling selectors
+    read, so the overview switches with no script."""
+    tokens = " checked" if headline == "tokens" else ""
+    dollars = " checked" if headline == "api_equivalent" else ""
+    return (
+        f'<input class="hl-in" type="radio" name="headline" id="headline-tokens"{tokens}>'
+        f'<input class="hl-in" type="radio" name="headline" id="headline-usd"{dollars}>'
+        '<div class="hl-switch" role="group" aria-label="Headline">'
+        '<label for="headline-tokens">tokens</label>'
+        '<label for="headline-usd">API-equivalent</label></div>'
+    )
+
+
+def _hero(scope: Scope, headline: HeadlineMode) -> str:
+    prices = _ListPrices(active_price_book())
+    requests = _scope_requests(scope)
+    cost = _priced_total(requests)
     worth = effective(cost)
     handled = sum(measure(row, Metric.TOTAL_TOKENS) for row in scope.rows)
-    unpriced = len(scope.rows) - len(priced)
-    value = (
-        f'<span class="num">{compact(worth)}</span> <small>effective tokens</small>'
-        if worth is not None
-        else f"<span>{DASH}</span> <small>not priced: no session carries a verified rate</small>"
+    unpriced = unpriced_tokens(requests)
+    verified = _verified_on(requests, prices)
+    dated = (
+        f"list prices verified {verified.isoformat()}"
+        if verified is not None
+        else "priced by operator overrides"
     )
+    dollars = f"{usd(cost)} API-equivalent · {dated}"
+    tokens = f"{compact(worth or 0)} effective tokens"
+    if cost is None:
+        none = f"<span>{DASH}</span> <small>not priced: no session carries a verified rate</small>"
+        lead_usd = lead_tokens = none
+        sub_usd = sub_tokens = ""
+    else:
+        lead_usd = f'<span class="num">{usd(cost)}</span> <small>API-equivalent · {dated}</small>'
+        lead_tokens = (
+            f'<span class="num">{compact(worth or 0)}</span> <small>effective tokens</small>'
+        )
+        sub_usd = f"{tokens}. "
+        sub_tokens = f"{dollars}. "
+    read_copy = _cache_read_copy(scope, prices)
     caveat = (
-        f" {plural(unpriced, 'session')} carry no verified rate and are left out of it."
+        f" {compact(unpriced)} tokens carry no verified rate and are left out, so the total"
+        " is a lower bound."
         if unpriced
         else ""
+    )
+    context = (
+        f"{compact(handled)} tokens passed through the context (context handled, cumulative)."
+        f" {read_copy}, so the weighted total is smaller.{caveat}"
+    )
+    label_usd = (
+        "API-equivalent: every token class at the vendor's standard-tier list price in USD,"
+        ' not what a subscription bills. <a href="#rates">Rates and assumptions</a>.'
+    )
+    label_tokens = (
+        f"Effective tokens: every token class priced, then expressed back at"
+        f" ${REFERENCE_RATE:.2f} per 1M base input tokens "
+        '<span class="q" title="Derived from recorded per-request totals">reconstructed</span>'
     )
     return (
         '<section class="sec" data-section="hero"><div class="eyebrow">'
         f"{esc(scope.sources.scope_label)} · local artifact</div>"
-        '<h1>What these sessions cost you</h1><div class="hero"><div class="hero-top"><div>'
-        f'<div class="hero-val">{value}</div><div class="hero-lbl">Effective tokens: every token'
-        f" class priced, then expressed back at ${REFERENCE_RATE:.2f} per 1M base input tokens "
-        '<span class="q" title="Derived from recorded per-request totals">reconstructed</span>'
-        f'</div><div class="hero-sub">{compact(handled)} tokens passed through the context'
-        " (context handled, cumulative), but cache reads bill at a tenth of base input, so the"
-        f" weighted total is smaller.{caveat}</div></div>"
-        '<div class="hero-side"><div class="eyebrow">Estimated cost</div>'
-        f'<div class="money num">{usd(cost)}</div><div class="note">Standard tier, USD at list'
-        ' rates. <a href="#rates">Rates and assumptions</a>.</div></div></div>'
-        f"{_class_strip(scope)}</div></section>"
+        f"<h1>What these sessions cost you</h1>{_switch(headline)}"
+        f'<div class="hero" data-headline="{headline}"><div class="hero-top"><div>'
+        f'<div class="hl-usd"><div class="hero-val">{lead_usd}</div>'
+        f'<div class="hero-lbl">{label_usd}</div><div class="hero-sub">{sub_usd}{context}'
+        "</div></div>"
+        f'<div class="hl-tokens"><div class="hero-val">{lead_tokens}</div>'
+        f'<div class="hero-lbl">{label_tokens}</div><div class="hero-sub">{sub_tokens}'
+        f"{context}</div></div></div></div>"
+        f"{_class_strip(scope, prices, read_copy)}</div></section>"
+        f"{unpriced_banner(requests)}"
     )
 
 
@@ -199,9 +373,9 @@ def _quantile(values: Sequence[float], probability: float) -> float:
     return ordered[max(0, math.ceil(probability * len(ordered)) - 1)]
 
 
-def _ticks(scale: _LogScale) -> tuple[str, str]:
-    """Return the track gridlines and the axis: decade majors, 2 to 9 minors."""
-    grid, axis = [], []
+def _ticks(scale: _LogScale) -> tuple[str, str, list[str]]:
+    """Return the track gridlines, the axis and its labels: decade majors, 2 to 9 minors."""
+    grid, minors, majors = [], [], []
     decade = scale.low
     while decade <= scale.high:
         for step in range(1, 10):
@@ -211,11 +385,13 @@ def _ticks(scale: _LogScale) -> tuple[str, str]:
             major = ' class="mj"' if step == 1 else ""
             line = f'<i{major} style="left:{scale.at(tick):.2f}%"></i>'
             grid.append(line)
-            axis.append(line)
             if step == 1:
-                axis.append(f'<b style="left:{scale.at(tick):.2f}%">{compact(tick)}</b>')
+                majors.append((scale.at(tick), compact(tick)))
+            else:
+                minors.append(line)
         decade *= 10
-    return "".join(grid), "".join(axis)
+    labels = [label for _at, label in majors]
+    return "".join(grid), "".join(minors) + axis_ticks(majors), labels
 
 
 def _dot_tip(row: SessionAnalysis, value: float, median: float) -> str:
@@ -262,20 +438,25 @@ def _distribution(scope: Scope) -> str:
     values = [value for _row, value in sized]
     low = 10 ** math.floor(math.log10(min(values)))
     scale = _LogScale(low, max(10 ** math.ceil(math.log10(max(values))), low * 10))
-    grid, axis = _ticks(scale)
-    marks = []
+    grid, axis, ticks = _ticks(scale)
+    marks, labels = [], []
     for css, label, value in (
         ("p50", "Your median", statistics.median(values)),
         ("p95", "P95", _quantile(values, 0.95)),
         ("max", "Largest", max(values)),
     ):
         x = scale.at(value)
-        marks.append(
-            f'<div class="dist-mark {css}{" flip" if x > 62 else ""}" style="left:{x:.2f}%">'
-            f"<span>{label} {compact(value)}</span></div>"
+        marks.append(f'<div class="dist-mark {css}" style="left:{x:.2f}%"></div>')
+        # Each mark's label keeps its own row of the lane above the dots, so none overlap.
+        labels.append(
+            f'<span class="dist-label {css}{" flip" if x > 62 else ""}" style="left:{x:.2f}%">'
+            f"{label} {compact(value)}</span>"
         )
+    side = axis_side(ticks, _AXIS_FONT_PX)
     body = (
-        f'<div class="dist"><div class="dist-track"><div class="dist-grid">{grid}</div>'
+        f'<div class="dist" data-chart="distribution" style="--side:{side}px">'
+        f'<div class="dist-lane">{"".join(labels)}</div>'
+        f'<div class="dist-track"><div class="dist-grid">{grid}</div>'
         f"{''.join(marks)}{_dots(sized, scale, scope.median_tokens)}</div>"
         f'<div class="axis">{axis}</div></div>'
     )
@@ -300,11 +481,19 @@ def _why(row: SessionAnalysis, median: float) -> str:
     return " · ".join(parts) + "."
 
 
-def _must_see_row(rank: int, row: SessionAnalysis, median: float) -> str:
+def _session_cost(row: SessionAnalysis, scope: Scope) -> str | None:
+    """Return a session's cost text from its requests, else its recorded cost, else ``None``."""
+    requests = scope.requests.get(row.session_ref, ())
+    if requests:
+        return cost_text(requests)
+    return None if row.cost_usd is None else usd(row.cost_usd)
+
+
+def _must_see_row(rank: int, row: SessionAnalysis, scope: Scope) -> str:
     worst = max(raised(row), key=lambda item: item.severity.rank).severity
-    money = (
-        usd(row.cost_usd) if row.cost_usd is not None else '<span class="faint">not priced</span>'
-    )
+    cost = _session_cost(row, scope)
+    money = esc(cost) if cost is not None else '<span class="faint">not priced</span>'
+    median = scope.median_tokens
     chip = f'<span class="sv sv-{SEVERITY[worst][0]}">{plural(len(raised(row)), "finding")}</span>'
     return (
         f'<a href="{page_name(row.session_ref)}"><span class="no">{rank}</span><span>'
@@ -317,8 +506,7 @@ def _must_see_row(rank: int, row: SessionAnalysis, median: float) -> str:
 
 def _must_see(scope: Scope) -> str:
     items = "".join(
-        _must_see_row(rank, row, scope.median_tokens)
-        for rank, row in enumerate(scope.must_see, start=1)
+        _must_see_row(rank, row, scope) for rank, row in enumerate(scope.must_see, start=1)
     )
     total = sum((row.cost_usd or Decimal(0) for row in scope.must_see), Decimal(0))
     chip = (
@@ -434,6 +622,7 @@ def _rates(scope: Scope) -> str:
             compact(row.total_tokens),
             _rate(row.rates, "input", 2),
             _rate(row.rates, "cache_write_5m", 2),
+            _rate(row.rates, "cache_write_1h", 2),
             _rate(row.rates, "cache_read", 3),
             _rate(row.rates, "output", 2),
             usd(row.cost_usd)
@@ -447,7 +636,8 @@ def _rates(scope: Scope) -> str:
         ("Sessions", True),
         ("Tokens", True),
         ("$/1M input", True),
-        ("$/1M cache write", True),
+        ("$/1M 5-minute write", True),
+        ("$/1M 1-hour write", True),
         ("$/1M cache read", True),
         ("$/1M output", True),
         ("Cost", True),
@@ -455,26 +645,28 @@ def _rates(scope: Scope) -> str:
     total = sum(row.total_tokens for row in scope.rates)
     priced = sum(row.total_tokens for row in scope.rates if row.rates is not None)
     provenance = note(
-        "Rates come from the embedded pricing snapshot: standard tier, USD, cache writes at"
-        f" the 5-minute rate. {pct(priced, total)} of tokens handled were priced; an unpriced"
-        " model shows no cost, never zero."
+        "Rates come from the shipped price files: standard tier, USD, 5-minute and 1-hour"
+        f" cache writes at their own rates. {pct(priced, total)} of tokens handled were"
+        " priced; an unpriced model shows no cost, never zero."
     )
     return section("rates", "Rates", table(head, rows) + provenance)
 
 
-def _overview(scope: Scope) -> str:
-    parts = (_hero, _distribution, _must_see, _expected, _findings, _coverage, _rates)
-    body = "".join(part(scope) for part in parts)
+def _overview(scope: Scope, headline: HeadlineMode) -> str:
+    parts = (_distribution, _must_see, _expected, _findings, _coverage, _rates)
+    body = _hero(scope, headline) + "".join(part(scope) for part in parts)
     return shell("Reflection · Eä", _nav(OVERVIEW_FILENAME), body, scope, script=False)
 
 
 # ---- finder ---------------------------------------------------------------------------
 
 
-def _finder_row(row: SessionAnalysis, must: frozenset[str]) -> dict[str, object]:
+def _finder_row(row: SessionAnalysis, must: frozenset[str], scope: Scope) -> dict[str, object]:
     flags = raised(row)
     worst = max((item.severity for item in flags), key=lambda item: item.rank, default=None)
     tokens = measure(row, Metric.TOTAL_TOKENS)
+    requests = scope.requests.get(row.session_ref, ())
+    cost = _priced_total(requests) if requests else row.cost_usd
     return {
         "key": session_key(row.session_ref),
         "t": session_title(row),
@@ -483,8 +675,8 @@ def _finder_row(row: SessionAnalysis, must: frozenset[str]) -> dict[str, object]
         "d": None if row.started_at is None else row.started_at.timestamp(),
         "p": row.project_label,
         "m": row.model,
-        "c": None if row.cost_usd is None else float(row.cost_usd),
-        "cs": None if row.cost_usd is None else usd(row.cost_usd),
+        "c": None if cost is None else float(cost),
+        "cs": _session_cost(row, scope),
         "tk": tokens,
         "tks": compact(tokens),
         "f": len(flags),
@@ -532,7 +724,7 @@ _FINDER_TOOLS: Final = (
 
 def _finder(scope: Scope) -> str:
     must = frozenset(row.session_ref for row in scope.must_see)
-    items = [_finder_row(row, must) for row in sorted(scope.rows, key=spend_order)]
+    items = [_finder_row(row, must, scope) for row in sorted(scope.rows, key=spend_order)]
     first = "".join(_finder_html(item) for item in items[:FINDER_PAGE_ROWS]) or (
         '<tr><td colspan="7">No session in this scope yet.</td></tr>'
     )
@@ -555,7 +747,9 @@ def _finder(scope: Scope) -> str:
         '<script type="application/json" id="finder-data">'
         f"{payload.replace('</', '<\\/')}</script>"
     )
-    page = section("finder", "Sessions", body, chip=plural(len(items), "session"))
+    page = unpriced_banner(_scope_requests(scope)) + section(
+        "finder", "Sessions", body, chip=plural(len(items), "session")
+    )
     return shell("Sessions · Eä", _nav(FINDER_FILENAME), page, scope, script=True)
 
 
@@ -593,13 +787,19 @@ def _write(path: Path, text: str) -> None:
 
 
 def write_pages(
-    output_dir: Path, sources: PageSources, *, progress: Progress | None = None
+    output_dir: Path,
+    sources: PageSources,
+    *,
+    headline: HeadlineMode = "api_equivalent",
+    progress: Progress | None = None,
 ) -> WrittenPages:
     """Write the overview, the finder and one page per covered session.
 
     Args:
         output_dir: The directory the pages land in; created when missing.
         sources: What the pages are drawn from.
+        headline: What the overview leads with, as :func:`reflect_headline`
+            reads it; the page switch starts on it.
         progress: Called with ``("render", done, total)`` at the start, the end
             and about every tenth session page.
 
@@ -613,7 +813,7 @@ def write_pages(
     scope = _scope(sources)
     overview = output_dir / OVERVIEW_FILENAME
     finder = output_dir / FINDER_FILENAME
-    _write(overview, _overview(scope))
+    _write(overview, _overview(scope, headline))
     _write(finder, _finder(scope))
     ordered = sorted(scope.rows, key=spend_order)
     total = len(ordered)
@@ -630,4 +830,11 @@ def write_pages(
     return WrittenPages(overview=overview, finder=finder, sessions=tuple(written))
 
 
-__all__ = ["FINDER_PAGE_ROWS", "PageSources", "WrittenPages", "write_pages"]
+__all__ = [
+    "FINDER_PAGE_ROWS",
+    "HeadlineMode",
+    "PageSources",
+    "WrittenPages",
+    "reflect_headline",
+    "write_pages",
+]

@@ -9,8 +9,8 @@ and the cost ledger reports ``$0`` regardless of real token consumption.
 This module closes that gap. :func:`price_spawn_result` is the metering
 writer: it takes the transient
 :class:`~eawf.runtime.runtimes.adapter.SpawnResult` a live spawn
-returns, prices its token classes through the embedded Decimal pricing
-snapshot (W20, :func:`~eawf.observability.telemetry.pricing.lookup_pricing`),
+returns, prices its token classes through the shipped price files
+(:func:`~eawf.observability.telemetry.pricing.active_price_book`),
 and returns a typed :class:`MeteredCost` carrying the priced ``cost_usd``,
 the snapshot ``pricing_version``, the model the cost was priced against,
 and the per-class token tallies the ``dispatch_cost`` payload records. The
@@ -21,15 +21,14 @@ true spend.
 Pricing precision
 -----------------
 
-Every rate is a :class:`~decimal.Decimal` in USD *per token* (per the W20
-snapshot), so the per-class products and their sum never accumulate the
+Every rate is a :class:`~decimal.Decimal` in USD per million tokens, so the
+per-class products and their sum never accumulate the
 binary-floating-point drift a ``float`` ledger would over a long horizon.
 The two prompt-cache *write* tiers price independently: the spawn result
 splits cache-creation into a 5-minute-TTL tally and a 1-hour-TTL tally
 (:attr:`SpawnResult.cache_creation_5m_input_tokens` /
 :attr:`SpawnResult.cache_creation_1h_input_tokens`), and each is multiplied
-by its own rate (``cache_write_5m_per_token`` is ``1.25x`` base input,
-``cache_write_1h_per_token`` is ``2x``). The single
+by its own rate (the ``5m`` and ``1h`` write classes of the price file). The single
 ``cache_creation_input_tokens`` total the ``dispatch_cost`` payload records
 is the *sum* of the two tiers (the payload does not carry the TTL split),
 but the **cost** honours the split so a 1-hour write is not under-billed at
@@ -41,8 +40,8 @@ Model resolution
 The cost is priced against :attr:`SpawnResult.resolved_model` when the
 runtime disclosed the billed model id, falling back to the *requested*
 :attr:`SpawnResult.model` otherwise — so a short alias the caller passed to
-``--model`` (e.g. ``opus``) still resolves to a priced row via the
-snapshot's longest-prefix alias fallback. When *neither* id matches any
+``--model`` (e.g. ``opus``) still resolves to a priced row through the
+price file's dated aliases. When *neither* id matches any
 pricing row (a genuinely unknown model), the writer does not raise and does
 not silently bill ``$0`` as if priced: it returns a :class:`MeteredCost`
 with a null ``cost_usd`` and ``priced is False`` and logs a ``WARNING``, so an
@@ -92,10 +91,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from eawf.kernel.state.enums import MeasurementStatus
 from eawf.observability.telemetry.models import PriceSourceKind
 from eawf.observability.telemetry.pricing import (
-    PRICING_VERSION,
-    ModelPricing,
-    lookup_pricing,
-    unpriced_model,
+    PriceBook,
+    PriceQuote,
+    TokenUsage,
+    active_price_book,
+    request_date,
 )
 
 if TYPE_CHECKING:
@@ -112,7 +112,6 @@ __all__ = [
     "meter_and_emit",
     "meter_stream",
     "price_spawn_result",
-    "price_token_counts",
 ]
 
 
@@ -301,7 +300,7 @@ class MeteredCost(BaseModel):
             ``Decimal("0")`` for a genuine zero-token spawn (``priced`` is
             ``True``); ``None`` for an unpriceable model or an unmeasured
             spawn (``priced`` is ``False``), never a zero that reads billed.
-        pricing_version: ``PRICING`` snapshot tag the cost was priced under.
+        pricing_version: Version of the price book the cost was priced under.
         priced: ``True`` when a pricing row resolved for ``model`` and the
             cost is a real token-derived figure (including a genuine ``$0``
             for a zero-token spawn). ``False`` when no cost could be
@@ -329,52 +328,9 @@ class MeteredCost(BaseModel):
     rate_table_version: str | None = None
 
 
-def _price_tokens(result: SpawnResult, pricing: ModelPricing) -> Decimal:
-    """Sum the per-class token costs for *result* under *pricing*.
-
-    Each token class is multiplied by its own per-token rate and the
-    products are summed as :class:`~decimal.Decimal` so no float drift
-    enters the ledger. The two cache-write TTL tiers price independently
-    (5-minute vs 1-hour rate); the non-cached input, output, and cache-read
-    classes price against their single rates.
-
-    Args:
-        result: The completed spawn whose token tallies are priced.
-        pricing: The resolved per-token rate row for the spawn's model.
-
-    Returns:
-        The exact token-derived cost in USD.
-    """
-    return _sum_token_cost(
-        pricing,
-        input_tokens=result.input_tokens or 0,
-        output_tokens=result.output_tokens or 0,
-        cache_creation_5m_input_tokens=result.cache_creation_5m_input_tokens or 0,
-        cache_creation_1h_input_tokens=result.cache_creation_1h_input_tokens or 0,
-        cache_read_input_tokens=result.cache_read_input_tokens or 0,
-    )
-
-
-def _sum_token_cost(
-    pricing: ModelPricing,
-    *,
-    input_tokens: int,
-    output_tokens: int,
-    cache_creation_5m_input_tokens: int,
-    cache_creation_1h_input_tokens: int,
-    cache_read_input_tokens: int,
-) -> Decimal:
-    """Sum per-class token counts against *pricing* into an exact USD cost."""
-    return (
-        input_tokens * pricing.input_per_token
-        + output_tokens * pricing.output_per_token
-        + cache_creation_5m_input_tokens * pricing.cache_write_5m_per_token
-        + cache_creation_1h_input_tokens * pricing.cache_write_1h_per_token
-        + cache_read_input_tokens * pricing.cache_read_per_token
-    )
-
-
-def price_token_counts(
+def _quote_spawn(
+    book: PriceBook,
+    result: SpawnResult,
     model: str,
     *,
     input_tokens: int,
@@ -382,51 +338,27 @@ def price_token_counts(
     cache_creation_5m_input_tokens: int,
     cache_creation_1h_input_tokens: int,
     cache_read_input_tokens: int,
-) -> Decimal | None:
-    """Price bare per-class token counts for *model*, or ``None`` when unpriceable.
+) -> PriceQuote:
+    """Price a spawn's summed token classes where the sum prices as its requests did.
 
-    The spawn-free counterpart of :func:`price_spawn_result`: the interactive
-    Claude path has no :class:`SpawnResult` to price -- it aggregates its token
-    tallies out of the session transcript -- but must bill them against the same
-    Decimal table so interactive and headless cost attribution agree.
-
-    Args:
-        model: Model id to resolve a pricing row for (exact match, then
-            longest-prefix alias fallback).
-        input_tokens: Non-cached input tokens.
-        output_tokens: Output tokens.
-        cache_creation_5m_input_tokens: Prompt-cache write tokens at the
-            5-minute TTL rate.
-        cache_creation_1h_input_tokens: Prompt-cache write tokens at the 1-hour
-            TTL rate.
-        cache_read_input_tokens: Prompt-cache read tokens.
-
-    Returns:
-        The exact token-derived cost in USD, or ``None`` when no pricing row
-        matches *model* -- so the caller records a null cost rather than a
-        fabricated ``$0``.
+    A spawn reports its totals, not its requests, so the sum is priced only
+    where that is exact (:meth:`~eawf.observability.telemetry.pricing.PriceBook.quote_totals`):
+    one rate set over the spawn's dates and no tier its summed prompt reaches.
     """
-    pricing = lookup_pricing(model)
-    if pricing is None:
-        logger.warning(
-            f"price_token_counts model={model!r} pricing=unresolved cost_usd=none "
-            f"reason={_unpriced_reason(model)!r}"
-        )
-        return None
-    return _sum_token_cost(
-        pricing,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        cache_creation_5m_input_tokens=cache_creation_5m_input_tokens,
-        cache_creation_1h_input_tokens=cache_creation_1h_input_tokens,
-        cache_read_input_tokens=cache_read_input_tokens,
+    return book.quote_totals(
+        model,
+        TokenUsage(
+            input=input_tokens,
+            output=output_tokens,
+            cache_read=cache_read_input_tokens,
+            cache_write={
+                "5m": cache_creation_5m_input_tokens,
+                "1h": cache_creation_1h_input_tokens,
+            },
+        ),
+        first=request_date(result.started_at),
+        last=request_date(result.ended_at),
     )
-
-
-def _unpriced_reason(model: str) -> str:
-    """Return why *model* resolved to no rate, for the unpriced log line."""
-    entry = unpriced_model(model)
-    return entry.reason if entry is not None else "no rate row matches"
 
 
 def _reasoning_inside_output(result: SpawnResult, *, output_tokens: int) -> int | None:
@@ -457,11 +389,9 @@ def _reasoning_inside_output(result: SpawnResult, *, output_tokens: int) -> int 
 def price_spawn_result(result: SpawnResult) -> MeteredCost:
     """Price a completed :class:`SpawnResult` into a :class:`MeteredCost`.
 
-    The metering writer. Resolves the pricing row for
-    ``result.resolved_model or result.model`` via
-    :func:`~eawf.observability.telemetry.pricing.lookup_pricing` (exact match,
-    then longest-prefix alias fallback), then sums the per-class token costs
-    (:func:`_price_tokens`) into an exact :class:`~decimal.Decimal`
+    The metering writer. Prices ``result.resolved_model or result.model``
+    through the active price book (exact id, ``match``, then the alias in
+    effect) into an exact :class:`~decimal.Decimal`
     ``cost_usd``. The returned :class:`MeteredCost` carries the real,
     token-derived cost the ``dispatch_cost`` event records in place of the
     ``$0`` placeholder.
@@ -484,6 +414,7 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
     cache_creation_1h = result.cache_creation_1h_input_tokens or 0
     cache_read = result.cache_read_input_tokens or 0
     cache_creation_total = cache_creation_5m + cache_creation_1h
+    book = active_price_book()
     if result.measurement_status is not MeasurementStatus.USAGE_OBSERVED:
         logger.warning(
             f"price_spawn_result model={model!r} runtime={result.runtime!r} "
@@ -497,17 +428,26 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
             cache_creation_input_tokens=0,
             cache_read_input_tokens=0,
             cost_usd=None,
-            pricing_version=PRICING_VERSION,
+            pricing_version=book.version,
             priced=False,
             price_source=PriceSourceKind.UNPRICED,
         )
     reasoning = _reasoning_inside_output(result, output_tokens=output_tokens)
-    pricing = lookup_pricing(model)
-    if pricing is None:
+    quote = _quote_spawn(
+        book,
+        result,
+        model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_creation_5m_input_tokens=cache_creation_5m,
+        cache_creation_1h_input_tokens=cache_creation_1h,
+        cache_read_input_tokens=cache_read,
+    )
+    if not quote.priced:
         logger.warning(
             f"price_spawn_result model={model!r} runtime={result.runtime!r} "
             f"session={result.session_id!r} pricing=unresolved cost_usd=none priced=false "
-            f"reason={_unpriced_reason(model)!r}"
+            f"reason={quote.reason!r}"
         )
         return MeteredCost(
             session_id=result.session_id,
@@ -518,15 +458,15 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
             cache_read_input_tokens=cache_read,
             reasoning_tokens=reasoning,
             cost_usd=None,
-            pricing_version=PRICING_VERSION,
+            pricing_version=book.version,
             priced=False,
             price_source=PriceSourceKind.UNPRICED,
         )
-    cost_usd = _price_tokens(result, pricing)
+    cost_usd = quote.cost_usd
     logger.info(
         f"price_spawn_result model={model!r} runtime={result.runtime!r} "
         f"session={result.session_id!r} cost_usd={cost_usd} "
-        f"pricing_version={pricing.pricing_version}"
+        f"pricing_version={book.version}"
     )
     return MeteredCost(
         session_id=result.session_id,
@@ -537,10 +477,10 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
         cache_read_input_tokens=cache_read,
         reasoning_tokens=reasoning,
         cost_usd=cost_usd,
-        pricing_version=pricing.pricing_version,
+        pricing_version=book.version,
         priced=True,
         price_source=PriceSourceKind.LIST_RECONSTRUCTED,
-        rate_table_version=pricing.pricing_version,
+        rate_table_version=book.rate_version(quote),
     )
 
 

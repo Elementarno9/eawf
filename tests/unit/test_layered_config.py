@@ -334,6 +334,17 @@ _CAMPAIGN_RUN = "eawf.runtime.daemon.methods.campaign_run"
 _EXPECTED_CONSUMERS: dict[str, str] = {
     "schema_version": "eawf.kernel.config.migration.migrate_config_payload",
     "agents.extra_tools": f"{_LAYERED}.resolve_agent_extra_tools",
+    "reflect.pricing.overrides": "eawf.observability.telemetry.pricing.price_overrides",
+    **dict.fromkeys(
+        (
+            "statusline.theme",
+            "statusline.glyphs",
+            "statusline.ink",
+            "statusline.bar_width",
+        ),
+        "eawf.runtime.runtimes.claude.statusline_theme.statusline_config",
+    ),
+    "reflect.headline": "eawf.observability.reflect.html.pages.reflect_headline",
     "daemon.idle_timeout_seconds": "eawf.runtime.daemon.main._resolve_idle_timeout",
     "daemon.proxy_enabled": "eawf.surfaces.cli._mutation._proxy_enabled",
     "economics.governor": _ECONOMICS,

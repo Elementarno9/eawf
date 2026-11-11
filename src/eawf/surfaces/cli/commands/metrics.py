@@ -696,7 +696,7 @@ def _render_pricing(pricing: PricingCoverage) -> str:
 def _telemetry_info(flags: GlobalFlags) -> None:
     """Print cache stats: DB kind, path, schema + pricing version, row counts."""
     from eawf.observability.telemetry.models import TelemetryIncident, TelemetrySession
-    from eawf.observability.telemetry.pricing import PRICING_VERSION
+    from eawf.observability.telemetry.pricing import active_price_book
     from eawf.observability.telemetry.store import metrics_db_path, open_store
     from eawf.observability.telemetry.store.base import SCHEMA_VERSION
 
@@ -716,20 +716,21 @@ def _telemetry_info(flags: GlobalFlags) -> None:
     finally:
         store.close()
 
+    pricing_version = active_price_book().version
     payload = {
         "db_kind": store.backend,
         "db_path": str(db_path),
         "db_existed": exists,
         "db_size_bytes": size_bytes,
         "schema_version": SCHEMA_VERSION,
-        "pricing_version": PRICING_VERSION,
+        "pricing_version": pricing_version,
         "telemetry_enabled": True,
         "session_rows": session_count,
         "incident_rows": incident_count,
     }
     text = (
         f"telemetry cache: backend={store.backend} path={db_path}\n"
-        f"  schema_version={SCHEMA_VERSION} pricing_version={PRICING_VERSION} "
+        f"  schema_version={SCHEMA_VERSION} pricing_version={pricing_version} "
         f"enabled=True\n"
         f"  rows: sessions={session_count} incidents={incident_count} "
         f"size={size_bytes}B"

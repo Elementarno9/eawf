@@ -1,12 +1,14 @@
 """``eawf reflect``: report where a tree's Runs went, without a canonical write.
 
-The group carries ``run``, ``show``, ``serve``, ``export`` and ``prune``. Every verb reads
-the tree and writes only to the local reflection collection under ``.ea/local/reflect``,
-its title cache, or an output path the operator names; an output path inside the
-canonical store is refused before anything is read. ``run`` is the one verb that may call
-out: it fills session titles from a scrubbed structural digest, and ``--local-only``
-turns that off. The other four never call out under any flag. ``run`` also indexes the
-local Claude and Codex session history incrementally into the collection and writes its
+The group carries ``run``, ``show``, ``serve``, ``export``, ``prune`` and ``prices check``.
+``prices check`` writes nothing; with ``--online`` it fetches the public vendor pricing
+pages and sends nothing about the tree. The other verbs read the tree and write only to
+the local reflection collection under ``.ea/local/reflect``, its title cache, or an output
+path the operator names; an output path inside the canonical store is refused before
+anything is read. Of those, ``run`` is the one verb that may call out: it fills session
+titles from a scrubbed structural digest, and ``--local-only`` turns that off.
+``show``, ``serve``, ``export`` and ``prune`` never call out under any flag. ``run`` also
+indexes the local Claude and Codex session history incrementally into the collection and writes its
 analysis there beside the report, with offline overview, finder and session pages over
 the sessions ``--scope`` covers. Since the index holds every project's sessions, an
 output directory git would commit is refused before anything is written into it.
@@ -277,7 +279,50 @@ def reflect_prune(ctx: typer.Context) -> None:
     )
 
 
+prices_app = typer.Typer(
+    name="prices",
+    help="Check the shipped price files.",
+    no_args_is_help=True,
+)
+reflect_app.add_typer(prices_app)
+
+
+@prices_app.command("check")
+def prices_check(
+    ctx: typer.Context,
+    online: Annotated[
+        bool,
+        typer.Option("--online", help="Fetch the vendor pricing pages and compare every rate."),
+    ] = False,
+) -> None:
+    """Check the price files; exit 0 when current, 1 on a difference, 2 when a price is unchecked.
+
+    Without ``--online`` the check stays offline: every Anthropic row must bill
+    cache writes at the vendor's stated multipliers of its input rate.
+    """
+    from eawf.observability.telemetry.price_check import check_prices_online, render_price_check
+    from eawf.observability.telemetry.pricing import check_pricing_currency
+
+    flags: GlobalFlags = ctx.obj
+    if online:
+        report = check_prices_online()
+        emit_json_or_text(report.model_dump(mode="json"), render_price_check(report), flags=flags)
+        raise typer.Exit(code=report.exit_status)
+    offline = check_pricing_currency()
+    lines = [
+        f"Prices: {'the file is consistent' if offline.is_current else 'rates drift'} "
+        f"({offline.model_count} rows, offline)."
+    ]
+    lines.extend(
+        f"- {finding.model_id} {finding.field}: expected {finding.expected}, file {finding.actual}"
+        for finding in offline.findings
+    )
+    emit_json_or_text(offline.model_dump(mode="json"), "\n".join(lines), flags=flags)
+    raise typer.Exit(code=0 if offline.is_current else 1)
+
+
 __all__ = [
+    "prices_check",
     "reflect_app",
     "reflect_export",
     "reflect_prune",

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from enum import StrEnum
 from typing import Final, Literal, get_args
 
@@ -250,8 +252,98 @@ class RuntimeLivenessConfig(BaseModel):
     )
 
 
+#: Every prompt-cache write class a price may name: Anthropic bills 5-minute and
+#: 1-hour writes, OpenAI 30-minute and 12-hour writes.
+CACHE_WRITE_CLASSES: Final[tuple[str, ...]] = ("5m", "1h", "30m", "12h")
+
+
+class PriceRates(BaseModel):
+    """USD per million tokens for each token class of one model.
+
+    A class whose rate is ``None`` is not stated, so tokens of that class are
+    unpriced rather than billed at zero or at a neighbour's rate.
+
+    Attributes:
+        input: Non-cached input.
+        output: Output, reasoning included.
+        cache_read: Prompt-cache reads.
+        cache_write: Prompt-cache writes by write class (one of
+            :data:`CACHE_WRITE_CLASSES`).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    input: Decimal | None = Field(ge=0)
+    output: Decimal | None = Field(ge=0)
+    cache_read: Decimal | None = Field(ge=0)
+    cache_write: dict[str, Decimal | None]
+
+    @field_validator("cache_write")
+    @classmethod
+    def _known_write_classes(cls, value: dict[str, Decimal | None]) -> dict[str, Decimal | None]:
+        """Refuse an unknown write class or a negative write rate.
+
+        Raises:
+            ValueError: A key outside :data:`CACHE_WRITE_CLASSES`, or a rate below zero.
+        """
+        unknown = sorted(set(value) - set(CACHE_WRITE_CLASSES))
+        if unknown:
+            raise ValueError(
+                f"unknown cache_write class(es) {unknown!r}; expected {list(CACHE_WRITE_CLASSES)}"
+            )
+        negative = sorted(key for key, rate in value.items() if rate is not None and rate < 0)
+        if negative:
+            raise ValueError(f"cache_write rate(s) below zero: {negative!r}")
+        return value
+
+
+class PriceOverride(BaseModel):
+    """An operator's own rates for one model, ``reflect.pricing.overrides.<model-id>``.
+
+    Attributes:
+        rates: The rates that replace the price file's for this model.
+        effective_from: First UTC date the override prices; ``None`` prices
+            every request of the model.
+        note: Why the override exists, shown beside the model.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    rates: PriceRates
+    effective_from: date | None = None
+    note: str = Field(min_length=1)
+
+
+class ReflectPricingConfig(BaseModel):
+    """Strict typed model for the ``reflect.pricing`` block.
+
+    Attributes:
+        overrides: Override by model id; empty prices from the shipped files only.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    overrides: dict[str, PriceOverride] = Field(default_factory=dict)
+
+
+class ReflectConfig(BaseModel):
+    """Strict typed model for the ``reflect`` config section.
+
+    Attributes:
+        pricing: Operator price overrides.
+        headline: What the overview leads with: list-price dollars labelled
+            API-equivalent, or tokens with the dollars in the subline.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    pricing: ReflectPricingConfig = Field(default_factory=ReflectPricingConfig)
+    headline: Literal["api_equivalent", "tokens"] = "api_equivalent"
+
+
 __all__ = [
     "ALL_ROLES",
+    "CACHE_WRITE_CLASSES",
     "DEFAULT_PERMISSION_WAIT_SECONDS",
     "DEFAULT_STALL_INTERVAL_SECONDS",
     "MAX_PERMISSION_WAIT_SECONDS",
@@ -265,6 +357,10 @@ __all__ = [
     "IntegrationCommitUnit",
     "OperatorConfig",
     "PreferencesConfig",
+    "PriceOverride",
+    "PriceRates",
+    "ReflectConfig",
+    "ReflectPricingConfig",
     "RuntimeAdapterId",
     "RuntimeLivenessConfig",
     "RuntimeModelsConfig",

@@ -22,7 +22,7 @@ from eawf.observability.reflect.rates import (
     rate_table,
 )
 from eawf.observability.telemetry.models import ObservedRequest, PriceSourceKind
-from eawf.observability.telemetry.pricing import lookup_pricing
+from eawf.observability.telemetry.pricing import active_price_book
 
 _NOW = datetime(2026, 11, 1, tzinfo=UTC)
 
@@ -61,7 +61,7 @@ def _rows() -> tuple[RateRow, ...]:
             _request(1, 2, model="claude-opus-4-7"),
             _request(2, 1, model="claude-opus-4-7", cost="1.00"),
             _request(2, 2, model="claude-haiku-4-5"),
-            _request(3, 1, model="gpt-6.1-sol", runtime="codex", cost=None),
+            _request(3, 1, model="gpt-5-codex", runtime="codex", cost=None),
             _request(4, 1, model="claude-unreleased-9", cost=None),
             _request(5, 1, model=None, cost=None),
             _request(6, 1, model="<synthetic>", cost=None),
@@ -80,7 +80,7 @@ def test_rate_table_has_one_row_per_model_seen() -> None:
         [
             "claude-opus-4-7",
             "claude-haiku-4-5",
-            "gpt-6.1-sol",
+            "gpt-5-codex",
             "claude-unreleased-9",
             UNKNOWN_MODEL,
             "<synthetic>",
@@ -95,14 +95,14 @@ def test_rate_table_has_one_row_per_model_seen() -> None:
     assert opus.cost_usd == Decimal("2.00")
     assert opus.quality is PricingQuality.VERIFIED
     assert opus.unpriced_reason is None
-    pricing = lookup_pricing("claude-opus-4-7")
-    assert pricing is not None
+    listed = active_price_book().list_rates("claude-opus-4-7", on=datetime.now(tz=UTC).date())
+    assert listed is not None
     assert opus.rates is not None
-    assert opus.rates.input == pricing.input_per_token * 1_000_000
-    assert opus.rates.output == pricing.output_per_token * 1_000_000
-    assert opus.rates.cache_write_5m == pricing.cache_write_5m_per_token * 1_000_000
-    assert opus.rates.cache_write_1h == pricing.cache_write_1h_per_token * 1_000_000
-    assert opus.rates.cache_read == pricing.cache_read_per_token * 1_000_000
+    assert opus.rates.input == listed.input
+    assert opus.rates.output == listed.output
+    assert opus.rates.cache_write_5m == listed.cache_write["5m"]
+    assert opus.rates.cache_write_1h == listed.cache_write["1h"]
+    assert opus.rates.cache_read == listed.cache_read
 
 
 @pytest.mark.parametrize(
@@ -123,25 +123,22 @@ def test_an_unpriced_model_shows_no_rate_and_names_its_reason(model: str, reason
     assert row.total_tokens == 1_170
 
 
-def test_a_codex_row_carries_tokens_and_no_dollar_figure() -> None:
-    codex = _row(_rows(), "gpt-6.1-sol")
+def test_a_codex_row_without_a_stated_rate_carries_tokens_and_no_dollar_figure() -> None:
+    codex = _row(_rows(), "gpt-5-codex")
 
     assert codex.runtimes == ("codex",)
     assert codex.total_tokens == 1_170
     assert codex.rates is None
     assert codex.cost_usd is None
-    assert codex.quality is PricingQuality.PLACEHOLDER
-    assert codex.unpriced_reason is not None
-    assert "placeholder" in codex.unpriced_reason
+    assert codex.quality is PricingQuality.UNAVAILABLE
+    assert codex.unpriced_reason == "No published rate for this model"
 
 
-def test_a_codex_request_never_lends_a_model_a_rate() -> None:
-    # The embedded table resolves this id to a placeholder row.
-    assert lookup_pricing("gpt-6.1-sol") is not None
+def test_a_model_with_no_stated_rate_takes_no_cost_from_its_requests() -> None:
     rows = rate_table(
         [
-            _request(1, 1, model="gpt-6.1-sol", runtime="codex", cost=None),
-            _request(2, 1, model="gpt-6.1-sol", runtime="claude", cost="3.00"),
+            _request(1, 1, model="gpt-5-codex", runtime="codex", cost=None),
+            _request(2, 1, model="gpt-5-codex", runtime="claude", cost="3.00"),
         ]
     )
 
@@ -173,22 +170,20 @@ def test_rate_table_orders_by_tokens_then_model() -> None:
 
 
 @pytest.mark.parametrize(
-    ("runtime", "model", "quality"),
+    ("model", "quality"),
     [
-        ("claude", "claude-opus-4-7", PricingQuality.VERIFIED),
-        ("claude", "claude-opus-4-7-20260514", PricingQuality.VERIFIED),
-        ("codex", "gpt-6.1-sol", PricingQuality.PLACEHOLDER),
-        ("codex", None, PricingQuality.PLACEHOLDER),
-        ("claude", None, PricingQuality.UNAVAILABLE),
-        ("claude", "<synthetic>", PricingQuality.UNAVAILABLE),
-        ("claude", "", PricingQuality.UNAVAILABLE),
-        ("claude", "claude-unreleased-9", PricingQuality.UNAVAILABLE),
+        ("claude-opus-4-7", PricingQuality.VERIFIED),
+        ("claude-opus-4-8[1m]", PricingQuality.VERIFIED),
+        ("claude-opus-4-7-20260514", PricingQuality.UNAVAILABLE),
+        ("gpt-5-codex", PricingQuality.UNAVAILABLE),
+        (None, PricingQuality.UNAVAILABLE),
+        ("<synthetic>", PricingQuality.UNAVAILABLE),
+        ("", PricingQuality.UNAVAILABLE),
+        ("claude-unreleased-9", PricingQuality.UNAVAILABLE),
     ],
 )
-def test_pricing_quality_per_runtime_and_model(
-    runtime: str, model: str | None, quality: PricingQuality
-) -> None:
-    assert pricing_quality(runtime, model) is quality  # type: ignore[arg-type]
+def test_pricing_quality_per_model(model: str | None, quality: PricingQuality) -> None:
+    assert pricing_quality(model) is quality
 
 
 def test_rate_row_refuses_an_unknown_field() -> None:
@@ -207,14 +202,14 @@ def test_a_codex_session_is_in_no_cost_ordered_ranking() -> None:
             project_label="SYN",
             started_at=_NOW,
             ended_at=_NOW,
-            model="claude-opus-4-7" if runtime == "claude" else "gpt-6.1-sol",
+            model="claude-opus-4-7" if runtime == "claude" else "gpt-5-codex",
             model_family="m",
             orchestrated=False,
             metrics={Metric.TOTAL_TOKENS: 1_000.0 * (index + 1), Metric.MODEL_STEPS: 4.0},
             cost_usd=cost,
             pricing_quality=pricing_quality(
-                runtime, "claude-opus-4-7" if runtime == "claude" else "gpt-6.1-sol"
-            ),  # type: ignore[arg-type]
+                "claude-opus-4-7" if runtime == "claude" else "gpt-5-codex"
+            ),
             issues=(StructuralIssue.TIMESTAMP_REGRESSION,),
         )
 
@@ -222,7 +217,7 @@ def test_a_codex_session_is_in_no_cost_ordered_ranking() -> None:
         [session(1, "claude", Decimal(2)), session(2, "codex", Decimal(500))],
         requests=[
             _request(1, 1, model="claude-opus-4-7"),
-            _request(2, 1, model="gpt-6.1-sol", runtime="codex", cost=None),
+            _request(2, 1, model="gpt-5-codex", runtime="codex", cost=None),
         ],
         now=_NOW,
     )

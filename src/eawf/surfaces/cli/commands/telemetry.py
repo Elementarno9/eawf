@@ -7,8 +7,8 @@ detection, and the projection all live in the library.
 
 Verbs:
 
-- ``eawf telemetry pricing-currency-check`` — validate the embedded
-  ``PRICING`` snapshot's shape + internal currency and emit a typed
+- ``eawf telemetry pricing-currency-check`` — hold the shipped price files
+  to the stated cache multipliers and emit a typed
   :class:`~eawf.observability.telemetry.pricing.PricingDriftReport`. With ``--strict``
   the verb exits ``2`` (``VALIDATION_ERROR``) on detected drift so the
   weekly CI gate can open an auto-refresh PR.
@@ -52,10 +52,9 @@ def pricing_currency_check(
 ) -> None:
     """Validate the embedded pricing snapshot and emit a drift report.
 
-    The check is offline — it confirms the embedded ``PRICING`` snapshot is
-    internally consistent (every row carries the embedded ``pricing_version``
-    and each cache rate equals the Anthropic-stated multiplier on that row's
-    base input). It does not hit the network.
+    The check is offline — it confirms each Anthropic row of the shipped price
+    files bills cache writes at the Anthropic-stated multipliers on that row's
+    base input. It does not hit the network.
 
     Exit codes:
         - ``0`` — snapshot is current (or drift found without ``--strict``).

@@ -208,7 +208,7 @@ def test_prior_baseline_leaves_out_sessions_that_never_did_the_thing() -> None:
 def test_prior_baseline_prices_cost_against_verified_sessions_only() -> None:
     priced = [_session(i, extra={Metric.COST_USD: 1.0}) for i in range(4)]
     placeholder = [
-        _session(4 + i, extra={Metric.COST_USD: 1.0}, pricing_quality=PricingQuality.PLACEHOLDER)
+        _session(4 + i, extra={Metric.COST_USD: 1.0}, pricing_quality=PricingQuality.UNAVAILABLE)
         for i in range(4)
     ]
     current = _session(9, extra={Metric.COST_USD: 9.0})
@@ -405,7 +405,7 @@ def test_every_anomaly_metric_has_a_plain_subject() -> None:
 # ---- rankings and cost --------------------------------------------------------------------
 
 
-def test_codex_sessions_carry_no_dollar_and_rank_only_by_tokens() -> None:
+def test_unpriced_codex_sessions_carry_no_dollar_and_rank_only_by_tokens() -> None:
     claude = [
         _session(
             i,
@@ -417,10 +417,10 @@ def test_codex_sessions_carry_no_dollar_and_rank_only_by_tokens() -> None:
     codex = _session(
         3,
         runtime="codex",
-        model="gpt-6.1-sol",
+        model="gpt-5-codex",
         issues=(StructuralIssue.TIMESTAMP_REGRESSION,),
         cost_usd=Decimal(99),
-        pricing_quality=PricingQuality.PLACEHOLDER,
+        pricing_quality=PricingQuality.UNAVAILABLE,
         total=9_000_000.0,
     )
 
@@ -631,7 +631,7 @@ def test_history_sessions_leaves_codex_tool_counts_unobserved() -> None:
         ref,
         [],
         runtime="codex",
-        model="gpt-6.1-sol",
+        model="gpt-5-codex",
         cwd_digest=None,
         cost_usd=None,
         price_source=PriceSourceKind.UNPRICED,
@@ -651,7 +651,7 @@ def test_history_sessions_leaves_codex_tool_counts_unobserved() -> None:
 
     assert Metric.TOOL_CALLS not in session.metrics
     assert session.project_key == "unknown"
-    assert session.pricing_quality is PricingQuality.PLACEHOLDER
+    assert session.pricing_quality is PricingQuality.UNAVAILABLE
     row_analysis = analyze_sessions([session], requests=(), now=_NOW).sessions[0]
     assert row_analysis.session_class is SessionClass.LISTED
 

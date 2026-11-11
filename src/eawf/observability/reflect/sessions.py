@@ -18,6 +18,7 @@ from pathlib import Path
 
 from eawf.observability.reflect import analysis as an
 from eawf.observability.reflect.html import PageSources, write_pages
+from eawf.observability.reflect.html.pages import reflect_headline
 from eawf.observability.reflect.preamble import read_memory_files
 from eawf.observability.reflect.report import ReportScope, reflect_root
 from eawf.observability.reflect.runs import ProgressSink, tree_project_code
@@ -144,7 +145,12 @@ def reflect_sessions(
             scope_label=scope.label,
         )
         analysis_path = an.write_analysis(area.directory, analysis, on=now.date())
-        overview = write_pages(area.directory, sources, progress=progress).overview
+        overview = write_pages(
+            area.directory,
+            sources,
+            headline=reflect_headline(project_root),
+            progress=progress,
+        ).overview
     logger.debug(
         f"reflect_sessions scope={scope.label} sessions={len(sessions)} covered={len(covered)}"
     )

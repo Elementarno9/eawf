@@ -181,6 +181,9 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "enabled": True,
         "db_kind": "sqlite",
     },
+    "reflect": {
+        "headline": "api_equivalent",
+    },
     # Per-role runtime tool grants appended to each rendered subagent's
     # built-in allowlist. Empty by default so an unconfigured repo renders
     # exactly the tools AGENT_REGISTRY declares; see

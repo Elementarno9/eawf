@@ -51,7 +51,7 @@ import typer
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydValidationError
 
-from eawf.kernel.config.schema import AgentsConfig, EstimationConfig, VerifyConfig
+from eawf.kernel.config.schema import AgentsConfig, EstimationConfig, ReflectConfig, VerifyConfig
 from eawf.kernel.fsync import fsync_parent_dir
 from eawf.runtime.lock import portalock
 from eawf.runtime.vcs.coauthor import VcsConfig
@@ -135,6 +135,8 @@ class _ConfigSchema(BaseModel):
     # section model so a misspelled role fails here rather than at render.
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     verify: VerifyConfig = Field(default_factory=VerifyConfig)
+    # ``reflect`` has no shipped value; a layer may state price overrides.
+    reflect: ReflectConfig = Field(default_factory=ReflectConfig)
     # ``preferences`` carries the operator-preference knob (auto_choose).
     # Value-shape validation lives in the leaf catalog; the composed schema
     # only needs to accept the section so a default-bearing merge does not

@@ -23,8 +23,9 @@ capable (and costlier) Opus tier, lighter effort routes to the cheaper
 Haiku tier, with Sonnet in the middle. A handful of reasoning-heavy roles
 (planner, auditor, reviewer) bump one tier up at the mid band so a
 medium-effort review still reasons on the stronger model. Every model id
-is a key in :data:`eawf.observability.telemetry.pricing.PRICING` so a
-routed wave prices through :func:`~eawf.observability.telemetry.pricing.lookup_pricing`.
+is named in a price file under
+:data:`eawf.observability.telemetry.pricing.PRICE_FILE_DIR` so a routed wave
+prices through :meth:`~eawf.observability.telemetry.pricing.PriceBook.quote`.
 
 The ``runtime`` is the short :data:`~eawf.kernel.store.kinds.events.base.RuntimeTriple`
 spelling (``claude`` / ``codex`` / ``opencode``) — the same vocabulary
@@ -43,9 +44,9 @@ from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 
 logger = logging.getLogger(__name__)
 
-#: Canonical model ids (keys of
-#: :data:`eawf.observability.telemetry.pricing.PRICING`). Named here so the
-#: table reads by tier rather than by bare string literal.
+#: Canonical model ids (rows of a price file under
+#: :data:`eawf.observability.telemetry.pricing.PRICE_FILE_DIR`). Named here so
+#: the table reads by tier rather than by bare string literal.
 _MODEL_OPUS: str = "claude-opus-4-8"
 _MODEL_SONNET: str = "claude-sonnet-4-6"
 _MODEL_HAIKU: str = "claude-haiku-4-5"
@@ -68,9 +69,11 @@ _TIER_INDEX_BY_MODEL: dict[str, int] = {_MODEL_HAIKU: 0, _MODEL_SONNET: 1, _MODE
 #: verbatim so the claude spawn model is byte-identical to the pre-W15 surface.
 #: ``codex`` routes bare OpenAI ids; ``opencode`` routes the ``provider/model``
 #: form the opencode CLI ``-m`` flag expects (anthropic provider, so an
-#: OAuth-Claude opencode lane prices at the real anthropic rates). Every id is a
-#: key the cost ledger prices through
-#: :func:`eawf.observability.telemetry.pricing.lookup_pricing`.
+#: OAuth-Claude opencode lane prices at the real anthropic rates). Every id here
+#: has a price row, so the cost ledger prices it through
+#: :meth:`eawf.observability.telemetry.pricing.PriceBook.quote`; an id a repo
+#: sets through ``runtime.models`` prices only when a row names it, and the
+#: Codex-only ids (``gpt-5-codex`` and the like) have none.
 _RUNTIME_TIER_MODEL: dict[str, tuple[str, str, str]] = {
     "claude": (_MODEL_HAIKU, _MODEL_SONNET, _MODEL_OPUS),
     # ChatGPT-account codex (the agent-driven default lane) rejects the
@@ -110,10 +113,10 @@ class RoutingDecision:
     """The model + runtime a dispatched wave resolves to.
 
     Attributes:
-        model: Model identifier — a key of
-            :data:`eawf.observability.telemetry.pricing.PRICING` so the
-            decision prices through
-            :func:`~eawf.observability.telemetry.pricing.lookup_pricing`.
+        model: Model identifier — a row of a price file under
+            :data:`eawf.observability.telemetry.pricing.PRICE_FILE_DIR` so
+            the decision prices through
+            :meth:`~eawf.observability.telemetry.pricing.PriceBook.quote`.
         runtime: Runtime adapter id in the short
             :data:`~eawf.kernel.store.kinds.events.base.RuntimeTriple`
             spelling (``claude`` / ``codex`` / ``opencode``).
@@ -272,7 +275,7 @@ def runtime_model_for_decision(
     Returns:
         The per-runtime model id for the decision's tier (a key the cost ledger
         prices through
-        :func:`eawf.observability.telemetry.pricing.lookup_pricing`).
+        :meth:`eawf.observability.telemetry.pricing.PriceBook.quote`).
 
     Raises:
         ValueError: When *runtime* is not one of the three short triple
@@ -321,7 +324,7 @@ def model_for_runtime(
     ``provider/model`` form its CLI ``-m`` flag expects, and a claude spawn gets
     the same claude id :func:`resolve_routing` already returned (byte-identical
     to the pre-W15 surface). Every returned id is a key the cost ledger prices
-    through :func:`eawf.observability.telemetry.pricing.lookup_pricing`.
+    through :meth:`eawf.observability.telemetry.pricing.PriceBook.quote`.
 
     Args:
         agent_role: The wave's :class:`~eawf.kernel.state.enums.AgentSessionRole`.
@@ -362,7 +365,7 @@ def tier_for_model(model: str) -> int | None:
     exact match first, then longest-prefix fallback (so a dated / suffixed
     variant like ``gpt-5-codex-preview`` still classifies as the tier its
     ``gpt-5-codex`` prefix names), mirroring
-    :func:`eawf.observability.telemetry.pricing.lookup_pricing`.
+    :meth:`eawf.observability.telemetry.pricing.PriceBook.quote`.
 
     This is the seam the verdict-agreement cost A/B keys its cheaper-vs-opus
     comparison on: a verdict / cost observation priced against a model is
