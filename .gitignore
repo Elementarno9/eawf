@@ -133,6 +133,9 @@ AGENTS.override.md
 !.ea/artifacts/evidence/2026-11-08-stable-native-linux/dispatch-smoke-receipts.json
 !.ea/artifacts/evidence/2026-11-08-stable-native-linux/dispatch-check-*.json
 !.ea/artifacts/evidence/2026-11-08-stable-native-linux/packet-run-receipts.jsonl
+!.ea/artifacts/evidence/2026-11-11-stable-native-linux/dispatch-smoke-receipts.json
+!.ea/artifacts/evidence/2026-11-11-stable-native-linux/dispatch-check-*.json
+!.ea/artifacts/evidence/2026-11-11-stable-native-linux/packet-run-receipts.jsonl
 !.ea/artifacts/evidence/2026-10-24-rc3-claude-host-facts/claude-project-document-cap.json
 .ea/**/.DS_Store
 # END EAWF:gitignore
