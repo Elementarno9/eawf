@@ -95,10 +95,11 @@ def guard_pre_tool_use(
         logger.warning("guard_pre_tool_use status=passed reason=no_tool_name")
         return None
     raw_cwd = payload.get("cwd")
-    reported = isinstance(raw_cwd, str) and os.path.isdir(raw_cwd)
+    reported_cwd = raw_cwd if isinstance(raw_cwd, str) and os.path.isdir(raw_cwd) else None
+    reported = reported_cwd is not None
     # The wrapper falls back to its own directory for a cwd that is not one;
     # judging against the same directory keeps the two sides on one answer.
-    cwd = raw_cwd if reported else os.getcwd()
+    cwd = reported_cwd if reported_cwd is not None else os.getcwd()
     project_dir = os.environ.get(_PROJECT_DIR_ENV) if event.runtime == "claude" else None
     root = _session_tree(context, cwd, project_dir, reported=reported)
     if root is None:
