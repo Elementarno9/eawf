@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": "1f4b9cb1c3a14556db098c4d63109f432e4fb897",
+  "revision": "3c70ca92dfdb7fd3985a9c5ded687cf3c05c8506",
   "summary": {
     "total": 1170,
     "owned": 1001,
@@ -1478,7 +1478,7 @@
     {"id": "SURF-106", "title": "Every skill declares its prompt-budget class and counts against the ceiling resolved from V07-ECON;...", "status": "owned", "owners": ["EAWF-0141"], "tests": ["tests/unit/platform/rules/test_chain_budget.py"], "producers": [], "deferral": null, "satisfied_by": null},
     {"id": "SURF-107", "title": "Skill invocation counts are observable per host lane", "status": "deferred", "owners": [], "tests": [], "producers": [], "deferral": "D93", "satisfied_by": null},
     {"id": "SURF-108", "title": "No shipped skill, manifest, or hook references an epoch-1 noun after cutover, proven by a symbol...", "status": "owned", "owners": ["EAWF-0139"], "tests": ["tests/contract/workflow/skills/test_skill_catalog_generation.py"], "producers": [], "deferral": null, "satisfied_by": null},
-    {"id": "SURF-109", "title": "An installed bundle whose target epoch differs from the repository refuses to operate and renders...", "status": "owned", "owners": ["EAWF-0139", "EAWF-0243"], "tests": ["tests/contract/workflow/skills/test_host_lane_invocation.py", "tests/contract/workflow/skills/test_skill_catalog_generation.py"], "producers": [], "deferral": null, "satisfied_by": null},
+    {"id": "SURF-109", "title": "An installed bundle whose target epoch differs from the repository refuses to operate and renders...", "status": "owned", "owners": ["EAWF-0139", "EAWF-0243"], "tests": [], "producers": [], "deferral": null, "satisfied_by": null},
     {"id": "SURF-110", "title": "The orchestration contract ships as a dispatch default and the concurrency plan is derived from the...", "status": "owned", "owners": ["EAWF-0132"], "tests": ["tests/unit/workflow/planning/test_orchestration.py"], "producers": [], "deferral": null, "satisfied_by": null},
     {"id": "SURF-111", "title": "Every operator question renders comparable visuals, expands its terms, recommends the...", "status": "owned", "owners": ["EAWF-0131", "EAWF-0226"], "tests": ["tests/contract/workflow/skills/test_decision_rpc_grant.py", "tests/contract/workflow/test_operator_approval_surfaces.py", "tests/integration/runtime/daemon/methods/test_question_decision.py", "tests/integration/workflow/delivery/test_host_question_binding.py", "tests/tui/surfaces/tui/console/test_question_decision_card.py", "tests/unit/workflow/test_host_question.py"], "producers": [], "deferral": null, "satisfied_by": null},
     {"id": "SURF-112", "title": "Each shipped skill's strict argument schema generates identical host help, machine schema,...", "status": "owned", "owners": ["EAWF-0139", "EAWF-0243"], "tests": ["tests/contract/workflow/skills/test_host_lane_invocation.py", "tests/contract/workflow/skills/test_skill_catalog_generation.py"], "producers": ["src/eawf/runtime/harness/host_keys.py"], "deferral": null, "satisfied_by": null},
