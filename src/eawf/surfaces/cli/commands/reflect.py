@@ -147,7 +147,7 @@ def reflect_run(
         target = _output(tree_root, out, flags=flags)
         root = rp.new_output_dir()
         cache_root = index_root = rp.user_reflect_root()
-        area = sc.OutputArea.of(root, tree_root=tree_root)
+        area = sc.OutputArea.created(root)
         kept: tuple[RunReading, ...] = ()
     else:
         tree_root = managed

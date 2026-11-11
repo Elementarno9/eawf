@@ -65,6 +65,8 @@ def layout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Layout:
     worktree = base / "repo-wt"
     worktree.mkdir()
     (worktree / ".git").write_text(f"gitdir: {git / 'worktrees' / 'wt'}\n", encoding="utf-8")
+    # git takes a linked worktree only when its git directory has a HEAD.
+    (git / "worktrees" / "wt" / "HEAD").write_text("ref: refs/heads/wt\n", encoding="utf-8")
     (git / "worktrees" / "wt" / "gitdir").write_text(f"{worktree / '.git'}\n", encoding="utf-8")
     (git / "worktrees" / "wt" / "commondir").write_text("../..\n", encoding="utf-8")
     sibling = base / "sibling"

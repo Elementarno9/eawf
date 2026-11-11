@@ -164,6 +164,38 @@ def resolve_session_scope(scope: ReportScope, *, project_root: Path, label: str)
     return SessionScope(own=own, covered=covered, labels=labels, label=scope.text())
 
 
+def _work_tree(directory: Path) -> Path | None:
+    """Return the top of the git work tree holding *directory*, as git reports it.
+
+    An entry named ``.git`` only says git may be worth asking: an empty or
+    invalid one is no repository, and git's own discovery passes it. With no
+    such entry above *directory*, git is not spawned at all.
+
+    Args:
+        directory: An absolute directory; it need not exist yet.
+
+    Returns:
+        The work tree top, or ``None`` when git finds no work tree or the
+        probe fails.
+    """
+    chain = (directory, *directory.parents)
+    if not any((parent / ".git").exists() for parent in chain):
+        return None
+    probe = next(parent for parent in chain if parent.is_dir())
+    found = subprocess.run(
+        ["git", "-C", str(probe), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=False,
+        **no_window_kwargs(),
+    )
+    top = found.stdout.strip()
+    if found.returncode != 0 or not top:
+        logger.debug(f"_work_tree none probe_status={found.returncode}")
+        return None
+    return Path(top).resolve()
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OutputArea:
     """The directory a run writes into, and whether git would commit it.
@@ -192,11 +224,8 @@ class OutputArea:
         resolved = directory.resolve()
         if resolved.is_relative_to(tree_root.resolve() / LOCAL_DIRNAME):
             return cls(directory=resolved, committed=False)
-        work_tree = next(
-            (parent for parent in (resolved, *resolved.parents) if (parent / ".git").exists()),
-            None,
-        )
-        if work_tree is None:
+        work_tree = _work_tree(resolved)
+        if work_tree is None or not resolved.is_relative_to(work_tree):
             return cls(directory=resolved, committed=False)
         relative = resolved.relative_to(work_tree).as_posix()
         # The trailing slash asks about the directory itself, so a pattern such as
@@ -208,6 +237,21 @@ class OutputArea:
             **no_window_kwargs(),
         )
         return cls(directory=resolved, committed=ignored.returncode != 0)
+
+    @classmethod
+    def created(cls, directory: Path) -> OutputArea:
+        """Return the area of a directory this run created for itself.
+
+        No repository's ignore rules govern a fresh private directory, so git is
+        not asked about it.
+
+        Args:
+            directory: The directory the run created.
+
+        Returns:
+            The area, never committed.
+        """
+        return cls(directory=directory.resolve(), committed=False)
 
     def admit(self, foreign_rows: int) -> None:
         """Refuse a write that would carry rows of other projects into a committed area.

@@ -31,6 +31,7 @@ from eawf.observability.reflect.report import (
     store_report,
     user_reflect_root,
 )
+from eawf.observability.reflect.scopes import OutputArea
 from eawf.surfaces.cli.app import app
 from eawf.workflow.skills.catalog import render_skill_classes_tsv, resolve_skill, standalone_class
 from tests.contract.surfaces.cli._reflect_tree import native_tree, refuse_egress, run_row
@@ -135,6 +136,53 @@ def test_outside_repo_runs_again_into_a_new_directory(
     pages = [Path(json.loads(run.stdout)["result"]["pages"]).parent for run in (first, second)]
     assert pages[0] != pages[1]
     assert refuse_egress == []
+
+
+@pytest.fixture
+def stray(sandbox: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return a plain working directory below an ancestor holding an empty ``.git``.
+
+    The temporary directory lies below that ancestor too, as on a machine whose
+    shared temporary directory holds a stray ``.git``; no repository exists.
+    """
+    ancestor = sandbox / "stray"
+    (ancestor / ".git").mkdir(parents=True)
+    (ancestor / "tmp").mkdir()
+    work = ancestor / "work"
+    work.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(ancestor / "tmp"))
+    monkeypatch.chdir(work)
+    return work
+
+
+def test_stray_git_entry_spawns_no_ignore_check(stray: Path, refuse_egress: list[str]) -> None:
+    result = runner.invoke(app, ["reflect", "run", "--local-only"])
+
+    assert result.exit_code == 0, result.output
+    assert refuse_egress == []
+    pages = next(line for line in result.stdout.splitlines() if line.startswith("pages: "))
+    assert Path(pages.removeprefix("pages: ")).parent.parent == stray.parent / "tmp"
+
+
+def test_stray_git_entry_with_a_named_out(stray: Path, refuse_egress: list[str]) -> None:
+    out = stray.parent / "out" / "r.json"
+    out.parent.mkdir()
+
+    result = runner.invoke(
+        app, ["reflect", "run", "--local-only", "--format", "json", "--out", str(out)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert refuse_egress == []
+    assert json.loads(out.read_text(encoding="utf-8"))["scope"]["kind"] == "user"
+
+
+def test_output_area_passes_an_invalid_git_entry(stray: Path) -> None:
+    area = OutputArea.of(stray.parent / "out", tree_root=stray / ".ea")
+    assert area.committed is False
+    created = OutputArea.created(stray / "fresh")
+    assert created.committed is False
+    assert created.directory == (stray / "fresh").resolve()
 
 
 def test_json_out(scratch: Path, refuse_egress: list[str]) -> None:
