@@ -235,9 +235,10 @@ _eawf_session_tree() {
 
 # A judged call of a session in a managed tree goes to the guard, which then
 # judges it whole; outside one it stands down here. A call whose cwd was read
-# unsure goes to the guard too, without -w, so eawf decides from the parsed
-# payload; with no managed tree found, no health row may create an .ea.
-if [ "${_eawf_event}" = "pre_tool_use" ] && { [ "${_eawf_kind}" != "managed" ] || [ -z "${_eawf_cwd_sure}" ]; }; then
+# unsure goes to the guard too, which judges by the cwd of the parsed payload
+# whatever -w names; with no managed tree found, no health row may create an
+# .ea. A managed checkout the probe found keeps its -w.
+if [ "${_eawf_event}" = "pre_tool_use" ] && [ "${_eawf_kind}" != "managed" ]; then
     _eawf_session_tree
     if [ -n "${_eawf_g}" ]; then
         _eawf_kind="guarded"

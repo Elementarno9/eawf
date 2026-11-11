@@ -95,11 +95,12 @@ def guard_pre_tool_use(
         logger.warning("guard_pre_tool_use status=passed reason=no_tool_name")
         return None
     raw_cwd = payload.get("cwd")
+    reported = isinstance(raw_cwd, str) and os.path.isdir(raw_cwd)
     # The wrapper falls back to its own directory for a cwd that is not one;
     # judging against the same directory keeps the two sides on one answer.
-    cwd = raw_cwd if isinstance(raw_cwd, str) and os.path.isdir(raw_cwd) else os.getcwd()
+    cwd = raw_cwd if reported else os.getcwd()
     project_dir = os.environ.get(_PROJECT_DIR_ENV) if event.runtime == "claude" else None
-    root = _session_tree(context, cwd, project_dir)
+    root = _session_tree(context, cwd, project_dir, reported=reported)
     if root is None:
         return None
     # The kernel resolves a relative path or a .. through the real directory,
@@ -114,9 +115,16 @@ def guard_pre_tool_use(
     return denial
 
 
-def _session_tree(context: HookContext, cwd: str, project_dir: str | None) -> Path | None:
-    """Return the managed tree the session's directory or project directory lies in."""
-    if context.kind == "managed":
+def _session_tree(
+    context: HookContext, cwd: str, project_dir: str | None, *, reported: bool
+) -> Path | None:
+    """Return the managed tree the session's directory or project directory lies in.
+
+    A cwd the payload reports decides over the hook's context: the wrapper
+    may name a repository through ``-w`` from a cwd it read unsure, and only
+    the parsed payload says where the session stands.
+    """
+    if context.kind == "managed" and not reported:
         return context.main
     root = managed_tree(Path(os.path.realpath(cwd)))
     if root is None and project_dir and os.path.isdir(project_dir):

@@ -59,7 +59,7 @@ main()
 # Stands in for uv: counts the start, drops ``run [...]`` and runs the rest
 # of the line through the launcher.
 _STUB_UV: Final = """#!/bin/bash
-echo started >>"$EAWF_TEST_STARTS"
+echo "started $*" >>"$EAWF_TEST_STARTS"
 while [ $# -gt 0 ] && [ "$1" != "eawf" ]; do shift; done
 shift
 exec "$EAWF_TEST_PYTHON" "$EAWF_TEST_LAUNCHER" "$@"
@@ -84,8 +84,13 @@ class _Harness:
             render_hook_sh(HookEventType.PRE_TOOL_USE, runtime="claude"), encoding="utf-8"
         )
 
-    def run(self, context: str, payload: str, starts: Path) -> subprocess.CompletedProcess[str]:
-        """Feed *payload* to the wrapper in *context*; count runner starts in *starts*."""
+    def run(
+        self, context: str, payload: str, starts: Path, directory: Path | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        """Feed *payload* to the wrapper in *context*; count runner starts in *starts*.
+
+        *directory* is the wrapper's own directory; the context's when ``None``.
+        """
         _, project = self.layout.context(context)
         runtime = self.root / "xdg"
         runtime.mkdir(exist_ok=True)
@@ -108,7 +113,7 @@ class _Harness:
             text=True,
             encoding="utf-8",
             env=env,
-            cwd=self.layout.process_dir(context),
+            cwd=directory or self.layout.process_dir(context),
             check=False,
             timeout=60,
         )
@@ -159,3 +164,32 @@ def test_reach_wrapper_never_evaluates_the_cwd(harness: _Harness, tmp_path: Path
     assert (done.returncode, done.stdout) == (0, "")
     assert not canary.exists()
     assert _starts(starts) == 0
+
+
+@pytest.mark.parametrize(
+    ("shape", "denies"),
+    [("no-cwd", True), ("cwd-late", True), ("cwd-nested-key-unmanaged", False)],
+)
+def test_reach_wrapper_keeps_w_in_a_managed_checkout_read_unsure(
+    harness: _Harness, tmp_path: Path, shape: str, denies: bool
+) -> None:
+    """In a managed checkout an unsure reading still names it; the payload's cwd decides."""
+    managed = harness.layout.managed
+    if shape == "no-cwd":
+        payload = json.dumps(
+            {"session_id": SESSION, "tool_name": "Bash", "tool_input": {"command": "rm -rf .ea"}}
+        )
+    else:
+        payload = harness.layout.payload(shape, "Bash", {"command": "rm -rf .ea"})
+    starts = tmp_path / "starts"
+    done = harness.run(
+        shape if shape != "no-cwd" else "managed-root", payload, starts, directory=managed
+    )
+    assert done.returncode == 0, done.stderr
+    assert starts.read_text().splitlines() == [
+        f"started run --no-project eawf -w {managed} hook run pre_tool_use --runtime claude"
+    ]
+    if denies:
+        assert json.loads(done.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+    else:
+        assert done.stdout == ""
