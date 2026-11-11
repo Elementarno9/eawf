@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import stat
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -19,7 +20,7 @@ from eawf.observability.doctor.checks_worktrees import (
     check_leftovers,
     check_worktrees,
 )
-from eawf.runtime.daemon.runtime_dir import tree_key
+from eawf.runtime.daemon.runtime_dir import TREES_DIRNAME, runtime_base_dir, tree_key
 from tests._linked_worktree import git, repo_with_linked_worktree
 
 _EIGHT_DAYS = 8 * 24 * 3600
@@ -46,12 +47,20 @@ def _btrfs_stand_in(tmp_path: Path, body: str) -> Path:
 _TABLE = "printf '     Total   Exclusive  Set shared  Filename\\n 100 40 60 /x\\n'"
 
 
-@pytest.fixture(autouse=True)
-def _isolated_host(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Point the temp directory, the runtime base and btrfs at the test's own paths."""
+@pytest.fixture(autouse=True, params=["linux", "darwin"])
+def _isolated_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> Path:
+    """Point the temp directory, the runtime base and btrfs at the test's own paths.
+
+    Each test runs as on Linux, whose runtime base follows XDG_RUNTIME_DIR, and
+    as on macOS, whose runtime base is under the home whatever that says.
+    """
     temp = tmp_path / "tmp"
     temp.mkdir()
     monkeypatch.setattr(tempfile, "tempdir", str(temp))
+    monkeypatch.setattr(sys, "platform", request.param)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "xdg"))
     monkeypatch.setattr(checks_worktrees, "BTRFS", str(tmp_path / "no-btrfs"))
     return temp
@@ -107,7 +116,7 @@ def test_worktrees_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     git(dirty, "reset", "-q", "--hard", "HEAD~1")
 
     # A runtime directory keyed to a worktree's own state.json.
-    runtime = tmp_path / "xdg" / "eawfd" / "trees" / tree_key(linked / ".ea" / "state.json")
+    runtime = runtime_base_dir() / TREES_DIRNAME / tree_key(linked / ".ea" / "state.json")
     runtime.mkdir(parents=True)
     keyed = check_worktrees(workspace=main)
     assert keyed.status == "warn"
@@ -142,7 +151,7 @@ def test_leftovers_check(
     (temp / "eawf-proof-1").mkdir()
     (temp / "eawf-proof-2").mkdir()
     (temp / "unrelated-1").mkdir()
-    trees = tmp_path / "xdg" / "eawfd" / "trees"
+    trees = runtime_base_dir() / TREES_DIRNAME
     for key, pid in (("nopid", None), ("badpid", "x"), ("deadpid", "999999999")):
         (trees / key).mkdir(parents=True)
         if pid is not None:
