@@ -55,9 +55,10 @@ if [[ "${_eawf_payload:0:8192}" =~ ${_eawf_cwd_re} ]]; then
         *) _eawf_cwd_sure="yes" ;;
     esac
     # A JSON string holds no raw control byte, so \001 stands in for an
-    # escaped backslash while \/ is decoded.
+    # escaped backslash while \/ is decoded. The replacement is a bare "/":
+    # bash 3.2 keeps the backslash of a "\/" replacement in double quotes.
     _eawf_cwd="${_eawf_cwd//\\\\/$'\001'}"
-    _eawf_cwd="${_eawf_cwd//\\\//\/}"
+    _eawf_cwd="${_eawf_cwd//\\\///}"
     _eawf_cwd="${_eawf_cwd//$'\001'/\\}"
     if [ -n "${_eawf_cwd_sure}" ] && [ "${_eawf_event}" = "pre_tool_use" ]; then
         _eawf_rest="${_eawf_payload#*\"cwd\"}"

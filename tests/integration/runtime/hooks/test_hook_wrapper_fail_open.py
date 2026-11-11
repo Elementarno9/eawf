@@ -344,6 +344,29 @@ def test_project_venv_eawf_runs_without_sync(wrapper: Path, tmp_path: Path) -> N
     ]
 
 
+def test_a_cwd_with_escaped_slashes_names_its_managed_tree(wrapper: Path, tmp_path: Path) -> None:
+    # A JSON encoder may write "/" as "\/"; bash 3.2, the system bash on macOS,
+    # keeps the backslash of a "\/" replacement inside double quotes.
+    main, _linked = repo_with_linked_worktree(tmp_path / "managed")
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    stubs = tmp_path / "stubs"
+    _stub(stubs, "uv", '#!/bin/bash\nprintf \'%s\\n\' "$*" >>"$EAWF_TEST_LOG"\n')
+    _stub(stubs, "eawf", "#!/bin/bash\n")
+    escaped = json.dumps(str(main)).replace("/", "\\/")
+    result = _run(
+        wrapper,
+        "session_end",
+        f'{{"session_id": "s", "cwd": {escaped}}}',
+        cwd=plain,
+        env=_env(tmp_path, f"{stubs}:{_SYSTEM_PATH}"),
+    )
+    assert result.returncode == 0, result.stderr
+    assert _calls(tmp_path) == [
+        f"run --no-project eawf -w {main} hook run session_end --runtime claude"
+    ]
+
+
 @pytest.mark.parametrize("payload", ["", "{not json", '{"cwd": 3}'])
 def test_unreadable_payload_falls_back_to_the_working_directory(
     wrapper: Path, tmp_path: Path, payload: str
