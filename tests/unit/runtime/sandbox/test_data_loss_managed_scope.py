@@ -15,6 +15,7 @@ from typing import Any, Final
 
 import pytest
 
+from eawf.runtime.daemon.runtime_dir import TREES_DIRNAME, runtime_base_dir
 from eawf.runtime.hooks.context import managed_tree, resolve_hook_context
 from eawf.runtime.hooks.data_loss_guard import (
     DATA_LOSS_GUARD_HOOK,
@@ -120,7 +121,9 @@ def _event(payload: dict[str, Any]) -> HookEvent:
 
 
 def _tree_entries(runtime: Path) -> list[Path]:
-    trees = runtime / "eawfd" / "trees"
+    # The platform's own base: macOS keeps it under the home, not *runtime*.
+    trees = runtime_base_dir() / TREES_DIRNAME
+    assert trees.is_relative_to(runtime.parent)
     return sorted(trees.iterdir()) if trees.is_dir() else []
 
 

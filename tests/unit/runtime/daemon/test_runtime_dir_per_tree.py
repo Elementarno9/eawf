@@ -90,6 +90,22 @@ def test_tree_key_ignores_path_spelling(tmp_path: Path) -> None:
     assert len(tree_key(state)) == 16
 
 
+def test_a_tree_reached_through_a_symlinked_parent_has_one_runtime_dir(
+    default_resolution: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # As /var reaches /private/var on macOS: one tree, so one daemon.
+    real = _tree(tmp_path / "real" / "a")
+    (tmp_path / "link").symlink_to(tmp_path / "real", target_is_directory=True)
+    spelled = tmp_path / "link" / "a"
+
+    assert tree_key(spelled / ".ea" / "state.json") == tree_key(real / ".ea" / "state.json")
+    monkeypatch.setenv("EA_STATE", str(spelled / ".ea" / "state.json"))
+    through_link = runtime_dir()
+    monkeypatch.setenv("EA_STATE", str(real / ".ea" / "state.json"))
+
+    assert through_link == runtime_dir()
+
+
 def test_socket_under_a_home_of_ordinary_length_fits_the_cap(
     default_resolution: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
