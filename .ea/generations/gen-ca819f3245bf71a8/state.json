@@ -1091,7 +1091,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 80768,
+  "canonical_sequence": 80775,
   "milestone": {
     "MLS-0108": {
       "acceptance_bundle_revision": null,
