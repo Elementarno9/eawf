@@ -11,7 +11,8 @@ against the contract every hook keeps:
 - stdout is empty or one JSON document of the shape the host reads for the
   event;
 - stderr is empty outside a managed repository;
-- no daemon socket appears, except one a managed session start starts.
+- no daemon socket appears outside a managed repository, where a hook may
+  start one in the background.
 
 It also checks the bundle itself: a ``timeout`` on every manifest entry, the
 ``bash "${CLAUDE_PLUGIN_ROOT}/hooks/eawf-hook.sh" <event>`` command form, no
@@ -59,6 +60,7 @@ from eawf.observability.doctor.hook_matrix import (
 )
 from eawf.observability.doctor.models import CheckResult
 from eawf.platform.subprocess_detach import no_window_kwargs
+from eawf.runtime.hooks.daemon_start import DAEMON_START_UNANSWERED_CODE
 from eawf.runtime.hooks.health import HEALTH_RECORD, read_health_rows
 
 HOOK_HEALTH_CHECK: Final = "hook_health"
@@ -476,8 +478,9 @@ def _judge(
             failures.append(fail("guard", "deny", decision or "no decision"))
     if context not in MANAGED_CONTEXTS and context != "runner-missing" and completed.stderr:
         failures.append(fail("stderr", "empty", completed.stderr.strip().splitlines()[0]))
-    allowed = event.value == "session_start" and context in MANAGED_CONTEXTS
-    if sockets and not allowed:
+    # Any managed hook that finds no daemon may start one once the last start's
+    # stamp is older than the interval, which a slow matrix can outlast.
+    if sockets and context not in MANAGED_CONTEXTS:
         failures.append(fail("daemon", "no socket", ", ".join(sockets)))
     return failures
 
@@ -729,11 +732,14 @@ def check_hook_health(*, workspace: Path | None) -> CheckResult:
     for row in rows:
         codes[row.code] = codes.get(row.code, 0) + 1
     code, count = max(codes.items(), key=lambda item: item[1])
-    return CheckResult(
-        name=HOOK_HEALTH_CHECK,
-        status="warn",
-        detail=f"{len(rows)} hook failures recorded (top: {code} x{count}); run eawf doctor hooks",
-    )
+    detail = f"{len(rows)} hook failures recorded (top: {code} x{count}); run eawf doctor hooks"
+    unanswered = codes.get(DAEMON_START_UNANSWERED_CODE, 0)
+    if unanswered:
+        detail = (
+            f"{detail}; {unanswered} background daemon start(s) went unanswered: "
+            "run eawf daemon start to see why the daemon does not come up"
+        )
+    return CheckResult(name=HOOK_HEALTH_CHECK, status="warn", detail=detail)
 
 
 __all__ = [

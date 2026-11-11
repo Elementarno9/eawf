@@ -14,6 +14,7 @@ import socket
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -24,6 +25,7 @@ from eawf.observability.doctor.checks_hooks import (
     HOOK_HEALTH_CHECK,
     CellFailure,
     HooksReport,
+    _judge,
     bundle_findings,
     check_hook_health,
     installed_bundles,
@@ -33,11 +35,13 @@ from eawf.observability.doctor.hook_matrix import (
     CONTEXTS,
     MANAGED_CONTEXTS,
     MatrixEvent,
+    Payload,
     StaleDaemon,
     allowed_shape_error,
     matrix_events,
     payloads_for,
 )
+from eawf.runtime.hooks.daemon_start import DAEMON_START_UNANSWERED_CODE
 from eawf.runtime.hooks.health import HEALTH_RECORD, HOOK_RAISED, HookFailure, record_failures
 from eawf.runtime.runtimes.claude.plugin_package import package_plugin
 from eawf.surfaces.cli.app import app
@@ -404,6 +408,34 @@ def test_hook_health_warns_about_recorded_failures(tmp_path: Path) -> None:
     assert result.detail == (
         "2 hook failures recorded (top: hook_raised x2); run eawf doctor hooks"
     )
+
+
+def test_hook_health_names_an_unanswered_daemon_start(tmp_path: Path) -> None:
+    (tmp_path / ".ea").mkdir()
+    at = datetime.now(UTC)
+    unanswered = HookFailure("e", "h", DAEMON_START_UNANSWERED_CODE, "E", "", at)
+    record_failures(tmp_path / ".ea", [HookFailure("e", "h", HOOK_RAISED, "E", "", at), unanswered])
+
+    result = check_hook_health(workspace=tmp_path)
+
+    assert result.status == "warn"
+    assert "1 background daemon start(s) went unanswered" in result.detail
+    assert "eawf daemon start" in result.detail
+
+
+@pytest.mark.parametrize("context", sorted(CONTEXTS))
+@pytest.mark.parametrize("event", ["session_start", "post_tool_use", "pre_compact"])
+def test_a_started_daemon_socket_is_allowed_on_every_managed_event(
+    context: str, event: str
+) -> None:
+    cc_event = {"session_start": "SessionStart", "pre_compact": "PreCompact"}
+    matrix_event = MatrixEvent(event, cc_event.get(event, "PostToolUse"))
+    completed: Any = SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    failures = _judge((context, matrix_event, Payload("x")), completed, ["eawfd.sock"])
+
+    criteria = [failure.criterion for failure in failures]
+    assert ("daemon" in criteria) is (context not in MANAGED_CONTEXTS)
 
 
 def test_hook_health_warns_about_an_unreadable_record(tmp_path: Path) -> None:

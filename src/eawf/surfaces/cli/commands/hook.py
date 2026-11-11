@@ -907,32 +907,94 @@ def _register_daemon_start(
     """
     if context.kind != "managed" or not (named or reported) or daemonless:
         return
-    from eawf.runtime.hooks.daemon_start import (
-        DAEMON_START_HOOK,
-        claim_daemon_start,
-        request_daemon_start,
-    )
+    from eawf.runtime.hooks.daemon_start import DAEMON_START_HOOK
     from eawf.runtime.hooks.event import HookEventType
     from eawf.runtime.hooks.runner import HookResult
 
-    ea_dir = context.main / ".ea"
-
-    def _session_start(_event: HookEvent) -> HookResult:
-        # The claim's outcome is not consulted: a new session always asks, and
-        # its stamp keeps the session's first tool calls from asking again.
-        claim_daemon_start(ea_dir)
-        request_daemon_start(context.main)
+    def _session_start(event: HookEvent) -> HookResult:
+        # A new session always asks, and its stamp keeps the session's first
+        # tool calls from asking again.
+        _ask_for_start(runner, event, context, always=True)
         return HookResult(name=DAEMON_START_HOOK, output="")
 
-    def _when_absent(_event: HookEvent) -> HookResult:
-        if runner.daemon_absent and claim_daemon_start(ea_dir):
-            request_daemon_start(context.main)
+    def _when_absent(event: HookEvent) -> HookResult:
+        _ask_for_start(runner, event, context, always=False)
         return HookResult(name=DAEMON_START_HOOK, output="")
 
     runner.register(HookEventType.SESSION_START, _session_start, name=DAEMON_START_HOOK)
     for event_type in HookEventType:
         if event_type != HookEventType.SESSION_START:
             runner.register(event_type, _when_absent, name=DAEMON_START_HOOK)
+
+
+def _ask_for_start(
+    runner: HookRunner, event: HookEvent, context: HookContext, *, always: bool
+) -> None:
+    """Mark a reached daemon, report an unanswered start, and ask for a background start.
+
+    Args:
+        runner: The runner whose handlers have made their daemon calls.
+        event: The dispatched event.
+        context: Where the hook fired, a managed repository.
+        always: Whether to ask even when no handler found the daemon down or
+            the claim was lost, as a session start does; the claim then only
+            decides whether an unanswered start is reported.
+    """
+    from eawf.runtime.hooks.daemon_start import (
+        claim_daemon_start,
+        note_daemon_seen,
+        request_daemon_start,
+        unanswered_start_age,
+    )
+
+    ea_dir = context.main / ".ea"
+    if runner.daemon_reached:
+        note_daemon_seen(ea_dir)
+    if not runner.daemon_absent and not always:
+        return
+    # Read before the claim renews the stamp whose age it reports.
+    unanswered = unanswered_start_age(ea_dir) if runner.daemon_absent else None
+    claimed = claim_daemon_start(ea_dir)
+    if claimed and unanswered is not None:
+        _record_unanswered(runner, event, context, unanswered)
+    if claimed or always:
+        request_daemon_start(context.main)
+
+
+def _record_unanswered(
+    runner: HookRunner, event: HookEvent, context: HookContext, age: float
+) -> None:
+    """Add the one failure row of a background start no daemon came of.
+
+    Only the process that won this interval's start claim calls it, so an
+    unanswered start is recorded once however many hooks find no daemon.
+
+    Args:
+        runner: The runner whose failures are recorded after dispatch.
+        event: The dispatched event.
+        context: Where the hook fired.
+        age: How long ago the unanswered start was requested, in seconds.
+    """
+    from eawf.runtime.hooks.daemon_start import (
+        DAEMON_START_HOOK,
+        DAEMON_START_UNANSWERED_CODE,
+        daemon_start_argv,
+        note_unanswered_reported,
+    )
+    from eawf.runtime.hooks.health import HookFailure
+
+    interpreter = daemon_start_argv(context.main)[0]
+    runner.failures.append(
+        HookFailure(
+            event=event.event_type.value,
+            hook=DAEMON_START_HOOK,
+            code=DAEMON_START_UNANSWERED_CODE,
+            error="DaemonStartUnanswered",
+            detail=f"no daemon answered a start {age:.0f} s ago; interpreter={interpreter}",
+            at=datetime.now(UTC),
+        )
+    )
+    note_unanswered_reported(context.main / ".ea")
 
 
 #: Runtimes whose session-start hook prints a host context document instead

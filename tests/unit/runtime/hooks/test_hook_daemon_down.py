@@ -35,11 +35,18 @@ from eawf.runtime.hooks import daemon_start
 from eawf.runtime.hooks import runner as runner_module
 from eawf.runtime.hooks.context import HookContext, HookContextKind
 from eawf.runtime.hooks.daemon_start import (
+    DAEMON_SEEN_MARKER,
     DAEMON_START_HOOK,
     DAEMON_START_INTERVAL_S,
     DAEMON_START_STAMP,
+    DAEMON_START_UNANSWERED_CODE,
+    DAEMON_UNANSWERED_MARKER,
+    HOOKS_DIR,
+    SESSION_ENV_DROPPED,
+    UNANSWERED_REPEAT_S,
     claim_daemon_start,
     daemon_start_argv,
+    daemon_start_env,
 )
 from eawf.runtime.hooks.health import (
     DAEMON_CALL_FAILED,
@@ -329,9 +336,15 @@ def _session_start_stamps(s: _Scene) -> None:
 
 
 def _stamp_path(_s: _Scene) -> None:
-    assert DAEMON_START_STAMP.parent == HEALTH_RECORD.parent
-    assert DAEMON_START_STAMP.name == "daemon-start.stamp"
+    # Every start file is named in daemon_start beside the health record.
+    assert HEALTH_RECORD.parent == HOOKS_DIR
+    names = {p.name for p in (DAEMON_START_STAMP, DAEMON_SEEN_MARKER, DAEMON_UNANSWERED_MARKER)}
+    assert names == {"daemon-start.stamp", "daemon-seen", "daemon-start.unanswered"}
+    assert {
+        p.parent for p in (DAEMON_START_STAMP, DAEMON_SEEN_MARKER, DAEMON_UNANSWERED_MARKER)
+    } == {HOOKS_DIR}
     assert pytest.approx(60.0) == DAEMON_START_INTERVAL_S
+    assert pytest.approx(86400.0) == UNANSWERED_REPEAT_S
 
 
 def _claim_race(s: _Scene) -> None:
@@ -369,8 +382,6 @@ def _claim_boundaries(s: _Scene) -> None:
     # A stamp from the future (a clock set back) must not block starts for an hour.
     _age(s.stamp, -3600)
     assert claim_daemon_start(ea) is True
-    with pytest.raises(TypeError):
-        claim_daemon_start(str(ea))  # type: ignore[arg-type]
 
 
 _SCENES: dict[str, Callable[[_Scene], None]] = {
@@ -417,6 +428,137 @@ def _refusing() -> Any:
     raise ConnectionRefusedError("refused")
 
 
+# ---- a start nobody answered, an unwritable directory, the child's environment ----------------
+
+
+def _unanswered_rows(tree: Path) -> list[tuple[str, str, str]]:
+    return [row for row in _rows(tree) if row[1] == DAEMON_START_UNANSWERED_CODE]
+
+
+def _down(s: _Scene) -> None:
+    s.monkeypatch.setattr(runner_module, "_default_daemon_client_factory", _not_running)
+
+
+def _up(s: _Scene) -> None:
+    s.monkeypatch.setattr(runner_module, "_default_daemon_client_factory", _answering_daemon)
+
+
+def _never_answered(s: _Scene) -> None:
+    assert _hook_run(s.tree, "post_tool_use").exit_code == 0
+    assert _unanswered_rows(s.tree) == []
+    _age(s.stamp, DAEMON_START_INTERVAL_S + 5)
+    result = _hook_run(s.tree, "post_tool_use")
+    assert result.exit_code == 0
+    assert _unanswered_rows(s.tree) == [
+        (DAEMON_START_HOOK, DAEMON_START_UNANSWERED_CODE, "DaemonStartUnanswered")
+    ]
+    (detail,) = [
+        r.detail
+        for r in read_health_rows(s.tree / ".ea").rows
+        if r.code == DAEMON_START_UNANSWERED_CODE
+    ]
+    assert "interpreter=" in detail and " s ago" in detail
+    assert len(s.launches.calls) == 2
+
+
+def _answered_then_idled(s: _Scene) -> None:
+    assert _hook_run(s.tree, "post_tool_use").exit_code == 0
+    _up(s)
+    assert _hook_run(s.tree, "post_tool_use").exit_code == 0
+    assert (s.tree / ".ea" / DAEMON_SEEN_MARKER).is_file()
+    # The daemon idles out a while later; the next start owes nothing.
+    _down(s)
+    _age(s.stamp, DAEMON_START_INTERVAL_S + 5)
+    assert _hook_run(s.tree, "post_tool_use").exit_code == 0
+    assert _unanswered_rows(s.tree) == []
+    assert len(s.launches.calls) == 2
+
+
+def _one_row_per_outage(s: _Scene) -> None:
+    assert _hook_run(s.tree, "post_tool_use").exit_code == 0
+    for _ in range(3):
+        _age(s.stamp, DAEMON_START_INTERVAL_S + 5)
+        for event in ("post_tool_use", "pre_tool_use", "session_start"):
+            assert _hook_run(s.tree, event).exit_code == 0
+    # Three more unanswered intervals, one row: the outage is reported once a day.
+    assert len(_unanswered_rows(s.tree)) == 1
+    # After the daemon was reached once, the next unanswered start is a new outage.
+    _up(s)
+    assert _hook_run(s.tree, "post_tool_use").exit_code == 0
+    _down(s)
+    # Backdated in the order they happen: report, contact, then a new start.
+    _age(s.tree / ".ea" / DAEMON_UNANSWERED_MARKER, 300)
+    _age(s.tree / ".ea" / DAEMON_SEEN_MARKER, 200)
+    _age(s.stamp, DAEMON_START_INTERVAL_S + 5)
+    assert _hook_run(s.tree, "post_tool_use").exit_code == 0
+    assert len(_unanswered_rows(s.tree)) == 2
+    # A day after the last report the same outage is reported again.
+    _age(s.tree / ".ea" / DAEMON_UNANSWERED_MARKER, UNANSWERED_REPEAT_S + 1)
+    _age(s.tree / ".ea" / DAEMON_SEEN_MARKER, UNANSWERED_REPEAT_S + 10)
+    _age(s.stamp, DAEMON_START_INTERVAL_S + 5)
+    assert _hook_run(s.tree, "post_tool_use").exit_code == 0
+    assert len(_unanswered_rows(s.tree)) == 3
+
+
+def _session_start_reports(s: _Scene) -> None:
+    assert _hook_run(s.tree, "session_start").exit_code == 0
+    _age(s.stamp, DAEMON_START_INTERVAL_S + 5)
+    assert _hook_run(s.tree, "session_start").exit_code == 0
+    assert len(_unanswered_rows(s.tree)) == 1
+
+
+def _unwritable(s: _Scene) -> None:
+    if os.name == "nt" or os.geteuid() == 0:
+        pytest.skip("needs a POSIX permission the user cannot override")
+    hooks = s.tree / ".ea" / HOOKS_DIR
+    hooks.mkdir(parents=True)
+    hooks.chmod(0o500)
+    s.monkeypatch.setattr(daemon_start, "_warned_unwritable", False)
+    try:
+        warnings: list[str] = []
+        s.monkeypatch.setattr(daemon_start.sys.stderr, "write", warnings.append)
+        assert claim_daemon_start(s.tree / ".ea") is False
+        assert claim_daemon_start(s.tree / ".ea") is False
+    finally:
+        hooks.chmod(0o700)
+    assert len(warnings) == 1
+    assert "no background daemon start" in warnings[0]
+    assert "local/hooks is not writable (PermissionError)" in warnings[0]
+    assert str(s.tree) not in warnings[0]
+
+
+def _child_env(s: _Scene) -> None:
+    hook_env = dict.fromkeys(SESSION_ENV_DROPPED, "x")
+    kept = {"PATH": "/bin", "TMPDIR": "/tmp", "EAWF_DAEMONLESS": "0", "CLAUDE_CONFIG_DIR": "c"}
+    env = daemon_start_env({**hook_env, **kept}, s.tree)
+    assert env == {**kept, "EA_STATE": str(s.tree / ".ea" / "state.json")}
+    assert daemon_start_env({}, s.tree) == {"EA_STATE": str(s.tree / ".ea" / "state.json")}
+    s.monkeypatch.setenv("CLAUDECODE", "1")
+    s.monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(s.tree))
+    assert _hook_run(s.tree, "post_tool_use").exit_code == 0
+    ((_argv, kwargs),) = s.launches.calls
+    assert not SESSION_ENV_DROPPED & set(kwargs["env"])
+    assert {"CLAUDECODE", "CLAUDE_PROJECT_DIR", "CLAUDE_PLUGIN_ROOT"} <= SESSION_ENV_DROPPED
+
+
+_START_SCENES: dict[str, Callable[[_Scene], None]] = {
+    "never-answered": _never_answered,
+    "answered-then-idled": _answered_then_idled,
+    "one-row-per-outage": _one_row_per_outage,
+    "session-start-reports": _session_start_reports,
+    "unwritable": _unwritable,
+    "child-env": _child_env,
+}
+
+
+@pytest.mark.parametrize("case", list(_START_SCENES))
+def test_unanswered_start_and_child_env(
+    tree: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, case: str
+) -> None:
+    _context(monkeypatch, tree, "managed")
+    _START_SCENES[case](_Scene(tree, monkeypatch, tmp_path, _launcher(monkeypatch)))
+
+
 # ---- the interpreter the start runs ------------------------------------------------------------
 
 
@@ -448,7 +590,6 @@ def _venv(main: Path, layout: str) -> Path | None:
         "launcher-only",
         "launcher-not-executable",
         "cannot-launch",
-        "type-error",
     ],
 )
 def test_start_interpreter_choice(
@@ -457,9 +598,6 @@ def test_start_interpreter_choice(
     module = "eawf.runtime.daemon.main"
     if layout == "none":
         assert daemon_start_argv(tmp_path) == [sys.executable, "-m", module]
-    elif layout == "type-error":
-        with pytest.raises(TypeError):
-            daemon_start_argv(str(tmp_path))  # type: ignore[arg-type]
     elif layout == "cannot-launch":
         # What a detached child cannot report is known at spawn time: the
         # interpreter must exist. The real launcher raises, so one row.

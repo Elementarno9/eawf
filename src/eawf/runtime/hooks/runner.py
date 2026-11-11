@@ -117,6 +117,8 @@ class HookRunner:
         #: The daemon exits when idle and hooks never start one in-line, so
         #: that is the expected state after any pause, not a failure.
         self.daemon_absent: list[str] = []
+        #: Whether a handler's daemon client attached to a running daemon.
+        self.daemon_reached = False
         # The event and handler being dispatched, so a failed daemon call
         # made through :meth:`recording_factory` is attributed to them.
         self._event_value = ""
@@ -258,7 +260,7 @@ class _RecordingClient:
     def __enter__(self) -> Any:
         try:
             self._context = self._factory()
-            return self._context.__enter__()
+            client = self._context.__enter__()
         except Exception as exc:
             from eawf.surfaces.cli._daemon_client import DaemonNotRunningError
 
@@ -269,6 +271,8 @@ class _RecordingClient:
             else:
                 self._runner._note_failure(DAEMON_CALL_FAILED, exc)
             raise
+        self._runner.daemon_reached = True
+        return client
 
     def __exit__(
         self,
