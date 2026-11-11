@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
@@ -59,6 +60,7 @@ __all__ = [
     "check_pricing_currency",
     "load_price_book",
     "load_price_file",
+    "price_book_root",
     "price_overrides",
     "request_date",
 ]
@@ -666,19 +668,52 @@ def load_price_book(
     return PriceBook(files=files, overrides=chosen, digest=hasher.hexdigest())
 
 
-def _enclosing_repo(start: Path) -> Path | None:
-    """Return the nearest directory at or above *start* holding ``.git``, if any."""
-    return next((path for path in (start, *start.parents) if (path / ".git").exists()), None)
+def price_book_root() -> Path | None:
+    """Return the repository whose overrides this process prices with.
+
+    The state resolver's precedence names it: ``EA_STATE``, then the
+    ``-w/--workspace`` root the CLI pinned, then the tree above the main
+    checkout of the repository holding the working directory. A linked
+    worktree's own ``.ea`` is a frozen copy, so it is never the answer.
+
+    Returns:
+        The directory holding the resolved ``.ea`` tree; ``None`` outside
+        every managed repository, or when the resolver refuses the override
+        or the repository.
+    """
+    from eawf.kernel.state.resolve import home_state, resolve_with_reason
+    from eawf.runtime.daemon.runtime_dir import pinned_workspace
+    from eawf.runtime.vcs.branch_name import BareRepositoryError
+
+    workspace = pinned_workspace()
+    try:
+        if os.environ.get("EA_STATE") or workspace is not None:
+            state_path, _reason = resolve_with_reason(workspace)
+            return state_path.parent.parent
+        state_path, found = home_state(Path.cwd())
+    except FileNotFoundError, BareRepositoryError:
+        return None
+    return state_path.parent.parent if found else None
 
 
 @cache
-def active_price_book() -> PriceBook:
-    """Return the book this process prices with, loaded once.
+def _price_book(repo_root: Path | None) -> PriceBook:
+    """Return the book for *repo_root*, loaded once per repository per process."""
+    return load_price_book(repo_root=repo_root)
 
-    The overrides come from the repository the process runs in, or from the
-    global layer alone outside one.
+
+def active_price_book(repo_root: Path | None = None) -> PriceBook:
+    """Return the book a repository prices with, loaded once per repository.
+
+    Args:
+        repo_root: The repository whose config layers supply overrides; when
+            ``None``, the one :func:`price_book_root` names, or the global
+            layer alone outside every repository.
+
+    Returns:
+        The cached book for that repository.
     """
-    return load_price_book(repo_root=_enclosing_repo(Path.cwd()))
+    return _price_book(repo_root if repo_root is not None else price_book_root())
 
 
 def request_date(ts: datetime | None) -> date:

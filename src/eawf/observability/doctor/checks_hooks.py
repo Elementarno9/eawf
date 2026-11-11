@@ -66,7 +66,8 @@ HOOK_HEALTH_CHECK: Final = "hook_health"
 #: The manifest command form every 0.7.2 entry takes.
 _COMMAND_FORM: Final = re.compile(r'bash "\$\{CLAUDE_PLUGIN_ROOT\}/hooks/eawf-hook\.sh" ([a-z_]+)')
 
-#: How long one cell may run; the longest manifest timeout is 10 s.
+#: How long one cell may run; it covers the default permission wait, the
+#: longest any cell's hook holds, since a throwaway repository sets no wait.
 _CELL_TIMEOUT_S: Final = 30.0
 
 #: How long a daemon a managed session start launched may take to come up.

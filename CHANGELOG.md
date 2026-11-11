@@ -40,10 +40,11 @@ This patch release lets eawf hooks and skills behave safely outside a repository
 
 ### Hooks and skills
 
-- **One wrapper.** One bash wrapper, `hooks/eawf-hook.sh <event>`, replaces the ten per-event scripts, with 3, 5 or 10 second timeouts in the manifest. It checks the repository before starting eawf and fails open as described in the upgrade notes.
+- **One wrapper.** One bash wrapper, `hooks/eawf-hook.sh <event>`, replaces the ten per-event scripts, with 3, 5 or 10 second timeouts in the manifest and 60 seconds for the permission-request hook. It checks the repository before starting eawf and fails open as described in the upgrade notes.
 - **Skills outside a managed repository.** Each skill declares how it runs outside a managed repository: `/research` and `/reflect` are supported, `/spike`, `/mockup`, `/refactor` and `/test` run in a reduced form their page states, and the rest are refused with `not an eawf-managed repository; run eawf init to manage it`. A project verb run there exits 1 with kind `NotManaged`.
 - **`eawf doctor hooks`.** It runs each installed bundle's wrapper across contexts, events and payloads in throwaway repositories and checks the manifest timeouts, the command form, double subscription, duplicate skills, skill classes and the launcher's version.
 - **Data-loss guard.** The data-loss guard is on when the session's working directory or its host project directory lies in a managed tree: a git repository whose main checkout holds `.ea/`, with its subfolders, its linked worktrees and any clone or submodule nested inside it, or a directory outside git that holds `.ea/state.json`; then every protection of 0.7.1 applies. It is off otherwise, decided without reading the command, so a session outside every managed tree is no longer stopped from touching a managed repository by path. Its worktree refusals point to `eawf worktree gc --dry-run` and `git worktree add .ea/worktrees/<name> -b <branch>`.
+- **Permission wait.** The permission-request hook now outlasts the configured `runtime.claude.permission_wait_s`, which is bounded at 50 seconds, so a decision made late in the wait reaches the host instead of being dropped by a hook timeout.
 - **Hook health.** A failed hook leaves a health record, which rotates to `health.1.jsonl` once it passes 1 MiB, and session start warns once about failures recorded since the last warning. A managed session start requests a background daemon start without waiting for it, and a daemon that is not up yet at session start is not counted as a failure.
 
 ### Status line

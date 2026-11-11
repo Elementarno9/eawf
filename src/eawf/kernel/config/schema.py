@@ -223,10 +223,11 @@ STALL_INTERVAL_RUNTIMES: Final[tuple[str, ...]] = ("claude", "codex", "opencode"
 #: it answers nothing and leaves the call to the host's own prompt.
 DEFAULT_PERMISSION_WAIT_SECONDS: Final = 20
 
-#: The longest that wait may be set to. Claude Code kills a command hook after 60
-#: seconds unless its entry sets a timeout, and the installed entry sets none, so
-#: the cap leaves the hook's own start-up and the answer room inside that window;
-#: a hook killed mid-wait would hand the host nothing at all.
+#: The longest that wait may be set to. The host kills a command hook at its
+#: entry's timeout (60 seconds for an entry that sets none), so the cap leaves the
+#: hook's own start-up and the answer room inside that window; a hook killed
+#: mid-wait would hand the host nothing at all. The packaged manifest's permission
+#: entry is sized from this cap.
 MAX_PERMISSION_WAIT_SECONDS: Final = 50
 
 

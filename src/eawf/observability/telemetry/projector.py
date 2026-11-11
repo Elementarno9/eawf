@@ -834,6 +834,7 @@ def sweep_session_history(
     history_root: Path,
     *,
     project_id: str,
+    prices: PriceBook | None = None,
 ) -> SweepFunnel:
     """Index the Claude transcripts of one project directory, subagents included.
 
@@ -842,12 +843,13 @@ def sweep_session_history(
         history_root: One project's Claude history directory; a missing
             directory sweeps nothing.
         project_id: Scope label stamped on every observed session row.
+        prices: The prices to bill with; the process's active book by default.
 
     Returns:
         The coverage funnel of the sweep.
     """
     files = discover_claude_project(history_root)
-    return index_session_history(store, files, project_id=project_id)
+    return index_session_history(store, files, project_id=project_id, prices=prices)
 
 
 def load_session_detail(

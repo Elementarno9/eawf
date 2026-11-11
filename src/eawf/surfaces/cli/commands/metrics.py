@@ -608,6 +608,7 @@ def _telemetry_export(flags: GlobalFlags, *, fmt: str, out: Path | None) -> None
 def _telemetry_rebuild(flags: GlobalFlags, *, full: bool, incremental: bool) -> None:
     """Drive the projector over the discovered sources into the local cache."""
     from eawf.observability.measurement.coverage import pricing_coverage
+    from eawf.observability.telemetry.pricing import active_price_book
     from eawf.observability.telemetry.projector import (
         RebuildMode,
         SourceSpec,
@@ -641,6 +642,7 @@ def _telemetry_rebuild(flags: GlobalFlags, *, full: bool, incremental: bool) -> 
             store,
             claude_history_root(state_path.parent.parent.resolve()),
             project_id=_scope_label(state_path),
+            prices=active_price_book(state_path.parent.parent),
         )
     finally:
         store.close()
@@ -716,7 +718,7 @@ def _telemetry_info(flags: GlobalFlags) -> None:
     finally:
         store.close()
 
-    pricing_version = active_price_book().version
+    pricing_version = active_price_book(state_path.parent.parent).version
     payload = {
         "db_kind": store.backend,
         "db_path": str(db_path),

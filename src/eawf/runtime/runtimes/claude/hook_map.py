@@ -61,6 +61,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Final
 
+from eawf.kernel.config.schema import MAX_PERMISSION_WAIT_SECONDS
 from eawf.runtime.hooks.event import HookEventType
 from eawf.runtime.hooks.runner import registered_handler_event_types
 from eawf.surfaces.render.hooks import HOOK_REGISTRY
@@ -125,7 +126,16 @@ HOOK_WRAPPER: Final = "hooks/eawf-hook.sh"
 #: Seconds the host lets a hook run before it gives up on it. The prompt hook
 #: holds up the operator's own prompt and the pre-tool hook every tool call,
 #: so theirs are short; a hook the host kills is a hook that did nothing.
-_TIMEOUT_S: Final[dict[str, int]] = {"UserPromptSubmit": 3, "PreToolUse": 5}
+#: The permission hook waits for a principal's decision, and the manifest is
+#: static, so its timeout covers the longest wait any repository may set plus
+#: the hook's start-up and its daemon round trips; a shorter one drops a
+#: decision made late in the wait.
+_PERMISSION_TIMEOUT_MARGIN_S: Final = 10
+_TIMEOUT_S: Final[dict[str, int]] = {
+    "UserPromptSubmit": 3,
+    "PreToolUse": 5,
+    "PermissionRequest": MAX_PERMISSION_WAIT_SECONDS + _PERMISSION_TIMEOUT_MARGIN_S,
+}
 _DEFAULT_TIMEOUT_S: Final = 10
 
 
