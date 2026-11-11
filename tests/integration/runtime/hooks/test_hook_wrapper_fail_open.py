@@ -21,8 +21,12 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
+from eawf.kernel.config.schema import MAX_PERMISSION_WAIT_SECONDS
 from eawf.runtime.hooks.health import HEALTH_RECORD, read_health_rows, take_failure_warning
-from eawf.runtime.runtimes.claude.hook_map import handler_backed_plugin_hooks
+from eawf.runtime.runtimes.claude.hook_map import (
+    _PERMISSION_TIMEOUT_MARGIN_S,
+    handler_backed_plugin_hooks,
+)
 from eawf.runtime.runtimes.claude.plugin_package import package_plugin
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import hook as hook_command
@@ -117,7 +121,9 @@ def _scratch_repo(root: Path) -> Path:
 
 def test_manifest_shape(wrapper: Path) -> None:
     manifest = json.loads((wrapper.parent / "hooks.json").read_text(encoding="utf-8"))
-    timeouts = {"UserPromptSubmit": 3, "PreToolUse": 5}
+    # The permission hook outlasts the longest wait a repository may set.
+    permission = MAX_PERMISSION_WAIT_SECONDS + _PERMISSION_TIMEOUT_MARGIN_S
+    timeouts = {"UserPromptSubmit": 3, "PreToolUse": 5, "PermissionRequest": permission}
     seen: list[str] = []
     for cc_event, entries in manifest["hooks"].items():
         for entry in entries:
