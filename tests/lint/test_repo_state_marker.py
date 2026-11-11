@@ -2,8 +2,9 @@
 
 A state-only change must not red the product suite, so every test module
 that reads the repository's own ``.ea`` tree wears the ``repo_state``
-marker, CI deselects that marker in every pytest call, and the pre-push
-hook runs the marked set instead.
+marker, CI deselects that marker on a draft pull request's fast lane and
+selects it in the full configuration, and the pre-push hook runs the
+marked set before every push.
 
 A module reads the committed tree when its AST names ``REPO_EA_DIR`` (or a
 name bound to such a read, imported from another test module), joins a
@@ -30,7 +31,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
+import pytest
 import yaml
+
+from tests.lint.test_ci_workflow_shape import _evaluate, _render
 
 _REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 _TESTS_DIR: Final = "tests"
@@ -507,23 +511,79 @@ def _default_conjuncts() -> list[str]:
     return [] if expression is None else [c.strip() for c in expression.split(" and ")]
 
 
-def deselection_problems(workflow: dict[str, Any], default_conjuncts: list[str]) -> list[str]:
-    """Return every CI pytest call that would run the ``repo_state`` modules.
+#: Every event shape a ci.yaml run takes: a label, the event name and the
+#: pull request's draft flag (null outside a pull request).
+EVENT_SHAPES: Final[tuple[tuple[str, str, bool | None], ...]] = (
+    ("draft pull request", "pull_request", True),
+    ("ready pull request", "pull_request", False),
+    ("push", "push", None),
+    ("schedule", "schedule", None),
+    ("workflow_dispatch", "workflow_dispatch", None),
+)
+_ENV_REFERENCE: Final = re.compile(r"\$\{\{\s*env\.([A-Za-z_]\w*)\s*\}\}")
 
-    A command-line ``-m`` replaces the ini ``addopts`` one rather than adding
-    to it, so each call must also keep the default conjuncts it does not
-    explicitly invert (the eval step selects ``eval`` on purpose).
+
+def shape_context(event: str, draft: bool | None) -> dict[str, object]:
+    """Return the Actions context of one event shape, its changes job reporting code.
+
+    Args:
+        event: The ``github.event_name`` of the run.
+        draft: The pull request's draft flag; ``None`` outside a pull request.
+
+    Returns:
+        The context keys the workflow's env and job conditions read.
+    """
+    return {
+        "github.event_name": event,
+        "github.event.pull_request.draft": draft,
+        "needs.changes.result": "success",
+        "needs.changes.outputs.code": "true",
+    }
+
+
+def is_fast_lane(context: dict[str, object]) -> bool:
+    """Return whether *context* is a draft pull request, the only run deselecting the marker."""
+    return (
+        context["github.event_name"] == "pull_request"
+        and context["github.event.pull_request.draft"] is True
+    )
+
+
+def _workflow_env(workflow: dict[str, Any], context: dict[str, object]) -> dict[str, str]:
+    return {name: _render(str(value), context) for name, value in workflow.get("env", {}).items()}
+
+
+def _with_env(text: str, env: dict[str, str]) -> str:
+    """Substitute each ``${{ env.NAME }}`` the runner would; an undefined name raises KeyError."""
+    return _ENV_REFERENCE.sub(lambda match: env[match.group(1)], text)
+
+
+def selection_problems(
+    workflow: dict[str, Any], default_conjuncts: list[str], context: dict[str, object]
+) -> list[str]:
+    """Return every CI pytest call whose ``repo_state`` selection is wrong for *context*.
+
+    A draft pull request's fast lane must deselect the marker; every other
+    run is the full configuration and must select it. A command-line ``-m``
+    replaces the ini ``addopts`` one rather than adding to it, so each call
+    must also keep the default conjuncts it does not explicitly invert (the
+    eval step selects ``eval`` on purpose). A call without ``-m`` runs the
+    ini default.
 
     Args:
         workflow: The parsed workflow document.
         default_conjuncts: The ``and`` conjuncts of the ini ``-m`` expression.
+        context: The event shape, as :func:`shape_context` builds it.
 
     Returns:
-        One line per offending step; empty when every call deselects.
+        One line per offending call; empty when every call selects as it should.
 
     Raises:
-        KeyError: *workflow* has no ``jobs`` table.
+        KeyError: *workflow* has no ``jobs`` table, or a call names an
+            ``env`` value the workflow does not define.
     """
+    deselect = is_fast_lane(context)
+    env = _workflow_env(workflow, context)
     problems: list[str] = []
     for step in _ci_steps(workflow):
         name = step.get("name", "<unnamed>")
@@ -531,18 +591,22 @@ def deselection_problems(workflow: dict[str, Any], default_conjuncts: list[str])
         if not isinstance(run, str):
             continue
         if "just " in run and "pytest" not in run:
-            expression = _marker_expression(
-                shlex.split(str(step.get("env", {}).get("PYTEST_ADDOPTS", "")))
+            addopts = _with_env(str(step.get("env", {}).get("PYTEST_ADDOPTS", "")), env)
+            expressions = [_marker_expression(shlex.split(addopts))]
+        else:
+            expressions = [
+                _marker_expression(argv) for argv in _pytest_commands(_with_env(run, env))
+            ]
+        for expression in expressions:
+            conjuncts = (
+                default_conjuncts
+                if expression is None
+                else [c.strip() for c in expression.split(" and ")]
             )
-            if expression is None or _DESELECT not in expression.split(" and "):
-                problems.append(f"{name}: just recipe runs pytest without {_DESELECT!r}")
-            continue
-        for argv in _pytest_commands(run):
-            expression = _marker_expression(argv)
-            conjuncts = [] if expression is None else [c.strip() for c in expression.split(" and ")]
-            if _DESELECT not in conjuncts:
-                problems.append(f"{name}: pytest call lacks -m {_DESELECT!r}")
-                continue
+            if deselect and _DESELECT not in conjuncts:
+                problems.append(f"{name}: the fast lane runs pytest without {_DESELECT!r}")
+            if not deselect and _DESELECT in conjuncts:
+                problems.append(f"{name}: the full configuration deselects {_MARKER!r}")
             selected = {c for c in conjuncts if not c.startswith("not ")}
             lost = [c for c in default_conjuncts if c not in conjuncts and c[4:] not in selected]
             if lost:
@@ -599,17 +663,94 @@ def test_ci_deselects_and_prepush_runs() -> None:
     called = called_workflows(workflow)
     # Boundary: ci.yaml calls the console replay, so the walk must reach it.
     assert ".github/workflows/console-replay.yaml" in called
+    callers = {
+        str(job["uses"]).removeprefix("./"): str(job.get("if", "true"))
+        for job in workflow["jobs"].values()
+        if "uses" in job
+    }
+    defaults = _default_conjuncts()
     calls: list[list[str]] = []
+    checked: set[str] = set()
+    for label, event, draft in EVENT_SHAPES:
+        context = shape_context(event, draft)
+        assert selection_problems(workflow, defaults, context) == [], label
+        # A called workflow runs only where its calling job does, and sees
+        # none of the caller's env, so it is judged on those shapes alone.
+        for path in called:
+            if _evaluate(callers[path], context):
+                checked.add(path)
+                document = _load_yaml(_REPO_ROOT / path)
+                assert selection_problems(document, defaults, context) == [], (label, path)
     for document in (workflow, *(_load_yaml(_REPO_ROOT / path) for path in called)):
-        assert deselection_problems(document, _default_conjuncts()) == []
         calls += [
             argv
             for step in _ci_steps(document)
             for argv in _pytest_commands(str(step.get("run", "")))
         ]
     assert prepush_problems(_load_yaml(_PRE_COMMIT)) == []
-    # Boundary: the walk must find real pytest calls, or an empty parse passes.
+    # Boundary: every called workflow ran under some shape, and the walk
+    # found real pytest calls, or an empty parse passes.
+    assert checked == set(called)
     assert len(calls) >= 5
+
+
+def _one_call_workflow(marker: str, env: str | None = None) -> dict[str, Any]:
+    workflow: dict[str, Any] = {
+        "jobs": {"t": {"steps": [{"name": "s", "run": f'uv run pytest -m "{marker}" -n0'}]}}
+    }
+    if env is not None:
+        workflow["env"] = {"REPO_STATE_DESELECT": env}
+    return workflow
+
+
+_FAST_LANE_ENV: Final = (
+    "${{ github.event_name == 'pull_request' && github.event.pull_request.draft"
+    " && ' and not repo_state' || '' }}"
+)
+
+
+def test_selection_follows_the_event_shape() -> None:
+    computed = _one_call_workflow("not eval${{ env.REPO_STATE_DESELECT }}", _FAST_LANE_ENV)
+    for label, event, draft in EVENT_SHAPES:
+        assert selection_problems(computed, ["not eval"], shape_context(event, draft)) == [], label
+    assert is_fast_lane(shape_context("pull_request", True))
+    assert not is_fast_lane(shape_context("pull_request", False))
+    assert not is_fast_lane(shape_context("push", None))
+
+
+def test_selection_fire_proof() -> None:
+    draft = shape_context("pull_request", True)
+    ready = shape_context("pull_request", False)
+    # The literal deselection CI carried reds the full configuration and
+    # passes only the fast lane.
+    literal = _one_call_workflow("not eval and not repo_state")
+    assert selection_problems(literal, ["not eval"], ready) == [
+        "s: the full configuration deselects 'repo_state'"
+    ]
+    assert selection_problems(literal, ["not eval"], draft) == []
+    # A bare default reds the fast lane.
+    assert selection_problems(_one_call_workflow("not eval"), ["not eval"], draft) == [
+        "s: the fast lane runs pytest without 'not repo_state'"
+    ]
+    # Dropping the default conjunct reds every shape; eval selected on purpose does not.
+    assert selection_problems(_one_call_workflow("not slow"), ["not eval"], ready) == [
+        "s: -m drops the default ['not eval']"
+    ]
+    assert selection_problems(_one_call_workflow("eval"), ["not eval"], ready) == []
+    # A call without -m runs the ini default.
+    bare = {"jobs": {"t": {"steps": [{"name": "s", "run": "uv run pytest -n0"}]}}}
+    assert selection_problems(bare, ["not eval"], ready) == []
+    assert selection_problems(bare, ["not eval"], draft) != []
+    # Empty: no steps, no problems.
+    assert selection_problems({"jobs": {}}, ["not eval"], draft) == []
+
+
+def test_selection_error_paths() -> None:
+    undefined = _one_call_workflow("not eval${{ env.REPO_STATE_DESELECT }}")
+    with pytest.raises(KeyError, match="REPO_STATE_DESELECT"):
+        selection_problems(undefined, ["not eval"], shape_context("push", None))
+    with pytest.raises(KeyError, match="jobs"):
+        selection_problems({}, ["not eval"], shape_context("push", None))
 
 
 def test_called_workflows_lists_local_reusable_workflows_only() -> None:

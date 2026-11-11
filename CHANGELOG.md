@@ -73,7 +73,7 @@ This patch release lets eawf hooks and skills behave safely outside a repository
 - **No tests for `.ea`-only changes.** A push or pull request that changes only `.ea` runs no test job.
 - **`ci-ok` is the required check.** An always-running `ci-ok` job carries the verdict, and superseded runs of a pull request are cancelled.
 - **Draft and ready lanes.** A draft pull request runs the fast lane; the full configuration, console replay included, runs once it is marked ready for review.
-- **`repo_state` tests.** Tests that read the repository's own `.ea` are marked `repo_state`, deselected in CI and run by a pre-push hook.
+- **`repo_state` tests.** Tests that read the repository's own `.ea` are marked `repo_state`; they run in CI's full configuration and in a pre-push hook, and are deselected on a draft pull request's fast lane.
 - **Weekly price check.** A scheduled workflow runs `eawf reflect prices check --online` every Monday and opens or comments on one issue whenever the prices are not confirmed current; it never commits.
 
 ### Digests and secret scan

@@ -30,6 +30,19 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.ref) }}
   cancel-in-progress: true
 
+env:
+  # The one place the repo_state selection is decided; every pytest -m in
+  # this workflow appends it to its own conjuncts. The repo_state tests
+  # read the .ea tree committed in this repository, so a change that only
+  # edits that state would otherwise fail them in CI without touching any
+  # code. The changes job already keeps such a change from running any
+  # test job, and a change with code runs these tests against the .ea
+  # committed with it, so the full configuration (a push, the nightly and
+  # hand-started runs, a pull request ready for review) runs them and
+  # their coverage counts toward the gate. A draft pull request's fast
+  # lane deselects them; the pre-push hook runs them before every push.
+  REPO_STATE_DESELECT: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && ' and not repo_state' || '' }}
+
 jobs:
   changes:
     name: Classify changes since the last green tree
@@ -158,7 +171,7 @@ jobs:
         # The cases compare envelope structure against committed goldens and
         # call no model, so the step is deterministic and cheap.
         if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
-        run: uv run pytest tests/eval/test_skill_eval.py -m "eval and not repo_state" -q
+        run: uv run pytest tests/eval/test_skill_eval.py -m "eval${{ env.REPO_STATE_DESELECT }}" -q
 
       - name: Snapshot pairing gate
         if: ${{ !cancelled() && steps.sync.outcome == 'success' && github.event_name == 'pull_request' }}
@@ -260,7 +273,7 @@ jobs:
         # a draft, which has no coverage job to feed. The test selection is
         # the same on every event. The end-to-end suite and the perf lane
         # run in the serial job to avoid worker contention.
-        run: uv run pytest -m "not eval and not repo_state" -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability --junitxml=pytest-junit.xml --splits 4 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft) && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
+        run: uv run pytest -m "not eval${{ env.REPO_STATE_DESELECT }}" -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability --junitxml=pytest-junit.xml --splits 4 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft) && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
 
       - name: Duration budget (advisory)
         # Diffs every test's wall time in the parallel leg against the
@@ -316,7 +329,7 @@ jobs:
 
       - name: Pytest (serial e2e timing)
         # Console latency must be measured without competing pytest workers.
-        run: uv run pytest -m "not eval and not repo_state" -n0 tests/e2e ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft) && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
+        run: uv run pytest -m "not eval${{ env.REPO_STATE_DESELECT }}" -n0 tests/e2e ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft) && '--cov=eawf --cov-report= --cov-fail-under=0' || '' }}
 
       - name: Pytest (serial perf structure)
         # The perf lane's import-graph and harness checks block on every
@@ -324,7 +337,7 @@ jobs:
         # runner can red with nothing broken.
         env:
           EAWF_SKIP_PERF: "1"
-        run: uv run pytest -m "not eval and not repo_state" -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft) && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
+        run: uv run pytest -m "not eval${{ env.REPO_STATE_DESELECT }}" -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft) && '--cov=eawf --cov-append --cov-report= --cov-fail-under=0' || '' }}
 
       - name: Perf lane (nightly, reports, never blocks)
         # The same lane with its wall-clock budgets, serial and on the
@@ -332,7 +345,7 @@ jobs:
         # on an otherwise green job, so it reports without blocking.
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         continue-on-error: true
-        run: uv run pytest -m "not eval and not repo_state" -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
+        run: uv run pytest -m "not eval${{ env.REPO_STATE_DESELECT }}" -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
 
       - name: Telemetry sync (REL-009)
         # Telemetry ingestion is on by default, so CI must prove the sync
@@ -349,7 +362,7 @@ jobs:
         # Its fire proof is tests/integration/test_metrics_cli.py, which reds
         # on an ingestion path that writes no rows. Reviewed and kept; the
         # companion review row is tests/lint/test_gate_sunset_review.py.
-        run: uv run pytest -m "not eval and not repo_state" -n0 tests/integration/test_metrics_cli.py
+        run: uv run pytest -m "not eval${{ env.REPO_STATE_DESELECT }}" -n0 tests/integration/test_metrics_cli.py
 
       - name: Upload coverage data
         if: github.event_name != 'pull_request' || !github.event.pull_request.draft
@@ -400,7 +413,7 @@ jobs:
 
       - name: Pytest (parallel)
         # The ubuntu shards' selection without coverage.
-        run: uv run pytest -m "not eval and not repo_state" -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability --junitxml=pytest-junit.xml --splits 3 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json
+        run: uv run pytest -m "not eval${{ env.REPO_STATE_DESELECT }}" -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability --junitxml=pytest-junit.xml --splits 3 --group ${{ matrix.shard }} --splitting-algorithm least_duration --durations-path split-durations.json
 
       - name: Upload JUnit report
         if: ${{ !cancelled() }}
@@ -412,22 +425,22 @@ jobs:
 
       - name: Pytest (serial e2e timing)
         if: matrix.shard == '1'
-        run: uv run pytest -m "not eval and not repo_state" -n0 tests/e2e
+        run: uv run pytest -m "not eval${{ env.REPO_STATE_DESELECT }}" -n0 tests/e2e
 
       - name: Pytest (serial perf structure)
         if: matrix.shard == '1'
         env:
           EAWF_SKIP_PERF: "1"
-        run: uv run pytest -m "not eval and not repo_state" -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
+        run: uv run pytest -m "not eval${{ env.REPO_STATE_DESELECT }}" -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
 
       - name: Perf lane (nightly, reports, never blocks)
         if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && matrix.shard == '1'
         continue-on-error: true
-        run: uv run pytest -m "not eval and not repo_state" -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
+        run: uv run pytest -m "not eval${{ env.REPO_STATE_DESELECT }}" -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli tests/perf/runtime tests/perf/kernel tests/perf/observability
 
       - name: Telemetry sync (REL-009)
         if: matrix.shard == '1'
-        run: uv run pytest -m "not eval and not repo_state" -n0 tests/integration/test_metrics_cli.py
+        run: uv run pytest -m "not eval${{ env.REPO_STATE_DESELECT }}" -n0 tests/integration/test_metrics_cli.py
 
   macos-affected:
     name: macos-26 / affected tests
@@ -478,7 +491,7 @@ jobs:
         run: |
           set +e
           # shellcheck disable=SC2086 # the scope is a space-separated path list
-          uv run pytest -m "not eval and not repo_state" -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability $SCOPE
+          uv run pytest -m "not eval${{ env.REPO_STATE_DESELECT }}" -n auto --ignore=tests/snapshots/tui --ignore=tests/e2e --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --ignore=tests/perf/runtime --ignore=tests/perf/kernel --ignore=tests/perf/observability $SCOPE
           status=$?
           if [ "${status}" -eq 5 ]; then
             echo "no affected test outside the serial tiers"
@@ -584,7 +597,7 @@ jobs:
         # executes the real launch. The containment cases skip without bwrap,
         # so this is the only host where they run at all.
         run: >
-          uv run pytest -m "not eval and not repo_state" -n0 --no-cov
+          uv run pytest -m "not eval${{ env.REPO_STATE_DESELECT }}" -n0 --no-cov
           tests/integration/runtime/sandbox/test_jail.py
           tests/integration/runtime/sandbox/test_bwrap_containment.py
           tests/unit/runtime/sandbox/test_jail_expiry.py
@@ -642,9 +655,9 @@ jobs:
 
       - name: Pytest via just test-all
         # The recipe's pytest calls carry no -m of their own, so the
-        # deselection the other jobs spell inline reaches them through the env.
+        # marker selection the other jobs spell inline reaches them through the env.
         env:
-          PYTEST_ADDOPTS: -m "not eval and not repo_state"
+          PYTEST_ADDOPTS: -m "not eval${{ env.REPO_STATE_DESELECT }}"
         run: just test-all
 
   windows:
@@ -723,7 +736,7 @@ jobs:
         # so the job is the focused Windows transport gate, not a full
         # cross-OS suite re-run.
         run: >
-          uv run pytest -m "not eval and not repo_state" -n0 --no-cov
+          uv run pytest -m "not eval${{ env.REPO_STATE_DESELECT }}" -n0 --no-cov
           tests/unit/runtime/daemon/test_windows_pipe.py
           tests/unit/runtime/daemon/test_windows_pipe_design_only.py
           tests/unit/runtime/daemon/test_windows_pipe_poc_scenarios.py

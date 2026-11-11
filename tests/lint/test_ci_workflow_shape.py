@@ -117,15 +117,27 @@ def _context(
     draft: bool = True,
 ) -> dict[str, object]:
     """Return the context of an *event* run; a pull request is a draft unless *draft* is false."""
-    return {
-        "github.event_name": event,
-        "github.ref": ref,
-        "github.event.pull_request.draft": draft,
-        "needs.changes.result": changes,
-        "needs.changes.outputs.code": code,
-        "matrix.os": os,
-        "matrix.shard": shard,
+    return _with_workflow_env(
+        {
+            "github.event_name": event,
+            "github.ref": ref,
+            "github.event.pull_request.draft": draft,
+            "needs.changes.result": changes,
+            "needs.changes.outputs.code": code,
+            "matrix.os": os,
+            "matrix.shard": shard,
+        }
+    )
+
+
+def _with_workflow_env(context: dict[str, object]) -> dict[str, object]:
+    """Add each ci.yaml workflow-level ``env`` value, rendered for *context*, as ``env.NAME``."""
+    workflow: dict[str, Any] = yaml.safe_load(_CI.read_text(encoding="utf-8"))
+    rendered = {
+        f"env.{name}": _render(str(value), context)
+        for name, value in workflow.get("env", {}).items()
     }
+    return {**context, **rendered}
 
 
 def _jobs() -> dict[str, Any]:
@@ -231,9 +243,16 @@ _TEST_JOB = {_UBUNTU: "test", _MACOS: "test-macos"}
 _SERIAL_PREFIX = "Pytest (serial "
 _EXCLUDE_FLAGS = ("--exclude", "--omit", "--ignore", "--deselect", "-m")
 _COV_FLAGS = ("--cov=eawf", "--cov-report=", "--cov-fail-under=0")
-#: The ini default ``not eval`` plus the repository-state deselection; a
-#: command-line ``-m`` replaces the ini one, so CI spells both.
-_CI_MARKERS = "not eval and not repo_state"
+#: The ini default ``not eval``, which a command-line ``-m`` replaces, so CI
+#: spells it; a draft pull request's fast lane adds the repository-state
+#: deselection.
+_FULL_MARKERS = "not eval"
+_FAST_LANE_MARKERS = "not eval and not repo_state"
+
+
+def _ci_markers(event: str) -> str:
+    """Return the ``-m`` expression of an *event* run; a pull request here is a draft."""
+    return _FAST_LANE_MARKERS if event == "pull_request" else _FULL_MARKERS
 
 
 def _bare(step: Mapping[str, Any]) -> str:
@@ -280,8 +299,11 @@ def _coverage_gate_argv(event: str) -> list[str]:
 def test_pull_request_and_push_select_the_same_parallel_tests(shard: str) -> None:
     pull_request = _parallel_argv("pull_request", shard=shard)
     push = _parallel_argv("push", shard=shard)
-    assert pull_request == [arg for arg in push if arg not in _COV_FLAGS]
-    assert _option(pull_request, "-m") == [_CI_MARKERS]
+    assert _option(pull_request, "-m") == [_FAST_LANE_MARKERS]
+    assert _option(push, "-m") == [_FULL_MARKERS]
+    # Beyond the marker expression and the coverage flags, the lanes select alike.
+    same = [_FAST_LANE_MARKERS if arg == _FULL_MARKERS else arg for arg in push]
+    assert pull_request == [arg for arg in same if arg not in _COV_FLAGS]
     assert _option(pull_request, "--ignore-glob") == []
     assert "tests/eval" not in _option(pull_request, "--ignore")
 
@@ -295,7 +317,13 @@ def test_macos_shards_select_the_ubuntu_tests(os: str, shard: str) -> None:
 
 @pytest.mark.parametrize("event", _EVENTS)
 def test_every_event_keeps_the_default_marker_selection(event: str) -> None:
-    assert _option(_parallel_argv(event), "-m") == [_CI_MARKERS]
+    assert _option(_parallel_argv(event), "-m") == [_ci_markers(event)]
+
+
+def test_ready_pull_request_selects_the_repo_state_tests() -> None:
+    run = str(_step("test", "Pytest (parallel)")["run"])
+    argv = shlex.split(_render(run, _context("pull_request", draft=False)))
+    assert _option(argv, "-m") == [_FULL_MARKERS]
 
 
 @pytest.mark.parametrize("event", _EVENTS)
@@ -357,7 +385,7 @@ def test_end_to_end_suite_runs_serially_in_its_own_job(event: str) -> None:
             assert _option(_parallel_argv(event, os, shard), "--ignore").count("tests/e2e") == 1
     step = _step("e2e", "Pytest (serial e2e timing)")
     argv = shlex.split(_render(str(step["run"]), _context(event)))
-    expected = ["uv", "run", "pytest", "-m", _CI_MARKERS, "-n0", "tests/e2e"]
+    expected = ["uv", "run", "pytest", "-m", _ci_markers(event), "-n0", "tests/e2e"]
     if event != "pull_request":
         expected.extend(_COV_FLAGS)
     assert argv == expected
@@ -395,7 +423,7 @@ def test_affected_macos_run_ignores_every_perf_lane_path() -> None:
 def test_blocking_perf_step_runs_the_lane_with_its_budgets_skipped(event: str, os: str) -> None:
     step = _step(_SERIAL_JOB[os], _PERF_STRUCTURE)
     argv = shlex.split(_render(str(step["run"]), _context(event, os=os)))
-    expected = ["uv", "run", "pytest", "-m", _CI_MARKERS, "-n0", *PERF_LANE]
+    expected = ["uv", "run", "pytest", "-m", _ci_markers(event), "-n0", *PERF_LANE]
     if os == _UBUNTU and event != "pull_request":
         expected.extend(["--cov=eawf", "--cov-append", "--cov-report=", "--cov-fail-under=0"])
     assert argv == expected
@@ -419,7 +447,7 @@ def test_perf_lane_with_budgets_runs_nightly_once_per_os_and_never_blocks(
     assert step["continue-on-error"] is True
     assert "env" not in step
     argv = shlex.split(_render(str(step["run"]), _context("schedule", os=os)))
-    assert argv == ["uv", "run", "pytest", "-m", _CI_MARKERS, "-n0", *PERF_LANE]
+    assert argv == ["uv", "run", "pytest", "-m", _FULL_MARKERS, "-n0", *PERF_LANE]
 
 
 def test_perf_lane_steps_finish_before_coverage_is_uploaded() -> None:

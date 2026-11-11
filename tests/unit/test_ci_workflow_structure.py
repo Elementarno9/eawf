@@ -23,7 +23,7 @@ from typing import Any
 import pytest
 import yaml
 
-from tests.lint.test_ci_workflow_shape import _evaluate, _render
+from tests.lint.test_ci_workflow_shape import _evaluate, _render, _with_workflow_env
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
@@ -120,9 +120,13 @@ def _runs(job: dict[str, Any], event: str = "pull_request", *, draft: bool = Tru
         condition = str(step.get("if", "true")).strip()
         embedded = _EMBEDDED.fullmatch(condition)
         condition = embedded.group(1) if embedded else condition
-        context = {
-            "github.event_name": event,
-            "github.event.pull_request.draft": draft,
+        context = _with_workflow_env(
+            {
+                "github.event_name": event,
+                "github.event.pull_request.draft": draft,
+            }
+        )
+        context |= {
             "steps.sync.outcome": "success",
             "steps.wheel.outcome": "success",
             "matrix.shard": "1",

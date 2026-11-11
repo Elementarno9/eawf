@@ -30,11 +30,12 @@ jobs:
         # journeys replay before the 261 frames in ONE app instance, so the frames
         # prove the reset as well as the render. Sharding the parametrised cases
         # across xdist workers would give each worker its own app and quietly
-        # weaken that to a per-worker reset. The marker expression is the one
-        # every ci.yaml pytest call carries; none of these modules wears either
+        # weaken that to a per-worker reset. ci.yaml calls this workflow only
+        # for a pull request ready for review, the full configuration, whose
+        # marker expression is "not eval"; none of these modules wears either
         # marker, so it deselects nothing here.
         run: >
-          uv run pytest -m "not eval and not repo_state" -p no:xdist
+          uv run pytest -m "not eval" -p no:xdist
           tests/snapshots/tui/console/test_golden_frames.py
           tests/snapshots/tui/console/test_golden_journeys.py
           tests/snapshots/tui/console/test_normalisation_map.py
