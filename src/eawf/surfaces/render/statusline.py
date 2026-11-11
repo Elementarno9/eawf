@@ -249,6 +249,9 @@ Fill = Annotated[str, StringConstraints(pattern=r"^(#[0-9a-f]{6}|4[0-7]|10[0-7])
 Ink = Annotated[str, StringConstraints(pattern=r"^(#[0-9a-f]{6}|3[0-7]|9[0-7])$")]
 """A foreground: an SGR foreground code (30-37, 90-97) or a lower-case ``#rrggbb``."""
 
+AutoInk = Literal["auto"]
+"""The ink that picks white or black text per fill, whichever stands out on it."""
+
 ColourTheme = Literal[
     "ansi", "catppuccin-latte", "catppuccin-frappe", "catppuccin-macchiato", "catppuccin-mocha"
 ]
@@ -262,10 +265,12 @@ class Theme(BaseModel):
     """One statusline theme: a colour per role.
 
     Meter-row text, gaps and the cell after the last separator are not
-    roles: they stay on the terminal's own background in every theme.
+    roles: they stay on the terminal's own background in every theme. The
+    pace marker is not a role either: it is drawn white or black, whichever
+    stands out on the cell under it, so it never vanishes into a fill.
 
     Attributes:
-        ink: Text on a segment fill.
+        ink: Text on a segment fill; ``auto`` picks white or black per fill.
         model: Fill of the model segment.
         project: Fill of the project segment.
         active_time: Fill of the session segment.
@@ -282,12 +287,11 @@ class Theme(BaseModel):
         danger: Bar fill from four fifths used, and of a limit window 11 or
             more points over pace or 90% used.
         under: Bar fill of a limit window 4 or more points under pace.
-        marker: The pace marker's glyph, drawn on its cell's own fill.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    ink: Ink
+    ink: Ink | AutoInk
     model: Fill
     project: Fill
     active_time: Fill
@@ -302,7 +306,6 @@ class Theme(BaseModel):
     caution: Fill
     danger: Fill
     under: Fill
-    marker: Ink
 
 
 class _ThemeFile(BaseModel):
@@ -317,13 +320,13 @@ class _ThemeFile(BaseModel):
     catppuccin_mocha: Theme = Field(alias="catppuccin-mocha")
 
 
-def load_theme(name: ColourTheme, *, ink: Ink | None = None) -> Theme:
+def load_theme(name: ColourTheme, *, ink: Ink | AutoInk | None = None) -> Theme:
     """Return the bundled theme called *name*.
 
     Args:
         name: The theme's name.
         ink: The segment text colour the ``ansi`` theme draws with in place of
-            its own; the Catppuccin flavours keep their own ink.
+            its own, ``auto`` included; the Catppuccin flavours keep their own ink.
 
     Returns:
         The theme, read from ``templates/themes.yaml``.
@@ -502,6 +505,9 @@ _RESET: Final = "\x1b[0m"
 _DEFAULT_BG: Final = "49"
 _SGR: Final = re.compile(r"\x1b\[[0-9;]*m")
 _ELLIPSIS: Final = "…"
+#: The empty row between line 1 and the meter rows, so the bars read apart
+#: from the segments above them.
+_SPACER: Final = ""
 
 #: Line-1 segments in the order they are dropped when the row is too wide;
 #: model and cost are never dropped, only clipped.
@@ -573,6 +579,42 @@ def _bg(fill: str) -> str:
 def _fg(ink: str) -> str:
     """Return the SGR foreground parameters of *ink*."""
     return f"38;2;{_rgb(ink)}" if ink.startswith("#") else ink
+
+
+#: The 16-colour backgrounds a terminal palette draws dark: black, red, blue,
+#: magenta and bright black; text on them reads in white, on the rest in black.
+_DARK_FILLS: Final = frozenset({"40", "41", "44", "45", "100"})
+_WHITE: Final = "97"
+_BLACK: Final = "30"
+_WHITE_RGB: Final = "38;2;255;255;255"
+_BLACK_RGB: Final = "38;2;0;0;0"
+#: The relative luminance at which black and white stand out equally (WCAG 2.x).
+_EVEN_CONTRAST: Final = 0.179
+
+
+def _linear(channel: int) -> float:
+    """Return the linear-light value of one sRGB channel, 0 to 255."""
+    value = channel / 255
+    return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+
+
+def _contrast(background: str) -> str:
+    """Return the foreground, white or black, that stands out most on *background*.
+
+    A 16-colour fill answers in the palette's own 97 or 30, since the palette
+    decides how dark it is; a 24-bit fill answers in 24-bit white or black by
+    its relative luminance.
+    """
+    if not background.startswith("48;2;"):
+        return _WHITE if background in _DARK_FILLS else _BLACK
+    red, green, blue = (int(part) for part in background.split(";")[2:])
+    luminance = 0.2126 * _linear(red) + 0.7152 * _linear(green) + 0.0722 * _linear(blue)
+    return _BLACK_RGB if luminance > _EVEN_CONTRAST else _WHITE_RGB
+
+
+def _ink(theme: Theme, background: str) -> str:
+    """Return the foreground of segment text on *background* in *theme*."""
+    return _contrast(background) if theme.ink == "auto" else _fg(theme.ink)
 
 
 def _as_fg(background: str) -> str:
@@ -654,7 +696,7 @@ def _line_one(pieces: Sequence[_Piece], style: LineStyle) -> str:
     separator = _SEPARATOR[style.glyphs]
     drawn = ""
     for index, piece in enumerate(pieces):
-        drawn += f"{_sgr(_fg(theme.ink), piece.fill)} {piece.text} "
+        drawn += f"{_sgr(_ink(theme, piece.fill), piece.fill)} {piece.text} "
         if separator:
             following = pieces[index + 1].fill if index + 1 < len(pieces) else _DEFAULT_BG
             drawn += f"{_sgr(_as_fg(piece.fill), following)}{separator}"
@@ -712,8 +754,8 @@ def _bar(bar: PowerlineBar, cells: int, style: LineStyle) -> str:
     In colour the cells take a background fill: full cells, then one eighth
     glyph drawn in the fill on the track, then track. ``ascii`` has no
     eighth glyph, so its partial cell is left as track. The marker replaces
-    the glyph of the cell at the expected share and keeps that cell's own
-    background.
+    the glyph of the cell at the expected share, keeps that cell's own
+    background and is drawn white or black, whichever stands out on it.
     """
     units = int(bar.ratio * cells * 8 + 0.5)
     full, eighths = divmod(units, 8)
@@ -733,7 +775,7 @@ def _bar(bar: PowerlineBar, cells: int, style: LineStyle) -> str:
     runs += [(track, " ")] * rest
     if marker is not None:
         own = fill if marker < full else track
-        runs[marker] = (f"{_fg(theme.marker)};{own}", _BAR_MARKER[style.glyphs])
+        runs[marker] = (f"{_contrast(own)};{own}", _BAR_MARKER[style.glyphs])
     drawn = ""
     previous = None
     for params, glyph in runs:
@@ -827,8 +869,10 @@ def render_powerline(
     """Draw line 1 from *segments* and one meter row per bar, in *style*.
 
     Line 1 shows each segment with a sourced value, in the order given; a
-    segment with none is omitted, never drawn as a marker. Meter rows share
-    one column grid, so each detail starts at the same offset.
+    segment with none is omitted, never drawn as a marker. One blank row
+    separates line 1 from the meter rows, and only when both are drawn.
+    Meter rows share one column grid, so each detail starts at the same
+    offset.
 
     Args:
         segments: The line-1 segments, in display order.
@@ -853,8 +897,10 @@ def render_powerline(
         pieces = _fit_line_one(pieces, style, width)
     rows = [_line_one(pieces, style)] if pieces else []
     grid = _meter_grid(bars, style.bar_width, width)
-    if grid is not None:
+    if grid is not None and bars:
         bar_cells, pace, detail = grid
+        if rows:
+            rows.append(_SPACER)
         rows.extend(
             _meter_row(bar, style, bar_cells=bar_cells, pace=pace, detail=detail) for bar in bars
         )

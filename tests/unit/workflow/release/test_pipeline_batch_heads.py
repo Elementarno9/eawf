@@ -225,6 +225,50 @@ def test_carriers_are_empty_for_an_empty_log(canary: CanaryProvision) -> None:
     assert _host(canary).batch_carrier_commits(TARGET) == {}
 
 
+def test_descendants_read_batch_trailers_past_the_head_on_its_line(
+    canary: CanaryProvision,
+) -> None:
+    host = _host(canary)
+    argvs: list[list[str]] = []
+    listing = _log(
+        (B2, "fix: again\n\nBatch: BAT-0007\nBatch: BAT-0008"),
+        (B1, "fix: later\n\nBatch: BAT-0007"),
+        (A2, "fix: names Batch: BAT-0007 inline"),
+    )
+
+    def run(argv: list[str], **_kwargs: Any) -> str:
+        argvs.append(argv)
+        return listing
+
+    host._run = run  # type: ignore[method-assign]
+    assert host.batch_trailer_descendants(A1, TARGET) == {
+        "BAT-0007": (B2, B1),
+        "BAT-0008": (B2,),
+    }
+    assert "--ancestry-path" in argvs[0]
+    assert argvs[0][-1] == f"{A1}..{TARGET}"
+
+
+def test_descendants_skip_a_commit_named_only_by_a_task_trailer(canary: CanaryProvision) -> None:
+    listing = _log((B1, "fix: later\n\nTask: EAWF-0042"))
+    assert _host(canary, listing).batch_trailer_descendants(A1, TARGET) == {}
+
+
+def test_descendants_are_empty_for_an_empty_log(canary: CanaryProvision) -> None:
+    assert _host(canary).batch_trailer_descendants(A1, TARGET) == {}
+
+
+def test_descendants_surface_a_log_failure(tmp_path: Path) -> None:
+    host = GitHubReleaseHost(tmp_path, state_path=tmp_path / ".ea" / "state.json")
+
+    def fail(argv: list[str], **_kwargs: Any) -> str:
+        raise PipelineHostError(f"git log exited 128: bad revision {argv[-1]}")
+
+    host._run = fail  # type: ignore[method-assign]
+    with pytest.raises(PipelineHostError, match="bad revision"):
+        host.batch_trailer_descendants(A1, TARGET)
+
+
 def test_carriers_refuse_a_tree_that_is_not_native(tmp_path: Path) -> None:
     host = GitHubReleaseHost(tmp_path, state_path=tmp_path / ".ea" / "state.json")
     host._run = lambda argv, **_kwargs: ""  # type: ignore[method-assign]
@@ -242,6 +286,8 @@ class _Host:
     repo_root: Path
     heads: dict[str, str]
     carriers: dict[str, dict[str, tuple[str, ...]]]
+    #: Pinned head -> the Batch-trailer commits of main that descend from it.
+    descendants: dict[str, dict[str, tuple[str, ...]]] = field(default_factory=dict)
     reads: list[str] = field(default_factory=list)
 
     def head(self) -> str:
@@ -255,6 +301,12 @@ class _Host:
         if ref not in self.carriers:
             raise PipelineHostError(f"git log {ref} exited 128: unknown revision")
         return self.carriers[ref]
+
+    def batch_trailer_descendants(self, head: str, ref: str) -> dict[str, tuple[str, ...]]:
+        self.reads.append(f"{head}..{ref}")
+        if head == "unreadable":
+            raise PipelineHostError(f"git log {head}..{ref} exited 128: bad revision")
+        return self.descendants.get(head, {})
 
 
 def _repin(host: _Host) -> PipelineRefusal | dict[str, str]:
@@ -349,3 +401,72 @@ def test_repin_refuses_a_pinned_head_it_cannot_read(tmp_path: Path) -> None:
     assert isinstance(refusal, PipelineRefusal)
     assert refusal.code is PipelineRefusalCode.MILESTONE_UNREADABLE
     assert "unknown revision" in refusal.detail
+
+
+# ---- the repin step accepts later fixes that name a closed Batch ---------------------
+
+
+def test_later_trailer_commits_accepted(tmp_path: Path) -> None:
+    host = _Host(
+        tmp_path,
+        {"BAT-0007": A1, "BAT-0008": A1},
+        {
+            TARGET: {"BAT-0007": (B2, B1, A1), "BAT-0008": (A2,)},
+            A1: {"BAT-0007": (A1,), "BAT-0008": (A2,)},
+        },
+        descendants={A1: {"BAT-0007": (B2, B1)}},
+    )
+    assert _repin(host) == {"milestone": MILESTONE, "batches": "2"}
+    # Two Batches on one head read its descendants once, and only for the one with fixes.
+    assert host.reads == [TARGET, A1, f"{A1}..{TARGET}"]
+
+
+@pytest.mark.parametrize(
+    ("heads", "carriers", "descendants", "detail"),
+    [
+        pytest.param(
+            {"BAT-0007": A2},
+            {TARGET: {"BAT-0007": (B1, A1)}, A2: {"BAT-0007": (A2, A1)}},
+            {A2: {"BAT-0007": (B1,)}},
+            f"BAT-0007 bound {A2[:12]}, landed {B1[:12]}",
+            id="pinned-commit-missing",
+        ),
+        pytest.param(
+            {"BAT-0007": A1},
+            {TARGET: {"BAT-0007": (B2, B1, A1)}, A1: {"BAT-0007": (A1,)}},
+            {A1: {"BAT-0007": (B1,)}},
+            f"BAT-0007 bound {A1[:12]}, landed {B2[:12]}",
+            id="trailer-commit-off-the-pinned-line",
+        ),
+        pytest.param(
+            {"BAT-0007": A1},
+            {TARGET: {"BAT-0007": (B1, A2)}, A1: {"BAT-0008": (A1,)}},
+            {A1: {"BAT-0007": (B1, A2)}},
+            f"BAT-0007 bound {A1[:12]}, landed {B1[:12]}",
+            id="pinned-head-carries-none-of-the-batch",
+        ),
+    ],
+)
+def test_missing_or_unrelated_commits_refused(
+    tmp_path: Path,
+    heads: dict[str, str],
+    carriers: dict[str, dict[str, tuple[str, ...]]],
+    descendants: dict[str, dict[str, tuple[str, ...]]],
+    detail: str,
+) -> None:
+    refusal = _repin(_Host(tmp_path, heads, carriers, descendants=descendants))
+    assert isinstance(refusal, PipelineRefusal)
+    assert refusal.code is PipelineRefusalCode.BATCH_HEAD_MISMATCH
+    assert detail in refusal.detail
+
+
+def test_repin_refuses_descendants_it_cannot_read(tmp_path: Path) -> None:
+    host = _Host(
+        tmp_path,
+        {"BAT-0007": "unreadable"},
+        {TARGET: {"BAT-0007": (B1, A1)}, "unreadable": {"BAT-0007": (A1,)}},
+    )
+    refusal = _repin(host)
+    assert isinstance(refusal, PipelineRefusal)
+    assert refusal.code is PipelineRefusalCode.MILESTONE_UNREADABLE
+    assert "bad revision" in refusal.detail

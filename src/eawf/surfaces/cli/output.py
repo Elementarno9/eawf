@@ -5,15 +5,17 @@ JSON envelope shape stays consistent across commands. The text branch uses
 :func:`typer.echo` (which honours stdout TTY); the JSON branch uses
 :mod:`orjson` with stable formatting (sorted keys, two-space indent) to keep
 golden-test diffs deterministic.
+
+Typer and Click load inside the functions that use them: the kernel config
+loader reaches this module through the error types, and a statusline redraw
+reading the config must not pay for either.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-import click
 import orjson
-import typer
 
 from eawf.surfaces.cli.flags import GlobalFlags
 
@@ -34,6 +36,8 @@ def emit_json_or_text(
         flags: Resolved global flags. Only ``json_output`` is consulted today;
             ``plain_output`` is reserved for downstream Rich-bypass logic.
     """
+    import typer
+
     if flags.json_output:
         raw = orjson.dumps(
             machine_payload(payload), option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS
@@ -45,6 +49,8 @@ def emit_json_or_text(
 
 def _running_verb() -> tuple[str, ...]:
     """Return the command path of the running verb after ``eawf``, empty outside one."""
+    import click
+
     ctx = click.get_current_context(silent=True)
     names: list[str] = []
     while ctx is not None and ctx.parent is not None:

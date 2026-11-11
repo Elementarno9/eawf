@@ -264,8 +264,8 @@ StatuslineTheme = Literal[
 ]
 #: The glyphs the statusline draws separators and bars with.
 StatuslineGlyphs = Literal["nerd", "unicode", "ascii"]
-#: The SGR foreground of the text on an ``ansi`` segment fill: black or bright white.
-StatuslineInk = Literal["30", "97"]
+#: The text on an ``ansi`` segment fill: white or black per fill, black, or bright white.
+StatuslineInk = Literal["auto", "30", "97"]
 
 
 class StatuslineConfig(BaseModel):
@@ -282,7 +282,7 @@ class StatuslineConfig(BaseModel):
 
     theme: StatuslineTheme = "ansi"
     glyphs: StatuslineGlyphs = "nerd"
-    ink: StatuslineInk = "30"
+    ink: StatuslineInk = "auto"
     bar_width: StrictInt = Field(default=20, ge=10, le=40)
 
 

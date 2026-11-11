@@ -67,7 +67,7 @@ Every way the read can fail comes back as one reason that the segment renders as
 
 ## Meter rows and grid
 
-Under line 1 come up to three meter rows, `ctx`, `5h` and `7d`, read from the payload alone; a row without data is not printed.
+Under line 1 come up to three meter rows, `ctx`, `5h` and `7d`, read from the payload alone; a row without data is not printed. One empty row separates line 1 from the first meter row, and none is printed when no meter row is.
 Every row lays out the same five columns, one space apart, so the columns line up down the rows:
 
 | Column | Width | Align | `ctx` | `5h`, `7d` |
@@ -82,7 +82,7 @@ The detail starts at offset W + 16 on every row: offset 36 with the default 20-c
 
 - `ctx` fills with the three input classes of the last API call over the context window, capped at 100 %. Its cache column, such as `92%c`, is the cache-read share of those tokens; with no tokens it is blank.
 - `5h` and `7d` fill with the window's used share and end on the time to reset, such as `2h05m` or `2d4h`.
-- The bar is W cells (`statusline.bar_width`, 10 to 40, default 20): full cells, one eighth-cell edge, then the track. The pace marker `│` sits at the cell an even spend would have reached.
+- The bar is W cells (`statusline.bar_width`, 10 to 40, default 20): full cells, one eighth-cell edge, then the track. The pace marker `│` sits at the cell an even spend would have reached, drawn white or black, whichever stands out on that cell: in `ansi` white (97) on the danger fill 41 and on the track, black (30) on 42, 43 and 46.
 
 ### Pace
 
@@ -100,7 +100,7 @@ The record is read backward from its end, stopping at the first older row or aft
 ## Theme
 
 The default theme, `ansi`, paints with the terminal's 16 ANSI colours, so the line follows whatever palette the terminal is set to (`src/eawf/platform/templates/themes.yaml`).
-Segment fills are SGR backgrounds: model 45, project 44, session 46, cost 42, MCP 47, scope 105, budget 106, a warning 43, an alert 41. Segment text takes `statusline.ink`, 30 by default or 97.
+Segment fills are SGR backgrounds: model 45, project 44, session 46, cost 42, MCP 47, scope 105, budget 106, a warning 43, an alert 41. Segment text takes `statusline.ink`: `auto` by default, white (97) on 41, 44 and 45 and black (30) on 42, 43, 46, 47, 105 and 106; `30` or `97` forces one ink on every segment.
 Gaps, meter-row text and the cell after the last separator stay on the terminal's own background (SGR 49); only the bar paints its cells, on a track of 100.
 Each separator takes the colour of the segment before it on the fill of the segment after it, so the segments chain without gaps.
 The four Catppuccin flavours, `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato` and `catppuccin-mocha`, reuse the same roles in 24-bit hex; `dark` and `light` name Mocha and Latte. `none` emits no escape at all and joins segments with ` | `.

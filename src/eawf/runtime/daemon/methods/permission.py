@@ -78,7 +78,7 @@ from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.kernel.state.epoch2.urns import PermissionUrn, RunUrn
 from eawf.kernel.state.types import UtcDatetime
-from eawf.kernel.store.compaction import document_rows, read_document
+from eawf.kernel.store.compaction import read_status_rows
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -522,7 +522,9 @@ def host_session_runs(authority: RootAuthority, host_session_id: str) -> list[st
     """Return the URNs of every live Run the host session is the vendor session of.
 
     Inside a subagent the host names the subagent, whose own adopted Run is the one
-    its calls belong to; elsewhere it names the session.
+    its calls belong to; elsewhere it names the session. Every host hook asks this, so
+    the Runs are read from the status projection, which holds them, rather than from
+    the whole document.
 
     Args:
         authority: The fence-cleared tree.
@@ -535,9 +537,7 @@ def host_session_runs(authority: RootAuthority, host_session_id: str) -> list[st
     holding = {status.value for status in _HOLDING_STATUSES}
     return sorted(
         row["urn"]
-        for row in document_rows(
-            read_document(_document_path(authority)), Epoch2Collection.RUN
-        ).values()
+        for row in read_status_rows(_document_path(authority), Epoch2Collection.RUN).values()
         if row.get("status") in holding
         and isinstance(row.get("vendor_session"), dict)
         and row["vendor_session"].get("session_digest") == digest

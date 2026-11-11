@@ -34,12 +34,49 @@ def _statusline_theme(argv: list[str]) -> tuple[bool, str | None]:
             return False, None
 
 
+def _defer_cli_logging() -> None:
+    """Have the first log record install the CLI's scrubbed stderr sink.
+
+    The scrubber compiles its patterns at import, which a redraw that logs
+    nothing never needs. A stand-in root handler at the sink's WARNING level
+    replaces itself with the sink on its first record and hands that record
+    on, so what reaches stderr is what the sink installed up front would
+    print. A root logger that already has handlers is left
+    alone, as the sink's installer leaves it.
+    """
+    import logging
+
+    root = logging.getLogger()  # noqa: EAWF003 (root-logger handler config, not library acquisition)
+    if root.handlers:
+        return
+
+    class _InstallOnFirstRecord(logging.Handler):
+        def __init__(self) -> None:
+            super().__init__()
+            self._sink: list[logging.Handler] | None = None
+
+        def emit(self, record: logging.LogRecord) -> None:
+            if self._sink is None:
+                from eawf.observability.logging.scrub import configure_cli_logging
+
+                root.removeHandler(self)
+                configure_cli_logging()
+                self._sink = list(root.handlers)
+            for handler in self._sink:
+                handler.handle(record)
+
+    root.addHandler(_InstallOnFirstRecord())
+    root.setLevel(logging.WARNING)
+
+
 def _serve_statusline(argv: list[str]) -> bool:
     """Print the statusline for *argv* and return ``True`` when it was served.
 
-    It installs the CLI's scrubbed log sink and renders through the same
-    budgeted path the ``cc statusline`` command takes, so output, cache entry
-    and stderr match it. When that path printed the cached line because the
+    It renders through the same budgeted path the ``cc statusline`` command
+    takes, so output and cache entry match it, and the CLI's scrubbed log
+    sink is installed by the first record a render logs, so stderr matches
+    too while a redraw that logs nothing never loads the scrubber. When that
+    path printed the cached line because the
     render overran, the process exits at once: the host waits for it to end,
     and the abandoned render is a daemon thread that may be mid-import, which
     interpreter shutdown should not wait on. A TTY stdin and Windows consoles
@@ -49,10 +86,9 @@ def _serve_statusline(argv: list[str]) -> bool:
     matched, theme = _statusline_theme(argv)
     if not matched or sys.platform == "win32" or sys.stdin.isatty():
         return False
-    from eawf.observability.logging.scrub import configure_cli_logging
     from eawf.runtime.runtimes.claude.statusline import read_payload, serve_line
 
-    configure_cli_logging()
+    _defer_cli_logging()
     served = serve_line(read_payload(), workspace=None, theme_name=theme)
     sys.stdout.write(f"{served.text}\n")
     if served.render_running:

@@ -357,10 +357,13 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         key="statusline.ink",
         domain="ui",
         type="literal",
-        default="30",
+        default="auto",
         writable_layers=_WRITABLE_GWR,
-        choices=("30", "97"),
-        description="Text colour on the ansi theme's segment fills: 30 black or 97 bright white.",
+        choices=("auto", "30", "97"),
+        description=(
+            "Text colour on the ansi theme's segment fills: auto picks white or black per "
+            "fill, 30 forces black, 97 bright white."
+        ),
         consumer="eawf.runtime.runtimes.claude.statusline_theme.statusline_config",
     ),
     LeafKey(

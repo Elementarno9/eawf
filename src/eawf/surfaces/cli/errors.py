@@ -42,7 +42,6 @@ import re
 from datetime import UTC, datetime
 from typing import Any, Final, Literal, NoReturn
 
-import typer
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.surfaces.cli import exit_codes
@@ -490,6 +489,9 @@ def emit_error(
     )
     payload = env.model_dump(mode="json", exclude_none=False)
     emit_json_or_text(payload, _render_text(env), flags=flags)
+    # Imported here so the error types load without Typer, see the output module.
+    import typer
+
     raise typer.Exit(err.exit_code)
 
 

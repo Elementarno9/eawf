@@ -254,6 +254,38 @@ def read_document(state_path: Path) -> dict[str, Any]:
     return _merged(committed, _read_projection(state_path), _digest(raw))
 
 
+def read_status_rows(state_path: Path, collection: Epoch2Collection) -> dict[str, Any]:
+    """Return one status projection collection's rows, read from the projection alone.
+
+    The rows are the ones :func:`read_document` would merge in, without
+    decoding the committed file: its bytes are hashed only when the
+    projection still carries the one it replaced, to tell which of the two
+    belongs to them. A tree with no projection keeps the rows in the
+    committed file, which is then decoded.
+
+    Args:
+        state_path: Path to the tree's ``state.json``.
+        collection: A collection the status projection holds.
+
+    Returns:
+        The collection's rows, keyed by public key; empty when it has none.
+
+    Raises:
+        ValueError: The projection holds something other than an object
+            under the collection.
+        FileNotFoundError: The tree has neither a projection nor a document.
+        pydantic.ValidationError: The projection is not a status projection.
+    """
+    projection = _read_projection(state_path)
+    if isinstance(projection, StatusProjection) and projection.previous is not None:
+        projection = _settled(projection, _digest(state_path.read_bytes()))
+    if projection is None:
+        return document_rows(read_document(state_path), collection)
+    if isinstance(projection, StatusProjection):
+        return document_rows(projection.status, collection)
+    return document_rows(projection, collection)
+
+
 def write_document(
     state_path: Path,
     document: dict[str, Any],
@@ -987,6 +1019,7 @@ __all__ = [
     "migrate_status_projection",
     "plan_legacy_seal",
     "read_document",
+    "read_status_rows",
     "recover_store_tree",
     "seal_legacy_import",
     "settle_status_ledgers",

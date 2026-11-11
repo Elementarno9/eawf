@@ -3,9 +3,11 @@
 # Each theme names one colour per role (see `Theme` in
 # src/eawf/surfaces/render/statusline.py for what each role paints). A fill is
 # an SGR background code (40-47, 100-107) or a 24-bit `#rrggbb`; `ink`, the
-# text on a segment fill, is an SGR foreground code or a `#rrggbb`. Gaps,
-# meter-row text and the cell after the last separator are never painted:
-# they stay on the terminal's own background (SGR 49) in every theme.
+# text on a segment fill, is an SGR foreground code, a `#rrggbb` or `auto`,
+# white or black per fill, whichever stands out. Gaps, meter-row text and the
+# cell after the last separator are never painted: they stay on the
+# terminal's own background (SGR 49) in every theme. The pace marker is no
+# role: it is drawn white or black, whichever stands out on its cell.
 #
 # `ansi` is the default: the terminal's own 16 colours, so the line follows
 # whatever palette the terminal is set to. Its ink is replaced by the
@@ -14,10 +16,10 @@
 # green for model, project, session, cost; sky, lavender, yellow for MCP,
 # scope, budget; peach and red for warn and alert; surface2 for the bar
 # track; teal, yellow, red for the bar fills; green for a limit bar under
-# pace; pink for the pace marker; ink crust (Latte: base).
+# pace; ink crust (Latte: base).
 
 ansi:
-  ink: "30"
+  ink: "auto"
   model: "45"
   project: "44"
   active_time: "46"
@@ -32,7 +34,6 @@ ansi:
   caution: "43"
   danger: "41"
   under: "42"
-  marker: "95"
 
 catppuccin-latte:
   ink: "#eff1f5"
@@ -50,7 +51,6 @@ catppuccin-latte:
   caution: "#df8e1d"
   danger: "#d20f39"
   under: "#40a02b"
-  marker: "#ea76cb"
 
 catppuccin-frappe:
   ink: "#232634"
@@ -68,7 +68,6 @@ catppuccin-frappe:
   caution: "#e5c890"
   danger: "#e78284"
   under: "#a6d189"
-  marker: "#f4b8e4"
 
 catppuccin-macchiato:
   ink: "#181926"
@@ -86,7 +85,6 @@ catppuccin-macchiato:
   caution: "#eed49f"
   danger: "#ed8796"
   under: "#a6da95"
-  marker: "#f5bde6"
 
 catppuccin-mocha:
   ink: "#11111b"
@@ -104,4 +102,3 @@ catppuccin-mocha:
   caution: "#f9e2af"
   danger: "#f38ba8"
   under: "#a6e3a1"
-  marker: "#f5c2e7"

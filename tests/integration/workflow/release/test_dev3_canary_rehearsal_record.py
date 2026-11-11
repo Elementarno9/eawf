@@ -80,6 +80,7 @@ from eawf.workflow.evidence.provider_certification import (
     membership_findings,
 )
 from eawf.workflow.release.admission import assert_membership_resolves
+from tests._canary_releases import UNRECORDED_RELEASES
 from tests.integration.workflow.release._canary_acceptance_walk import (
     LEDGER_COMMIT_SURFACE,
     WALK_SCHEMA_VERSION,
@@ -928,9 +929,11 @@ def test_a_record_that_is_not_a_mapping_is_refused() -> None:
 # ---------- the walk that reached acceptance ----------
 
 #: Every release whose canary export and walk record are committed, in the
-#: order they were cut. Read from the loader's own map so a release it can
-#: find evidence for is one this suite checks.
-RECORDED_RELEASES: Final[tuple[str, ...]] = tuple(CANARY_EVIDENCE_DIRS)
+#: order they were cut: every key of the loader's map except the releases
+#: still awaiting their walk.
+RECORDED_RELEASES: Final[tuple[str, ...]] = tuple(
+    key for key in CANARY_EVIDENCE_DIRS if key not in UNRECORDED_RELEASES
+)
 
 #: The walk record's name beside each release's export.
 WALK_FILENAME: Final = "canary-acceptance-walk.json"
@@ -1148,6 +1151,15 @@ def release(request: pytest.FixtureRequest) -> str:
     """Return each release whose export and walk record are committed."""
     key: str = request.param
     return key
+
+
+@pytest.mark.parametrize("unrecorded", sorted(UNRECORDED_RELEASES))
+def test_a_release_awaiting_its_walk_has_no_committed_export(unrecorded: str) -> None:
+    """A release still on the allow-list has no export; once one lands, drop it from the list."""
+    assert unrecorded in CANARY_EVIDENCE_DIRS
+    assert not evidence_path(unrecorded).is_file(), (
+        f"{unrecorded} has a committed canary export; remove it from UNRECORDED_RELEASES"
+    )
 
 
 def test_the_walk_accepts_the_canary_milestone_through_the_three_skills(

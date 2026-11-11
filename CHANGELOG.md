@@ -6,7 +6,7 @@ The format is based on Keep a Changelog [1], and this project adheres to Semanti
 
 ## [0.7.2] - 2026-11-11
 
-This patch release lets eawf hooks and skills behave safely outside a repository eawf manages, makes every worktree of a repository share one state and one daemon, reorganises `.ea/local`, stops pushes that change only `.ea` from running tests, restyles the status line, and reworks `eawf reflect` on dated, verified price files. No state migration is required from 0.7.1, but read the upgrade notes: hooks now fail open, and the plugin must be updated after the package.
+This patch release lets eawf hooks and skills behave safely outside a repository eawf manages, makes every worktree of a repository share one state and one daemon, reorganises `.ea/local`, stops pushes that change only `.ea` from running tests, restyles the status line and speeds up its redraw, makes hook calls to the daemon cheaper, lets the release pipeline accept fixes pushed after a Batch closed, and reworks `eawf reflect` on dated, verified price files. No state migration is required from 0.7.1, but read the upgrade notes: hooks now fail open, and the plugin must be updated after the package.
 
 ### Upgrade notes
 
@@ -19,6 +19,7 @@ This patch release lets eawf hooks and skills behave safely outside a repository
 - **`.ea/specs/` is no longer ignored.** Files there now show in `git status`; commit them or move them under `.ea/local`.
 - **Secret scanning is pattern-only.** The secret-scanning pre-commit hook no longer runs entropy detectors, so some credential shapes pass it; see Digests and secret scan below.
 - **Status line per user.** Plugin install no longer writes a project status line. Run `eawf statusline install` once to add it to your user settings, and `eawf statusline doctor` to see which settings layer wins.
+- **Status line ink defaults to `auto`.** The `ansi` theme's segment text was always black (`30`); it now follows `statusline.ink`, whose default `auto` picks white or black per fill colour. Set `statusline.ink: 30` to keep the old black ink.
 
 ### .ea layout
 
@@ -45,16 +46,17 @@ This patch release lets eawf hooks and skills behave safely outside a repository
 - **`eawf doctor hooks`.** It runs each installed bundle's wrapper across contexts, events and payloads in throwaway repositories and checks the manifest timeouts, the command form, double subscription, duplicate skills, skill classes and the launcher's version.
 - **Data-loss guard.** The data-loss guard is on when the session's working directory or its host project directory lies in a managed tree: a git repository whose main checkout holds `.ea/`, with its subfolders, its linked worktrees and any clone or submodule nested inside it, or a directory outside git that holds `.ea/state.json`; then every protection of 0.7.1 applies. It is off otherwise, decided without reading the command, so a session outside every managed tree is no longer stopped from touching a managed repository by path. Its worktree refusals point to `eawf worktree gc --dry-run` and `git worktree add .ea/worktrees/<name> -b <branch>`.
 - **Permission wait.** The permission-request hook now outlasts the configured `runtime.claude.permission_wait_s`, which is bounded at 50 seconds, so a decision made late in the wait reaches the host instead of being dropped by a hook timeout.
+- **Cheaper hook calls.** Recording one host tool observation now takes one read and one write of the state document instead of about five, finding a session's Runs no longer decodes the document, and a hook pings the daemon once instead of twice. Measured on a synthetic 17 MB state document, the daemon's lock is held for about 0.6 s instead of about 2.6 s per observation. The stored format is unchanged.
 - **Hook health.** A failed hook leaves a health record, which rotates to `health.1.jsonl` once it passes 1 MiB, and session start warns once about failures recorded since the last warning. A managed session start requests a background daemon start without waiting for it. On every hook event a daemon that is not running is not counted as a hook failure, and any other hook that finds none asks for a background start at most once a minute; a background start no daemon came of is recorded once.
 
 ### Status line
 
-- **New look.** The status line draws on the terminal's 16 ANSI colours by default, with four Catppuccin flavours, chained separators, a column grid that shrinks to the terminal width and bars filled in eighth cells. The `statusline.theme`, `glyphs`, `ink` and `bar_width` settings choose the look; `--theme`, then `NO_COLOR`, then `EAWF_STATUSLINE_THEME`, then the config pick the theme.
-- **Pace and cache reads.** Limit rows show your pace against an even spend (`+N%`, `-N%` or `~`), the context row shows the last call's cache-read share as `N%c`, and the trend arrows are gone.
+- **New look.** The status line draws on the terminal's 16 ANSI colours by default, with four Catppuccin flavours, chained separators, a column grid that shrinks to the terminal width and bars filled in eighth cells. One blank row separates the powerline row from the first meter row when both are drawn. The `statusline.theme`, `glyphs`, `ink` (`auto`, `30` or `97`) and `bar_width` settings choose the look; `--theme`, then `NO_COLOR`, then `EAWF_STATUSLINE_THEME`, then the config pick the theme.
+- **Pace and cache reads.** Limit rows show your pace against an even spend (`+N%`, `-N%` or `~`) with a marker drawn white or black, whichever stands out on its cell, in place of the themes' `marker` colour, the context row shows the last call's cache-read share as `N%c`, and the trend arrows are gone.
 - **API-equivalent cost.** The session cost is labelled API-equivalent: list prices for every token class, not what a subscription bills.
 - **`hooks!N`.** The status line counts, as `hooks!N`, the hook failures of the last 24 hours that came after the last `eawf hook health ack`; an unreadable acknowledgement file counts as none, so it never hides failures.
 - **Per-user install.** `eawf statusline install` sets only `statusLine` in your user settings file, keeping its key order and indentation and re-serialising the rest; `eawf statusline doctor` and the `claude.statusline` doctor check name the winning settings layer and say whether the line is ok, missing, shadowed or broken. Plugin install and `eawf init --quick` no longer write a project status line.
-- **Synchronous render.** Each redraw renders within a 250 ms budget; on an overrun or an error the session's cached line is printed instead, and only one background refresh per session is in flight at a time.
+- **Synchronous render.** Each redraw renders within a 250 ms budget; on an overrun or an error the session's cached line is printed instead, and only one background refresh per session is in flight at a time. A plain redraw no longer loads Typer, Click or the log scrubber, which makes it about 20 to 70 ms faster on the development host.
 - **Bad payloads.** A bad payload, such as empty, non-JSON or non-UTF-8 input, never yields a blank line or a traceback: the status line prints at least the model line. In ascii glyph mode every character it emits is ASCII.
 
 ### Reflect
@@ -75,6 +77,10 @@ This patch release lets eawf hooks and skills behave safely outside a repository
 - **Draft and ready lanes.** A draft pull request runs the fast lane; the full configuration, console replay included, runs once it is marked ready for review.
 - **`repo_state` tests.** Tests that read the repository's own `.ea` are marked `repo_state`; they run in CI's full configuration and in a pre-push hook, and are deselected on a draft pull request's fast lane.
 - **Weekly price check.** A scheduled workflow runs `eawf reflect prices check --online` every Monday and opens or comments on one issue whenever the prices are not confirmed current; it never commits.
+
+### Release
+
+- **Fixes after a Batch closed.** The release pipeline's Batch landing check now accepts a commit on main beyond the head a closed Batch pinned when its `Batch:` trailer names that Batch and it descends from the pinned head. It still refuses a release whose pinned commit is missing from main, or whose trailer-named commit does not descend from the pinned head.
 
 ### Digests and secret scan
 

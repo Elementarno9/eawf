@@ -121,9 +121,10 @@ def test_ansi_theme_and_precedence(
         "budget": "106",
     }
     for module, fill in fills.items():
-        assert _segment_sgr(_segment(module), ansi) == f"30;{fill}", module
+        ink = "97" if fill in {"44", "45"} else "30"
+        assert _segment_sgr(_segment(module), ansi) == f"{ink};{fill}", module
     assert _segment_sgr(_segment("mcp_health", "warn"), ansi) == "30;43"
-    assert _segment_sgr(_segment("hooks_plugins", "degraded"), ansi) == "30;41"
+    assert _segment_sgr(_segment("hooks_plugins", "degraded"), ansi) == "97;41"
     assert _segment_sgr(_segment("model"), load_theme("ansi", ink="97")) == "97;45"
     # The ink knob is the ansi theme's alone.
     assert load_theme("catppuccin-mocha", ink="97").ink == "#11111b"
@@ -234,24 +235,22 @@ def test_the_hit_path_names_match_the_config_literals() -> None:
 
 #: Upstream palette.json hex for the roles each flavour paints, in Theme field order:
 #: ink, mauve, blue, teal, green, sky, lavender, yellow, peach, red, surface2,
-#: pink, then the teal, yellow, red and green bar fills and the pink marker.
+#: then the teal, yellow, red and green bar fills.
 _UPSTREAM: Final = {
     "catppuccin-latte": ("#eff1f5", "#8839ef", "#1e66f5", "#179299", "#40a02b", "#04a5e5",
-                         "#7287fd", "#df8e1d", "#fe640b", "#d20f39", "#acb0be", "#ea76cb"),
+                         "#7287fd", "#df8e1d", "#fe640b", "#d20f39", "#acb0be"),
     "catppuccin-frappe": ("#232634", "#ca9ee6", "#8caaee", "#81c8be", "#a6d189", "#99d1db",
-                          "#babbf1", "#e5c890", "#ef9f76", "#e78284", "#626880", "#f4b8e4"),
+                          "#babbf1", "#e5c890", "#ef9f76", "#e78284", "#626880"),
     "catppuccin-macchiato": ("#181926", "#c6a0f6", "#8aadf4", "#8bd5ca", "#a6da95", "#91d7e3",
-                             "#b7bdf8", "#eed49f", "#f5a97f", "#ed8796", "#5b6078", "#f5bde6"),
+                             "#b7bdf8", "#eed49f", "#f5a97f", "#ed8796", "#5b6078"),
     "catppuccin-mocha": ("#11111b", "#cba6f7", "#89b4fa", "#94e2d5", "#a6e3a1", "#89dceb",
-                         "#b4befe", "#f9e2af", "#fab387", "#f38ba8", "#585b70", "#f5c2e7"),
+                         "#b4befe", "#f9e2af", "#fab387", "#f38ba8", "#585b70"),
 }  # fmt: skip
 
 
 @pytest.mark.parametrize("name", sorted(_UPSTREAM))
 def test_catppuccin_flavours(name: Any) -> None:
-    ink, mauve, blue, teal, green, sky, lavender, yellow, peach, red, surface2, pink = _UPSTREAM[
-        name
-    ]
+    ink, mauve, blue, teal, green, sky, lavender, yellow, peach, red, surface2 = _UPSTREAM[name]
     theme = load_theme(name)
     assert theme.model_dump() == {
         "ink": ink,
@@ -269,11 +268,10 @@ def test_catppuccin_flavours(name: Any) -> None:
         "caution": yellow,
         "danger": red,
         "under": green,
-        "marker": pink,
     }
     # The fills are 24-bit; the gaps and the meter-row text stay on 49.
     style = LineStyle(theme=theme)
-    [line, row] = render_powerline(
+    [line, _blank, row] = render_powerline(
         [_segment("model"), _segment("cost")],
         [PowerlineBar(label="ctx", ratio=0.6, detail="1K/2K")],
         style,
@@ -299,8 +297,6 @@ def test_the_bundled_theme_file_is_closed() -> None:
         Theme.model_validate({**ansi.model_dump(), "model": "48"})
     with pytest.raises(ValueError, match="pattern"):
         Theme.model_validate({**ansi.model_dump(), "ink": "45"})
-    with pytest.raises(ValueError, match="pattern"):
-        Theme.model_validate({**ansi.model_dump(), "marker": "105"})
     with pytest.raises(ValueError, match="Extra inputs"):
         Theme.model_validate({**ansi.model_dump(), "glow": "95"})
     with pytest.raises(ValueError, match="pattern"):
@@ -415,7 +411,7 @@ def test_statusline_repro_ascii_render_emits_non_ascii(
         monkeypatch.setenv("COLUMNS", columns)
     for theme in ("ansi", "none"):
         rendered = orchestrator.render_pipeline(_full_payload(), workspace=None, theme_name=theme)
-        assert len(rendered.splitlines()) == 4, rendered
+        assert len(rendered.splitlines()) == 5, rendered
         # At 40 columns the active segment is the first one dropped.
         assert (" 38% active" in rendered) is (columns is None), rendered
         assert [char for char in rendered if not char.isascii()] == [], rendered

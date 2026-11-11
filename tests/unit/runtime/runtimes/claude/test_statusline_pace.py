@@ -193,7 +193,7 @@ def test_marker_position() -> None:
     [plain] = _plain(render_powerline([], [row], LineStyle(theme=None), width=None))
     assert plain == f"7d  {'█' * 8}{'░' * 12}  40%"
     [drawn] = render_powerline([], [row], LineStyle(theme=load_theme("ansi")), width=None)
-    assert "│" not in drawn and "95;" not in drawn
+    assert "│" not in drawn
 
 
 def _assert_marker(row: PowerlineBar, index: int) -> None:
@@ -210,16 +210,18 @@ def _assert_marker(row: PowerlineBar, index: int) -> None:
     assert len(cells) == 20
     params, glyph = cells[index]
     assert glyph == "│"
-    # foreground 95 on the cell's own background: the fill inside it, the track past it.
+    # White or black, whichever stands out, on the cell's own background: the fill
+    # inside it, the track past it.
     full = int(row.ratio * 20 * 8 + 0.5) // 8
     own = _fill(row) if index < full else "100"
-    assert params == f"95;{own}"
+    assert params == f"{'97' if own in {'41', '100'} else '30'};{own}"
     assert all(glyph != "│" for i, (_, glyph) in enumerate(cells) if i != index)
-    # Catppuccin draws it pink.
+    # Catppuccin draws it black on its light fills and white on its dark track.
     [mocha] = render_powerline(
         [], [row], LineStyle(theme=load_theme("catppuccin-mocha")), width=None
     )
-    assert _bar_cells(mocha)[index][0].startswith("38;2;245;194;231;")
+    ink = "38;2;0;0;0;" if index < full else "38;2;255;255;255;"
+    assert _bar_cells(mocha)[index][0].startswith(ink)
 
 
 @pytest.mark.parametrize("expected", [-0.1, 100.1, float("nan")])

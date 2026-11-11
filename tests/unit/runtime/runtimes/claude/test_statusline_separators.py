@@ -272,6 +272,7 @@ def test_glyphs_and_no_color(
     assert capsys.readouterr() == ("", "")
     rows = plain.split("\n")
     assert rows[0].startswith("Opus 5.5 | sample-project | ")
-    assert rows[1].startswith("ctx ")
+    assert rows[1] == ""
+    assert rows[2].startswith("ctx ")
     # an empty NO_COLOR is unset.
     assert _ESC in render(NO_COLOR="")

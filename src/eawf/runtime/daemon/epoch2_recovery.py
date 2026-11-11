@@ -91,12 +91,15 @@ from eawf.kernel.state.io import state_version
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.append import append_json_line
 from eawf.kernel.store.changes import ChangeRecord, append_change_record_once
-from eawf.kernel.store.compaction import read_document, recover_store_tree
+from eawf.kernel.store.compaction import CANONICAL_SEQUENCE_KEY, read_document, recover_store_tree
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import (
     LedgerError,
     LedgerRecord,
     append_ledger_record_once,
+    line_digest,
+    read_ledger_records,
+    render_ledger_line,
     split_torn_tail,
     truncate_torn_tail,
 )
@@ -106,6 +109,7 @@ from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.epoch2_root import (
     NATIVE_WAL_DIRNAME,
     Epoch2RootContext,
+    carry_append_forward,
     root_id_for,
 )
 from eawf.runtime.lock import portalock
@@ -142,6 +146,10 @@ REASON_DOCUMENT_DIVERGED: Final = "native_document_diverged"
 #: A record whose stored document path does not resolve to the root its
 #: WAL namespace is named for.
 REASON_ROOT_UNRESOLVED: Final = "native_root_unresolved"
+
+#: A pending record whose canonical sequence the firehose already holds under
+#: another envelope: a later write drew it again, so the record cannot land.
+REASON_SEQUENCE_REISSUED: Final = "native_sequence_reissued"
 
 #: A record whose bytes do not decode or do not validate.
 REASON_RECORD_UNREADABLE: Final = "native_record_unreadable"
@@ -764,16 +772,53 @@ def _native_documents(native: Path) -> tuple[Path, ...]:
 def _replay_root(root_dir: Path, *, tally: _Tally) -> None:
     """Walk one root's namespace, pending records first."""
     known: dict[Path, set[str]] = {}
-    for path in wal.list_records(root_dir, status=wal.WalStatus.PENDING):
-        _replay_pending(root_dir, path, known=known, tally=tally)
+    taken: dict[Path, dict[int, str]] = {}
+    for path in _chain_ordered(wal.list_records(root_dir, status=wal.WalStatus.PENDING)):
+        _replay_pending(root_dir, path, known=known, taken=taken, tally=tally)
     for path in wal.list_records(root_dir, status=wal.WalStatus.APPLIED):
         _replay_applied(root_dir, path, known=known, tally=tally)
 
 
+def _chain_ordered(paths: list[Path]) -> list[Path]:
+    """Return pending records with the ledger-only ones in canonical sequence order.
+
+    A batch of ledger appends journals a chain of records, each found by the
+    one before it, which resolves only in the order the sequences were drawn;
+    their ``written_at`` order can disagree after a clock step or a tie. The
+    ledger-only records take the slots they held in *paths* in sequence order,
+    and every other record keeps its place.
+    """
+    sequenced: list[tuple[int, Path]] = []
+    slots: list[int] = []
+    for index, path in enumerate(paths):
+        try:
+            payload = wal.read_record(path).envelope.payload
+        except ValueError, OSError:
+            continue
+        sequence = payload.get(CANONICAL_SEQUENCE_KEY)
+        if isinstance(payload.get(LEDGER_LINE_KEY), str) and isinstance(sequence, int):
+            sequenced.append((sequence, path))
+            slots.append(index)
+    ordered = list(paths)
+    for slot, (_, path) in zip(slots, sorted(sequenced, key=lambda item: item[0]), strict=True):
+        ordered[slot] = path
+    return ordered
+
+
 def _replay_pending(
-    root_dir: Path, path: Path, *, known: dict[Path, set[str]], tally: _Tally
+    root_dir: Path,
+    path: Path,
+    *,
+    known: dict[Path, set[str]],
+    taken: dict[Path, dict[int, str]],
+    tally: _Tally,
 ) -> None:
-    """Finish or abandon one journalled intent, by what the document says."""
+    """Finish or abandon one journalled intent, by what the document says.
+
+    A record whose canonical sequence the firehose already holds under
+    another envelope was drawn again by a later write, so finishing it would
+    order two rows under one sequence; it is poisoned instead.
+    """
     loaded = _load_record(root_dir, path)
     if loaded is None:
         return
@@ -782,6 +827,20 @@ def _replay_pending(
     tree_root = _tree_root_of(record, root_id=root_dir.name)
     if tree_root is None:
         wal.mark_poisoned(root_dir, record_id, reason=REASON_ROOT_UNRESOLVED)
+        return
+    firehose = store_path(tree_root / TREE_ANCHOR_FILENAME, StoreKind.EVENT)
+    sequences = taken.get(firehose)
+    if sequences is None:
+        sequences = _firehose_sequences(firehose)
+        taken[firehose] = sequences
+    sequence = record.envelope.payload.get(CANONICAL_SEQUENCE_KEY)
+    if isinstance(sequence, int) and sequences.get(sequence, record.envelope.id) != (
+        record.envelope.id
+    ):
+        wal.mark_poisoned(root_dir, record_id, reason=REASON_SEQUENCE_REISSUED)
+        logger.warning(
+            f"_replay_pending poisoned record={record_id!r} reason={REASON_SEQUENCE_REISSUED}"
+        )
         return
     landed = _document_landed(record)
     if landed is None:
@@ -797,6 +856,26 @@ def _replay_pending(
     wal.mark_applied(root_dir, record_id)
     tally.completed_count += 1
     _finish(root_dir, record_id, record, tree_root=tree_root, known=known, tally=tally)
+    if isinstance(sequence, int):
+        sequences[sequence] = record.envelope.id
+
+
+def _firehose_sequences(event_path: Path) -> dict[int, str]:
+    """Return the envelope id each canonical sequence names in the firehose."""
+    if not event_path.exists():
+        return {}
+    held: dict[int, str] = {}
+    with event_path.open("rb") as handle:
+        for line in handle:
+            try:
+                row = orjson.loads(line)
+            except orjson.JSONDecodeError:
+                continue
+            payload = row.get("payload") if isinstance(row, dict) else None
+            sequence = payload.get(CANONICAL_SEQUENCE_KEY) if isinstance(payload, dict) else None
+            if isinstance(sequence, int) and isinstance(row.get("id"), str):
+                held.setdefault(sequence, row["id"])
+    return held
 
 
 def _replay_applied(
@@ -917,19 +996,63 @@ def _document_landed(record: wal.WalRecord) -> bool | None:
     Returns ``True`` when the document reads as the mutation left it,
     ``False`` when it still reads as the mutation found it, and ``None``
     when it reads as neither and no replay can say.
+
+    A batch of ledger appends journals and appends each line before its one
+    document write, so for a ledger-only record two more shapes are read: a
+    document the mutation found whose ledger already holds the line is carried
+    forward to the record's sequence here and counts as landed, and a document
+    that is the mutation's result with a later sequence counts as landed too.
     """
     if record.state_path is None:
         return None
+    state_path = Path(record.state_path)
     try:
-        document = read_document(Path(record.state_path))
+        document = read_document(state_path)
     except FileNotFoundError, ValueError, OSError:
         return None
     version = state_version(document)
     if version == record.after_state_version:
         return True
+    appended = _journalled_append(record)
     if version == record.before_state_version:
-        return False
-    return None
+        if appended is None or not _line_held(state_path, appended[0]):
+            return False
+        ledger_record, sequence = appended
+        carry_append_forward(state_path, document, ledger_record, sequence=sequence)
+        logger.info(f"_document_landed carried forward sequence={sequence}")
+        return True
+    if appended is None:
+        return None
+    held = document.get(CANONICAL_SEQUENCE_KEY)
+    sequence = appended[1]
+    # Only a batched line reaches its ledger before the document moves past it;
+    # a line that is not on disk was refused, and a later write took its place.
+    if not isinstance(held, int) or held <= sequence or not _line_held(state_path, appended[0]):
+        return None
+    rewound = state_version({**document, CANONICAL_SEQUENCE_KEY: sequence})
+    return True if rewound == record.after_state_version else None
+
+
+def _journalled_append(record: wal.WalRecord) -> tuple[LedgerRecord, int] | None:
+    """Return the ledger line a ledger-only record journalled and its sequence.
+
+    Raises:
+        ValidationError: The journalled line is not a ledger record.
+    """
+    payload = record.envelope.payload
+    line, sequence = payload.get(LEDGER_LINE_KEY), payload.get(CANONICAL_SEQUENCE_KEY)
+    if not isinstance(line, str) or not isinstance(sequence, int):
+        return None
+    return LedgerRecord.model_validate_json(line), sequence
+
+
+def _line_held(state_path: Path, ledger_record: LedgerRecord) -> bool:
+    """Return whether the ledger the line belongs to already holds it."""
+    target = record_ledger_path(state_path, ledger_record.collection, ledger_record.payload)
+    wanted = line_digest(render_ledger_line(ledger_record))
+    return any(
+        line_digest(render_ledger_line(item)) == wanted for item in read_ledger_records(target)
+    )
 
 
 def _tree_root_of(record: wal.WalRecord, *, root_id: str) -> Path | None:
@@ -1008,6 +1131,7 @@ __all__ = [
     "REASON_INTENT_ABANDONED",
     "REASON_RECORD_UNREADABLE",
     "REASON_ROOT_UNRESOLVED",
+    "REASON_SEQUENCE_REISSUED",
     "RECEIPT_LOCATOR",
     "RECEIPT_SCHEMA_VERSION",
     "TAIL_REPAIR_EVENT_SCHEMA_VERSION",

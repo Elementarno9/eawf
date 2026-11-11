@@ -142,7 +142,7 @@ def test_goldens() -> None:
 
     meter_rows = [
         _SGR.sub("", row)
-        for row in (_GOLDEN_DIR / "ansi-120.ansi").read_text(encoding="utf-8").splitlines()[1:]
+        for row in (_GOLDEN_DIR / "ansi-120.ansi").read_text(encoding="utf-8").splitlines()[2:]
     ]
     assert [row[:3] for row in meter_rows] == ["ctx", "5h ", "7d "]
     for row in meter_rows:

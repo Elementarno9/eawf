@@ -42,7 +42,7 @@ from eawf.kernel.store.ledger import LedgerRecord, read_collection_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.content_store import file_content
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession, canonical_entity_urn
-from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
+from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append, ledger_append_batch
 from eawf.runtime.daemon.tool_events import state_tool_phase
 
 logger = logging.getLogger(__name__)
@@ -131,6 +131,32 @@ def host_receipts(session: RootSession, run_ref: str | QualifiedUrn) -> tuple[Ho
     )
 
 
+def _call_receipt(
+    session: RootSession, run_ref: QualifiedUrn, call_id: str
+) -> HostCallReceipt | None:
+    """Return the receipt one host call already earned, ``None`` when it has none.
+
+    Only the lines carrying the call's id are validated: a Run's receipts grow
+    with every call it makes, and they are read under the document lock.
+
+    Raises:
+        ValidationError: A host call receipt carrying the call's id does not
+            validate, so the ledger is corrupt.
+        IdentityError: Such a receipt's ``run_ref`` is not a qualified URN.
+    """
+    wanted = canonical_entity_urn(run_ref)
+    return next(
+        (
+            HostCallReceipt.model_validate(item.payload)
+            for item in read_collection_records(session.document_path, Epoch2Collection.RECEIPT)
+            if item.payload.get("payload_kind") == HOST_RECEIPT_PAYLOAD_KIND
+            and item.payload.get("call_id") == call_id
+            and _names_run(item.payload.get("run_ref"), wanted)
+        ),
+        None,
+    )
+
+
 def _names_run(run_ref: object, wanted: str) -> bool:
     """Return whether a stored receipt's raw ``run_ref`` names the Run ``wanted``.
 
@@ -183,11 +209,11 @@ def observe_host_call(
             now=now,
         )
 
-    with context.session([run_ref]) as session:
+    with context.session([run_ref]) as session, ledger_append_batch(session):
         state(ToolPayload(call_ref=call_id, tool_id=tool_id, phase="requested"), session)
         if output is None:
             return call_id, None
-        receipt = next((r for r in host_receipts(session, run_ref) if r.call_id == call_id), None)
+        receipt = _call_receipt(session, run_ref, call_id)
         if receipt is None:
             receipt = _receipt(
                 session,

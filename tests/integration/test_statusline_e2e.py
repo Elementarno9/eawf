@@ -95,8 +95,9 @@ def test_statusline_e2e_emits_powerline_rows_with_zero_exit(
     rows = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout.rstrip("\n")).split("\n")
     segments = [part.strip() for part in rows[0].split("\ue0b0") if part.strip()]
     assert segments == ["claude-opus-4-7", tmp_path.name]
-    assert len(rows) == 2
-    assert rows[1].startswith("ctx ") and rows[1].endswith("   1%   0%c 1K/200K")
+    assert len(rows) == 3
+    assert rows[1] == ""
+    assert rows[2].startswith("ctx ") and rows[2].endswith("   1%   0%c 1K/200K")
     assert "n/a" not in result.stdout
 
 

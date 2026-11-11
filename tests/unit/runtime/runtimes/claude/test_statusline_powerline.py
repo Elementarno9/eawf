@@ -144,7 +144,7 @@ def test_line_one() -> None:
 def test_bar_rows() -> None:
     # ctx: 50K of 64K read from cache is 78%; 5h: 23% used 58.2% in is -35%;
     # 7d: 41% used 5.9% in is +35%, its marker inside the fill.
-    rows = _render(None)[1:]
+    rows = _render(None)[2:]
     assert rows == [
         f"ctx █▎{'░' * 18}   6%  78%c 64K/1.0M",
         f"5h  ████▋{'░' * 6}│{'░' * 8}  23%  -35% 2h05m",

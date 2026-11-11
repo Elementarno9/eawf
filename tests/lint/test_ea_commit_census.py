@@ -53,6 +53,7 @@ from eawf.workflow.release.canary_receipts import (
     DISPATCH_SMOKE_RECEIPTS_FILENAME,
 )
 from eawf.workflow.release.packet_run import PACKET_RECEIPTS_EXPORT_FILENAME
+from tests._canary_releases import UNRECORDED_RELEASES
 from tools.ea_commit_census import GIT_UNAVAILABLE_EXIT
 
 pytestmark = pytest.mark.repo_state
@@ -285,7 +286,8 @@ _READERS = {
         "/".join((*directory, CANARY_EVIDENCE_FILENAME)): (
             "src/eawf/workflow/evidence/provider_certification.py"
         )
-        for directory in CANARY_EVIDENCE_DIRS.values()
+        for release, directory in CANARY_EVIDENCE_DIRS.items()
+        if release not in UNRECORDED_RELEASES
     },
     "/".join((*CANARY_EVIDENCE_DIRS["REL-0.7.0.dev5"], CANARY_RECEIPTS_FILENAME)): (
         "src/eawf/workflow/release/canary_receipts.py"

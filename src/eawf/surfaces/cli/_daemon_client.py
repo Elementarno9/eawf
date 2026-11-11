@@ -184,6 +184,10 @@ class DaemonClient:
     Enter refuses a daemon from another release unless ``check_version`` is
     off, which only the ``eawf daemon`` verbs pass so the operator can always
     inspect, stop or replace a mismatched daemon.
+    An attaching client that checks the version on a POSIX socket may pass
+    ``readiness_ping=False``: the version ping then stands for the readiness
+    ping, so a caller under a tight deadline, such as a hook, makes one round
+    trip before its call rather than two.
     The connection is a single socket; multiple ``client.call``
     invocations multiplex over it sequentially (one in-flight request
     at a time per the JSON-RPC 2.0 ordering contract).
@@ -196,6 +200,7 @@ class DaemonClient:
         call_timeout_seconds: float = DEFAULT_CALL_TIMEOUT_SECONDS,
         spawn: bool = True,
         check_version: bool = True,
+        readiness_ping: bool = True,
     ) -> None:
         if runtime_dir is None:
             runtime_dir = default_runtime_dir()
@@ -203,6 +208,7 @@ class DaemonClient:
         self._call_timeout_seconds = float(call_timeout_seconds)
         self._spawn = spawn
         self._check_version = check_version
+        self._readiness_ping = readiness_ping
         self._sock: socket.socket | None = None
         self._reader: Any = None  # makefile("rb") for newline-framed reads
         self._pid: int = 0
@@ -226,6 +232,9 @@ class DaemonClient:
     def __enter__(self) -> DaemonClient:
         if self._spawn:
             self._pid = auto_spawn_daemon(self._runtime_dir)
+        elif not self._readiness_ping and self._check_version and sys.platform != "win32":
+            self._attach_socket()
+            return self
         else:
             pid = daemon_pid_if_ready(self._runtime_dir)
             if pid is None:
@@ -261,6 +270,30 @@ class DaemonClient:
         self._ensure_current_daemon()
         return self
 
+    def _attach_socket(self) -> None:
+        """Connect to a running daemon and check its release with one ping.
+
+        Raises:
+            DaemonNotRunningError: Nothing takes a connection on the socket.
+            TimeoutError: A daemon took the connection and did not answer in time.
+            DaemonVersionMismatch: The daemon is of another release.
+        """
+        try:
+            self._connect_socket()
+        except OSError as exc:
+            self.__exit__(None, None, None)
+            raise DaemonNotRunningError(
+                f"no eawfd daemon is running under {self._runtime_dir.name!r}"
+            ) from exc
+        try:
+            answer = self.call("daemon.ping")
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+        pid = answer.get("pid")
+        self._pid = pid if isinstance(pid, int) else 0
+        self._refuse_other_release(str(answer.get("version", "")))
+
     def _connect_socket(self) -> None:
         """Open the POSIX UDS connection to the daemon at ``self._pid``."""
         sock_path = self._runtime_dir / "eawfd.sock"
@@ -288,7 +321,14 @@ class DaemonClient:
         """
         if not self._check_version:
             return
-        daemon_version = str(self.call("daemon.ping").get("version", ""))
+        self._refuse_other_release(str(self.call("daemon.ping").get("version", "")))
+
+    def _refuse_other_release(self, daemon_version: str) -> None:
+        """Close the connection and refuse a daemon whose release is not this CLI's.
+
+        Raises:
+            DaemonVersionMismatch: *daemon_version* is not this CLI's release.
+        """
         if daemon_version == __version__:
             return
         self.__exit__(None, None, None)

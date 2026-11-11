@@ -1,4 +1,4 @@
-"""The 0.7.2 cut: the package version and the changelog section naming its nine areas."""
+"""The 0.7.2 cut: the package version and the changelog section naming its ten areas."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from eawf.surfaces.cli._version_display import compose_display_version
 
 _CHANGELOG = Path(__file__).resolve().parents[4] / "CHANGELOG.md"
 
-#: The nine areas of the 0.7.2 patch, each a third-level heading of its section.
+#: The ten areas of the 0.7.2 patch, each a third-level heading of its section.
 _AREAS = (
     ".ea layout",
     "Worktrees and state home",
@@ -22,6 +22,7 @@ _AREAS = (
     "Status line",
     "Reflect",
     "CI",
+    "Release",
     "Digests and secret scan",
     "Prose",
 )

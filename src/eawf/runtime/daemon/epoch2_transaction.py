@@ -1,5 +1,7 @@
 """The one path an accepted epoch-2 mutation takes from request to commit.
 
+# noqa: EAWF010 the one commit path, which the ledger census pins here; split seam: ledger appends
+
 Every native lifecycle mutation walks the same seven steps, in the same
 order, whichever entity it moves:
 
@@ -85,7 +87,8 @@ from __future__ import annotations
 import copy
 import logging
 import uuid
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -134,7 +137,13 @@ from eawf.kernel.store.ledger import (
     render_ledger_line,
 )
 from eawf.kernel.store.paths import ledger_path, store_path
-from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, Epoch2Collection, StorageTier, tier_for
+from eawf.kernel.store.tiers import (
+    ENTITY_COLLECTIONS,
+    STATUS_PROJECTION_COLLECTIONS,
+    Epoch2Collection,
+    StorageTier,
+    tier_for,
+)
 from eawf.observability.logging.state_leak import state_leak_refusal
 from eawf.runtime.daemon.epoch2_changes import file_changes, journal_changes
 from eawf.runtime.daemon.epoch2_edges import batch_unlisting, edge_updates, locked_unmet
@@ -711,6 +720,26 @@ def commit_ledger_append(
             remediation="Remove the flagged text from the ledger line and retry.",
         )
     ledger, appends_to = session.ledger_target(record)
+    batch = _BATCHES.get(session)
+    # A line of a local ledger leaves the committed file as it is, whichever
+    # ledger its write would name, so it is the kind a batch may defer.
+    local = appends_to is None or appends_to in STATUS_PROJECTION_COLLECTIONS
+    if batch is not None and local:
+        pending = _defer_append(
+            session,
+            batch,
+            subject=subject,
+            record=record,
+            line=line,
+            patch_fields=patch_fields or {},
+        )
+        append_ledger_record(ledger, record)
+        pending.landed = True
+        return pending.record.envelope
+    if batch is not None:
+        # A committed line advances the committed sequence to its own, so the
+        # batch's local lines land first and this one takes its own write.
+        _land_batch(session, batch)
     allocator = CanonicalSequenceAllocator.recover(
         workspace_key=subject.workspace_key,
         high_water_mark=_high_water_mark(document),
@@ -737,6 +766,8 @@ def commit_ledger_append(
         write_pending(context.wal_dir, wal_record)
         session.write_document(new_document, appends_to=appends_to)
         mark_applied(context.wal_dir, wal_record.record_id)
+        if batch is not None:
+            batch.version = wal_record.after_state_version
         append_ledger_record(ledger, record)
         append_json_line(_firehose_path(context), envelope.model_dump_json())
         mark_fsynced(context.wal_dir, wal_record.record_id)
@@ -745,6 +776,154 @@ def commit_ledger_append(
         f"collection={record.collection.value} key={record.record_key!r} sequence={sequence}"
     )
     return envelope
+
+
+@dataclass
+class _PendingAppend:
+    """One deferred append: its journalled record, and whether its line is on disk yet."""
+
+    record: WalRecord
+    landed: bool = False
+
+
+@dataclass
+class _AppendBatch:
+    """The local ledger appends one session made since its last document write.
+
+    Attributes:
+        version: The state version of the document the next append finds,
+            ``None`` until an append needs it.
+        pending: The appends whose document write and firehose rows are owed.
+    """
+
+    version: str | None
+    pending: list[_PendingAppend]
+
+
+#: The open batch of each session that has one. A session is used by the one
+#: thread holding its lock, so an entry is only ever touched by that thread.
+_BATCHES: Final[dict[RootSession, _AppendBatch]] = {}
+
+
+@contextmanager
+def ledger_append_batch(session: RootSession) -> Iterator[None]:
+    """Land every local ledger append the block makes with one document read and write.
+
+    Each append still draws its sequence from the document, journals its WAL
+    record and then appends its line at once, so a read later in the block sees
+    it; only the document write and the firehose rows wait for the block's end.
+    Each record names the document as the append before it left it, so a replay
+    after a crash before that write carries the journalled appends forward one
+    by one, and one after it finds the document past each record's sequence. A
+    line bound for a committed ledger lands what the batch holds first and then
+    takes its own write, so the committed sequence moves as it would one append
+    at a time. Only :func:`commit_ledger_append` writes inside the block.
+
+    Args:
+        session: The open session the appends are made under.
+
+    Yields:
+        Nothing; the block's appends are batched while it runs.
+
+    Raises:
+        RuntimeError: The session is closed.
+        OSError: The deferred document write or a firehose row failed.
+    """
+    batch = _AppendBatch(version=None, pending=[])
+    session.hold_document(session.read_document())
+    _BATCHES[session] = batch
+    try:
+        yield
+    finally:
+        del _BATCHES[session]
+        try:
+            # Lines the block appended are on disk whether or not it raised.
+            _land_batch(session, batch)
+        except BaseException:
+            # The document may not hold the sequences its journalled lines
+            # took, so no later session may draw them before the boot replay.
+            session.context.fence()
+            raise
+        finally:
+            session.hold_document(None)
+
+
+def _defer_append(
+    session: RootSession,
+    batch: _AppendBatch,
+    *,
+    subject: QualifiedUrn,
+    record: LedgerRecord,
+    line: str,
+    patch_fields: Mapping[str, Any],
+) -> _PendingAppend:
+    """Draw one local line's sequence and journal it, owing its document write to *batch*.
+
+    The record is durable before the caller appends the line, then marks it
+    landed, so no line reaches its ledger without a record the replay finishes.
+    """
+    document = session.read_document()
+    before = batch.version if batch.version is not None else state_version(document)
+    allocator = CanonicalSequenceAllocator.recover(
+        workspace_key=subject.workspace_key,
+        high_water_mark=_high_water_mark(document),
+    )
+    with allocator.transaction() as sequences:
+        sequence = sequences.allocate()
+    envelope = _ledger_envelope(
+        session,
+        subject=subject,
+        record=record,
+        line=line,
+        sequence=sequence,
+        patch_fields=patch_fields,
+    )
+    advanced = {**document, CANONICAL_SEQUENCE_KEY: sequence}
+    pending = _PendingAppend(
+        record=WalRecord(
+            record_id=uuid.uuid4().hex,
+            envelope=envelope,
+            written_at=datetime.now(UTC),
+            before_state_version=before,
+            after_state_version=state_version(advanced),
+            state_path=str(session.document_path),
+        )
+    )
+    write_pending(session.context.wal_dir, pending.record)
+    session.hold_document(advanced)
+    batch.version = pending.record.after_state_version
+    batch.pending.append(pending)
+    logger.info(
+        f"epoch2 ledger append deferred root={session.context.identity.root_id} "
+        f"collection={record.collection.value} key={record.record_key!r} sequence={sequence}"
+    )
+    return pending
+
+
+def _land_batch(session: RootSession, batch: _AppendBatch) -> None:
+    """Write the document *batch*'s appends advanced, then their firehose rows.
+
+    A line whose append failed gets no firehose row here: its record is left
+    applied, and the replay appends the line and the row from it, as it does
+    after a one-append crash.
+    """
+    if not batch.pending:
+        return
+    context = session.context
+    document = session.read_document()
+    session.write_document(document)
+    for item in batch.pending:
+        mark_applied(context.wal_dir, item.record.record_id)
+    firehose = _firehose_path(context)
+    for item in batch.pending:
+        if item.landed:
+            append_json_line(firehose, item.record.envelope.model_dump_json())
+            mark_fsynced(context.wal_dir, item.record.record_id)
+    logger.info(
+        f"epoch2 ledger batch committed root={context.identity.root_id} "
+        f"appends={len(batch.pending)} sequence={_high_water_mark(document)}"
+    )
+    batch.pending.clear()
 
 
 def commit_row_write(
@@ -1396,5 +1575,6 @@ __all__ = [
     "TransitionRequest",
     "commit_ledger_append",
     "commit_row_write",
+    "ledger_append_batch",
     "run_transaction",
 ]

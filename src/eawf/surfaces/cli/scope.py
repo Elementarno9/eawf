@@ -42,17 +42,13 @@ import os
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from eawf.kernel.state.resolve import fence_live_ledger, home_state, refuse_linked_worktree
-from eawf.platform.registry import (
-    Registry,
-    RegistryReadError,
-    RegistryRepoEntry,
-    default_registry_path,
-    read_registry,
-)
 from eawf.surfaces.cli.errors import UserError
+
+if TYPE_CHECKING:
+    from eawf.platform.registry import Registry, RegistryRepoEntry
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +224,10 @@ def resolve_scope_tier(
         the matching repo entry (when applicable), and the registry
         that was consulted.
     """
+    # Loaded here so the statusline, which resolves only the state path,
+    # never pays for the registry models.
+    from eawf.platform.registry import RegistryReadError, default_registry_path, read_registry
+
     resolved_registry_path = (
         registry_path if registry_path is not None else default_registry_path(home=home)
     )

@@ -328,6 +328,13 @@ class PipelineHost(Protocol):
         """
         ...
 
+    def batch_trailer_descendants(self, head: str, ref: str) -> dict[str, tuple[str, ...]]:
+        """Return Batch key -> the commits of *ref* past *head* that descend from it.
+
+        Only a commit whose ``Batch:`` trailer names the Batch counts.
+        """
+        ...
+
     def sleep(self, seconds: float) -> None:
         """Wait *seconds*."""
         ...
@@ -1300,8 +1307,9 @@ class _PipelineRun:
         }
 
     def _repin(self, step: PipelineStep) -> dict[str, str]:
-        # A Batch landed as it closed when main carries exactly the commits of its work
-        # that the head it pinned carries; a Batch may land as several commits.
+        # A Batch landed when main carries every commit of its work that the head it
+        # pinned carries; a Batch may land as several commits. A fix pushed after the
+        # Batch closed may follow, named by a Batch trailer and descending from that head.
         milestone_key = self.options.milestone_key
         remote = self.options.remote
         target_ref = f"refs/remotes/{remote}/main"
@@ -1333,18 +1341,26 @@ class _PipelineRun:
                 f"{', '.join(missing)}",
                 remedy=f"land those Batches' commits on main, fetch {remote} and rerun",
             )
+        moved: list[str] = []
         try:
             pinned = {head: self.host.batch_carrier_commits(head) for head in set(heads.values())}
+            later: dict[str, dict[str, tuple[str, ...]]] = {}
+            for key, head in sorted(heads.items()):
+                bound = set(pinned[head].get(key, ()))
+                stray = [sha for sha in landed[key] if sha not in bound]
+                # A head carrying none of the Batch's work pins nothing a fix could follow.
+                if stray and bound and bound <= set(landed[key]):
+                    if head not in later:
+                        later[head] = self.host.batch_trailer_descendants(head, target_ref)
+                    stray = [sha for sha in stray if sha not in later[head].get(key, ())]
+                if stray or not bound <= set(landed[key]):
+                    moved.append(
+                        f"{key} bound {head[:12]}, landed {(stray or landed[key])[0][:12]}"
+                    )
         except PipelineHostError as exc:
             raise PipelineRefusal(
                 step, PipelineRefusalCode.MILESTONE_UNREADABLE, detail=str(exc), remedy=unreadable
             ) from exc
-        moved: list[str] = []
-        for key, head in sorted(heads.items()):
-            bound = set(pinned[head].get(key, ()))
-            stray = [sha for sha in landed[key] if sha not in bound]
-            if stray or bound != set(landed[key]):
-                moved.append(f"{key} bound {head[:12]}, landed {(stray or landed[key])[0][:12]}")
         if moved:
             raise PipelineRefusal(
                 step,

@@ -453,6 +453,34 @@ class GitHubReleaseHost:
                 found.setdefault(key, []).append(sha)
         return {key: tuple(shas) for key, shas in found.items()}
 
+    def batch_trailer_descendants(self, head: str, ref: str) -> dict[str, tuple[str, ...]]:
+        """Return Batch key -> the commits of *ref* past *head* that descend from it.
+
+        Only a ``Batch:`` trailer counts: a fix pushed after a Batch closed names the
+        Batch it amends. ``--ancestry-path`` keeps only descendants of *head*, so a
+        commit that merely shares the trailer on another line of history is left out.
+
+        Raises:
+            PipelineHostError: The log cannot be read.
+        """
+        listing = self._run(
+            [
+                "git",
+                "log",
+                "-E",
+                "--grep=^Batch:",
+                "--ancestry-path",
+                "--format=%H%x00%B%x1e",
+                f"{head}..{ref}",
+            ]
+        )
+        found: dict[str, list[str]] = {}
+        for entry in listing.split("\x1e"):
+            sha, _, message = entry.strip().partition("\x00")
+            for key in sorted(set(_BATCH_TRAILER_RE.findall(message))):
+                found.setdefault(key, []).append(sha)
+        return {key: tuple(shas) for key, shas in found.items()}
+
     def sleep(self, seconds: float) -> None:
         """Wait *seconds*."""
         self._sleep(seconds)

@@ -290,11 +290,14 @@ def _default_daemon_client_factory() -> Any:
 
     A hook runs inside the host's tool call, so it attaches only to a running
     daemon and gives up after :data:`HOOK_DAEMON_DEADLINE_S`: a cold spawn or
-    a stuck daemon would stall every call of the session.
+    a stuck daemon would stall every call of the session. Its version ping is
+    its only readiness check, so the deadline is not spent on a second ping.
     """
     from eawf.surfaces.cli._daemon_client import DaemonClient
 
-    return DaemonClient(spawn=False, call_timeout_seconds=HOOK_DAEMON_DEADLINE_S)
+    return DaemonClient(
+        spawn=False, call_timeout_seconds=HOOK_DAEMON_DEADLINE_S, readiness_ping=False
+    )
 
 
 def _session_end_payload(event: HookEvent) -> dict[str, Any]:

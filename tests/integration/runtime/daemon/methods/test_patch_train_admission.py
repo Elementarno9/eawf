@@ -145,3 +145,44 @@ def test_create_refuses_a_version_no_train_declares(tmp_path: Path) -> None:
 
     with pytest.raises(DaemonValidationError, match="no release train declares a checkpoint"):
         asyncio.run(create(ctx, {"version": "9.9.9"}))
+
+
+SECOND_PATCH = "0.7.2"
+SECOND_KEY = "REL-0.7.2"
+SECOND_REF = "milestone://eawf/MLS-0108"
+
+
+def test_v072_admission(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    assert required_contract_ids(SECOND_PATCH) == required_contract_ids(PATCH)
+    monkeypatch.setitem(
+        provider_certification.CANARY_EVIDENCE_DIRS,
+        SECOND_KEY,
+        (".ea", "artifacts", "evidence", "patch-0.7.2-stable"),
+    )
+    ctx = context(tmp_path)
+    state_path = Path(str(ctx.state_path))
+    asyncio.run(create(ctx, {"version": PATCH, "membership_refs": [PATCH_REF]}))
+    before = read_release_records(state_path)[PATCH_KEY]
+
+    with pytest.raises(ReleaseConfigError, match=r"'REL-0\.7\.2' requires non-empty"):
+        checkpoint_release_config(SECOND_PATCH, repo_root=tmp_path)
+    document: dict[str, Any] = accepted_canary_export({"reference": SECOND_REF})
+    document["release_key"] = SECOND_KEY
+    path = canary_evidence_path(tmp_path, SECOND_KEY)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(document), encoding="utf-8")
+    config = checkpoint_release_config(SECOND_PATCH, repo_root=tmp_path)
+    assert config.release_key == SECOND_KEY
+    assert config.membership_refs == (SECOND_REF,)
+
+    result = asyncio.run(create(ctx, {"version": SECOND_PATCH, "membership_refs": [SECOND_REF]}))
+
+    assert result["release"]["key"] == SECOND_KEY
+    assert result["release"]["status"] == ReleaseStatus.DRAFT.value
+    assert result["supersedes_release_ref"] is None
+    records = read_release_records(state_path)
+    assert records[PATCH_KEY] == before
+    assert asyncio.run(show(ctx, {"version": PATCH}))["train_id"] == "TRAIN-0.7.1"
+    shown = asyncio.run(show(ctx, {}))
+    assert shown["train_id"] == "TRAIN-0.7.2"
+    assert shown["record"]["key"] == SECOND_KEY

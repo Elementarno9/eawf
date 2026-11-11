@@ -70,7 +70,7 @@ Type is the value shape; Layers names the layers that may write the leaf.
 | `ui.glyphs` | literal | `auto` | global, workspace, repo, env | Console glyph set: `unicode`, `ascii`, or `auto` to follow the terminal encoding. |
 | `statusline.theme` | literal | `ansi` | global, workspace, repo | Status line colours: `ansi` (the terminal's 16 colours), `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `catppuccin-mocha` or `none`. `--theme`, then `NO_COLOR`, then `EAWF_STATUSLINE_THEME` win over it. |
 | `statusline.glyphs` | literal | `nerd` | global, workspace, repo | Status line separators: `nerd` (U+E0B0), `unicode` (U+258C) or `ascii` (none). `EAWF_STATUSLINE_GLYPHS` wins over it; `TERM=linux` or a non-UTF-8 locale forces `ascii`. |
-| `statusline.ink` | literal | `30` | global, workspace, repo | Text colour on the `ansi` theme's segment fills: `30` (black) or `97` (bright white). |
+| `statusline.ink` | literal | `auto` | global, workspace, repo | Text colour on the `ansi` theme's segment fills: `auto` picks white or black per fill, `30` forces black, `97` bright white. |
 | `statusline.bar_width` | int, 10 to 40 | `20` | global, workspace, repo | Cells per status line meter bar before it shrinks to `COLUMNS`. |
 | `ui.toasts` | literal | `important` | global, workspace, repo, env | Toasts for state changes nobody keyed: `off` raises none, `important` and `all` raise them. Answers to a key and the quit prompt always show. |
 

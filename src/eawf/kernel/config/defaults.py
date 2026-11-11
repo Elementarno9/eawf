@@ -174,7 +174,7 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     "statusline": {
         "theme": "ansi",
         "glyphs": "nerd",
-        "ink": "30",
+        "ink": "auto",
         "bar_width": 20,
     },
     # C09 (telemetry) projector reads these keys. Ingestion is ON by

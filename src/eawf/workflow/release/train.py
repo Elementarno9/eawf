@@ -414,9 +414,37 @@ V071_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
     template=V07_CONFIG_TEMPLATE,
 )
 
+#: Stable version of the second patch train after 0.7.0.
+V072_TARGET_VERSION: Final[str] = "0.7.2"
+
+#: The 0.7.2 patch train, shaped like :data:`V071_TRAIN` for the same
+#: reason: one ``stable`` rung heading its own ladder, so it succeeds
+#: nothing and the 0.7.1 records stay where the 0.7.1 train put them.
+V072_TRAIN: Final[ReleaseTrain] = ReleaseTrain(
+    train_id=f"TRAIN-{V072_TARGET_VERSION}",
+    target_version=V072_TARGET_VERSION,
+    checkpoints=(
+        ReleaseCheckpoint(
+            release_key=release_key(V072_TARGET_VERSION),
+            authority_epoch=2,
+            gate_profile=ReleaseGateProfile.STABLE,
+            requires_membership=True,
+        ),
+    ),
+    current_checkpoint_index=0,
+)
+
+#: The ``0.7.2`` stable checkpoint configuration, rendered from the 0.7.0
+#: template so it declares the same targets, platform claims and runtime
+#: claims as the ``0.7.1`` stable rung.
+V072_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
+    rung=V072_TRAIN.checkpoint_for_version(V072_TARGET_VERSION),
+    template=V07_CONFIG_TEMPLATE,
+)
+
 #: Every declared train, oldest first. The last one is the train a
 #: version-less reader (the ladder view) describes.
-RELEASE_TRAINS: Final[tuple[ReleaseTrain, ...]] = (V07_TRAIN, V071_TRAIN)
+RELEASE_TRAINS: Final[tuple[ReleaseTrain, ...]] = (V07_TRAIN, V071_TRAIN, V072_TRAIN)
 
 #: Checkpoint configurations by version. ``dev1`` is authored -- it was
 #: cut before the template existed and its file is the one the burned
@@ -434,6 +462,7 @@ CHECKPOINT_CONFIGS: Final[dict[str, str]] = {
     "0.7.0rc4": RC4_RELEASE_CONFIG_YAML,
     V07_TARGET_VERSION: STABLE_RELEASE_CONFIG_YAML,
     V071_TARGET_VERSION: V071_RELEASE_CONFIG_YAML,
+    V072_TARGET_VERSION: V072_RELEASE_CONFIG_YAML,
 }
 
 #: What each of the eight ``dev1`` gates reads.
@@ -866,6 +895,9 @@ __all__ = [
     "V071_RELEASE_CONFIG_YAML",
     "V071_TARGET_VERSION",
     "V071_TRAIN",
+    "V072_RELEASE_CONFIG_YAML",
+    "V072_TARGET_VERSION",
+    "V072_TRAIN",
     "checkpoint_config_yaml",
     "gate_bindings_for",
     "gate_bindings_yaml",

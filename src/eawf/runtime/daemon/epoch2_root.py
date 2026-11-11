@@ -77,9 +77,10 @@ from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT, read_se
 from eawf.kernel.state.epoch2.authority import RootAuthority, require_native_authority
 from eawf.kernel.store import paths as store_paths
 from eawf.kernel.store.commit_policy import CENSUS_SURFACE_PREFIX, PathClass, classify_path
-from eawf.kernel.store.compaction import read_document, write_document
+from eawf.kernel.store.compaction import CANONICAL_SEQUENCE_KEY, read_document, write_document
 from eawf.kernel.store.ledger import LedgerError, LedgerRecord
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.lock import portalock, sibling
 
 logger = logging.getLogger(__name__)
@@ -112,6 +113,10 @@ _HOLDER_FRAMES: Final = 3
 #: The file name of a per-entity lock an earlier release took: the sha256
 #: hex digest of the entity URN plus the sibling lock suffix.
 ENTITY_LOCK_FILE_PATTERN: Final = re.compile(r"^[0-9a-f]{64}\.lock$")
+
+
+class RootFencedError(DaemonValidationError):
+    """A session was refused on a root fenced until the daemon restarts."""
 
 
 def root_id_for(tree_root: Path) -> str:
@@ -245,6 +250,31 @@ class Epoch2RootContext:
         self.identity = identity
         self.wal_dir = daemon_wal_dir / NATIVE_WAL_DIRNAME / identity.root_id
         self.idempotency_cache: dict[str, Any] = {}
+        self._fenced = False
+
+    def fence(self) -> None:
+        """Refuse every later session on this root until the daemon restarts.
+
+        A batch of ledger appends whose one document write failed leaves its
+        journalled lines owed a sequence the document does not yet hold, so a
+        later session would draw those sequences again. Only the boot replay
+        carries the lines forward, so the root stays shut until it has run.
+        """
+        self._fenced = True
+        logger.error(f"fence root={self.identity.root_id} refused=until-restart")
+
+    def _refuse_if_fenced(self) -> None:
+        """Raise when the root is fenced.
+
+        Raises:
+            RootFencedError: The root is fenced until the daemon restarts.
+        """
+        if self._fenced:
+            raise RootFencedError(
+                f"validation_failed: transition_guard_failed: root {self.identity.root_id} is "
+                "fenced because a batched document write failed; restart the daemon so its "
+                "boot replay finishes the journalled appends"
+            )
 
     def idempotency_key(self, client_key: str) -> str:
         """Return ``client_key`` inside this root's idempotency namespace.
@@ -373,13 +403,18 @@ class Epoch2RootContext:
             MigrationActivationSealFailedError: The block finished and its
                 mutation committed, but the activation seal failed; the
                 fault is recorded for the operator.
+            RootFencedError: The root is fenced; nothing was written.
         """
+        self._refuse_if_fenced()
         authority = self.require_selected_generation()
         subjects = session_subjects(urns)
         target = self._lock_target(DOCUMENT_LOCK_NAME)
         self.declared_path(sibling.lock_path(target))
         requested = time.monotonic()
         with portalock.acquire(target):
+            # The session that held the lock may have fenced the root while
+            # this one waited, so the fence is read again under the lock.
+            self._refuse_if_fenced()
             acquired = time.monotonic()
             session = RootSession(context=self, authority=authority, locked_urns=subjects)
             try:
@@ -497,6 +532,7 @@ class RootSession:
         self.authority = authority
         self.locked_urns = locked_urns
         self.closed = False
+        self._held: dict[str, Any] | None = None
 
     @property
     def context(self) -> Epoch2RootContext:
@@ -563,7 +599,22 @@ class RootSession:
             FileNotFoundError: The generation carries no document.
         """
         self._require_current()
+        if self._held is not None:
+            return self._held
         return read_document(self.document_path)
+
+    def hold_document(self, document: dict[str, Any] | None) -> None:
+        """Answer :meth:`read_document` with *document* until it is released.
+
+        A batch of ledger appends defers its one document write to its end, so
+        the document its appends have advanced is what the session reads in the
+        meantime. The session's lock keeps every other writer out, so the held
+        copy is the document as it will be written.
+
+        Args:
+            document: The document to answer with; ``None`` reads the file again.
+        """
+        self._held = document
 
     def write_document(
         self, document: dict[str, Any], *, appends_to: Epoch2Collection | None = None
@@ -586,6 +637,8 @@ class RootSession:
         """
         self._require_current()
         write_document(self.document_path, document, appends_to=appends_to)
+        if self._held is not None:
+            self._held = document
         logger.info(
             f"write_document root={self._context.identity.root_id} "
             f"generation={self.authority.generation_id}"
@@ -601,6 +654,30 @@ class RootSession:
                 f"the session was opened on {self.authority.generation_id} but the tree now "
                 f"selects {current.generation_id}, so its write would land in a stale generation"
             )
+
+
+def carry_append_forward(
+    state_path: Path, document: dict[str, Any], record: LedgerRecord, *, sequence: int
+) -> None:
+    """Write the sequence bump a journalled ledger line already on disk is owed.
+
+    The boot replay calls this, with no daemon session open, for a batched
+    append whose line landed before the batch's one document write did.
+
+    Args:
+        state_path: The generation document the line's record names.
+        document: The document as the replay read it, still at the state the
+            append found.
+        record: The journalled line, which its ledger already holds.
+        sequence: The canonical sequence the line was drawn under.
+    """
+    target = store_paths.record_ledger_path(state_path, record.collection, record.payload)
+    committed = target == store_paths.ledger_path(state_path, record.collection)
+    write_document(
+        state_path,
+        {**document, CANONICAL_SEQUENCE_KEY: sequence},
+        appends_to=record.collection if committed else None,
+    )
 
 
 def attach_root_context(
@@ -644,10 +721,12 @@ __all__ = [
     "ROOT_ID_PATTERN",
     "ROOT_ID_WIDTH",
     "Epoch2RootContext",
+    "RootFencedError",
     "RootIdentity",
     "RootSession",
     "attach_root_context",
     "canonical_entity_urn",
+    "carry_append_forward",
     "remove_entity_lock_files",
     "root_id_for",
     "session_subjects",
