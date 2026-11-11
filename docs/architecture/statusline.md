@@ -67,7 +67,7 @@ Every way the read can fail comes back as one reason that the segment renders as
 
 ## Meter rows and grid
 
-Under line 1 come up to three meter rows, `ctx`, `5h` and `7d`, read from the payload alone; a row without data is not printed. One empty row separates line 1 from the first meter row, and none is printed when no meter row is.
+Under line 1 come up to three meter rows, `ctx`, `5h` and `7d`, read from the payload alone; a row without data is not printed. One blank row separates line 1 from the first meter row, and none is printed when no meter row is; in colour the row holds a lone SGR reset (`\x1b[0m`) and nothing visible, because Claude Code drops an empty status line row, while a line drawn without colour keeps it empty.
 Every row lays out the same five columns, one space apart, so the columns line up down the rows:
 
 | Column | Width | Align | `ctx` | `5h`, `7d` |

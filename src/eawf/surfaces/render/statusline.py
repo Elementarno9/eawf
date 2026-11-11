@@ -505,9 +505,12 @@ _RESET: Final = "\x1b[0m"
 _DEFAULT_BG: Final = "49"
 _SGR: Final = re.compile(r"\x1b\[[0-9;]*m")
 _ELLIPSIS: Final = "…"
-#: The empty row between line 1 and the meter rows, so the bars read apart
-#: from the segments above them.
-_SPACER: Final = ""
+#: The row between line 1 and the meter rows, so the bars read apart from the
+#: segments above them. Claude Code drops an empty status line row, so a
+#: coloured line keeps it with a lone reset that draws nothing; a line drawn
+#: without colour emits no escape at all and keeps the empty row.
+_SPACER: Final = _RESET
+_PLAIN_SPACER: Final = ""
 
 #: Line-1 segments in the order they are dropped when the row is too wide;
 #: model and cost are never dropped, only clipped.
@@ -870,7 +873,9 @@ def render_powerline(
 
     Line 1 shows each segment with a sourced value, in the order given; a
     segment with none is omitted, never drawn as a marker. One blank row
-    separates line 1 from the meter rows, and only when both are drawn.
+    separates line 1 from the meter rows, and only when both are drawn; in
+    colour it holds a lone reset escape so a host that drops empty rows
+    keeps it.
     Meter rows share one column grid, so each detail starts at the same
     offset.
 
@@ -900,7 +905,7 @@ def render_powerline(
     if grid is not None and bars:
         bar_cells, pace, detail = grid
         if rows:
-            rows.append(_SPACER)
+            rows.append(_PLAIN_SPACER if style.theme is None else _SPACER)
         rows.extend(
             _meter_row(bar, style, bar_cells=bar_cells, pace=pace, detail=detail) for bar in bars
         )

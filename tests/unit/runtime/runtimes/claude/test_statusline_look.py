@@ -1,6 +1,7 @@
 """How the status line reads on a terminal: row spacing, segment ink and the pace marker.
 
-One blank row separates the powerline row from the meter rows. Under the
+One blank row separates the powerline row from the meter rows; in colour it
+holds a lone reset, so a host that drops empty rows keeps it. Under the
 ``auto`` ink the ``ansi`` theme writes white on its dark fills and black on its
 light ones, and the pace marker always contrasts with the cell it sits on.
 """
@@ -89,6 +90,8 @@ def test_spacer_row(count: int, width: int | None, theme: ColourTheme | None) ->
     blank = [index for index, row in enumerate(rows) if not _visible(row).strip()]
     if meter_rows:
         assert blank == [1]
+        # A host drops an empty row; a lone reset keeps it and draws nothing.
+        assert rows[1] == ("" if theme is None else "\x1b[0m")
         assert rows.index(meter_rows[0]) == 2
         assert len(rows) == 2 + len(meter_rows)
     else:

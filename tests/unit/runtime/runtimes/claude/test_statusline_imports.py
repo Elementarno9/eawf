@@ -77,7 +77,7 @@ _PAYLOAD: dict[str, Any] = {
 _GOLDEN_ROWS = (
     "\x1b[97;45m Opus \x1b[35;46m\x1b[30;46m 1m · 33% active "
     "\x1b[36;42m\x1b[30;42m $1.25 API-equivalent \x1b[32;49m\x1b[0m\n"
-    "\n"
+    "\x1b[0m\n"
     "\x1b[1;39;49mctx\x1b[0m \x1b[36;100m▌\x1b[100m                   \x1b[0m "
     "\x1b[1;39;49m  3%\x1b[0m \x1b[2;39;49m 80%c\x1b[0m \x1b[2;39;49m5K/200K\x1b[0m"
 )
