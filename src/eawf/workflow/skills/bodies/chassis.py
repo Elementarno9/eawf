@@ -15,8 +15,8 @@ authority before task, task before method, method before output.
 
 A page is checked before it ships: a missing or reordered slot, stale
 grammar, a retired skill named as an invocation, an option the skill's
-grammar does not declare, a placeholder where prose belongs, or an epoch-1
-noun refuses packaging instead of shipping.
+grammar does not declare, a placeholder where prose belongs, an epoch-1
+noun, or an ``eawf`` verb the CLI lacks refuses packaging instead of shipping.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Iterable, Iterator
+from functools import cache
 from typing import Final, Literal, get_args, get_origin
 
 from pydantic import BaseModel
@@ -33,7 +34,12 @@ from eawf.platform.rules.records import RuleRecord
 from eawf.surfaces.cli.verb_effects import CLI_VERB_EFFECTS
 from eawf.workflow.skills.arguments import UNIVERSAL_OPTIONS
 from eawf.workflow.skills.bodies.prompts import SkillPrompt, skill_prompt
-from eawf.workflow.skills.catalog import SKILL_CATALOG, SkillCatalogEntry, skill_lanes
+from eawf.workflow.skills.catalog import (
+    NOT_MANAGED_REFUSAL,
+    SKILL_CATALOG,
+    SkillCatalogEntry,
+    skill_lanes,
+)
 from eawf.workflow.skills.census import retired_nouns
 
 logger = logging.getLogger(__name__)
@@ -105,6 +111,47 @@ _HEADING_RE: Final[re.Pattern[str]] = re.compile(r"^## (.+)$", re.MULTILINE)
 _OPTION_RE: Final[re.Pattern[str]] = re.compile(r"(?<![\w-])--[a-z][a-z0-9-]*")
 #: An inline ``eawf`` command; its options belong to that CLI command, not the skill grammar.
 _EAWF_COMMAND_RE: Final[re.Pattern[str]] = re.compile(r"`eawf [^`\n]*`")
+#: One command or subcommand name of the ``eawf`` tree.
+_VERB_TOKEN_RE: Final[re.Pattern[str]] = re.compile(r"[a-z][a-z0-9-]*")
+
+_BOTH_AUDIENCE: Final = (
+    "an operator or an authorized agent may initiate this skill. Agent invocation never widens"
+    " authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC,"
+    " budget and external effect below; in a host session, the operator's own permissions do."
+)
+
+#: The audience line of a page that also runs outside an eawf-managed repository.
+MANAGED_AUTHORITY_LINE: Final = f"In an eawf-managed repository: {_BOTH_AUDIENCE}"
+
+#: The authority line that bounds a page run outside an eawf-managed repository.
+STANDALONE_AUTHORITY_LINE: Final = (
+    "Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the"
+    " operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf`"
+    " commands marked as working anywhere. Write no file unless `--save <path>` names one."
+)
+
+#: The line a page refused outside an eawf-managed repository opens with.
+REFUSED_AUTHORITY_LINE: Final = (
+    "Needs an eawf-managed repository; outside one the hook refuses it with"
+    f" `{NOT_MANAGED_REFUSAL}`."
+)
+
+_STANDALONE_WRITE_ROOT_TAIL: Final = (
+    "in an eawf-managed repository; outside one, none, unless `--save <path>` names a file."
+)
+
+#: Chassis-owned text naming ``--save`` on every standalone page; the option is
+#: the standalone contract's, so it is not checked against the skill grammar.
+_CHASSIS_SAVE_TEXTS: Final[tuple[str, ...]] = (
+    STANDALONE_AUTHORITY_LINE,
+    _STANDALONE_WRITE_ROOT_TAIL,
+)
+
+#: The line every page's output slot ends its prose with.
+OUTPUT_PROSE_LINE: Final = (
+    "Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with"
+    " `--output json`."
+)
 
 
 class SkillPageError(ValueError):
@@ -207,12 +254,62 @@ def chassis_findings(page: str, entry: SkillCatalogEntry) -> tuple[str, ...]:
         if re.search(rf"(?<![\w./-])/{re.escape(row.skill_id)}(?![\w-])", prose):
             findings.append(f"retired skill /{row.skill_id} is named; use {row.successor_text()}")
     declared = frozenset(entry.grammar.options) | UNIVERSAL_OPTIONS
+    own_prose = _EAWF_COMMAND_RE.sub("", prose)
+    for text in _CHASSIS_SAVE_TEXTS:
+        own_prose = own_prose.replace(text, "")
     findings.extend(
         f"option {option} is not in the {entry.invocation_name} grammar"
-        for option in dict.fromkeys(_OPTION_RE.findall(_EAWF_COMMAND_RE.sub("", prose)))
+        for option in dict.fromkeys(_OPTION_RE.findall(own_prose))
         if option not in declared
     )
+    tree = _cli_command_tree()
+    findings.extend(
+        f"{command} names an eawf verb the CLI lacks"
+        for command in dict.fromkeys(_EAWF_COMMAND_RE.findall(prose))
+        if not _names_known_verb(command.strip("`"), tree)
+    )
     return tuple(findings)
+
+
+@cache
+def _cli_command_tree() -> dict[tuple[str, ...], bool]:
+    # The live command tree, hidden commands included: a page may name any verb
+    # the installed CLI runs. Each path maps to whether it needs a subcommand.
+    import click
+    import typer
+
+    from eawf.surfaces.cli.app import app
+
+    root = typer.main.get_command(app)
+    ctx = click.Context(root)
+    tree: dict[tuple[str, ...], bool] = {}
+
+    def walk(command: click.Command, path: tuple[str, ...]) -> None:
+        tree[path] = False
+        if isinstance(command, click.Group):
+            tree[path] = not command.invoke_without_command
+            for name in command.list_commands(ctx):
+                child = command.get_command(ctx, name)
+                if child is not None:
+                    walk(child, (*path, name))
+
+    walk(root, ())
+    return tree
+
+
+def _names_known_verb(command: str, tree: dict[tuple[str, ...], bool]) -> bool:
+    # Words after `eawf` descend the tree until one is not a child; that word is
+    # an argument when the reached command runs without a subcommand, and an
+    # unknown verb when the reached group needs one or is the root, which takes
+    # no argument. A placeholder such as `<verb>` stops the walk.
+    path: tuple[str, ...] = ()
+    for token in command.split()[1:]:
+        if _VERB_TOKEN_RE.fullmatch(token) is None:
+            return True
+        if (*path, token) not in tree:
+            return bool(path) and not tree[path]
+        path = (*path, token)
+    return True
 
 
 def check_skill_page(page: str, entry: SkillCatalogEntry) -> None:
@@ -258,8 +355,11 @@ def shipped_skill_page(entry: SkillCatalogEntry) -> str:
     return page
 
 
-def _authority(entry: SkillCatalogEntry) -> str:
-    effects = entry.effects
+def _audience_lines(entry: SkillCatalogEntry) -> list[str]:
+    # A page that also runs outside a managed repository states its in-repository
+    # audience conditionally; a refused page opens with its refusal instead.
+    if entry.standalone != "refused":
+        return [f"- {MANAGED_AUTHORITY_LINE}"]
     if "agent" not in skill_lanes(entry):
         audience = (
             "Only an authenticated operator initiates this skill, by design: it is kept out of"
@@ -269,12 +369,34 @@ def _authority(entry: SkillCatalogEntry) -> str:
     elif "operator" not in skill_lanes(entry):
         audience = "Only an agent initiates this skill, inside an enclosing scope."
     else:
-        audience = (
-            "An operator or an authorized agent may initiate this skill. Agent invocation never"
-            " widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled"
-            " capsule already grants every read, write, RPC, budget and external effect below."
-        )
-    lines = [f"- {audience}", f"- Operates on: {_operates_on(entry)}."]
+        audience = _BOTH_AUDIENCE[0].upper() + _BOTH_AUDIENCE[1:]
+    return [f"- {REFUSED_AUTHORITY_LINE}", f"- {audience}"]
+
+
+def _write_root_lines(entry: SkillCatalogEntry) -> list[str]:
+    # The local write root, then the closing grant: a page that also runs
+    # outside a managed repository closes with what bounds it there.
+    scope = entry.effects.local_write_scope
+    if entry.standalone == "refused":
+        root = "none." if scope is None else f"`{scope}`; nothing is written outside it."
+        return [
+            f"- Local write root: {root}",
+            "- Executable grants come from the compiled capsule of the enclosing scope alone;"
+            " nothing on this page adds or widens a tool, path, RPC, credential or external"
+            " effect.",
+        ]
+    root = "none." if scope is None else f"`{scope}` {_STANDALONE_WRITE_ROOT_TAIL}"
+    return [
+        f"- Local write root: {root}",
+        f"- {STANDALONE_AUTHORITY_LINE}",
+        f"- Standalone use ({entry.standalone}): {entry.standalone_note}",
+    ]
+
+
+def _authority(entry: SkillCatalogEntry) -> str:
+    effects = entry.effects
+    lines = _audience_lines(entry)
+    lines.append(f"- Operates on: {_operates_on(entry)}.")
     if asks_operator(entry):
         actions = ", ".join(f"`{action}`" for action in entry.operator_only_actions)
         lead = (
@@ -322,16 +444,7 @@ def _authority(entry: SkillCatalogEntry) -> str:
         )
     else:
         lines.append("- Canonical state: never mutated by this skill.")
-    if effects.local_write_scope is not None:
-        lines.append(
-            f"- Local write root: `{effects.local_write_scope}`; nothing is written outside it."
-        )
-    else:
-        lines.append("- Local write root: none.")
-    lines.append(
-        "- Executable grants come from the compiled capsule of the enclosing scope alone; nothing"
-        " on this page adds or widens a tool, path, RPC, credential or external effect."
-    )
+    lines += _write_root_lines(entry)
     return "\n".join(lines)
 
 
@@ -413,7 +526,7 @@ def _constraints(entry: SkillCatalogEntry, prompt: SkillPrompt) -> str:
 def _output(entry: SkillCatalogEntry, prompt: SkillPrompt) -> str:
     outcomes = ", ".join(f"`{outcome}`" for outcome in entry.output.terminal_outcomes)
     return (
-        f"{prompt.output}\n\n"
+        f"{prompt.output} {OUTPUT_PROSE_LINE}\n\n"
         f"The report validates against `{entry.output.schema_name}`, and its terminal outcome is"
         f" exactly one of {outcomes}. Prose in the report is explanation, never the result."
         f" Check it with `eawf skill check-report {entry.invocation_name}` before returning it."

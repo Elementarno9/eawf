@@ -38,7 +38,7 @@ import re
 import shlex
 import sys
 from collections.abc import Iterator
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Final
@@ -159,6 +159,7 @@ _WRITE_WORDS = re.compile(
 )
 _PIPES: Final = frozenset({"|", "|&"})
 _PWD_VARIABLE = re.compile(r"\$(?:\{PWD\}|PWD(?![A-Za-z0-9_]))")
+_VARIABLE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
 _PWD_SUBSTITUTION = re.compile(r"\$\(\s*pwd(?:\s+-[LP])?\s*\)|`\s*pwd(?:\s+-[LP])?\s*`")
 _SHELL_VALUED: Final = frozenset({"-o", "+o", "-O", "+O", "--rcfile", "--init-file"})
 _XARGS_VALUED: Final = frozenset({"-I", "-n", "-L", "-P", "-d", "-E", "-s", "-a", "-R", "-S"})
@@ -184,7 +185,19 @@ _PROTECTED_NAMES: Final = (
     "workspaces",
 )
 _WORKTREE_ADD_VALUED: Final = frozenset({"-b", "-B", "--reason"})
+#: How an agent creates a worktree the guard admits.
+_ADD_ADVICE: Final = "git worktree add .ea/worktrees/<name> -b <branch>"
+#: Where a refused removal or move of a managed worktree is sent instead.
+_GC_ADVICE: Final = (
+    "run eawf worktree gc --dry-run: it prints the exact git worktree remove line "
+    "per landed, clean tree, for the operator"
+)
 _GIT_VALUED: Final = frozenset({"-c", "--namespace", "--exec-path", "--config-env"})
+#: The ``env`` options that take a value, which is not the command env runs.
+_ENV_VALUED: Final = frozenset({"-C", "--chdir", "-u", "--unset"})
+#: A backslash-newline the shell drops before it splits words, unless the
+#: backslash is itself escaped.
+_LINE_CONTINUATION = re.compile(r"(?<!\\)((?:\\\\)*)\\\n")
 
 
 @dataclass
@@ -195,6 +208,8 @@ class _Shell:
     session_cwd: Path
     anchor: Path
     moved: bool = False
+    #: The variables the line assigns for itself, which no environment holds.
+    variables: dict[str, str] = field(default_factory=dict)
 
 
 def judge_tool_call(
@@ -230,7 +245,8 @@ def _judge(tool_name: str, tool_input: object, *, cwd: Path, anchor: Path) -> Da
     if tool_name == HOST_WORKTREE_TOOL:
         return _deny(
             DataLossPattern.OUT_OF_ROOT_WORKTREE,
-            "host-native worktrees are refused; Eawf owns worktrees under .ea/worktrees",
+            "host-native worktrees are refused; Eawf owns worktrees under .ea/worktrees: "
+            f"create one with {_ADD_ADVICE} and work in its path",
         )
     if not isinstance(tool_input, dict):
         raise ValueError("the tool input is not a mapping")
@@ -240,8 +256,7 @@ def _judge(tool_name: str, tool_input: object, *, cwd: Path, anchor: Path) -> Da
                 DataLossPattern.OUT_OF_ROOT_WORKTREE,
                 "a subagent with worktree isolation creates a host-native worktree outside "
                 "Eawf's managed root; create the worktree under .ea/worktrees instead "
-                "(git worktree add .ea/worktrees/<name> -b <branch>) and give the subagent "
-                "its absolute path, without isolation",
+                f"({_ADD_ADVICE}) and give the subagent its absolute path, without isolation",
             )
         return None
     if tool_name in FILE_WRITE_TOOLS:
@@ -311,8 +326,10 @@ def _resolve(base: Path, raw: str) -> Path:
     Claude Code Bash tool there is Git Bash, where ``/c/work/x`` is
     ``C:\\work\\x``. Left as is, it has no drive, so it resolved under the
     current drive as ``C:\\c\\work\\x`` and slipped past every check.
+    Environment variables the hook inherited from the host expand as the
+    host's shell would expand them; one the line sets itself stays as written.
     """
-    expanded = os.path.expanduser(raw)
+    expanded = os.path.expandvars(os.path.expanduser(raw))
     if sys.platform == "win32":
         expanded = _WIN32_SHELL_DRIVE.sub(lambda m: f"{m.group(1).upper()}:", expanded, count=1)
         if len(expanded) == 2 and expanded[1] == ":":
@@ -414,10 +431,7 @@ def _removal_denial(path: Path, shell: _Shell, *, verb: str) -> DataLossDenial |
         return None
     return _deny(
         DataLossPattern.FOREIGN_WORKTREE_MUTATION,
-        f"{verb} a managed worktree outside Eawf is refused; "
-        "the daemon removes a Run's clean worktree when the Run ends "
-        "if worktrees.remove_when_clean is set, "
-        "and the operator removes any other from their own shell once its work has landed",
+        f"{verb} a managed worktree outside Eawf is refused; {_GC_ADVICE}",
     )
 
 
@@ -481,9 +495,12 @@ def _segments(tokens: list[str]) -> Iterator[tuple[list[str], list[tuple[str, st
         yield words, redirects, piped
 
 
-def _expand_pwd(word: str, cwd: Path) -> str:
-    """Return *word* with the shell's own spellings of the working directory filled in."""
-    return _PWD_VARIABLE.sub(lambda _: str(cwd), word)
+def _expand(word: str, shell: _Shell) -> str:
+    """Return *word* with the working directory and the line's own variables filled in."""
+    word = _PWD_VARIABLE.sub(lambda _: str(shell.cwd), word)
+    if not shell.variables:
+        return word
+    return _VARIABLE.sub(lambda m: shell.variables.get(m.group(1) or m.group(2), m.group(0)), word)
 
 
 def _judge_line(command: str, shell: _Shell, *, depth: int) -> DataLossDenial | None:
@@ -493,6 +510,7 @@ def _judge_line(command: str, shell: _Shell, *, depth: int) -> DataLossDenial | 
     # A pwd substitution names the working directory, not a command worth judging, and
     # left in place its parentheses would split the word it sits in.
     command = _PWD_SUBSTITUTION.sub("$PWD", command)
+    command = _LINE_CONTINUATION.sub(r"\1", command)
     for match in _SUBSTITUTION.finditer(command):
         inner = match.group(1) if match.group(1) is not None else match.group(2)
         denial = _judge_line(inner, shell, depth=depth + 1)
@@ -531,14 +549,14 @@ def _judge_repaired(
             except ValueError:
                 continue
             # Each reading moves its own copy, so a cd in one cannot steer another.
-            trial = replace(shell)
+            trial = replace(shell, variables=dict(shell.variables))
             denial = _judge_tokens(tokens, trial, depth=depth)
             if denial is not None:
                 return denial
             admitted = admitted or trial
     if admitted is None:
         raise ValueError(f"the line does not lex ({error})")
-    shell.cwd, shell.moved = admitted.cwd, admitted.moved
+    shell.cwd, shell.moved, shell.variables = admitted.cwd, admitted.moved, admitted.variables
     return None
 
 
@@ -546,13 +564,20 @@ def _judge_tokens(tokens: list[str], shell: _Shell, *, depth: int) -> DataLossDe
     """Judge the simple commands of one lexed line, in order."""
     producer: list[str] | None = None
     for raw_words, redirects, piped in _segments(tokens):
-        words = [_expand_pwd(word, shell.cwd) for word in raw_words]
+        words = [_expand(word, shell) for word in raw_words]
         for operator, raw_target in redirects:
-            target = _expand_pwd(raw_target, shell.cwd)
+            target = _expand(raw_target, shell)
             if operator in _REDIRECT_OUT and not target.isdigit() and target != "-":
                 denial = _canonical_denial(_resolve(shell.cwd, target), verb="a redirect to")
                 if denial is not None:
                     return denial
+        assigned = words[1:] if words[:1] == ["export"] else words
+        if assigned and all(_ASSIGNMENT.match(word) for word in assigned):
+            # A line that sets a variable and then names a path through it.
+            for word in assigned:
+                name, _, value = word.partition("=")
+                shell.variables[name] = value
+            continue
         denial = _judge_words(words, shell, depth=depth, producer=producer if piped else None)
         if denial is not None:
             return denial
@@ -562,6 +587,33 @@ def _judge_tokens(tokens: list[str], shell: _Shell, *, depth: int) -> DataLossDe
 
 def _unwrap(words: list[str]) -> list[str]:
     """Drop assignments and command prefixes that run the rest of the line."""
+    return _unwrap_chdir(words)[0]
+
+
+def _env_prefix(words: list[str], index: int, chdir: str | None) -> tuple[int, str | None]:
+    """Skip an ``env``'s options and assignments from *index*; return where its command starts.
+
+    Returns:
+        The command's index and the directory a ``-C`` or ``--chdir`` names,
+        else *chdir* unchanged.
+    """
+    while index < len(words) and (words[index].startswith("-") or _ASSIGNMENT.match(words[index])):
+        option = words[index]
+        index += 1
+        if option in _ENV_VALUED and index < len(words):
+            if option in {"-C", "--chdir"}:
+                chdir = words[index]
+            index += 1
+        elif option.startswith("--chdir="):
+            chdir = option.removeprefix("--chdir=")
+        elif option.startswith("-C"):
+            chdir = option[2:]
+    return index, chdir
+
+
+def _unwrap_chdir(words: list[str]) -> tuple[list[str], str | None]:
+    """Return the command :func:`_unwrap` finds and the directory an ``env -C`` runs it in."""
+    chdir: str | None = None
     index = 0
     while index < len(words):
         word = words[index]
@@ -573,11 +625,7 @@ def _unwrap(words: list[str]) -> list[str]:
             while index < len(words) and words[index].startswith("-"):
                 index += 1
         elif name == "env":
-            index += 1
-            while index < len(words) and (
-                words[index].startswith("-") or _ASSIGNMENT.match(words[index])
-            ):
-                index += 1
+            index, chdir = _env_prefix(words, index + 1, chdir)
         elif name == "timeout":
             index += 1
             while index < len(words) and words[index].startswith("-"):
@@ -585,16 +633,19 @@ def _unwrap(words: list[str]) -> list[str]:
             index += 1
         else:
             break
-    return words[index:]
+    return words[index:], chdir
 
 
 def _judge_words(
     words: list[str], shell: _Shell, *, depth: int, producer: list[str] | None = None
 ) -> DataLossDenial | None:
     """Judge one simple command; *producer* is the command piping into it, if any."""
-    words = _unwrap(words)
+    words, chdir = _unwrap_chdir(words)
     if not words:
         return None
+    if chdir is not None:
+        # env -C moves only the command it runs, so the line keeps its own directory.
+        shell = replace(shell, cwd=_resolve(shell.cwd, chdir), moved=True)
     name = os.path.basename(words[0])
     args = words[1:]
     if name in {"cd", "pushd"}:
@@ -908,7 +959,7 @@ def _judge_git_worktree(args: list[str], where: Path, shell: _Shell) -> DataLoss
         return _deny(
             DataLossPattern.OUT_OF_ROOT_WORKTREE,
             "creating a worktree outside the managed roots is refused; "
-            "create it under .ea/worktrees",
+            f"create it under .ea/worktrees with {_ADD_ADVICE}",
         )
     if action in {"remove", "move"}:
         if _managed_worktree(target, roots) is None and not _holds_managed_worktree(target, roots):
@@ -916,10 +967,7 @@ def _judge_git_worktree(args: list[str], where: Path, shell: _Shell) -> DataLoss
         verb = "removing" if action == "remove" else "moving"
         return _deny(
             DataLossPattern.FOREIGN_WORKTREE_MUTATION,
-            f"{verb} a managed worktree with git is refused; "
-            "the daemon removes a Run's clean worktree when the Run ends "
-            "if worktrees.remove_when_clean is set, "
-            "and the operator removes any other from their own shell once its work has landed",
+            f"{verb} a managed worktree with git is refused; {_GC_ADVICE}",
         )
     return None
 

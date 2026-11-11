@@ -10,9 +10,6 @@ one :class:`Publication` beside the rendered files, and
 catalog and from the files on disk and compares them as one unit.
 
 The publication also records the engine schema epoch the bundle targets.
-An installed bundle whose epoch differs from its repository refuses to
-operate: :func:`require_bundle_epoch` names the migration instead of letting
-the bundle fail obscurely against records it does not understand.
 
 Run as ``python -m eawf.workflow.skills.publication <bundle-root>`` to check a
 rendered bundle before it is archived.
@@ -30,10 +27,6 @@ from typing import Final, Literal
 import orjson
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from eawf.kernel.migration.epoch2.canary import DisposableTarget
-from eawf.kernel.migration.epoch2.errors import MigrationTargetNotDisposableError
-from eawf.kernel.migration.epoch2.generation import read_marker
-
 logger = logging.getLogger(__name__)
 
 #: The engine schema epoch every bundle this build renders targets.
@@ -41,9 +34,6 @@ BUNDLE_TARGET_EPOCH: Final = 2
 
 #: Where the publication sits, relative to the bundle root.
 PUBLICATION_FILENAME: Final = "eawf-publication.json"
-
-#: The command that explains how a repository reaches the epoch a bundle targets.
-MIGRATION_COMMAND: Final = "eawf help upgrade-from-0.6"
 
 #: The file kinds the epoch-1 noun census covers.
 _CENSUSED_KINDS: Final = frozenset({"skill", "manifest", "hook"})
@@ -107,39 +97,6 @@ class Publication(BaseModel):
     skills: tuple[SkillDigests, ...]
     files: tuple[BundleFile, ...]
     bundle: str
-
-
-class BundleEpochMismatchError(RuntimeError):
-    """An installed bundle targets another epoch than its repository.
-
-    Attributes:
-        bundle_epoch: The epoch the bundle targets.
-        repository_epoch: The epoch the repository resolves to.
-    """
-
-    def __init__(self, *, bundle_epoch: int, repository_epoch: int) -> None:
-        """Name both epochs and the migration that reconciles them.
-
-        Args:
-            bundle_epoch: The epoch the bundle targets.
-            repository_epoch: The epoch the repository resolves to.
-        """
-        self.bundle_epoch = bundle_epoch
-        self.repository_epoch = repository_epoch
-        if repository_epoch < bundle_epoch:
-            guidance = (
-                f"migrate the repository to epoch {bundle_epoch} first; `{MIGRATION_COMMAND}`"
-                " gives the steps"
-            )
-        else:
-            guidance = (
-                f"install the bundle this eawf version renders (`eawf plugin update`), which"
-                f" targets epoch {repository_epoch}"
-            )
-        super().__init__(
-            f"this eawf bundle targets schema epoch {bundle_epoch} but the repository is at"
-            f" epoch {repository_epoch}, so it does not operate here: {guidance}"
-        )
 
 
 def _sha256(data: bytes) -> str:
@@ -313,49 +270,16 @@ def publication_findings(root: Path) -> tuple[str, ...]:
     return tuple(findings)
 
 
-def repository_epoch(root: Path) -> Literal[1, 2]:
-    """Return the authority epoch the tree at ``root`` is in.
-
-    The answer is the one the state layer's authority resolver gives, read
-    from the same declaration and marker models, but without that layer's
-    state, spec and store models: every hook call checks its bundle's epoch
-    before it does anything else, so this read is paid per call.
+def is_managed(root: Path) -> bool:
+    """Return whether the repository at ``root`` is managed by eawf.
 
     Args:
-        root: The tree's root directory, normally ``<repository>/.ea``.
+        root: The repository's root directory.
 
     Returns:
-        ``2`` when the tree carries a valid declaration and a valid epoch
-        marker, ``1`` otherwise. A missing or malformed file is an answer,
-        never an error.
+        Whether ``root/.ea`` is a directory.
     """
-    try:
-        target = DisposableTarget.require(root)
-    except MigrationTargetNotDisposableError:
-        return 1
-    try:
-        marker = read_marker(target)
-    except (OSError, ValueError) as error:
-        logger.warning(
-            f"repository_epoch root={root.name} marker_unreadable={error.__class__.__name__}"
-        )
-        return 1
-    return 1 if marker is None else 2
-
-
-def require_bundle_epoch(bundle_epoch: int, repository_root: Path) -> None:
-    """Refuse to operate a bundle whose target epoch differs from the repository.
-
-    Args:
-        bundle_epoch: The epoch the invoking bundle targets.
-        repository_root: The repository the bundle is operating in.
-
-    Raises:
-        BundleEpochMismatchError: The repository resolves to another epoch.
-    """
-    epoch = repository_epoch(repository_root / ".ea")
-    if epoch != bundle_epoch:
-        raise BundleEpochMismatchError(bundle_epoch=bundle_epoch, repository_epoch=epoch)
+    return (root / ".ea").is_dir()
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -368,7 +292,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ``0`` when the publication checks, ``1`` after printing every
         finding otherwise.
     """
-    # Deferred: each hook call imports this module for its epoch check alone.
+    # Deferred: each hook call imports this module for its managed check alone.
     import argparse
 
     parser = argparse.ArgumentParser(prog="eawf-publication")
@@ -382,18 +306,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 __all__ = [
     "BUNDLE_TARGET_EPOCH",
-    "MIGRATION_COMMAND",
     "PUBLICATION_FILENAME",
-    "BundleEpochMismatchError",
     "BundleFile",
     "Publication",
     "SkillDigests",
     "build_publication",
+    "is_managed",
     "main",
     "publication_findings",
     "read_publication",
-    "repository_epoch",
-    "require_bundle_epoch",
     "skill_digests",
     "write_publication",
 ]

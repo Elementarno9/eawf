@@ -8,14 +8,15 @@ Build, test, independently verify and present a local proof of concept.
 
 ## 1. Authority
 
-- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- In an eawf-managed repository: an operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
 - Operates on: proof of concept, through `runtime.run.dispatch`, `runtime.evidence.spike_report.file`.
 - Effects: Writes only under the resolved local spike folder; separate builder and verifier Runs; the report is filed and its contracts submitted for promotion.
 - Allowed RPCs: `runtime.run.dispatch`, `runtime.evidence.spike_report.file`. Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
 - Run tools: `repo_read`, `submit_report`, `submit_evidence`. These exist only inside a native Run eawf dispatches; a host session has none of them and uses the `eawf` commands above instead.
 - Canonical state: never mutated by this skill.
-- Local write root: `.ea/local/spikes`; nothing is written outside it.
-- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
+- Local write root: `.ea/local/spikes` in an eawf-managed repository; outside one, none, unless `--save <path>` names a file.
+- Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one.
+- Standalone use (degraded): Builds in a temporary directory outside the repository, deleted at the end; a host subagent verifies; nothing is filed.
 
 ## 2. Context
 
@@ -57,7 +58,7 @@ The obligations the effective rule graph holds for activities `research`, `test`
 
 ## 6. Output
 
-Output one SpikeReport. Its `summary` states the folder, hypothesis, commands, observations, contracts, verdict, limitations, independent verifier result, operator demo, retention, and stop reason.
+Output one SpikeReport. Its `summary` states the folder, hypothesis, commands, observations, contracts, verdict, limitations, independent verifier result, operator demo, retention, and stop reason. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
 
 The report validates against `SpikeReport`, and its terminal outcome is exactly one of `ready`, `inconclusive`, `failed`, `cancelled`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /spike` before returning it. It carries these fields and no other; a nested field is written under its parent.
 

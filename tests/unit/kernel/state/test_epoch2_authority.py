@@ -10,7 +10,6 @@ one that does not parse, resolves to epoch 1 with the gap that says why.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -33,7 +32,6 @@ from eawf.kernel.state.epoch2.authority import (
     resolve_authority,
 )
 from eawf.observability.doctor.checks_authority import check_authority_epoch
-from eawf.workflow.skills.publication import repository_epoch
 
 GENERATION_ID = "gen-0123456789abcdef"
 WRITTEN_AT = datetime(2026, 1, 1, tzinfo=UTC)
@@ -148,55 +146,6 @@ def test_resolve_authority_malformed_marker_is_epoch1(tmp_path: Path, body: str)
     authority = resolve_authority(root)
 
     assert (authority.epoch, authority.gap) == (1, AuthorityGap.MARKER_UNREADABLE)
-
-
-def _both_declarations(root: Path) -> None:
-    (root / "epoch2-opt-in.json").write_text("{}", encoding="utf-8")
-
-
-def _marker_is_a_directory(root: Path) -> None:
-    marker = root / "generations" / "EPOCH2_ACTIVE.json"
-    marker.unlink()
-    marker.mkdir()
-
-
-@pytest.mark.parametrize(
-    ("declared", "marked", "spoil"),
-    [
-        pytest.param(True, True, None, id="both-present"),
-        pytest.param(False, True, None, id="declaration-missing"),
-        pytest.param(True, False, None, id="marker-missing"),
-        pytest.param(False, False, None, id="both-missing"),
-        pytest.param(True, True, _both_declarations, id="two-declarations"),
-        pytest.param(True, True, _marker_is_a_directory, id="marker-unreadable"),
-        pytest.param(
-            True,
-            True,
-            lambda root: declaration_path(root).write_text('{"disposable": true}', "utf-8"),
-            id="declaration-malformed",
-        ),
-        pytest.param(
-            True,
-            True,
-            lambda root: (root / "generations" / "EPOCH2_ACTIVE.json").write_text("[]", "utf-8"),
-            id="marker-malformed",
-        ),
-    ],
-)
-def test_repository_epoch_agrees_with_the_resolver(
-    tmp_path: Path, declared: bool, marked: bool, spoil: Callable[[Path], object] | None
-) -> None:
-    root = _tree(tmp_path, declared=declared, marked=marked)
-    if spoil is not None:
-        spoil(root)
-
-    assert repository_epoch(root) == resolve_authority(root).epoch
-
-
-def test_repository_epoch_of_a_missing_tree_is_epoch1(tmp_path: Path) -> None:
-    absent = tmp_path / "absent"
-
-    assert repository_epoch(absent) == resolve_authority(absent).epoch == 1
 
 
 def test_resolve_authority_rereads_tree_after_marker_removed(tmp_path: Path) -> None:

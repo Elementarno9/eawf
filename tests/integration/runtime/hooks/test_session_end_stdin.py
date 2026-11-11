@@ -1,8 +1,8 @@
 """Stdin-first hook wrapper contract.
 
 Claude Code delivers hook input as a JSON document on stdin. The rendered
-wrappers forward that document verbatim instead of synthesising one from argv,
-which is kept only as the empty-stdin fallback. The real Stop payload's key set
+wrappers forward that document verbatim and never synthesise one from argv.
+The real Stop payload's key set
 is the ``claude_session_end_stdin.json`` fixture.
 
 - The rendered ``session_end`` wrapper forwards the stdin JSON verbatim.
@@ -144,23 +144,19 @@ def test_session_end_wrapper_forwards_stdin_verbatim() -> None:
 
 
 @_needs_bash
-def test_session_end_wrapper_falls_back_to_argv_on_empty_stdin() -> None:
+def test_session_end_wrapper_forwards_an_empty_stdin_as_is() -> None:
+    """An empty stdin is forwarded empty; the CLI reads it as an empty payload."""
     forwarded = _run_rendered_wrapper(HookEventType.SESSION_END, stdin=b"")
-    assert json.loads(forwarded) == {
-        "hook_event_name": "SessionEnd",
-        "claude_event_name": "session_end",
-        "args": ["", "", "", ""],
-    }
+    assert forwarded == b""
 
 
-def test_session_end_wrapper_is_stdin_first_with_argv_fallback() -> None:
+def test_session_end_wrapper_reads_stdin_only() -> None:
     script = render_hook_sh(HookEventType.SESSION_END)
     assert "if [ ! -t 0 ]; then" in script
-    assert '_eawf_stdin="$(cat)"' in script
-    assert 'if [ -n "${_eawf_stdin}" ]; then' in script
-    assert "eawf hook run session_end --runtime claude" in script
-    # The argv synthesis survives, but only inside the empty-stdin else branch.
-    assert '"hook_event_name":"%s"' in script
+    assert '_eawf_payload="$(cat)"' in script
+    assert '_eawf_event="session_end"' in script
+    # Positional arguments no longer synthesise a payload.
+    assert '"hook_event_name":"%s"' not in script
 
 
 # --- subagent_stop wrapper carries the same contract ------------------------
@@ -175,20 +171,9 @@ def test_subagent_stop_wrapper_forwards_stdin_verbatim() -> None:
     assert json.loads(forwarded) == payload
 
 
-@_needs_bash
-def test_subagent_stop_wrapper_falls_back_to_argv_on_empty_stdin() -> None:
-    forwarded = _run_rendered_wrapper(HookEventType.SUBAGENT_STOP, stdin=b"")
-    assert json.loads(forwarded) == {
-        "hook_event_name": "SubagentStop",
-        "claude_event_name": "subagent_stop",
-        "args": ["", "", "", ""],
-    }
-
-
-def test_subagent_stop_wrapper_is_stdin_first_with_argv_fallback() -> None:
+def test_subagent_stop_wrapper_reads_stdin_only() -> None:
     script = render_hook_sh(HookEventType.SUBAGENT_STOP)
     assert "if [ ! -t 0 ]; then" in script
-    assert '_eawf_stdin="$(cat)"' in script
-    assert 'if [ -n "${_eawf_stdin}" ]; then' in script
-    assert "eawf hook run subagent_stop --runtime claude" in script
-    assert '"hook_event_name":"%s"' in script
+    assert '_eawf_payload="$(cat)"' in script
+    assert '_eawf_event="subagent_stop"' in script
+    assert '"hook_event_name":"%s"' not in script

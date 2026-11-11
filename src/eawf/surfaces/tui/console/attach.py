@@ -9,8 +9,9 @@ chrome's static state with the facts it read and the commands that change them.
 Nothing here writes. The resolver reads the registry and a few small files, and every
 command it names is handed to the operator rather than run, so no frame of the layer can
 mutate state it cannot reach. Resolution never guesses: a tree named outright by a flag
-or ``EA_STATE`` wins, otherwise only an exact registered root matches and membership is
-read from the registry, never inferred.
+or ``EA_STATE`` wins, otherwise the repository's main checkout, never a linked worktree,
+must be an exact registered root, and membership is read from the registry, never
+inferred.
 """
 
 from __future__ import annotations

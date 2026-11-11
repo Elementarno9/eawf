@@ -190,6 +190,7 @@ These control variables use a single underscore after the `EAWF_` prefix and are
 | `EAWF_VERBOSE` | Set to `1` to print daemon start-up progress to standard error. |
 | `EAWF_LOCK_TIMEOUT` | Reserved name; the configuration merge skips it and the package does not read it. |
 | `EAWF_SUITE_SESSION` | Marks every daemon a test session spawns, so the suite can find and stop the daemons it started. |
+| `EAWF_HOOKS` | Set to `off` to make every installed host hook wrapper exit 0 at once, before it probes the repository or starts eawf; `eawf doctor hooks` removes it from the environment its cells run in. |
 
 ### Command line and console
 

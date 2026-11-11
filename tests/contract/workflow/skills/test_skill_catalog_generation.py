@@ -8,8 +8,7 @@
 - SURF-100 / SURF-108: every page names its epoch-2 subject and routes, and no shipped
   skill, manifest or hook says phase, iter or wave.
 - SURF-101: a missing or incompatible route fails generation.
-- SURF-105 / SURF-109: a bundle records the epoch it targets and refuses, with
-  migration guidance, to operate in a repository at another epoch.
+- SURF-105: a bundle records the epoch it targets; its hooks no longer pass it.
 - SURF-112 / SURF-114: one argument schema generates help, machine schema,
   completion and validation, and one lane map filters every surface.
 - SURF-113: catalog, prompt, argument, allowlist, output-schema and file digests are
@@ -64,10 +63,8 @@ from eawf.workflow.skills.engine import SkillContext
 from eawf.workflow.skills.publication import (
     BUNDLE_TARGET_EPOCH,
     PUBLICATION_FILENAME,
-    BundleEpochMismatchError,
     publication_findings,
     read_publication,
-    require_bundle_epoch,
 )
 
 runner = CliRunner()
@@ -297,45 +294,14 @@ def test_surf_108_census_reports_each_epoch1_noun_with_its_line(tmp_path: Path) 
     assert bundle_census(tmp_path / "hooks" / "absent") == ()
 
 
-# ---- SURF-105 / SURF-109 -----------------------------------------------------
+# ---- SURF-105 ----------------------------------------------------------------
 
 
 def test_surf_105_a_bundle_records_the_epoch_it_targets(claude_bundle: Path) -> None:
     assert read_publication(claude_bundle).target_epoch == BUNDLE_TARGET_EPOCH == 2
+    # The hook no longer carries the epoch: a repository is judged by its managed anchors.
     for hook in (claude_bundle / "hooks").glob("*.sh"):
-        assert f"--target-epoch {BUNDLE_TARGET_EPOCH}" in hook.read_text()
-
-
-def test_surf_109_a_mismatched_epoch_refuses_with_migration_guidance(tmp_path: Path) -> None:
-    result = runner.invoke(
-        app,
-        [
-            "-w",
-            str(tmp_path),
-            "hook",
-            "run",
-            "session_start",
-            "--runtime",
-            "claude",
-            "--target-epoch",
-            "2",
-        ],
-        input="{}",
-    )
-    assert result.exit_code == 0
-    assert "targets schema epoch 2 but the repository is at epoch 1" in result.stderr
-    assert "eawf help upgrade-from-0.6" in result.stderr
-    assert result.stdout == ""
-
-
-def test_surf_109_the_matching_epoch_passes_and_a_newer_repo_names_the_update(
-    tmp_path: Path,
-) -> None:
-    require_bundle_epoch(1, tmp_path)
-    newer = BundleEpochMismatchError(bundle_epoch=1, repository_epoch=2)
-    assert "install the bundle this eawf version renders (`eawf plugin update`)" in str(newer)
-    with pytest.raises(BundleEpochMismatchError, match="migrate the repository to epoch 2"):
-        require_bundle_epoch(2, tmp_path)
+        assert "--target-epoch" not in hook.read_text()
 
 
 # ---- SURF-112 / SURF-114 -----------------------------------------------------

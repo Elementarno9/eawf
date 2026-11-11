@@ -221,12 +221,15 @@ def test_a_session_in_a_linked_worktree_writes_to_the_main_tree(repo: Path, tmp_
 
 
 def test_session_bind_in_a_linked_worktree_writes_to_the_main_tree(
-    repo: Path, tmp_path: Path
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     worktree = _linked_worktree(repo)
     _start(worktree, _transcript(tmp_path))
+    # Naming the worktree with -w is refused; run from inside it instead.
+    monkeypatch.delenv("EA_STATE", raising=False)
+    monkeypatch.chdir(worktree)
 
-    result = _invoke(worktree, "session", "bind", OTHER_TASK_KEY, "--session", HOST_SESSION)
+    result = cli.invoke(app, ["session", "bind", OTHER_TASK_KEY, "--session", HOST_SESSION])
 
     assert result.exit_code == 0, result.output
     assert session_task_keys(repo / ".ea") == {hash_vendor_session_id(HOST_SESSION): OTHER_TASK_KEY}

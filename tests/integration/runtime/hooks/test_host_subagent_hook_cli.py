@@ -51,9 +51,12 @@ def test_surf_055_a_dispatch_names_the_handler_that_ran(
     )
 
     assert result.exit_code == 0, result.stdout
-    rows = json.loads(result.stdout)["body"]["results"]
-    adoption = [row for row in rows if row["name"] == "runtime.host_subagent"]
-    assert [row["output"] for row in adoption] == [
+    # Claude reads no answer from a subagent hook's stdout, so the line goes to stderr.
+    assert result.stdout == ""
+    adoption = [
+        line for line in result.stderr.splitlines() if line.startswith("runtime.host_subagent")
+    ]
+    assert adoption == [
         "runtime.host_subagent ok run=eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000011"
     ]
     assert sink == ["runtime.host.subagent.start"]

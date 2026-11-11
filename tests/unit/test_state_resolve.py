@@ -141,7 +141,9 @@ def test_empty_env_dict_falls_through_to_workspace(tmp_path: Path) -> None:
     assert reason == REASON_WORKSPACE_FLAG
 
 
-def test_relative_env_path_returned_as_is(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_relative_env_path_returned_as_is(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Outside any checkout, so a run from a linked worktree is not refused.
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("EA_STATE", "relative/path/state.json")
     path, reason = resolve_with_reason(workspace=None)
     assert path == Path("relative/path/state.json")

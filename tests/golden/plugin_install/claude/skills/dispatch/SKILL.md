@@ -12,7 +12,8 @@ Coordinate one Delivery Batch: bring its ready Tasks to a candidate.
 
 ## 1. Authority
 
-- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Needs an eawf-managed repository; outside one the hook refuses it with `not an eawf-managed repository; run eawf init to manage it`.
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
 - Operates on: Batch, through `projection.batch.detail.read`, `projection.task.detail.read`, `projection.run.detail.read`, `eawf run dispatch`, `runtime.run.dispatch`, `runtime.run.retry`.
 - Effects: Coordinator reads plus the Task dispatch, Run dispatch and Run retry verbs.
 - Allowed RPCs: `projection.batch.detail.read`, `projection.task.detail.read`, `projection.run.detail.read`, `eawf run dispatch` (`runtime.task.dispatch`), `runtime.run.dispatch`, `runtime.run.retry`. Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
@@ -73,7 +74,7 @@ The obligations the effective rule graph holds for activities `implement`. They 
 
 ## 6. Output
 
-Output one report whose `summary` gives the coordination record: the concurrency plan you computed, every Run you dispatched with its Task and outcome, the frontier remaining, and every condition you stopped on.
+Output one report whose `summary` gives the coordination record: the concurrency plan you computed, every Run you dispatched with its Task and outcome, the frontier remaining, and every condition you stopped on. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
 
 The report validates against `CoordinationReport`, and its terminal outcome is exactly one of `candidate_ready`, `frontier_empty`, `needs_operator`, `budget_exhausted`, `blocked`, `cancelled`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /dispatch` before returning it. It carries these fields and no other; a nested field is written under its parent.
 

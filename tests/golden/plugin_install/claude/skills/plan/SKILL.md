@@ -12,7 +12,8 @@ Propose, approve and apply a PlanRevision.
 
 ## 1. Authority
 
-- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Needs an eawf-managed repository; outside one the hook refuses it with `not an eawf-managed repository; run eawf init to manage it`.
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
 - Operates on: PlanRevision, through `projection.roadmap.read`, `eawf plan submit`, `eawf plan approve`, `eawf plan apply`.
 - Operator-only actions: `approve`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`) and never chooses the recommended option itself. In Claude Code, present the bound question the answer carries with AskUserQuestion verbatim, the action marker on its first line included: the operator's answer to that marked question is the approval, or the choice, and that answer seals it. Then complete the act under your own principal, citing the sealed action; an agent still cannot name an `OP-` key. Codex sessions have no AskUserQuestion, so their operator acts stay terminal-only: print the answer's `numbered_prompt` verbatim and stop; the operator relays the reply with `eawf question answer` (`runtime.question.answer_numbered`) from their own terminal, the console answers the same record, and the first answer wins.
 - Effects: The roadmap read plus the PlanRevision submit, approve and apply verbs.
@@ -76,7 +77,7 @@ The obligations the effective rule graph holds for activities `plan` and roles `
 
 ## 6. Output
 
-Output one report whose `summary` gives the strict PlanRevision proposal by key, plus the atom-to-criterion coverage table, every atom you dropped with its reason, and the uncertainty register from step 0 with each unknown either resolved to a cited contract or named as unmeasured.
+Output one report whose `summary` gives the strict PlanRevision proposal by key, plus the atom-to-criterion coverage table, every atom you dropped with its reason, and the uncertainty register from step 0 with each unknown either resolved to a cited contract or named as unmeasured. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
 
 The report validates against `PlanSkillReport`, and its terminal outcome is exactly one of `proposed`, `rejected`, `approved`, `applied`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /plan` before returning it. It carries these fields and no other; a nested field is written under its parent.
 

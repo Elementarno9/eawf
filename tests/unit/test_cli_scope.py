@@ -157,8 +157,10 @@ def test_missing_state_raises_filenotfounderror(
         resolve_state_path(workspace=None)
 
 
-def test_env_var_path_returned_as_is(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_env_var_path_returned_as_is(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """``EA_STATE`` is honoured verbatim — even relative paths."""
+    # Outside any checkout, so a run from a linked worktree is not refused.
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("EA_STATE", "relative/path/state.json")
     resolved = resolve_state_path(workspace=None)
     assert resolved == Path("relative/path/state.json")

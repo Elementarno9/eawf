@@ -8,14 +8,15 @@ Answer one question as a one-page local brief, swift or in rounds; no Campaign.
 
 ## 1. Authority
 
-- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- In an eawf-managed repository: an operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
 - Operates on: question, through `projection.evidence.read`, `eawf research check`.
 - Effects: Evidence read and repository reads; one gitignored local brief.
 - Allowed RPCs: `projection.evidence.read`. Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
 - Run tools: `eawf_state_query`, `repo_read`, `repo_search`, `submit_report`. These exist only inside a native Run eawf dispatches; a host session has none of them and uses the `eawf` commands above instead.
 - Canonical state: never mutated by this skill.
-- Local write root: `.ea/local/research`; nothing is written outside it.
-- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
+- Local write root: `.ea/local/research` in an eawf-managed repository; outside one, none, unless `--save <path>` names a file.
+- Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one.
+- Standalone use (supported): Returns the brief in the conversation; writes a file only when `--save <path>` names one.
 
 ## 2. Context
 
@@ -40,8 +41,8 @@ Answer one bounded question in one markdown brief of at most one rendered page. 
 5. Reconcile evidence once. Distinguish implementation fact, document claim, external claim, and inference. Resolve every citation used by the verdict.
 6. Compare plausible alternatives with their main advantage and cost. Give a verdict, confidence, and material open gaps.
 7. If evidence cannot decide, recommend the cheapest discriminating next step. Do not turn the invocation into a Campaign or Spike implicitly: a question that needs more than the rounds allow is recommended as a Campaign, which the operator plans with `eawf campaign new` (`runtime.campaign.start`) and the daemon drives step by step with `eawf campaign run` (`runtime.campaign.run`).
-8. Write the brief to the `--save` path under `.ea/local/research/`, by default `<date>-<slug>.md` there: an H1 title, then exactly the sections Question, Findings, Alternatives, Recommendation, Open gaps, References in that order. References is a numbered table with the columns `#` and `Reference`, one repo-relative path, URL or Eawf URN per row, each cited in the prose as `[N]`.
-9. Run `eawf research check <brief>` and fix every error it names before returning. Stop at the last pass, one rendered page, or the first hard budget cap.
+8. Write the brief. In an eawf-managed repository, write it to the `--save` path under `.ea/local/research/`, by default `<date>-<slug>.md` there. Outside one, write no file and return the brief in the conversation, unless `--save <path>` names a file. Either way: an H1 title, then exactly the sections Question, Findings, Alternatives, Recommendation, Open gaps, References in that order. References is a numbered table with the columns `#` and `Reference`, one repo-relative path, URL or Eawf URN per row, each cited in the prose as `[N]`.
+9. If the brief is a file, run `eawf research check <brief>` and fix every error it names. If a report file exists, run `eawf skill check-report /research <report>`. With no file, check the section order and the References table yourself. Stop at the last pass, one rendered page, or the first hard budget cap.
 
 ## 4b. Applicable rules
 
@@ -52,6 +53,7 @@ The obligations the effective rule graph holds for activities `research` and rol
 
 ## 5. Constraints
 
+- Outside an eawf-managed repository a bare `--save` is refused: `--save needs a path outside an eawf-managed repository`.
 - Every parallel slice declares what its result would rule out; a slice that cannot name it is not dispatched.
 - A brief that `eawf research check` refuses is not a result.
 - Continue without mid-task pauses. Hand independent slices to separate subagents in one message, not one per turn.
@@ -59,7 +61,7 @@ The obligations the effective rule graph holds for activities `research` and rol
 
 ## 6. Output
 
-Output one SwiftResearchReport. Its `summary` states the mode, the rounds used, the brief's path, the verdict, its confidence and the stop reason.
+Output one SwiftResearchReport. Its `summary` states the mode, the rounds used, the brief's path, the verdict, its confidence and the stop reason. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
 
 The report validates against `SwiftResearchReport`, and its terminal outcome is exactly one of `answered`, `open`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /research` before returning it. It carries these fields and no other; a nested field is written under its parent.
 

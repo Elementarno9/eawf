@@ -40,7 +40,9 @@ from eawf.kernel.migration.epoch2.canary import (
     GENERATIONS_DIRNAME,
     MARKER_FILENAME,
     OPT_IN_DECLARATION_FILENAME,
+    V08_LAYOUT_MESSAGE,
     DisposableTarget,
+    uses_v08_layout,
 )
 from eawf.kernel.migration.epoch2.errors import MigrationTargetNotDisposableError
 from eawf.kernel.migration.epoch2.generation import GENERATION_ID_PATTERN, read_marker
@@ -145,7 +147,7 @@ class NativeAuthorityRequiredError(Exception):
 
     code: ClassVar[str] = NATIVE_AUTHORITY_REQUIRED
 
-    def __init__(self, *, root_name: str, gap: AuthorityGap) -> None:
+    def __init__(self, *, root_name: str, gap: AuthorityGap, v08_layout: bool = False) -> None:
         """Build the refusal for the tree named ``root_name``.
 
         Args:
@@ -153,8 +155,13 @@ class NativeAuthorityRequiredError(Exception):
                 path, so a refusal pasted into a ticket carries no home
                 directory.
             gap: Why epoch 2 was withheld.
+            v08_layout: The tree is in the eawf 0.8 layout, so the refusal
+                names the client to install instead of the epoch-2 files.
         """
         self.gap = gap
+        if v08_layout:
+            super().__init__(V08_LAYOUT_MESSAGE)
+            return
         super().__init__(
             f"{root_name} resolves to authority epoch 1 ({gap.value}): a native mutation "
             f"needs {CANARY_DECLARATION_FILENAME} or {OPT_IN_DECLARATION_FILENAME}, and "
@@ -215,7 +222,9 @@ def require_native_authority(root: Path) -> RootAuthority:
     """
     authority = resolve_authority(root)
     if authority.gap is not None:
-        raise NativeAuthorityRequiredError(root_name=authority.root.name, gap=authority.gap)
+        raise NativeAuthorityRequiredError(
+            root_name=authority.root.name, gap=authority.gap, v08_layout=uses_v08_layout(root)
+        )
     return authority
 
 

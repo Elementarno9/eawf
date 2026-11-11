@@ -21,8 +21,8 @@ from eawf.runtime.runtimes.claude.plugin_package import package_plugin
 
 pytestmark = pytest.mark.unit
 
-_PREFIX = 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/'
-_SUFFIX = '.sh"'
+_PREFIX = 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/eawf-hook.sh" '
+_SESSION_END = f"{_PREFIX}session_end"
 
 
 def _package(target: Path) -> Path:
@@ -78,9 +78,8 @@ def test_every_hook_command_runs_its_wrapper_through_bash(tmp_path: Path) -> Non
     assert commands, "the packaged hooks.json names no command"
     for command in commands:
         assert command.startswith(_PREFIX), command
-        assert command.endswith(_SUFFIX), command
-        wrapper = command.removeprefix(_PREFIX).removesuffix(_SUFFIX)
-        assert (target / "hooks" / f"{wrapper}.sh").is_file(), command
+        assert command.removeprefix(_PREFIX).isidentifier(), command
+    assert (target / "hooks" / "eawf-hook.sh").is_file()
 
 
 def test_wrappers_still_render_executable(tmp_path: Path) -> None:
@@ -98,7 +97,7 @@ def test_hook_command_runs_a_0644_wrapper(tmp_path: Path) -> None:
     bin_dir = _stub_uv(tmp_path)
     home = tmp_path / "home"
     home.mkdir()
-    [command] = [c for c in _commands(target) if "/session_end.sh" in c]
+    [command] = [c for c in _commands(target) if c == _SESSION_END]
 
     result = _run_command(command, plugin_root=target, bin_dir=bin_dir, home=home)
 
@@ -110,7 +109,7 @@ def test_hook_command_survives_a_plugin_root_with_spaces(tmp_path: Path) -> None
     bin_dir = _stub_uv(tmp_path)
     home = tmp_path / "home"
     home.mkdir()
-    [command] = [c for c in _commands(target) if "/session_end.sh" in c]
+    [command] = [c for c in _commands(target) if c == _SESSION_END]
 
     result = _run_command(command, plugin_root=target, bin_dir=bin_dir, home=home)
 
@@ -119,11 +118,11 @@ def test_hook_command_survives_a_plugin_root_with_spaces(tmp_path: Path) -> None
 
 def test_hook_command_fails_when_the_wrapper_is_missing(tmp_path: Path) -> None:
     target = _package(tmp_path / "plugin")
-    (target / "hooks" / "session_end.sh").unlink()
+    (target / "hooks" / "eawf-hook.sh").unlink()
     bin_dir = _stub_uv(tmp_path)
     home = tmp_path / "home"
     home.mkdir()
-    [command] = [c for c in _commands(target) if "/session_end.sh" in c]
+    [command] = [c for c in _commands(target) if c == _SESSION_END]
 
     result = _run_command(command, plugin_root=target, bin_dir=bin_dir, home=home)
 

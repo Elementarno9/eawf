@@ -31,6 +31,7 @@ from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.observability.doctor import daemon_checks
 from eawf.observability.doctor.checks_authority import check_authority_epoch
 from eawf.observability.doctor.checks_gitignore import check_gitignore_block
+from eawf.observability.doctor.checks_hooks import check_hook_health
 from eawf.observability.doctor.checks_local_size import check_local_size
 from eawf.observability.doctor.checks_plugin_version import check_plugin_version
 from eawf.observability.doctor.checks_sequence import check_canonical_sequence_drift
@@ -43,6 +44,7 @@ from eawf.observability.doctor.checks_steering_cap import (
 from eawf.observability.doctor.checks_steering_cap import (
     check_agents_override_byte_cap as check_agents_override_byte_cap,
 )
+from eawf.observability.doctor.checks_worktrees import check_leftovers, check_worktrees
 from eawf.observability.doctor.models import CheckResult as CheckResult
 from eawf.observability.doctor.models import CheckStatus as CheckStatus
 from eawf.platform.install.instrument_probe import probe
@@ -973,6 +975,9 @@ def run_all(
         check_stray_daemons(),
         check_runtime_dir_size(workspace=anchor),
         check_local_size(workspace=anchor),
+        check_worktrees(workspace=anchor),
+        check_leftovers(workspace=anchor),
+        check_hook_health(workspace=anchor),
         check_render_output_roundtrip(),
         check_agents_md_byte_cap(workspace=anchor),
         check_agents_override_byte_cap(workspace=anchor),

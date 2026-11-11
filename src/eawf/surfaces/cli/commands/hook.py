@@ -66,6 +66,7 @@ if TYPE_CHECKING:
     from eawf.kernel.state.epoch2.urns import RunUrn
     from eawf.observability.logging.state_leak import StateLeakKind
     from eawf.platform.lint import LintConfig
+    from eawf.runtime.hooks.context import HookContext
     from eawf.runtime.hooks.event import HookEvent, HookEventType, HookRuntime
     from eawf.runtime.hooks.health import HookFailure
     from eawf.runtime.hooks.runner import HookResult, HookRunner
@@ -852,6 +853,59 @@ def _register_projection_staleness(runner: HookRunner, *, repo_root: Path) -> No
     runner.register(HookEventType.SESSION_START, _hook, name=_STALENESS_HOOK_NAME)
 
 
+_FAILURE_WARNING_HOOK_NAME = "hooks.failure_warning"
+
+
+def _register_failure_warning(runner: HookRunner, *, ea_dir: Path) -> None:
+    """Register the session-start warning about hook failures recorded since the last one.
+
+    Registered after the other session-start hooks have been, it reads the
+    record before this hook's own failures are appended, so those are
+    reported by the next session start.
+
+    Args:
+        runner: The runner dispatching this event.
+        ea_dir: The main checkout's ``.ea``, where the record is kept.
+    """
+    from eawf.runtime.hooks.event import HookEventType
+    from eawf.runtime.hooks.health import take_failure_warning
+    from eawf.runtime.hooks.runner import HookResult
+
+    def _hook(_event: HookEvent) -> HookResult:
+        warning = take_failure_warning(ea_dir)
+        return HookResult(name=_FAILURE_WARNING_HOOK_NAME, output=warning or "")
+
+    runner.register(HookEventType.SESSION_START, _hook, name=_FAILURE_WARNING_HOOK_NAME)
+
+
+def _register_daemon_start(runner: HookRunner, *, context: HookContext, named: bool) -> None:
+    """Register the background daemon start of a session in a managed repository.
+
+    A launch that fails raises inside the handler, so the runner records it
+    as one health row and the hook still answers as if nothing happened.
+
+    Args:
+        runner: The runner dispatching this event.
+        context: Where the hook fired; nothing is registered outside a
+            managed repository.
+        named: Whether ``-w`` named the repository, as the host wrapper always
+            does after its own probe. A bare ``eawf hook run`` typed in some
+            checkout starts nothing, so a daemon is only ever started for the
+            repository a host session runs in.
+    """
+    if context.kind != "managed" or not named:
+        return
+    from eawf.runtime.hooks.daemon_start import DAEMON_START_HOOK, request_daemon_start
+    from eawf.runtime.hooks.event import HookEventType
+    from eawf.runtime.hooks.runner import HookResult
+
+    def _hook(_event: HookEvent) -> HookResult:
+        request_daemon_start(context.main)
+        return HookResult(name=DAEMON_START_HOOK, output="")
+
+    runner.register(HookEventType.SESSION_START, _hook, name=DAEMON_START_HOOK)
+
+
 #: Runtimes whose session-start hook prints a host context document instead
 #: of the result envelope: Claude and Codex read ``additionalContext`` from
 #: it, and the OpenCode bridge lifts the same field out of it.
@@ -862,32 +916,46 @@ _SILENT_TOOL_EVENTS: frozenset[str] = frozenset(
     {"pre_tool_use", "post_tool_use", "post_tool_use_failure"}
 )
 
+#: The lifecycle events Claude reads stdout from only for fields eawf never
+#: sets, so their hooks print nothing there either.
+_SILENT_LIFECYCLE_EVENTS: frozenset[str] = frozenset(
+    {"subagent_start", "subagent_stop", "pre_compact", "session_end"}
+)
 
-def _emit_session_context(results: list[HookResult]) -> None:
+
+def _emit_session_context(results: list[HookResult], *, runtime: str) -> None:
     """Print the staleness reports and the Run's anchors as a session-start context document.
 
     Args:
-        results: The session-start hook results; the projection staleness and
-            plugin version checks' non-empty output and the anchors a
-            compaction boundary restated are printed, and nothing at all when
-            there are none, so a current repository with no Run on the session
-            adds no context.
+        results: The session-start hook results; the projection staleness,
+            plugin version and hook failure checks' non-empty output and the
+            anchors a compaction boundary restated are printed, and nothing at
+            all when there are none, so a current repository with no Run on
+            the session adds no context.
+        runtime: The runtime label. Claude also gets the hook failure warning
+            as ``systemMessage``, the field it reserves for the operator;
+            the context document carries it for the model on every runtime.
     """
     from eawf.runtime.hooks.host_lane import PLUGIN_VERSION_HOOK, host_context_restatement
 
-    reported = {_STALENESS_HOOK_NAME, PLUGIN_VERSION_HOOK}
+    reported = {_STALENESS_HOOK_NAME, PLUGIN_VERSION_HOOK, _FAILURE_WARNING_HOOK_NAME}
     reports = [r.output for r in results if r.name in reported and r.output]
     restatement = host_context_restatement(results)
     if restatement is not None:
         reports.append(restatement)
     if not reports:
         return
-    document = {
+    document: dict[str, Any] = {
         "hookSpecificOutput": {
             "hookEventName": "SessionStart",
             "additionalContext": "\n".join(reports),
         }
     }
+    warning = next(
+        (r.output for r in results if r.name == _FAILURE_WARNING_HOOK_NAME and r.output), None
+    )
+    if warning is not None and runtime == "claude":
+        document["systemMessage"] = warning
     typer.echo(orjson.dumps(document).decode("utf-8"))
 
 
@@ -960,83 +1028,73 @@ def _emitted_skill_refusal(event: HookEvent, results: list[HookResult]) -> bool:
     return True
 
 
-def _refused_stale_bundle(
-    event_type: str, runtime: str, stdin_text: str, error: Exception, started_at: datetime
-) -> bool:
-    """Refuse an eawf skill a stale bundle invokes, with the migration guidance.
-
-    A bundle targeting another epoch stands its hooks down, but a skill it
-    ships would still run against records it does not understand, so the
-    invocation itself is refused.
+def _payload_cwd(stdin_text: str) -> Path | None:
+    """Return the ``cwd`` the host reported in its payload, if it reported one.
 
     Args:
-        event_type: The event argument as given.
-        runtime: The runtime label, lowercased.
         stdin_text: The hook payload.
-        error: The epoch mismatch, whose message carries the guidance.
-        started_at: When the hook started.
 
     Returns:
-        Whether a refusal was printed.
+        The ``cwd`` field as a path; ``None`` when the payload is malformed
+        or carries no non-empty string there, since the dispatch that follows
+        names a malformed payload itself.
     """
-    from eawf.runtime.hooks.event import HookEventType
-    from eawf.runtime.hooks.host_lane import host_skill_invocation
-    from eawf.workflow.skills.catalog import SKILL_CATALOG
-
-    skill_events = {HookEventType.USER_PROMPT_SUBMIT.value, HookEventType.PRE_TOOL_USE.value}
-    if runtime != "claude" or event_type not in skill_events:
-        return False
     try:
-        event = _build_event(
-            event_type=HookEventType(event_type),
-            payload=_parse_payload(stdin_text),
-            scope="",
-            command="",
-            runtime="claude",
-            occurred_at=started_at,
-        )
-    except cli_errors.CliError, ValidationError:
-        return False
-    invocation = host_skill_invocation(event)
-    if invocation is None or SKILL_CATALOG.entry(invocation[0]) is None:
-        return False
-    _emit_skill_refusal(event, f"eawf: {error}")
-    return True
+        cwd = _parse_payload(stdin_text).get("cwd")
+    except cli_errors.CliError:
+        return None
+    return Path(cwd) if isinstance(cwd, str) and cwd else None
 
 
-def _stood_down_for_epoch(
-    target_epoch: int,
-    event_type: str,
-    runtime: str,
-    stdin_text: str,
-    flags: GlobalFlags,
-    started_at: datetime,
-) -> bool:
-    """Stand the hook down when its bundle targets another epoch than the repository.
+def _hook_context(stdin_text: str, flags: GlobalFlags) -> HookContext:
+    """Return the repository context the hook fired in, resolved once per hook.
 
-    A bundle built for another epoch reads records it does not understand; it
-    stands down with guidance rather than writing, and exits zero so the host
-    session it runs inside is not broken. A skill it would start is refused
-    outright.
+    ``-w`` comes first: the wrapper passes it only after its own probe found
+    the session's directory managed, and an operator names it on purpose.
+    Then the host's reported ``cwd``, then the process's own directory; each
+    answers for its main checkout, and outside git for the first directory
+    upward holding ``.ea/``. The guard judges a call against the payload
+    ``cwd`` itself, never against this context's tree.
 
     Args:
-        target_epoch: The epoch the invoking bundle targets.
-        event_type: The event argument as given.
-        runtime: The runtime label, lowercased.
         stdin_text: The hook payload.
         flags: The global flags.
-        started_at: When the hook started.
+
+    Returns:
+        The resolved context.
+    """
+    from eawf.runtime.hooks.context import resolve_hook_context
+
+    cwd = flags.workspace or _payload_cwd(stdin_text) or Path.cwd()
+    return resolve_hook_context(cwd.resolve())
+
+
+def _stood_down(context: HookContext, event_type: str, *, named: bool) -> bool:
+    """Stand the hook down outside a repository eawf manages.
+
+    Such a repository has nothing to protect or record, so a hook the host
+    fired there does nothing and says nothing. A ``-w`` directory was named on
+    purpose, by the wrapper after its own probe or by an operator, so it is
+    not second-guessed. A tree in the eawf 0.8 layout says so once, at session
+    start.
+
+    Args:
+        context: Where the hook fired.
+        event_type: The event argument as given.
+        named: Whether ``-w`` named the repository.
 
     Returns:
         Whether the hook stood down and must stop here.
     """
-    from eawf.workflow.skills.publication import BundleEpochMismatchError, require_bundle_epoch
+    from eawf.kernel.migration.epoch2.canary import V08_LAYOUT_MESSAGE, uses_v08_layout
+    from eawf.runtime.hooks.event import HookEventType
+    from eawf.workflow.skills.publication import is_managed
 
-    try:
-        require_bundle_epoch(target_epoch, (flags.workspace or Path.cwd()).resolve())
-    except BundleEpochMismatchError as exc:
-        if not _refused_stale_bundle(event_type, runtime, stdin_text, exc, started_at):
-            typer.echo(f"eawf: {exc}", err=True)
+    if not named and not is_managed(context.main):
+        return True
+    if uses_v08_layout(context.main / ".ea"):
+        if event_type == HookEventType.SESSION_START.value:
+            typer.echo(V08_LAYOUT_MESSAGE)
         return True
     return False
 
@@ -1060,7 +1118,7 @@ def _emitted_host_answer(
         event.event_type == HookEventType.SESSION_START
         and event.runtime in _SESSION_CONTEXT_RUNTIMES
     ):
-        _emit_session_context(results)
+        _emit_session_context(results, runtime=event.runtime)
         return True
     if event.event_type == HookEventType.PERMISSION_REQUEST and event.runtime == "claude":
         _emit_permission_decision(results)
@@ -1070,7 +1128,8 @@ def _emitted_host_answer(
     if event.event_type == HookEventType.USER_PROMPT_SUBMIT and event.runtime == "claude":
         # Claude adds a prompt hook's stdout to the prompt; an admitted one adds nothing.
         return True
-    if event.event_type.value in _SILENT_TOOL_EVENTS and event.runtime == "claude":
+    silent = _SILENT_TOOL_EVENTS | _SILENT_LIFECYCLE_EVENTS
+    if event.event_type.value in silent and event.runtime == "claude":
         # Claude Code reads a tool hook's stdout as a decision about the call; an
         # observer has none to give, so what it did goes to stderr alone. A hook
         # that skipped the call did nothing, and on every tool call of a session
@@ -1085,20 +1144,21 @@ def _emitted_host_answer(
 
 
 def _guarded_pre_tool_use(
-    event_type: str, runtime: str, stdin_text: str, flags: GlobalFlags, started_at: datetime
+    event_type: str, runtime: str, stdin_text: str, context: HookContext, started_at: datetime
 ) -> bool:
     """Run the data-loss guard on a pre-tool call; print the host's deny when it refuses.
 
-    The guard runs ahead of every other hook and of the bundle-epoch check, because it
-    reads no state and must not stand down. A payload it cannot read is refused. Codex
-    subscribes its pre-tool hook for the guard alone, so on Codex an allowed call ends
-    here too, with nothing printed.
+    The guard runs ahead of every other hook and of the managed-repository stand-down,
+    because it reads no state; it judges only a call that reaches a repository eawf
+    manages. A payload it cannot read passes with nothing printed. Codex subscribes its
+    pre-tool hook for the guard alone, so on Codex an allowed call ends here too, with
+    nothing printed.
 
     Args:
         event_type: The event argument as given.
         runtime: The runtime label, lowercased.
         stdin_text: The hook payload.
-        flags: The global flags.
+        context: The hook's repository context.
         started_at: When the hook started.
 
     Returns:
@@ -1115,7 +1175,6 @@ def _guarded_pre_tool_use(
         DENY_EMISSION_RUNTIMES,
         deny_document,
         guard_pre_tool_use,
-        unreadable_payload_denial,
     )
     from eawf.runtime.sandbox.data_loss import DataLossDenial
 
@@ -1131,10 +1190,11 @@ def _guarded_pre_tool_use(
             runtime=cast("HookRuntime", runtime),
             occurred_at=started_at,
         )
-    except (cli_errors.CliError, ValidationError) as err:
-        denial = unreadable_payload_denial(type(err).__name__)
+    except cli_errors.CliError, ValidationError:
+        # A payload the hook cannot read is a host fault, not a call to judge: it passes.
+        return True
     else:
-        denial = guard_pre_tool_use(event, repo_root=(flags.workspace or Path.cwd()).resolve())
+        denial = guard_pre_tool_use(event, context=context)
     if denial is None:
         return runtime == "codex"
     typer.echo(orjson.dumps(deny_document(denial)).decode("utf-8"))
@@ -1142,7 +1202,33 @@ def _guarded_pre_tool_use(
     return True
 
 
-def _report_failures(failures: list[HookFailure], *, repo_root: Path) -> None:
+def _unexpected_failures(failures: list[HookFailure], event: HookEvent) -> list[HookFailure]:
+    """Drop the failures a session start expects: a daemon not up yet.
+
+    Session start launches the daemon in the background, so a daemon call it
+    makes before that daemon answers finds none running. Counting that would
+    warn about every fresh session at the next one.
+
+    Args:
+        failures: What the runner caught, oldest first.
+        event: The dispatched event.
+
+    Returns:
+        *failures* without a session start's daemon-not-running calls.
+    """
+    from eawf.runtime.hooks.event import HookEventType
+    from eawf.runtime.hooks.health import DAEMON_CALL_FAILED
+
+    if event.event_type != HookEventType.SESSION_START:
+        return failures
+    return [
+        failure
+        for failure in failures
+        if not (failure.code == DAEMON_CALL_FAILED and failure.error == "DaemonNotRunningError")
+    ]
+
+
+def _report_failures(failures: list[HookFailure], *, ea_dir: Path, payload: dict[str, Any]) -> None:
     """Record each handler failure in the hook health record and name it on stderr.
 
     The hook still exits as its results say: a failure is reported, never
@@ -1150,16 +1236,20 @@ def _report_failures(failures: list[HookFailure], *, repo_root: Path) -> None:
 
     Args:
         failures: What the runner caught, oldest first.
-        repo_root: The repository the hook fired in; the record is kept in
-            its main checkout's tree.
+        ea_dir: The main checkout's ``.ea``, where the record is kept.
+        payload: The host payload, whose ``session_id`` each row records.
     """
     if not failures:
         return
     from eawf.runtime.hooks.health import failure_line, record_failures
-    from eawf.runtime.vcs.branch_name import main_checkout
 
+    session = payload.get("session_id")
     try:
-        record_failures(main_checkout(repo_root) / ".ea", failures)
+        record_failures(
+            ea_dir,
+            failures,
+            session_id=session if isinstance(session, str) and session else None,
+        )
     except OSError as exc:
         typer.echo(f"eawf hook: health record not written ({type(exc).__name__})", err=True)
     for failure in failures:
@@ -1202,7 +1292,8 @@ def run(
         int | None,
         typer.Option(
             "--target-epoch",
-            help="Schema epoch the invoking bundle targets; another repository epoch refuses.",
+            hidden=True,
+            help="Accepted and ignored, so an older wrapper that still passes it keeps working.",
         ),
     ] = None,
 ) -> None:
@@ -1210,16 +1301,16 @@ def run(
     from eawf.runtime.hooks.event import HookEventType
     from eawf.runtime.hooks.runner import HookRunner, register_runtime_capture_hooks
 
+    del target_epoch
     flags: GlobalFlags = ctx.obj
     started_at = datetime.now(UTC)
     # Skip stdin read on a TTY so interactive smoke runs don't block
     # waiting for EOF; piped/redirected stdin reads normally.
     stdin_text = "" if sys.stdin.isatty() else sys.stdin.read()
-    if _guarded_pre_tool_use(event_type, runtime.lower(), stdin_text, flags, started_at):
+    context = _hook_context(stdin_text, flags)
+    if _guarded_pre_tool_use(event_type, runtime.lower(), stdin_text, context, started_at):
         return
-    if target_epoch is not None and _stood_down_for_epoch(
-        target_epoch, event_type, runtime.lower(), stdin_text, flags, started_at
-    ):
+    if _stood_down(context, event_type, named=flags.workspace is not None):
         return
 
     if runtime.lower() not in {"claude", "codex", "opencode", "generic"}:
@@ -1260,13 +1351,16 @@ def run(
         return
 
     runner = HookRunner()
-    repo_root = (flags.workspace or Path.cwd()).resolve()
+    repo_root = flags.workspace.resolve() if flags.workspace else context.main
     register_runtime_capture_hooks(runner, repo_root=repo_root)
     _register_projection_staleness(runner, repo_root=repo_root)
+    _register_failure_warning(runner, ea_dir=context.main / ".ea")
+    _register_daemon_start(runner, context=context, named=flags.workspace is not None)
     results = runner.run_event(event)
-    _report_failures(runner.failures, repo_root=repo_root)
+    failures = _unexpected_failures(runner.failures, event)
+    _report_failures(failures, ea_dir=context.main / ".ea", payload=payload)
 
-    failed = frozenset(failure.hook for failure in runner.failures)
+    failed = frozenset(failure.hook for failure in failures)
     if _emitted_host_answer(event, results, failed):
         return
 

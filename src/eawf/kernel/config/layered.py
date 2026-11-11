@@ -308,6 +308,8 @@ _RESERVED_ENV_VARS: frozenset[str] = frozenset(
         "EAWF_RECONNECT_MIN_INTERVAL_S",
         "EAWF_LOCK_TIMEOUT",
         "EAWF_SKIP_GLOBAL_HOOKS",
+        # The hook wrappers' off switch, read in bash before any interpreter starts.
+        "EAWF_HOOKS",
         "EAWF_SKIP_PERF",
         "EAWF_BLITZ_DEPTH",
         "EAWF_BLITZ_DEPTH_COUNTER",

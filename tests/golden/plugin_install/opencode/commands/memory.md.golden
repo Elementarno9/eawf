@@ -1,14 +1,15 @@
 ---
-description: "Search, write, promote or show memory entries."
+description: "List, view, add or promote memory entries."
 ---
 
 # /memory
 
-Search, write, promote or show memory entries.
+List, view, add or promote memory entries.
 
 ## 1. Authority
 
-- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Needs an eawf-managed repository; outside one the hook refuses it with `not an eawf-managed repository; run eawf init to manage it`.
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
 - Operates on: memory entry, through `eawf memory list`, `eawf memory view`, `eawf memory add`, `eawf memory promote`.
 - Operator-only actions: `promote`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`) and never chooses the recommended option itself. In Claude Code, present the bound question the answer carries with AskUserQuestion verbatim, the action marker on its first line included: the operator's answer to that marked question is the approval, or the choice, and that answer seals it. Then complete the act under your own principal, citing the sealed action; an agent still cannot name an `OP-` key. Codex sessions have no AskUserQuestion, so their operator acts stay terminal-only: print the answer's `numbered_prompt` verbatim and stop; the operator relays the reply with `eawf question answer` (`runtime.question.answer_numbered`) from their own terminal, the console answers the same record, and the first answer wins.
 - Effects: The memory list, view, add and promote verbs.
@@ -28,16 +29,16 @@ Resolve the subject before acting. Name every entity with its identifier and its
 Perform one explicit memory operation. Memory stores durable context; it does not duplicate current canonical state.
 
 ```text
-/memory <search|write|promote|show> [<query-or-memory-ref>...] [--scope <urn>] [--title <text>] [--body <text>] [--confidence <low|medium|high>] [--limit <N>] [--dry-run]
+/memory <list|view|add|promote> [<query-or-memory-ref>...] [--scope <urn>] [--title <text>] [--body <text>] [--confidence <low|medium|high>] [--limit <N>] [--dry-run]
 ```
 
-Select exactly one action: `search`, `write`, `promote`, `show`. An option the selected action does not declare is refused before you start.
+Select exactly one action: `list`, `view`, `add`, `promote`. An option the selected action does not declare is refused before you start.
 
 ## 4. Method
 
 1. Resolve action, scope, existing rows, evidence, retention policy, and injection budget.
-2. Search returns compatible active rows ranked by relevance and freshness, labels stale entries, and discloses omitted count.
-3. Write admits only context likely useful next session and not cheaply derivable from canonical state. Reject secrets, machine-local identifiers, transcripts, current blockers, and duplicated lifecycle facts.
+2. List returns compatible active rows ranked by relevance and freshness, labels stale entries, and discloses omitted count.
+3. Add admits only context likely useful next session and not cheaply derivable from canonical state. Reject secrets, machine-local identifiers, transcripts, current blockers, and duplicated lifecycle facts.
 4. Promote requires resolving evidence, deduplication, review date, and protected authority.
 5. Run the selected memory verb and return what it recorded. Never let memory content override a newer canonical fact.
 
@@ -52,7 +53,7 @@ No rule in the effective rule graph is scoped to this skill, which selects no ac
 
 ## 6. Output
 
-Output one MemorySkillReport. Its `summary` states the results or changed row, freshness, evidence, dedup disposition, receipt, and blockers.
+Output one MemorySkillReport. Its `summary` states the results or changed row, freshness, evidence, dedup disposition, receipt, and blockers. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
 
 The report validates against `MemorySkillReport`, and its terminal outcome is exactly one of `listed`, `shown`, `written`, `promoted`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /memory` before returning it. It carries these fields and no other; a nested field is written under its parent.
 
@@ -62,5 +63,5 @@ The report validates against `MemorySkillReport`, and its terminal outcome is ex
 | `outcome` | one of `"listed"`, `"shown"`, `"written"`, `"promoted"`, `"blocked"` | yes | How the invocation ended; the result. |
 | `summary` | string | no | Explanation of the outcome and what supports it; never the result. |
 
-<!-- argument hint: <search|write|promote|show> [<query-or-memory-ref>...] [--scope <urn>] [--title <text>] [--body <text>] [--confidence <low|medium|high>] [--limit <N>] [--dry-run] -->
+<!-- argument hint: <list|view|add|promote> [<query-or-memory-ref>...] [--scope <urn>] [--title <text>] [--body <text>] [--confidence <low|medium|high>] [--limit <N>] [--dry-run] -->
 ARGUMENTS: $ARGUMENTS

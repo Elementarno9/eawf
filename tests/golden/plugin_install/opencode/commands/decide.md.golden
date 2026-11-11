@@ -8,7 +8,8 @@ Propose, supersede or show a Decision.
 
 ## 1. Authority
 
-- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Needs an eawf-managed repository; outside one the hook refuses it with `not an eawf-managed repository; run eawf init to manage it`.
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
 - Operates on: Decision, through `eawf question open-decision`, `eawf question answer`.
 - Operator-only actions: `supersede`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`) and never chooses the recommended option itself. In Claude Code, present the bound question the answer carries with AskUserQuestion verbatim, the action marker on its first line included: the operator's answer to that marked question is the approval, or the choice, and that answer seals it. Then complete the act under your own principal, citing the sealed action; an agent still cannot name an `OP-` key. Codex sessions have no AskUserQuestion, so their operator acts stay terminal-only: print the answer's `numbered_prompt` verbatim and stop; the operator relays the reply with `eawf question answer` (`runtime.question.answer_numbered`) from their own terminal, the console answers the same record, and the first answer wins.
 - Effects: The question open-decision and answer verbs.
@@ -63,7 +64,7 @@ The obligations the effective rule graph holds for activities `design`. They bin
 
 ## 6. Output
 
-Output one DecisionSkillReport. Its `summary` states the before/after references, option table, evidence chain, consequences, receipt or Attention reference, and blockers.
+Output one DecisionSkillReport. Its `summary` states the before/after references, option table, evidence chain, consequences, receipt or Attention reference, and blockers. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
 
 The report validates against `DecisionSkillReport`, and its terminal outcome is exactly one of `shown`, `proposed`, `superseded`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /decide` before returning it. It carries these fields and no other; a nested field is written under its parent.
 

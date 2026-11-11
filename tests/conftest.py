@@ -28,6 +28,7 @@ from eawf.kernel.spec.intent import IntentBrief
 from eawf.platform.lint.flake_quarantine import LaneReport, load_quarantine, partition
 from eawf.platform.lint.kind_taxonomy import kind_for_test_path, marker_conflict
 from eawf.runtime.daemon.churn import SUITE_SESSION_ENV, RuntimeDirSnapshot, snapshot_runtime_dir
+from eawf.runtime.vcs.branch_name import main_checkout
 
 # Every test's fsync checks its descriptor and flushes nothing; see the module.
 pytest_plugins = ["tests._fsync_stub"]
@@ -356,6 +357,28 @@ def home_mirror() -> Iterator[None]:
         patcher.undo()
 
 
+#: The commit tools' co-author controls. A suite run from a shell that commits
+#: with trailers disabled inherits them, and the commit-tool tests then see a
+#: policy CI never sets.
+_COAUTHOR_CONTROL_VARIABLES: tuple[str, ...] = (
+    "EAWF_COAUTHOR_MODE",
+    "EAWF_COAUTHOR_RUNTIME",
+    "EAWF_COAUTHOR_HARNESS",
+)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def coauthor_control_isolation() -> Iterator[None]:
+    """Run every test without the operator's co-author controls; a test may set its own."""
+    monkeypatch = pytest.MonkeyPatch()
+    for variable in _COAUTHOR_CONTROL_VARIABLES:
+        monkeypatch.delenv(variable, raising=False)
+    try:
+        yield
+    finally:
+        monkeypatch.undo()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def host_session_isolation() -> Iterator[None]:
     """Keep the suite's own host session off every Run a CLI test starts.
@@ -604,6 +627,14 @@ def daemon_leak_witness(
 
 REPO_ROOT: Path = Path(__file__).resolve().parents[1]
 REPO_EA_DIR: Path = REPO_ROOT / ".ea"
+# A checkout that is a linked worktree resolves state through its main
+# checkout, so a fall-through from it lands on that tree, not on its own copy.
+# The worktree itself may sit under that tree, and stays the tests' own ground.
+_MAIN_EA_DIR: Path = main_checkout(REPO_ROOT).resolve() / ".ea"
+
+
+def _within(path: Path, root: Path) -> bool:
+    return path == root or root in path.parents
 
 
 class RepoStateAccessError(RuntimeError):
@@ -631,7 +662,8 @@ def guard_repo_ea_path(path: Path, *, origin: str) -> Path:
     """
     candidate = Path(path)
     resolved = candidate.expanduser().resolve()
-    if resolved == REPO_EA_DIR or REPO_EA_DIR in resolved.parents:
+    in_main_tree = _within(resolved, _MAIN_EA_DIR) and not _within(resolved, REPO_ROOT)
+    if _within(resolved, REPO_EA_DIR) or in_main_tree:
         raise RepoStateAccessError(
             f"{origin} resolved to the repository's own state tree "
             f"({resolved}); tests must run against a tmp_path repo. Set "

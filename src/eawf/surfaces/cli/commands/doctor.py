@@ -574,6 +574,17 @@ def _run_doctor_repair_yes(flags: GlobalFlags) -> None:
     )
 
 
+def _effective_flags(ctx: typer.Context, *, json_output: bool) -> GlobalFlags:
+    """Return the root flags with the command's own ``--json`` folded in."""
+    flags: GlobalFlags = ctx.obj
+    return GlobalFlags(
+        json_output=flags.json_output or json_output,
+        plain_output=flags.plain_output,
+        no_input=flags.no_input,
+        workspace=flags.workspace,
+    )
+
+
 @doctor_app.callback(invoke_without_command=True)
 def doctor(
     ctx: typer.Context,
@@ -625,16 +636,12 @@ def doctor(
     ] = False,
 ) -> None:
     """Run install-readiness checks."""
+    if ctx.invoked_subcommand is not None:
+        return
     from eawf.observability.doctor import checks as doctor_checks
     from eawf.observability.doctor.report import overall_status, to_payload, to_text
 
-    flags: GlobalFlags = ctx.obj
-    effective_flags = GlobalFlags(
-        json_output=flags.json_output or json_output,
-        plain_output=flags.plain_output,
-        no_input=flags.no_input,
-        workspace=flags.workspace,
-    )
+    effective_flags = _effective_flags(ctx, json_output=json_output)
 
     if yes and not fix:
         emit_error(
@@ -644,10 +651,7 @@ def doctor(
         return
 
     if fix:
-        if yes:
-            _run_doctor_repair_yes(effective_flags)
-        else:
-            _run_doctor_repair(effective_flags)
+        (_run_doctor_repair_yes if yes else _run_doctor_repair)(effective_flags)
         return
 
     if runtime is not None:
@@ -694,4 +698,29 @@ def doctor(
         # into UserError (kind="InstrumentMissing"). A residual ``fail`` here
         # means a future check produced one without raising — we still want a
         # non-zero exit.
+        raise typer.Exit(code=1)
+
+
+@doctor_app.command(name="hooks")
+def hooks(
+    ctx: typer.Context,
+    bundle: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--bundle",
+            help="Check this plugin bundle directory instead of the installed ones; repeatable.",
+        ),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit a machine-readable JSON envelope."),
+    ] = False,
+) -> None:
+    """Run each installed plugin bundle's hooks against the hook contract; needs no tree."""
+    from eawf.observability.doctor.checks_hooks import doctor_hooks
+
+    effective_flags = _effective_flags(ctx, json_output=json_output)
+    report = doctor_hooks(bundle or None, cwd=Path.cwd(), home=Path.home())
+    emit_json_or_text(report.payload(), "\n".join(report.lines()), flags=effective_flags)
+    if not report.ok:
         raise typer.Exit(code=1)

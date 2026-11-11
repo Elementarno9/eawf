@@ -181,18 +181,23 @@ def live_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple
     socket_dir.rmdir()
 
 
-def _hook(repo: Path, event: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Run ``eawf hook run <event> --runtime claude`` with *payload* on stdin."""
+def _hook(repo: Path, event: str, payload: dict[str, Any]) -> None:
+    """Run ``eawf hook run <event> --runtime claude`` with *payload* on stdin.
+
+    Claude reads a subagent hook's stdout as a decision, so the adoption line
+    goes to stderr and stdout stays empty.
+    """
     result = CliRunner().invoke(
         cli,
         ["--workspace", str(repo), "hook", "run", event, "--runtime", "claude"],
         input=json.dumps(payload),
     )
-    assert result.exit_code == 0, result.stdout
-    rows = json.loads(result.stdout)["body"]["results"]
-    (adopted,) = [row for row in rows if row["name"] == "runtime.host_subagent"]
-    assert " ok run=" in adopted["output"], adopted["output"]
-    return dict(adopted)
+    assert result.exit_code == 0, result.output
+    assert result.stdout == ""
+    (adopted,) = [
+        line for line in result.stderr.splitlines() if line.startswith("runtime.host_subagent")
+    ]
+    assert " ok run=" in adopted, adopted
 
 
 def _start(repo: Path) -> None:

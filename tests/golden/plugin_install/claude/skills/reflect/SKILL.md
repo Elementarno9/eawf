@@ -12,6 +12,7 @@ Report where effort, time and money actually went, without mutating canonical st
 
 ## 1. Authority
 
+- Needs an eawf-managed repository; outside one the hook refuses it with `not an eawf-managed repository; run eawf init to manage it`.
 - Only an authenticated operator initiates this skill, by design: it is kept out of the model's reach. An agent may prepare evidence or recommend the invocation, but never calls it.
 - Operates on: measurement record, through `eawf reflect run`, `eawf reflect show`, `eawf reflect export`, `eawf reflect serve`, `eawf reflect prune`.
 - Effects: The reflect run, show, export, serve and prune verbs: read-only apart from the session title fill, which --local-only disables, and the local report files.
@@ -59,7 +60,7 @@ No rule in the effective rule graph is scoped to this skill, which selects no ac
 
 ## 6. Output
 
-Write the reflect report listing every Run of the selected scope and window, live or finished, with its status, runtime, model family, wall hours, model steps, tool work, subagents, cost and tokens, title and title source, and its quotability mark; the money and token totals per project, with unpriced Runs counted apart; the highlighted issues, each naming its subject and the Run rows that show it; and the excluded sessions with their reasons, beside the fill manifest of the titles. Write it in a form an agent can consume without re-deriving it: the machine-readable report document beside the plain-text report. Then output one ReflectReport whose `summary` names the path of each.
+Write the reflect report listing every Run of the selected scope and window, live or finished, with its status, runtime, model family, wall hours, model steps, tool work, subagents, cost and tokens, title and title source, and its quotability mark; the money and token totals per project, with unpriced Runs counted apart; the highlighted issues, each naming its subject and the Run rows that show it; and the excluded sessions with their reasons, beside the fill manifest of the titles. Write it in a form an agent can consume without re-deriving it: the machine-readable report document beside the plain-text report. Then output one ReflectReport whose `summary` names the path of each. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
 
 The report validates against `ReflectReport`, and its terminal outcome is exactly one of `reported`, `partial`, `unavailable`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /reflect` before returning it. It carries these fields and no other; a nested field is written under its parent.
 

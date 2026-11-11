@@ -1,5 +1,7 @@
 """The closed skill catalog: every presented skill, its grammar, effects and output.
 
+# noqa: EAWF010 one closed data table, by contract; split seam: the entry rows
+
 The catalog is data. Each :class:`SkillCatalogEntry` declares one operator intent
 with its invocation grammar, its effects boundary and its typed output schema,
 and the plugin packagers and ``eawf skill list`` project the shipped surface from
@@ -23,7 +25,7 @@ from __future__ import annotations
 import logging
 import re
 from functools import cache
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 
@@ -38,6 +40,18 @@ logger = logging.getLogger(__name__)
 SkillClass = Literal["lifecycle", "investigation", "knowledge", "engineering"]
 InvocationAudience = Literal["user_only", "agent_only", "both"]
 Lane = Literal["operator", "agent"]
+#: How a skill behaves outside an eawf-managed repository: refused there,
+#: supported in full, or run in a reduced form its ``standalone_note`` states.
+StandaloneClass = Literal["refused", "supported", "degraded"]
+
+#: The one text a managed-only skill and a project verb are refused with
+#: outside an eawf-managed repository.
+NOT_MANAGED_REFUSAL: Final = "not an eawf-managed repository; run eawf init to manage it"
+
+#: The name prefix of the rule-carrier skills ``eawf sync`` renders into a
+#: managed repository; it equals ``eawf.platform.rules.carriers.CARRIER_NAME_PREFIX``,
+#: restated so the hook path need not import the rule compiler.
+_RULE_CARRIER_PREFIX: Final = "eawf-rules-"
 
 #: Who may invoke a skill of each audience.
 _AUDIENCE_LANES: dict[InvocationAudience, frozenset[Lane]] = {
@@ -266,6 +280,11 @@ class SkillCatalogEntry(BaseModel):
     class and enlarge what every session carries. ``subject`` names the
     epoch-2 entity the skill operates on, or, for a skill with no lifecycle
     entity, the thing it works over.
+
+    ``standalone`` says how the skill behaves outside an eawf-managed
+    repository, and ``standalone_note`` says what it does there; a refused
+    skill needs no note, because the hook refuses it with
+    :data:`NOT_MANAGED_REFUSAL`.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -280,9 +299,17 @@ class SkillCatalogEntry(BaseModel):
     grammar: InvocationGrammar
     effects: EffectsBoundary
     output: OutputSchema
+    # A skill that has not opted in to run outside a managed repository is
+    # refused there, so the safe class is the default.
+    standalone: StandaloneClass = "refused"
+    standalone_note: str = Field(default="", max_length=160)
 
     @model_validator(mode="after")
     def _grammar_and_audience_agree(self) -> SkillCatalogEntry:
+        if self.standalone != "refused" and not self.standalone_note.strip():
+            raise ValueError(
+                f"skill {self.skill_id!r} is {self.standalone} outside and needs a note"
+            )
         if self.budget_class is BudgetClassId.STEERING_ZONE1:
             raise ValueError(f"skill {self.skill_id!r} cannot load into the always-on zone 1")
         if not self.grammar.usage.startswith(f"/{self.skill_id}"):
@@ -449,6 +476,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="accept",
         skill_class="lifecycle",
+        standalone="refused",
         subject="Milestone",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
@@ -489,6 +517,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="attend",
         skill_class="lifecycle",
+        standalone="refused",
         subject="PendingAction",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
@@ -525,6 +554,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="backlog",
         skill_class="lifecycle",
+        standalone="refused",
         subject="Task",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
@@ -555,6 +585,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="campaign",
         skill_class="investigation",
+        standalone="refused",
         subject="Campaign",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
@@ -606,6 +637,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="decide",
         skill_class="knowledge",
+        standalone="refused",
         subject="Decision",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
@@ -633,6 +665,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="dispatch",
         skill_class="lifecycle",
+        standalone="refused",
         subject="Batch",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
@@ -665,6 +698,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="integrate",
         skill_class="lifecycle",
+        standalone="refused",
         subject="Batch",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
@@ -745,23 +779,24 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="memory",
         skill_class="knowledge",
+        standalone="refused",
         subject="memory entry",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         operator_only_actions=("promote",),
-        description="Search, write, promote or show memory entries.",
+        description="List, view, add or promote memory entries.",
         grammar=_grammar(
-            "/memory <search|write|promote|show> [<query-or-memory-ref>...]"
+            "/memory <list|view|add|promote> [<query-or-memory-ref>...]"
             " [--scope <urn>] [--title <text>] [--body <text>]"
             " [--confidence <low|medium|high>] [--limit <N>] [--dry-run]",
-            "search",
-            "write",
+            "list",
+            "view",
+            "add",
             "promote",
-            "show",
-            search=("--scope", "--limit"),
-            write=("--scope", "--title", "--body", "--confidence", "--dry-run"),
+            list=("--scope", "--limit"),
+            view=("--scope",),
+            add=("--scope", "--title", "--body", "--confidence", "--dry-run"),
             promote=("--scope", "--confidence", "--dry-run"),
-            show=("--scope",),
         ),
         effects=EffectsBoundary(
             summary="The memory list, view, add and promote verbs.",
@@ -774,6 +809,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="milestone",
         skill_class="lifecycle",
+        standalone="refused",
         subject="Milestone",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
@@ -817,6 +853,11 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="mockup",
         skill_class="engineering",
+        standalone="degraded",
+        standalone_note=(
+            "Presents the options with AskUserQuestion; the choice is not filed and no asset"
+            " file is kept."
+        ),
         subject="operator-visible surface",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
@@ -842,6 +883,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="plan",
         skill_class="lifecycle",
+        standalone="refused",
         subject="PlanRevision",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
@@ -883,6 +925,11 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="refactor",
         skill_class="engineering",
+        standalone="degraded",
+        standalone_note=(
+            "Apply mode edits under the operator's own permissions; no Run, lease or receipt"
+            " exists."
+        ),
         subject="repository code",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
@@ -903,6 +950,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="reflect",
         skill_class="knowledge",
+        standalone="refused",
         subject="measurement record",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
@@ -944,6 +992,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="release",
         skill_class="lifecycle",
+        standalone="refused",
         subject="Release",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
@@ -1001,6 +1050,11 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="research",
         skill_class="investigation",
+        standalone="supported",
+        standalone_note=(
+            "Returns the brief in the conversation; writes a file only when `--save <path>`"
+            " names one."
+        ),
         subject="question",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
@@ -1035,6 +1089,11 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="spike",
         skill_class="investigation",
+        standalone="degraded",
+        standalone_note=(
+            "Builds in a temporary directory outside the repository, deleted at the end; a host"
+            " subagent verifies; nothing is filed."
+        ),
         subject="proof of concept",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
@@ -1067,6 +1126,11 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="test",
         skill_class="engineering",
+        standalone="degraded",
+        standalone_note=(
+            "Apply mode edits and runs tests under the operator's own permissions; no Run, lease"
+            " or receipt exists."
+        ),
         subject="test contract",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
@@ -1094,6 +1158,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="track",
         skill_class="lifecycle",
+        standalone="refused",
         subject="Track",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
@@ -1127,6 +1192,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="verify",
         skill_class="lifecycle",
+        standalone="refused",
         subject="Batch",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
@@ -1158,6 +1224,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="why",
         skill_class="knowledge",
+        standalone="refused",
         subject="any canonical entity",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
@@ -1284,6 +1351,42 @@ def skills_for_lane(lane: Lane) -> tuple[SkillCatalogEntry, ...]:
     return tuple(entry for entry in SKILL_CATALOG.entries if lane in skill_lanes(entry))
 
 
+def standalone_class(name: str) -> StandaloneClass:
+    """Return how the skill *name* behaves outside an eawf-managed repository.
+
+    A rule-carrier skill (``eawf-rules-<role>``) is refused: it delivers the
+    rules of a managed repository and means nothing outside one.
+
+    Args:
+        name: The skill name, slashed or bare.
+
+    Returns:
+        The carrier answer, or the catalog entry's ``standalone`` class.
+
+    Raises:
+        TypeError: *name* is not a string.
+        SkillRetiredError: *name* is retired.
+        UnknownSkillError: *name* is neither a carrier, a catalog skill nor retired.
+    """
+    if not isinstance(name, str):
+        raise TypeError(f"skill name must be str, got {type(name).__name__}")
+    if name.removeprefix("/").startswith(_RULE_CARRIER_PREFIX):
+        return "refused"
+    return resolve_skill(name).standalone
+
+
+def render_skill_classes_tsv() -> str:
+    """Render ``hooks/skill-classes.tsv``, read by the hook wrapper outside a managed repository.
+
+    Returns:
+        One ``<skill>`` TAB ``<standalone>`` line per catalog skill, in
+        catalog order, each newline-terminated.
+    """
+    return "".join(
+        f"{entry.skill_id}\t{standalone_class(entry.skill_id)}\n" for entry in SKILL_CATALOG.entries
+    )
+
+
 @cache
 def shipped_skill_specs() -> tuple[SkillSpec, ...]:
     """Project the catalog into the render specs every plugin packager ships.
@@ -1328,6 +1431,7 @@ def shipped_skill_specs() -> tuple[SkillSpec, ...]:
 
 
 __all__ = [
+    "NOT_MANAGED_REFUSAL",
     "SKILL_CATALOG",
     "CoverageBlock",
     "EffectsBoundary",
@@ -1342,9 +1446,12 @@ __all__ = [
     "SkillClass",
     "SkillReport",
     "SkillRetiredError",
+    "StandaloneClass",
     "UnknownSkillError",
+    "render_skill_classes_tsv",
     "resolve_skill",
     "shipped_skill_specs",
     "skill_lanes",
     "skills_for_lane",
+    "standalone_class",
 ]

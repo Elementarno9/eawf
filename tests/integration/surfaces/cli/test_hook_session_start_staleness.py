@@ -118,17 +118,21 @@ def test_hook_run_session_start_prints_the_context_document_on(
     assert out.strip() == ""
 
 
+_CODEX_STDOUT_GATE = "    session_start | pre_tool_use) ;;\n    *) exit 0 ;;\n"
+
+
 def test_render_hook_sh_codex_session_start_keeps_stdout() -> None:
     start = render_hook_sh(HookEventType.SESSION_START, runtime="codex")
-    assert start.rstrip("\n").endswith("hook run session_start --runtime codex --target-epoch 2")
-    end = render_hook_sh(HookEventType.SESSION_END, runtime="codex")
-    assert end.rstrip("\n").endswith("--runtime codex --target-epoch 2 >/dev/null")
+    assert "--runtime codex" in start
+    assert _CODEX_STDOUT_GATE in start
+    assert start.rstrip("\n").endswith("printf '%s\\n' \"${_eawf_out}\"\nfi\nexit 0")
 
 
 def test_render_hook_sh_claude_session_start_is_unchanged() -> None:
     start = render_hook_sh(HookEventType.SESSION_START)
-    assert start.rstrip("\n").endswith("hook run session_start --runtime claude --target-epoch 2")
-    assert "\nfi\n\nprintf" in start
+    assert "--runtime claude" in start
+    assert _CODEX_STDOUT_GATE not in start
+    assert start.rstrip("\n").endswith("printf '%s\\n' \"${_eawf_out}\"\nfi\nexit 0")
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")

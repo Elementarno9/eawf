@@ -1,10 +1,10 @@
 """The packaged Claude plugin hooks are laid out the way Claude Code loads them.
 
 Claude Code reads a plugin's hook manifest from ``hooks/hooks.json``, runs
-each wrapper it names as an executable, ends a session on ``SessionEnd``
-(``Stop`` fires after every turn), and honours exit 2 from a ``PreToolUse``
-hook as a deny. Each test pins one of those facts against the tree
-``package_plugin`` writes.
+the wrapper it names, ends a session on ``SessionEnd`` (``Stop`` fires after
+every turn), and honours exit 2 from a ``PreToolUse`` hook as a deny, which
+is why the wrapper never exits 2. Each test pins one of those facts against
+the tree ``package_plugin`` writes.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import os
 import stat
-import subprocess  # noqa: EAWF024 -- the fail-closed guard is a shell script; its pinned criterion gate lives here
+import subprocess  # noqa: EAWF024 -- the fail-open guard is a shell script; its pinned criterion gate lives here
 import tarfile
 from pathlib import Path
 
@@ -28,8 +28,6 @@ from eawf.runtime.runtimes.claude.plugin_package import package_plugin
 from eawf.workflow.release.plugin_bundle import EXECUTABLE_MODE, build_bundle
 
 pytestmark = pytest.mark.unit
-
-_GUARD_REFUSAL = "Eä data-loss guard could not run (exit 3), so the call is refused"
 
 
 def _package(target: Path) -> Path:
@@ -56,7 +54,7 @@ def test_session_end_subscribes_session_end_not_stop() -> None:
     assert "SessionEnd" in rendered
     assert "Stop" not in rendered
     commands = [h["command"] for entry in rendered["SessionEnd"] for h in entry["hooks"]]
-    assert commands == ['bash "${CLAUDE_PLUGIN_ROOT}/hooks/session_end.sh"']
+    assert commands == ['bash "${CLAUDE_PLUGIN_ROOT}/hooks/eawf-hook.sh" session_end']
 
     routed = route_claude_payload({"hook_event_name": "SessionEnd", "session_id": "s-1"})
     assert routed is not None
@@ -90,34 +88,42 @@ def _run_guard(
         {"hook_event_name": "PreToolUse", "tool_name": tool_name, "tool_input": {}}
     )
     return subprocess.run(
-        ["bash", str(wrapper)],
+        ["bash", str(wrapper), "pre_tool_use"],
         input=payload,
         capture_output=True,
         text=True,
         cwd=home,
-        env={"PATH": f"{bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin", "HOME": str(home)},
+        env={
+            "PATH": f"{bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin",
+            "HOME": str(home),
+            "TMPDIR": str(home),
+        },
         check=False,
         timeout=30,
     )
 
 
-def test_pre_tool_use_guard_fails_closed_on_a_version_mismatch(tmp_path: Path) -> None:
+def test_pre_tool_use_guard_fails_open_on_a_version_mismatch(tmp_path: Path) -> None:
+    """An eawf that speaks another hook contract stops no call; the failure is recorded."""
     target = _package(tmp_path / "plugin")
-    wrapper = target / "hooks" / "pre_tool_use.sh"
+    wrapper = target / "hooks" / "eawf-hook.sh"
     # The stub stands in for uv running ``eawf hook run pre_tool_use``, which
     # exits 3 when the installed CLI speaks another hook contract.
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    stub = bin_dir / "uv"
-    stub.write_text("#!/bin/sh\ncat >/dev/null\nexit 3\n", encoding="utf-8")
-    stub.chmod(0o755)
+    for name, body in (("uv", "cat >/dev/null\nexit 3\n"), ("eawf", "")):
+        stub = bin_dir / name
+        stub.write_text(f"#!/bin/sh\n{body}", encoding="utf-8")
+        stub.chmod(0o755)
     home = tmp_path / "home"
     home.mkdir()
+    subprocess.run(["git", "init", "-q", str(home)], check=True)
+    (home / ".ea").mkdir()
+    (home / ".ea" / "state.json").write_text("{}\n", encoding="utf-8")
 
-    judged = _run_guard(wrapper, bin_dir=bin_dir, home=home, tool_name="Bash")
-    assert judged.returncode == 2, judged.stderr
-    assert _GUARD_REFUSAL in judged.stderr
-
-    unjudged = _run_guard(wrapper, bin_dir=bin_dir, home=home, tool_name="Read")
-    assert unjudged.returncode == 0, unjudged.stderr
-    assert _GUARD_REFUSAL not in unjudged.stderr
+    for tool_name in ("Bash", "Read"):
+        result = _run_guard(wrapper, bin_dir=bin_dir, home=home, tool_name=tool_name)
+        assert (result.returncode, result.stdout) == (0, ""), result.stderr
+    record = home / ".ea" / "local" / "hooks" / "health.jsonl"
+    rows = [json.loads(line) for line in record.read_text(encoding="utf-8").splitlines()]
+    assert [(row["code"], row["error"]) for row in rows] == [("hook_exit", "exit 3")] * 2

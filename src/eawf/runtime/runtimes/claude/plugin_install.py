@@ -299,6 +299,31 @@ def _eawf_plugin_enabled(*layers: Mapping[str, Any]) -> bool:
     )
 
 
+def _plugin_serves_skills(
+    target_dir: Path, *, plugin_installed: bool, user_settings: Mapping[str, Any]
+) -> bool:
+    """Return whether the enabled eawf plugin serves every skill to *target_dir*.
+
+    Claude Code loads a plugin skill and a project skill of the same name side
+    by side, so a project copy beside an enabled plugin doubles each skill.
+
+    Args:
+        target_dir: Workspace root that hosts ``.claude/``.
+        plugin_installed: Claude Code's plugin registry lists the eawf plugin.
+        user_settings: The parsed user-level Claude settings.
+
+    Returns:
+        ``True`` when the plugin is installed and enabled across the user and
+        project settings.
+
+    Raises:
+        ValueError: The project ``settings.json`` is not a JSON object.
+    """
+    if not plugin_installed:
+        return False
+    return _eawf_plugin_enabled(user_settings, read_settings(_settings_target(target_dir)))
+
+
 def _eawf_settings_hooks() -> dict[str, list[dict[str, Any]]]:
     """Return the ``settings.json`` ``hooks`` block wiring the Eä plugin hooks.
 
@@ -468,6 +493,7 @@ def _build_manifest(
     base_manifest: Manifest,
     extra_tools: Mapping[str, Sequence[str]],
     agent_specs: Sequence[AgentSpec],
+    skill_specs: Sequence[SkillSpec],
     plugin_installed: bool,
     user_settings: Mapping[str, Any],
 ) -> Manifest:
@@ -478,9 +504,9 @@ def _build_manifest(
     is a blake2b-64 of the rendered file body so drift detection in
     :mod:`eawf.runtime.runtimes.claude.plugin_doctor` flags any hand-edit.
 
-    Every registry agent path counts as owned whether or not it was
-    rendered, so a row from an earlier install that wrote agents is dropped
-    rather than carried through once the marketplace plugin serves them.
+    Every catalog skill and registry agent path counts as owned whether or
+    not it was rendered, so a row from an earlier install that wrote it is
+    dropped rather than carried through once the marketplace plugin serves it.
 
     Args:
         target_dir: Workspace root that hosts ``.claude/``.
@@ -488,6 +514,7 @@ def _build_manifest(
         base_manifest: The manifest on disk before this install.
         extra_tools: The tool grant the agents were rendered with.
         agent_specs: The agents this install rendered.
+        skill_specs: The skills this install rendered.
         plugin_installed: The eawf plugin is in Claude Code's plugin registry.
         user_settings: The parsed user-level Claude settings.
 
@@ -510,7 +537,7 @@ def _build_manifest(
         if entry.target not in own_targets:
             new_generated[key] = entry
 
-    for skill_spec in shipped_skill_specs():
+    for skill_spec in skill_specs:
         path = _skill_target(target_dir, skill_spec)
         body = _render_skill(skill_spec)
         new_generated[f"{path.as_posix()}::plugin.claude.skill.{skill_spec.skill_name}"] = (
@@ -580,7 +607,12 @@ def _load_existing_manifest(target_dir: Path) -> Manifest:
 
 
 def _check_for_drift(
-    target_dir: Path, manifest: Manifest, *, force: bool, agent_specs: Sequence[AgentSpec]
+    target_dir: Path,
+    manifest: Manifest,
+    *,
+    force: bool,
+    agent_specs: Sequence[AgentSpec],
+    skill_specs: Sequence[SkillSpec],
 ) -> None:
     """Raise :class:`IntegrityViolation` if any owned file has been hand-edited.
 
@@ -588,13 +620,14 @@ def _check_for_drift(
     operates on a per-byte equality basis (the file is rendered, not a
     managed-region body). When *force* is ``True``, drift is overwritten
     silently — the caller takes responsibility for clobbering the
-    user's hand-edits. Only the agents in *agent_specs* are checked: an
-    agent this install will not render is never overwritten.
+    user's hand-edits. Only the agents in *agent_specs* and the skills in
+    *skill_specs* are checked: a file this install will not render is never
+    overwritten.
     """
     if force:
         return
     own_paths: list[Path] = []
-    for skill_spec in shipped_skill_specs():
+    for skill_spec in skill_specs:
         own_paths.append(_skill_target(target_dir, skill_spec))
     for agent_spec in agent_specs:
         own_paths.append(_agent_target(target_dir, agent_spec))
@@ -658,6 +691,42 @@ def _retire_project_agents(
     return deltas
 
 
+def _retire_project_skills(
+    target_dir: Path, manifest: Manifest, *, dry_run: bool
+) -> list[FileDelta]:
+    """Remove the project skill files an earlier install wrote, once the plugin serves skills.
+
+    A file is removed only when *manifest* owns it and its bytes still match
+    the recorded hash; an edited or never-owned file is the user's, so it
+    stays and is reported ``"kept"``. A skill directory left empty goes too.
+
+    Args:
+        target_dir: Workspace root that hosts ``.claude/``.
+        manifest: The manifest on disk before this install.
+        dry_run: Report the would-be action but delete nothing.
+
+    Returns:
+        One :class:`FileDelta` per skill file present on disk, in catalog order.
+    """
+    owned_hash = {entry.target: entry.hash for entry in manifest.generated.values()}
+    deltas: list[FileDelta] = []
+    for skill_spec in shipped_skill_specs():
+        path = _skill_target(target_dir, skill_spec)
+        if not path.exists():
+            continue
+        live_hash = hashlib.blake2b(path.read_bytes(), digest_size=8).hexdigest()
+        if owned_hash.get(path.as_posix()) != live_hash:
+            logger.warning(f"install_plugin kept edited or unowned skill file path={path}")
+            deltas.append(FileDelta(path=path, action="kept"))
+            continue
+        if not dry_run:
+            path.unlink()
+            if not any(path.parent.iterdir()):
+                path.parent.rmdir()
+        deltas.append(FileDelta(path=path, action="removed"))
+    return deltas
+
+
 class IntegrityViolation(Exception):  # noqa: N818 — mirrors the kind="IntegrityViolation" CLI error bucket
     """Raised when a managed plugin file has drifted from its recorded hash."""
 
@@ -677,8 +746,10 @@ def install_plugin(
     for the user: it ships every agent, and a project copy beside it makes
     Claude Code load each agent twice with undefined precedence. Agent
     files an earlier install wrote are removed then, unless edited. Once the
-    plugin is also enabled it wires the hooks too, so ``settings.json`` gets
-    no Eä hook entry and loses any an earlier install wrote. The user-level
+    plugin is also enabled it wires the hooks and serves the skills too, so
+    ``settings.json`` gets no Eä hook entry and loses any an earlier install
+    wrote, and no project skill is rendered, an earlier unedited copy being
+    removed. The user-level
     ``~/.claude/settings.json`` is read for that switch and for a statusline
     the project must not override.
 
@@ -727,13 +798,23 @@ def install_plugin(
     plugin_serves_agents = detect_marketplace_install() is not None
     user_settings = read_settings(global_settings_path())
     agent_specs = () if plugin_serves_agents else AGENT_REGISTRY
-    _check_for_drift(target_dir, base_manifest, force=force, agent_specs=agent_specs)
+    plugin_serves_skills = _plugin_serves_skills(
+        target_dir, plugin_installed=plugin_serves_agents, user_settings=user_settings
+    )
+    skill_specs = () if plugin_serves_skills else shipped_skill_specs()
+    _check_for_drift(
+        target_dir, base_manifest, force=force, agent_specs=agent_specs, skill_specs=skill_specs
+    )
 
-    skill_deltas: list[FileDelta] = []
     hook_deltas: list[FileDelta] = []
 
-    # Render skills.
-    for spec in shipped_skill_specs():
+    # Render skills, or retire the project copies the enabled plugin now serves.
+    skill_deltas = (
+        _retire_project_skills(target_dir, base_manifest, dry_run=dry_run)
+        if plugin_serves_skills
+        else []
+    )
+    for spec in skill_specs:
         path = _skill_target(target_dir, spec)
         payload = _render_skill(spec).encode("utf-8")
         action = _classify(path, payload)
@@ -803,6 +884,7 @@ def install_plugin(
             base_manifest=base_manifest,
             extra_tools=tools_grant,
             agent_specs=agent_specs,
+            skill_specs=skill_specs,
             plugin_installed=plugin_serves_agents,
             user_settings=user_settings,
         )
@@ -837,11 +919,20 @@ def expected_paths(
     Args:
         target_dir: Workspace root that hosts ``.claude/``.
         marketplace_installed: The eawf marketplace plugin serves the
-            agents, so the install renders none and none is expected.
+            agents, so the install renders none and none is expected; when
+            the plugin is also enabled it serves the skills, and no skill is
+            expected either.
+
+    Raises:
+        ValueError: With *marketplace_installed*, the user or project
+            ``settings.json`` is not a JSON object.
     """
     target_dir = Path(target_dir).resolve()
     paths: dict[str, Path] = {}
-    for spec in shipped_skill_specs():
+    serves_skills = marketplace_installed and _plugin_serves_skills(
+        target_dir, plugin_installed=True, user_settings=read_settings(global_settings_path())
+    )
+    for spec in () if serves_skills else shipped_skill_specs():
         paths[f"plugin.claude.skill.{spec.skill_name}"] = _skill_target(target_dir, spec)
     for agent_spec in () if marketplace_installed else AGENT_REGISTRY:
         paths[f"plugin.claude.agent.{agent_spec.role}"] = _agent_target(target_dir, agent_spec)

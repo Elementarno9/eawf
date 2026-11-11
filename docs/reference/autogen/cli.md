@@ -175,7 +175,9 @@ Read-only documentation drift + artifact cross-checks.
 
 Run install-readiness checks (tools, state, config).
 
-_No verbs registered._
+| Verb | Summary |
+|---|---|
+| `hooks` | Run each installed plugin bundle's hooks against the hook contract; needs no tree. |
 
 ### `eawf help`
 
@@ -562,3 +564,11 @@ Workspace-scoped state and repo linkage.
 | `remove` | Remove a workspace that has exactly one member. |
 | `select` | Select a workspace for the current session only. |
 | `show` | Show one workspace record, resolving it when no key is given. |
+
+### `eawf worktree`
+
+Upkeep of the repository's linked worktrees.
+
+| Verb | Summary |
+|---|---|
+| `gc` | List the worktrees under ``.ea/worktrees/`` that a garbage collection may reap. |

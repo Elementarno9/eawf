@@ -229,6 +229,7 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("vfl", "eawf.surfaces.cli.commands.vfl", "vfl_app"),
     GroupRow("backup", "eawf.surfaces.cli.commands.backup", "backup_app"),
     GroupRow("local", "eawf.surfaces.cli.commands.local", "local_app"),
+    GroupRow("worktree", "eawf.surfaces.cli.commands.worktree", "worktree_app"),
     # Completion + prose help topics.
     GroupRow("completion", "eawf.surfaces.cli.commands.completion", "completion_app"),
     GroupRow("help", "eawf.surfaces.cli.commands.help", "help_app"),

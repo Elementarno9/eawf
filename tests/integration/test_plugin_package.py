@@ -71,26 +71,14 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert len(list((target / "skills").iterdir())) == _SKILL_COUNT
     assert (target / "agents" / "auditor.md").exists()
     assert len(list((target / "agents").iterdir())) == 8
-    # Only handler-backed hooks are emitted by default, so the git-shaped
-    # idle no-op wrappers are absent while PreCompact, which snapshots the
-    # Run's contract anchors, is present.
+    # One wrapper serves every subscribed event; only handler-backed events
+    # are subscribed, so the git-shaped idle events are absent while
+    # PreCompact, which snapshots the Run's contract anchors, is present.
     assert (target / "hooks").exists()
     assert (target / "hooks" / "hooks.json").exists()
     assert not (target / "hooks.json").exists()
-    assert (target / "hooks" / "session_end.sh").exists()
-    assert (target / "hooks" / "session_start.sh").exists()
-    assert not (target / "hooks" / "pre_commit.sh").exists()
-    assert not (target / "hooks" / "post_commit.sh").exists()
-    assert not (target / "hooks" / "pre_push.sh").exists()
-    assert not (target / "hooks" / "post_push.sh").exists()
-    assert (target / "hooks" / "pre_compact.sh").exists()
-    assert (target / "hooks" / "subagent_start.sh").exists()
-    assert (target / "hooks" / "subagent_stop.sh").exists()
-    assert (target / "hooks" / "permission_request.sh").exists()
-    assert (target / "hooks" / "pre_tool_use.sh").exists()
-    assert (target / "hooks" / "post_tool_use.sh").exists()
-    assert (target / "hooks" / "post_tool_use_failure.sh").exists()
-    assert len(list((target / "hooks").glob("*.sh"))) == 10
+    assert [p.name for p in (target / "hooks").glob("*.sh")] == ["eawf-hook.sh"]
+    assert (target / "hooks" / "skill-classes.tsv").exists()
     hooks_manifest = json.loads((target / "hooks" / "hooks.json").read_text())
     assert set(hooks_manifest["hooks"].keys()) == {
         "SessionStart",
@@ -171,10 +159,10 @@ def test_package_skips_hooks_when_disabled(tmp_path: Path) -> None:
 
 
 def test_package_hook_scripts_are_executable(tmp_path: Path) -> None:
-    """The handler-backed wrapper script lands on disk with mode 0o755."""
+    """The wrapper script lands on disk with mode 0o755."""
     target = tmp_path / "eawf-plugin"
     package_plugin(target)
-    for name in ("session_end.sh",):
+    for name in ("eawf-hook.sh",):
         path = target / "hooks" / name
         mode = path.stat().st_mode & 0o777
         assert mode == 0o755, f"{name} mode={oct(mode)} expected 0o755"

@@ -218,8 +218,8 @@ def test_install_plugin_renders_hook_with_correct_event(tmp_path: Path) -> None:
     """Spot check: the rendered (handler-backed) hook script targets the right event."""
     install_plugin(tmp_path)
     session_end = (tmp_path / ".claude" / "hooks" / "session_end.sh").read_text(encoding="utf-8")
-    assert "eawf hook run session_end" in session_end
-    assert "--runtime claude" in session_end
+    assert '_eawf_event="session_end"' in session_end
+    assert 'hook run "${_eawf_event}" --runtime claude' in session_end
 
 
 def test_install_plugin_omits_handler_less_hooks(tmp_path: Path) -> None:

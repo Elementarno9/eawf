@@ -12,6 +12,7 @@ Decide a Milestone acceptance bundle: prepare, accept, reject or request repair.
 
 ## 1. Authority
 
+- Needs an eawf-managed repository; outside one the hook refuses it with `not an eawf-managed repository; run eawf init to manage it`.
 - Only an authenticated operator initiates this skill, by design: it is kept out of the model's reach. An agent may prepare evidence or recommend the invocation, but never calls it.
 - Operates on: Milestone, through `projection.milestone.read`, `projection.milestone.acceptance`, `eawf milestone open-approval`, `eawf milestone seal-approval`, `eawf milestone accept`, `runtime.delivery.request_acceptance_repair`.
 - Effects: Milestone acceptance reads plus the approval, acceptance and repair verbs.
@@ -65,7 +66,7 @@ The obligations the effective rule graph holds for activities `review`. They bin
 
 ## 6. Output
 
-Output one AcceptanceSkillReport. Its `summary` states the bundle digest, per-requirement verdicts, evidence links, decision receipt or PendingAction, repair scope, and blockers.
+Output one AcceptanceSkillReport. Its `summary` states the bundle digest, per-requirement verdicts, evidence links, decision receipt or PendingAction, repair scope, and blockers. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
 
 The report validates against `AcceptanceSkillReport`, and its terminal outcome is exactly one of `shown`, `prepared`, `accepted`, `rejected`, `repair_requested`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /accept` before returning it. It carries these fields and no other; a nested field is written under its parent.
 

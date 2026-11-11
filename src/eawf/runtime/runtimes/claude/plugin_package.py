@@ -14,16 +14,17 @@ differs from :mod:`eawf.runtime.runtimes.claude.plugin_install`:
       skills/<name>/SKILL.md         # one per skill catalog entry
       agents/<role>.md               # one per AGENT_REGISTRY entry
       hooks/hooks.json               # gated by ``include_hooks``
-      hooks/<event>.sh               # one per handler-backed hook event
-      README.md                      # gated by ``include_readme``
+      hooks/eawf-hook.sh             # the one wrapper; the event is its argument
+      hooks/skill-classes.tsv        # gated by ``include_hooks``; skill TAB standalone class
+      README.md                     # gated by ``include_readme``
 
 Crucially, this tree carries NO ``.claude/`` prefix, NO ``settings.json``,
 and NO ``.ea/`` — it is a self-contained plugin, not a per-repo workspace
 render.
 
 The packaged tree also emits a session-level ``hooks/hooks.json``, the
-path Claude Code loads a plugin's hooks from, beside the wrapper scripts
-it names. Only
+path Claude Code loads a plugin's hooks from, beside the wrapper it runs.
+Only
 handler-backed events — those with a real runner-registered handler, per
 :func:`eawf.runtime.runtimes.claude.hook_map.handler_backed_plugin_hooks`
 (today ``SESSION_START`` and ``SESSION_END``) — appear in the
@@ -61,10 +62,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 import eawf
 from eawf.kernel.config.layered import resolve_agent_extra_tools
-from eawf.runtime.runtimes.claude.hook_map import (
-    handler_backed_plugin_hooks,
-    render_plugin_hooks_json,
-)
+from eawf.runtime.runtimes.claude.hook_map import HOOK_WRAPPER, render_plugin_hooks_json
 from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.agents import (
@@ -74,13 +72,13 @@ from eawf.surfaces.render.agents import (
     effective_agent_tools,
     render_agent_md,
 )
-from eawf.surfaces.render.hooks import render_hook_sh
+from eawf.surfaces.render.hooks import render_hook_wrapper
 from eawf.surfaces.render.skills import (
     SkillSpec,
     SkillTemplateContext,
     render_skill_md,
 )
-from eawf.workflow.skills.catalog import shipped_skill_specs
+from eawf.workflow.skills.catalog import render_skill_classes_tsv, shipped_skill_specs
 from eawf.workflow.skills.publication import write_publication
 
 logger = logging.getLogger(__name__)
@@ -138,7 +136,7 @@ class PackageResult:
             (or *would have been*, in a dry-run).
         wrote_readme: True when ``README.md`` was emitted (or would
             have been, in a dry-run).
-        wrote_hooks: True when ``hooks/hooks.json`` + ``hooks/*.sh`` were
+        wrote_hooks: True when ``hooks/hooks.json`` + ``hooks/eawf-hook.sh`` were
             emitted (or would have been, in a dry-run).
     """
 
@@ -468,9 +466,11 @@ def package_plugin(
             keeps the relative ``"./"`` dev source; ``NPM`` emits the
             self-hosted published pointer at the npm artifact.
         include_readme: Emit ``README.md`` describing install steps.
-        include_hooks: Emit ``hooks/hooks.json`` plus
-            ``hooks/<event>.sh`` wrappers for the handler-backed events in
-            :func:`eawf.runtime.runtimes.claude.hook_map.handler_backed_plugin_hooks`.
+        include_hooks: Emit ``hooks/hooks.json`` for the handler-backed
+            events in
+            :func:`eawf.runtime.runtimes.claude.hook_map.handler_backed_plugin_hooks`,
+            the ``hooks/eawf-hook.sh`` wrapper it runs and the
+            ``hooks/skill-classes.tsv`` the wrapper reads.
             Defaults to ``True``; pass ``False`` to package a
             skills/agents-only tree.
         force: Bypass the non-empty-target check.
@@ -530,25 +530,16 @@ def package_plugin(
         path = target_dir / "agents" / f"{agent_spec.role}.md"
         agent_outputs.append((path, _render_agent(agent_spec, tools_grant)))
 
-    # Pre-render hooks.json + per-event wrappers. Only handler-backed
-    # events are emitted (see hook_map.handler_backed_plugin_hooks); the
-    # rest would be idle no-op scripts, and workflow-internal lifecycle
+    # Pre-render hooks.json and the one wrapper every entry runs with its
+    # event as the argument. Only handler-backed events are subscribed (see
+    # hook_map.handler_backed_plugin_hooks); workflow-internal lifecycle
     # events stay fired by explicit ``eawf hook run`` calls instead.
     hooks_manifest: str | None = None
     hook_outputs: list[tuple[Path, str]] = []
+    skill_classes = (target_dir / "hooks" / "skill-classes.tsv", render_skill_classes_tsv())
     if include_hooks:
         hooks_manifest = render_plugin_hooks_json()
-        # Deduplicate by event_type — the registry may legitimately
-        # list the same event under multiple CC events in a future
-        # extension; we only need one wrapper per event_type on disk.
-        seen: set[str] = set()
-        for hook_spec in handler_backed_plugin_hooks():
-            value = hook_spec.event_type.value
-            if value in seen:
-                continue
-            seen.add(value)
-            path = target_dir / "hooks" / f"{value}.sh"
-            hook_outputs.append((path, render_hook_sh(hook_spec.event_type)))
+        hook_outputs.append((target_dir / HOOK_WRAPPER, render_hook_wrapper()))
 
     if dry_run:
         logger.info(
@@ -596,6 +587,10 @@ def package_plugin(
             atomic_write_text(path, body)
             os.chmod(path, _HOOK_FILE_MODE)
             written.append(path)
+        # The hook wrapper reads this beside itself to refuse a managed-only
+        # skill outside a managed repository without starting an interpreter.
+        atomic_write_text(*skill_classes)
+        written.append(skill_classes[0])
 
     write_publication(target_dir, written)
 

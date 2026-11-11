@@ -34,6 +34,7 @@ from eawf.kernel.config.schema import ToastVerbosity
 from eawf.kernel.state.epoch2.authority import RootAuthority, resolve_authority
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.platform.registry import default_registry_path
+from eawf.runtime.vcs.branch_name import main_checkout
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.tui.console.attach import (
     ONBOARDING,
@@ -290,8 +291,9 @@ def launch_tui(
     env_state = os.environ.get("EA_STATE")
     named_by = "EA_STATE" if env_state else ("--workspace" if workspace is not None else None)
     # Off a TTY with no tree named, walking pwd-upward would land on whatever tree sits
-    # above cwd, so a scripted caller reads only the tree at cwd itself.
-    tree = workspace if tty or named_by is not None else Path.cwd()
+    # above cwd, so a scripted caller reads only the tree of the repository at cwd: its
+    # main checkout, because a linked worktree's own .ea is a frozen copy.
+    tree = workspace if tty or named_by is not None else main_checkout(Path.cwd())
 
     # An interactive launch reads the tree before the console takes the terminal. The
     # CLI's stderr log handler would print what that read logs beneath the console, where

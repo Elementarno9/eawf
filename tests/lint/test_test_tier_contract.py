@@ -37,6 +37,7 @@ from eawf.platform.lint.kind_taxonomy import (
     kind_for_test_path,
 )
 from eawf.platform.lint.kind_taxonomy import TestKind as Kind
+from eawf.runtime.vcs.branch_name import main_checkout
 from tests.conftest import REPO_EA_DIR, REPO_ROOT, RepoStateAccessError, guard_repo_ea_path
 
 # Aliased on import: a bare ``pytest_collection_modifyitems`` name in a test
@@ -225,7 +226,8 @@ def test_repo_ea_guard_allows_a_deliberately_targeted_repo_state(
     """An explicit ``EA_STATE`` is a choice, so the repo-census family still reads."""
     from eawf.surfaces.cli.commands import bench
 
-    target = REPO_EA_DIR / "state.json"
+    # The main checkout's tree: a linked worktree's own copy is refused.
+    target = main_checkout(REPO_ROOT) / ".ea" / "state.json"
     monkeypatch.setenv("EA_STATE", str(target))
     assert bench.resolve_state_path(None) == target
 

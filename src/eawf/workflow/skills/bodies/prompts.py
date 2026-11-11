@@ -372,9 +372,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
         method=(
             "Resolve action, scope, existing rows, evidence, retention policy, and injection"
             " budget.",
-            "Search returns compatible active rows ranked by relevance and freshness, labels"
+            "List returns compatible active rows ranked by relevance and freshness, labels"
             " stale entries, and discloses omitted count.",
-            "Write admits only context likely useful next session and not cheaply derivable from"
+            "Add admits only context likely useful next session and not cheaply derivable from"
             " canonical state. Reject secrets, machine-local identifiers, transcripts, current"
             " blockers, and duplicated lifecycle facts.",
             "Promote requires resolving evidence, deduplication, review date, and protected"
@@ -709,15 +709,20 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " more than the rounds allow is recommended as a Campaign, which the operator plans"
             " with `eawf campaign new` (`runtime.campaign.start`) and the daemon drives step by"
             " step with `eawf campaign run` (`runtime.campaign.run`).",
-            "Write the brief to the `--save` path under `.ea/local/research/`, by default"
-            " `<date>-<slug>.md` there: an H1 title, then exactly"
-            f" the sections {_BRIEF_HEADINGS} in that order. References is a numbered table with"
-            " the columns `#` and `Reference`, one repo-relative path, URL or Eawf URN per row,"
-            " each cited in the prose as `[N]`.",
-            "Run `eawf research check <brief>` and fix every error it names before returning."
-            " Stop at the last pass, one rendered page, or the first hard budget cap.",
+            "Write the brief. In an eawf-managed repository, write it to the `--save` path under"
+            " `.ea/local/research/`, by default `<date>-<slug>.md` there. Outside one, write no"
+            " file and return the brief in the conversation, unless `--save <path>` names a file."
+            f" Either way: an H1 title, then exactly the sections {_BRIEF_HEADINGS} in that order."
+            " References is a numbered table with the columns `#` and `Reference`, one"
+            " repo-relative path, URL or Eawf URN per row, each cited in the prose as `[N]`.",
+            "If the brief is a file, run `eawf research check <brief>` and fix every error it"
+            " names. If a report file exists, run `eawf skill check-report /research <report>`."
+            " With no file, check the section order and the References table yourself. Stop at"
+            " the last pass, one rendered page, or the first hard budget cap.",
         ),
         constraints=(
+            "Outside an eawf-managed repository a bare `--save` is refused:"
+            " `--save needs a path outside an eawf-managed repository`.",
             "Every parallel slice declares what its result would rule out; a slice that cannot"
             " name it is not dispatched.",
             "A brief that `eawf research check` refuses is not a result.",

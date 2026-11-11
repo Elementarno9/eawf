@@ -53,15 +53,18 @@ class _Unreachable:
 
 @pytest.fixture
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A main checkout with one managed worktree, a tmp HOME and a down daemon."""
+    """A managed main checkout with one managed worktree, a tmp HOME and a down daemon."""
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
-    main = tmp_path / "repo"
-    (main / ".git" / "worktrees" / "w1").mkdir(parents=True)
+    main = (tmp_path / "repo").resolve()
+    main.mkdir()
+    git = ["git", "-C", str(main), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+    subprocess.run([*git, "init", "-q"], check=True)
+    subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "root"], check=True)
     (main / ".ea").mkdir()
+    (main / ".ea" / "state.json").write_text("{}\n")
     worktree = main / ".ea" / "worktrees" / "w1"
-    worktree.mkdir(parents=True)
-    (worktree / ".git").write_text(f"gitdir: {main}/.git/worktrees/w1\n")
+    subprocess.run([*git, "worktree", "add", "-q", str(worktree), "-b", "w1"], check=True)
     return main
 
 
@@ -126,7 +129,7 @@ def test_surf_051_surf_103_the_live_hook_denies_with_the_daemon_down(
 
 @pytest.mark.parametrize("runtime", sorted(DENY_EMISSION_RUNTIMES))
 @pytest.mark.parametrize("stdin", ["not json", "[1, 2]"])
-def test_surf_051_an_unreadable_payload_is_denied(
+def test_surf_051_an_unreadable_payload_passes(
     repo: Path, down: _Unreachable, runtime: str, stdin: str
 ) -> None:
     result = CliRunner().invoke(
@@ -134,9 +137,9 @@ def test_surf_051_an_unreadable_payload_is_denied(
         ["--workspace", str(repo), "hook", "run", "pre_tool_use", "--runtime", runtime],
         input=stdin,
     )
-    decision = _decision(result)
-    assert decision["permissionDecision"] == "deny"
-    assert "(unjudged)" in decision["permissionDecisionReason"]
+    assert result.exit_code == 0, result.output
+    assert result.stdout == ""
+    assert down.calls == 0
 
 
 def test_surf_051_a_bundle_epoch_mismatch_does_not_stand_the_guard_down(
@@ -203,7 +206,7 @@ def test_surf_103_both_plugins_subscribe_the_pre_tool_guard() -> None:
 
     claude = build_plugin_hooks_json()["hooks"]["PreToolUse"]
     assert any(
-        entry["matcher"] == "" and entry["hooks"][0]["command"].endswith('/pre_tool_use.sh"')
+        entry["matcher"] == "" and entry["hooks"][0]["command"].endswith('.sh" pre_tool_use')
         for entry in claude
     )
     assert CODEX_HOOK_EVENT_NAMES[HookEventType.PRE_TOOL_USE] == "PreToolUse"
@@ -218,28 +221,57 @@ def _fake_uv(bin_dir: Path, body: str) -> None:
     uv.chmod(uv.stat().st_mode | stat.S_IXUSR)
 
 
+def _managed_checkout(tmp_path: Path) -> Path:
+    checkout = tmp_path / "managed"
+    if not checkout.exists():
+        checkout.mkdir()
+        subprocess.run(["git", "init", "-q", str(checkout)], check=True)
+        (checkout / ".ea").mkdir()
+        (checkout / ".ea" / "state.json").write_text("{}\n")
+    return checkout.resolve()
+
+
 def _wrapper(
     tmp_path: Path, runtime: str, tool: str, uv_body: str
 ) -> subprocess.CompletedProcess[str]:
     script = tmp_path / f"pre_tool_use-{runtime}.sh"
     script.write_text(render_hook_sh(HookEventType.PRE_TOOL_USE, runtime=runtime))
     _fake_uv(tmp_path / "bin", uv_body)
-    payload = json.dumps({"tool_name": tool, "tool_input": {"command": "rm -rf .ea"}})
-    env = {"PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin", "HOME": str(tmp_path / "home")}
+    eawf = tmp_path / "bin" / "eawf"
+    eawf.write_text("#!/usr/bin/env bash\n")
+    eawf.chmod(0o755)
+    checkout = _managed_checkout(tmp_path)
+    payload = json.dumps(
+        {"cwd": str(checkout), "tool_name": tool, "tool_input": {"command": "rm -rf .ea"}}
+    )
+    env = {
+        "PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin",
+        "HOME": str(tmp_path / "home"),
+        "TMPDIR": str(tmp_path),
+    }
     return subprocess.run(
-        ["bash", str(script)], input=payload, capture_output=True, text=True, env=env, check=False
+        ["bash", str(script)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=checkout,
+        check=False,
     )
 
 
 @pytest.mark.parametrize("runtime", sorted(DENY_EMISSION_RUNTIMES))
-def test_surf_051_the_wrapper_fails_closed_when_eawf_cannot_run(
+def test_surf_051_the_wrapper_fails_open_and_records_when_eawf_cannot_run(
     tmp_path: Path, runtime: str
 ) -> None:
+    """A guard that cannot run lets the call through and leaves a health row behind."""
     broken = _wrapper(tmp_path, runtime, "Bash", "exit 1")
-    assert broken.returncode == 2, "exit 2 is the deny both hosts honour"
-    assert "could not run" in broken.stderr
-    unjudged = _wrapper(tmp_path, runtime, "Read", "exit 1")
-    assert unjudged.returncode == 0, "a tool that cannot mutate owned state is never stopped"
+    assert (broken.returncode, broken.stdout) == (0, "")
+    record = _managed_checkout(tmp_path) / ".ea" / "local" / "hooks" / "health.jsonl"
+    rows = [json.loads(line) for line in record.read_text().splitlines()]
+    assert [(row["event"], row["code"], row["error"]) for row in rows] == [
+        ("pre_tool_use", "hook_exit", "exit 1")
+    ]
 
 
 @pytest.mark.parametrize("runtime", sorted(DENY_EMISSION_RUNTIMES))
@@ -252,6 +284,8 @@ def test_surf_053_the_wrapper_passes_the_deny_to_the_host(tmp_path: Path, runtim
 
 def test_surf_051_a_live_denial_is_filed_as_a_sandbox_decision(live_tree: Any) -> None:
     repo, _daemon = live_tree
+    # The guard judges only in a managed repository, which is a git working tree.
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
     result = _hook(repo, "Write", {"file_path": ".ea/state.json", "content": "{}"})
     assert _decision(result)["permissionDecision"] == "deny"
     ledgers = sorted(repo.rglob(f"ledger/{Epoch2Collection.RECEIPT.value}.jsonl"))

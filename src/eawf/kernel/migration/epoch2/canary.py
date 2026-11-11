@@ -70,6 +70,29 @@ BACKUP_TS_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z$"
 #: and none of the indexes, staging builds, restore copies or journal.
 GENERATIONS_DIRNAME: Final = "generations"
 
+#: The one line a tree in the eawf 0.8 layout answers with: this build cannot
+#: read it, and the operator needs the newer client rather than a migration.
+V08_LAYOUT_MESSAGE: Final = (
+    "eawf: this repository uses the eawf 0.8 layout; install eawf 0.8 or later"
+)
+
+#: The directory the eawf 0.8 layout keeps its state in, beside no generations.
+_V08_STATE_DIRNAME: Final = "state"
+
+
+def uses_v08_layout(root: Path) -> bool:
+    """Return whether the tree at ``root`` is in the eawf 0.8 layout.
+
+    Args:
+        root: The tree's root directory, normally ``<repository>/.ea``.
+
+    Returns:
+        ``True`` when ``root/state/`` is a directory and ``root/generations``
+        does not exist; ``False`` otherwise, including for a missing root.
+    """
+    return (root / _V08_STATE_DIRNAME).is_dir() and not (root / GENERATIONS_DIRNAME).exists()
+
+
 #: The append-only journal recording how far one apply got.
 JOURNAL_FILENAME: Final = "journal.jsonl"
 
@@ -441,6 +464,7 @@ __all__ = [
     "RESTORE_MANIFEST_FILENAME",
     "SELECTION_FILENAME",
     "TARGET_AUTHORITY_LOCATORS",
+    "V08_LAYOUT_MESSAGE",
     "CanaryDeclaration",
     "DeclarationKind",
     "DisposableTarget",
@@ -449,4 +473,5 @@ __all__ = [
     "declaration_path",
     "opt_in_path",
     "read_declaration",
+    "uses_v08_layout",
 ]

@@ -12,7 +12,8 @@ Work the Attention queue: pending actions, open questions and open pauses.
 
 ## 1. Authority
 
-- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Needs an eawf-managed repository; outside one the hook refuses it with `not an eawf-managed repository; run eawf init to manage it`.
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
 - Operates on: PendingAction, through `projection.attention.read`, `projection.notifications.read`, `eawf milestone seal-approval`, `eawf action decide-permission`.
 - Operator-only actions: `resolve`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`) and never chooses the recommended option itself. In Claude Code, present the bound question the answer carries with AskUserQuestion verbatim, the action marker on its first line included: the operator's answer to that marked question is the approval, or the choice, and that answer seals it. Then complete the act under your own principal, citing the sealed action; an agent still cannot name an `OP-` key. Codex sessions have no AskUserQuestion, so their operator acts stay terminal-only: print the answer's `numbered_prompt` verbatim and stop; the operator relays the reply with `eawf question answer` (`runtime.question.answer_numbered`) from their own terminal, the console answers the same record, and the first answer wins.
 - Effects: Attention reads plus the approval and permission verbs that answer a pending action, when resolve is explicitly selected.
@@ -63,7 +64,7 @@ The obligations the effective rule graph holds for activities `operate`. They bi
 
 ## 6. Output
 
-Output one report whose `summary` gives the prepared attention set: per item, its kind, subject, exact revision, options with consequences, evidence, recommendation, and what happens on no answer.
+Output one report whose `summary` gives the prepared attention set: per item, its kind, subject, exact revision, options with consequences, evidence, recommendation, and what happens on no answer. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
 
 The report validates against `AttentionSkillReport`, and its terminal outcome is exactly one of `listed`, `prepared`, `resolved`, `needs_operator`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /attend` before returning it. It carries these fields and no other; a nested field is written under its parent.
 

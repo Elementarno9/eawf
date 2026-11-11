@@ -37,11 +37,13 @@ HookEventType       CC event               Matcher
 ``USER_PROMPT_...`` ``UserPromptSubmit``   (none)
 ==================  =====================  ====================================
 
-Each entry runs ``bash "${CLAUDE_PLUGIN_ROOT}/hooks/<event>.sh"``. CC
-expands ``CLAUDE_PLUGIN_ROOT`` to the plugin's install root at runtime, so
-the manifest stays portable across user installs. Running the wrapper
-through ``bash`` rather than as an executable keeps the hook working when
-a copy step on the release path drops the 0755 mode.
+Each entry runs ``bash "${CLAUDE_PLUGIN_ROOT}/hooks/eawf-hook.sh" <event>``
+with a ``timeout`` of 3 s for ``UserPromptSubmit``, 5 s for ``PreToolUse``
+and 10 s for every other event. CC expands ``CLAUDE_PLUGIN_ROOT`` to the
+plugin's install root at runtime, so the manifest stays portable across user
+installs. Running the wrapper through ``bash`` rather than as an executable
+keeps the hook working when a copy step on the release path drops the 0755
+mode.
 
 Public API::
 
@@ -78,8 +80,7 @@ class PluginHookSpec:
 
     Attributes:
         event_type: The :class:`~eawf.runtime.hooks.event.HookEventType` value
-            whose wrapper script (``hooks/<value>.sh``) the manifest
-            entry will invoke.
+            the manifest entry passes to the wrapper.
         cc_event: The Claude Code event name (one of ``SessionStart``,
             ``SessionEnd``, ``PreToolUse``, ``PostToolUse``). Determines which
             top-level array in ``hooks.json`` the entry lands in.
@@ -118,16 +119,31 @@ PLUGIN_HOOK_REGISTRY: tuple[PluginHookSpec, ...] = (
 )
 
 
+#: The one wrapper every manifest entry runs, relative to the plugin root.
+HOOK_WRAPPER: Final = "hooks/eawf-hook.sh"
+
+#: Seconds the host lets a hook run before it gives up on it. The prompt hook
+#: holds up the operator's own prompt and the pre-tool hook every tool call,
+#: so theirs are short; a hook the host kills is a hook that did nothing.
+_TIMEOUT_S: Final[dict[str, int]] = {"UserPromptSubmit": 3, "PreToolUse": 5}
+_DEFAULT_TIMEOUT_S: Final = 10
+
+
 def _command_path(spec: PluginHookSpec) -> str:
     """Return the ``command`` field for *spec*'s manifest entry.
 
-    Always ``bash "${CLAUDE_PLUGIN_ROOT}/hooks/<event>.sh"``: the plugin-root
-    variable keeps the manifest portable across user installs, the quotes
-    survive an install root with spaces, and invoking ``bash`` explicitly
-    means a wrapper shipped without its execute bit (an archive step that
-    drops POSIX modes) still runs instead of failing with exit 126.
+    Always ``bash "${CLAUDE_PLUGIN_ROOT}/hooks/eawf-hook.sh" <event>``: the
+    plugin-root variable keeps the manifest portable across user installs, the
+    quotes survive an install root with spaces, and invoking ``bash``
+    explicitly means a wrapper shipped without its execute bit (an archive
+    step that drops POSIX modes) still runs instead of failing with exit 126.
     """
-    return f'bash "{_PLUGIN_ROOT_VAR}/hooks/{spec.event_type.value}.sh"'
+    return f'bash "{_PLUGIN_ROOT_VAR}/{HOOK_WRAPPER}" {spec.event_type.value}'
+
+
+def _timeout(spec: PluginHookSpec) -> int:
+    """Return the manifest ``timeout``, in seconds, for *spec*'s host event."""
+    return _TIMEOUT_S.get(spec.cc_event, _DEFAULT_TIMEOUT_S)
 
 
 # Events with a real runner-registered handler (:data:`HookSpec.has_handler`
@@ -174,7 +190,8 @@ def build_plugin_hooks_json() -> dict[str, Any]:
 
     Walks :func:`handler_backed_plugin_hooks`, grouping entries by
     ``cc_event`` in registry order. Each entry produces a ``{"matcher":
-    <str>, "hooks": [{"type": "command", "command": <str>}]}`` block. The
+    <str>, "hooks": [{"type": "command", "command": <str>, "timeout":
+    <int>}]}`` block. The
     dict wraps everything under the top-level ``"hooks"`` key, matching the
     Claude Code plugin manifest schema. Handler-less events are omitted so
     the manifest never wires Claude Code to an idle no-op script.
@@ -193,6 +210,7 @@ def build_plugin_hooks_json() -> dict[str, Any]:
                 {
                     "type": "command",
                     "command": _command_path(spec),
+                    "timeout": _timeout(spec),
                 }
             ],
         }
@@ -213,6 +231,7 @@ def render_plugin_hooks_json() -> str:
 
 
 __all__ = [
+    "HOOK_WRAPPER",
     "PLUGIN_HOOK_REGISTRY",
     "PluginHookSpec",
     "build_plugin_hooks_json",

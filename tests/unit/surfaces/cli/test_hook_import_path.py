@@ -62,7 +62,7 @@ def write():
 atexit.register(write)
 
 class DaemonClient:
-    def __init__(self):
+    def __init__(self, **options):
         snapshot("daemon")
     def __enter__(self):
         return self

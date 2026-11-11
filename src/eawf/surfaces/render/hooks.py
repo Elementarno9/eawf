@@ -8,55 +8,51 @@ today ``SESSION_START``, ``SESSION_END``, ``SUBAGENT_START``, ``SUBAGENT_STOP``,
 ``PRE_COMPACT``, ``PERMISSION_REQUEST`` and the three tool events), while
 the Codex installer renders every event with ``runtime="codex"``.
 
-The output is a small POSIX-bash wrapper that:
+:func:`render_hook_wrapper` renders the plugin's one wrapper, which takes the
+event as its first argument; :func:`render_hook_sh` bakes one event in for
+the installers that write a file per event.
 
-1. Reads the JSON document Claude Code delivers on stdin and forwards it
-   verbatim — SessionEnd / Stop / SubagentStop stdin carries the session
-   cost + token usage totals that feed EU capture, so a lossless forward
-   is the primary contract.
-2. Falls back — only when stdin is empty (or a TTY, for interactive smoke
-   runs) — to synthesising a minimal payload of shape
-   ``{"hook_event_name": <claude-name>, "claude_event_name":
-   <eawf-event>, "args": [<arg1>, <arg2>, <arg3>, <arg4>]}`` from up to
-   four positional arguments (``$1..$4``).
-3. Pipes the payload to ``uv run <mode> eawf hook run <event_type>
-   --runtime <runtime>`` (``<runtime>`` is ``claude`` by default, ``codex``
-   for the Codex install/doctor/package surfaces). The CLI's exit code (0
-   ok, 9 blocked) is the wrapper's exit code. ``--no-project`` keeps uv from
-   discovering, creating or syncing the host repository's own environment:
-   a sync there costs seconds per hook and fails outright on Windows while
-   one of that environment's executables is running, which would make the
-   fail-closed pre-tool guard refuse every judged tool call. An eawf in the
-   host project's own ``.venv`` wins over both and runs with ``--project
-   <root> --no-sync``, so a global eawf of another version never answers
-   for the project; ``--no-project`` applies only when the project has no
-   eawf and one is on PATH, and plain ``uv run eawf`` is the last resort.
+The output is a small bash wrapper that:
 
-The read is fail-open: a hook that dies breaks the operator's session,
-so an unreadable / empty stdin degrades to the positional-arg fallback
-rather than aborting.
+1. Exits 0 at once when ``EAWF_HOOKS=off``.
+2. Reads the JSON document the host delivers on stdin (nothing on a TTY).
+3. Probes the repository context in bash from the payload's ``cwd``: a
+   repository is managed when its main checkout holds one of
+   :data:`~eawf.runtime.hooks.context.MANAGED_ANCHORS`, so a subfolder or a
+   linked worktree answers for it. Outside one the wrapper prints nothing,
+   except the not-managed refusal of a managed-only skill (from the
+   ``skill-classes.tsv`` beside it), and exits 0.
+4. In a managed repository, pipes the payload to ``uv run <mode> eawf -w
+   <main> hook run <event> --runtime <runtime>``. An eawf in the working
+   tree's or the main checkout's ``.venv`` runs with ``--project <root>
+   --no-sync``; else an eawf on PATH runs with ``--no-project``.
+5. Fails open: a missing uv or eawf, or a child that exits non-zero, appends
+   one row to the repository's hook health record and exits 0 with the
+   child's stdout discarded.
 
-The wrapper deliberately stays in pure POSIX bash (no ``read -r``
-options, no ``${@:1:4}`` parameter expansions) so it works on macOS
-bash 3.2 and Linux distros without requiring bash 4+.
+The wrapper stays bash 3.2 compatible so it runs on macOS's system bash.
 
 Public API::
 
     HOOK_REGISTRY                # frozen tuple of every event Eä installs
-    render_hook_sh(event_type)   # pure: returns the rendered bash script
+    render_hook_sh(event_type)   # pure: one event's wrapper
+    render_hook_wrapper()        # pure: the plugin's one wrapper
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from importlib.resources import files
+from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from eawf.runtime.hooks.context import MANAGED_ANCHORS
 from eawf.runtime.hooks.event import HookEventType
-from eawf.runtime.sandbox.data_loss import JUDGED_TOOLS
-from eawf.workflow.skills.publication import BUNDLE_TARGET_EPOCH
+from eawf.runtime.hooks.health import HEALTH_RECORD
+from eawf.workflow.skills.catalog import NOT_MANAGED_REFUSAL
 
 logger = logging.getLogger(__name__)
 
@@ -142,15 +138,45 @@ def render_hook_sh(event_type: HookEventType, *, runtime: str = "claude") -> str
     Raises:
         KeyError: *event_type* has no entry in :data:`HOOK_REGISTRY`.
     """
-    spec = _spec_for(event_type)
+    return _render(_spec_for(event_type).event_type.value, runtime=runtime)
+
+
+def render_hook_wrapper(*, runtime: str = "claude") -> str:
+    """Render the one wrapper a plugin ships for every event it subscribes.
+
+    The wrapper takes the event as its first argument, so a manifest entry
+    reads ``bash <plugin root>/hooks/eawf-hook.sh <event>``.
+
+    Args:
+        runtime: The ``--runtime`` value baked into the wrapper's
+            ``eawf hook run`` invocation.
+
+    Returns:
+        The rendered bash script, terminated by ``\\n``.
+    """
+    return _render("", runtime=runtime)
+
+
+def _render(event_type: str, *, runtime: str) -> str:
+    """Render the wrapper template with *event_type* baked in, or taken from ``$1`` when empty."""
+    tool_refusal = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": NOT_MANAGED_REFUSAL,
+        }
+    }
     env = _load_environment()
     template = env.get_template(_TEMPLATE_NAME)
     rendered = template.render(
-        event_type=spec.event_type.value,
-        claude_event_name=spec.claude_event_name,
+        event_type=event_type,
         runtime=runtime,
-        target_epoch=BUNDLE_TARGET_EPOCH,
-        judged_tools="|".join(sorted(JUDGED_TOOLS)),
+        managed_anchors=[anchor.as_posix() for anchor in MANAGED_ANCHORS],
+        health_record=(Path(".ea") / HEALTH_RECORD).as_posix(),
+        prompt_refusal=json.dumps(
+            {"decision": "block", "reason": NOT_MANAGED_REFUSAL}, separators=(",", ":")
+        ),
+        tool_refusal=json.dumps(tool_refusal, separators=(",", ":")),
     )
     if not rendered.endswith("\n"):
         rendered = rendered + "\n"
@@ -251,4 +277,5 @@ __all__ = [
     "HOOK_REGISTRY",
     "HookSpec",
     "render_hook_sh",
+    "render_hook_wrapper",
 ]

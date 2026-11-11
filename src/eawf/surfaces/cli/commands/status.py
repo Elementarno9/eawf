@@ -50,9 +50,10 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 
-from eawf.kernel.state.resolve import resolve_with_reason
+from eawf.kernel.state.resolve import LinkedWorktreeStateError, resolve_with_reason
 from eawf.platform.subprocess_detach import no_window_kwargs
-from eawf.surfaces.cli import errors
+from eawf.runtime.vcs.branch_name import BareRepositoryError
+from eawf.surfaces.cli import errors, exit_codes
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 
@@ -178,7 +179,11 @@ def status(
         workspace=workspace if workspace is not None else flags.workspace,
     )
 
-    state_path, _reason = resolve_with_reason(workspace=effective_flags.workspace)
+    try:
+        state_path, _reason = resolve_with_reason(workspace=effective_flags.workspace)
+    except (LinkedWorktreeStateError, BareRepositoryError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(exit_codes.USER_ERROR) from exc
     tree_root = state_path.parent
     if not tree_root.is_dir():
         errors.emit_error(

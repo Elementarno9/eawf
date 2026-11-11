@@ -161,6 +161,7 @@ COMMAND_PANELS: dict[str, str] = {
     "store": "vcs",
     "wal": "vcs",
     "workspace": "vcs",
+    "worktree": "vcs",
 }
 
 

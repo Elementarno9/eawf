@@ -123,7 +123,7 @@ def _session_start(repo: Path, session_id: str, capsys: pytest.CaptureFixture[st
     results = runner.run_event(event)
     assert not any(result.raised for result in results), results
     capsys.readouterr()
-    _emit_session_context(results)
+    _emit_session_context(results, runtime=event.runtime)
     return capsys.readouterr().out
 
 

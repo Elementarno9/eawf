@@ -56,6 +56,9 @@ SESSION_END_HOOK: Final = "session.end_stamp"
 #: The subagent events the lifecycle module adopts a Run for.
 HOST_SUBAGENT_EVENTS: Final = (HookEventType.SUBAGENT_START, HookEventType.SUBAGENT_STOP)
 
+#: How long a hook's daemon call may take, in seconds, before the hook gives up.
+HOOK_DAEMON_DEADLINE_S: Final = 1.5
+
 
 class HookResult(BaseModel):
     """One row returned by :meth:`HookRunner.run_event`.
@@ -263,10 +266,15 @@ class _RecordingClient:
 
 
 def _default_daemon_client_factory() -> Any:
-    """Return a daemon client context manager for the hooks' daemon calls."""
+    """Return a daemon client context manager for the hooks' daemon calls.
+
+    A hook runs inside the host's tool call, so it attaches only to a running
+    daemon and gives up after :data:`HOOK_DAEMON_DEADLINE_S`: a cold spawn or
+    a stuck daemon would stall every call of the session.
+    """
     from eawf.surfaces.cli._daemon_client import DaemonClient
 
-    return DaemonClient()
+    return DaemonClient(spawn=False, call_timeout_seconds=HOOK_DAEMON_DEADLINE_S)
 
 
 def _session_end_payload(event: HookEvent) -> dict[str, Any]:
@@ -498,6 +506,7 @@ def append_event_idempotent(path: Path, event: HookEvent, *, timeout: float = 5.
 
 
 __all__ = [
+    "HOOK_DAEMON_DEADLINE_S",
     "DaemonClientFactory",
     "HookCallable",
     "HookResult",

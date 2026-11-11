@@ -3,9 +3,7 @@
 SURF-112: the text an operator submits after ``/<skill>``, or the arguments a
 model hands the host's skill tool, is read against the skill's one strict
 argument schema, and an unknown or action-incompatible argument is refused by
-the host hook before the model ever sees the skill. SURF-109: a bundle whose
-target epoch differs from the repository refuses to start an eawf skill and
-says how to migrate, where every other hook only stands down.
+the host hook before the model ever sees the skill.
 """
 
 from __future__ import annotations
@@ -33,21 +31,12 @@ def _entry(skill_id: str) -> Any:
     return entry
 
 
-def _prompt_hook(tmp_path: Path, prompt: str, *, target_epoch: int) -> Any:
+def _prompt_hook(tmp_path: Path, prompt: str) -> Any:
+    (tmp_path / ".ea").mkdir(exist_ok=True)
     payload = {"hook_event_name": "UserPromptSubmit", "session_id": "host-1", "prompt": prompt}
     return runner.invoke(
         app,
-        [
-            "-w",
-            str(tmp_path),
-            "hook",
-            "run",
-            "user_prompt_submit",
-            "--runtime",
-            "claude",
-            "--target-epoch",
-            str(target_epoch),
-        ],
+        ["-w", str(tmp_path), "hook", "run", "user_prompt_submit", "--runtime", "claude"],
         input=json.dumps(payload),
     )
 
@@ -104,7 +93,7 @@ def test_surf_112_text_that_does_not_split_is_read_word_by_word() -> None:
 def test_surf_112_the_prompt_hook_blocks_a_refused_invocation_before_a_run(
     tmp_path: Path, prompt: str, code: str
 ) -> None:
-    result = _prompt_hook(tmp_path, prompt, target_epoch=1)
+    result = _prompt_hook(tmp_path, prompt)
     assert result.exit_code == 0
     document = json.loads(result.stdout)
     assert document["decision"] == "block"
@@ -115,7 +104,7 @@ def test_surf_112_the_prompt_hook_blocks_a_refused_invocation_before_a_run(
 def test_surf_112_an_admitted_or_foreign_prompt_passes_untouched(
     tmp_path: Path, prompt: str
 ) -> None:
-    result = _prompt_hook(tmp_path, prompt, target_epoch=1)
+    result = _prompt_hook(tmp_path, prompt)
     assert result.exit_code == 0
     assert result.stdout == ""
 
@@ -134,49 +123,3 @@ def test_surf_112_a_foreign_skill_call_is_left_to_the_host() -> None:
     result = judge_host_skill_invocation(_skill_tool_event("someone-elses-skill", "--any"))
     assert not result.block
     assert "skipped" in result.output
-
-
-# ---- SURF-109: a stale bundle refuses to start an eawf skill -------------------
-
-
-def test_surf_109_a_stale_bundle_refuses_an_eawf_skill_with_migration_guidance(
-    tmp_path: Path,
-) -> None:
-    result = _prompt_hook(tmp_path, "/research caching", target_epoch=2)
-    assert result.exit_code == 0
-    document = json.loads(result.stdout)
-    assert document["decision"] == "block"
-    assert "targets schema epoch 2 but the repository is at epoch 1" in document["reason"]
-    assert "eawf help upgrade-from-0.6" in document["reason"]
-
-
-def test_surf_109_a_stale_bundle_refuses_a_model_skill_call_through_the_tool_hook(
-    tmp_path: Path,
-) -> None:
-    payload = {
-        "hook_event_name": "PreToolUse",
-        "session_id": "host-1",
-        "tool_name": "Skill",
-        "tool_input": {"skill": "eawf:research", "args": "caching"},
-    }
-    result = runner.invoke(
-        app,
-        [
-            *("-w", str(tmp_path), "hook", "run", "pre_tool_use"),
-            *("--runtime", "claude", "--target-epoch", "2"),
-        ],
-        input=json.dumps(payload),
-    )
-    assert result.exit_code == 0
-    decision = json.loads(result.stdout)["hookSpecificOutput"]
-    assert decision["permissionDecision"] == "deny"
-    assert "eawf help upgrade-from-0.6" in decision["permissionDecisionReason"]
-
-
-def test_surf_109_a_stale_bundle_stands_down_on_a_prompt_that_invokes_no_eawf_skill(
-    tmp_path: Path,
-) -> None:
-    result = _prompt_hook(tmp_path, "hello", target_epoch=2)
-    assert result.exit_code == 0
-    assert result.stdout == ""
-    assert "eawf help upgrade-from-0.6" in result.stderr

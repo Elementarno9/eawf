@@ -27,6 +27,7 @@ wrappers) even though most had no real runner-registered handler, so every
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -63,7 +64,14 @@ def test_claude_packager_emits_only_handler_backed_hooks(tmp_path: Path) -> None
     """``eawf plugin package claude`` wires only the session and subagent pairs."""
     target = tmp_path / "claude-pkg"
     claude_package_plugin(target)
-    emitted = {p.stem for p in (target / "hooks").glob("*.sh")}
+    assert [p.name for p in (target / "hooks").glob("*.sh")] == ["eawf-hook.sh"]
+    manifest = json.loads((target / "hooks" / "hooks.json").read_text(encoding="utf-8"))
+    emitted = {
+        hook["command"].rsplit(" ", 1)[1]
+        for entries in manifest["hooks"].values()
+        for entry in entries
+        for hook in entry["hooks"]
+    }
     _assert_emitted_are_handler_backed(emitted, _CLAUDE_HANDLER_BACKED)
     assert emitted == {
         "session_start",

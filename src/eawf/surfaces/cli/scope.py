@@ -4,7 +4,7 @@ Two entry points:
 
 1. :func:`resolve_state_path` — single-repo precedence chain for the
    active ``.ea/state.json`` path (``EA_STATE`` env > ``-w`` flag >
-   pwd-upward walk). Used by every per-repo CLI command (~10 call
+   upward walk from the repository's main checkout). Used by every per-repo CLI command (~10 call
    sites: lifecycle, roadmap, metrics, hook, ...).
 
 2. :func:`resolve_scope_tier` — multi-repo dispatch ladder
@@ -42,9 +42,9 @@ import os
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Final
 
-from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
-from eawf.kernel.state.resolve import fence_live_ledger
+from eawf.kernel.state.resolve import fence_live_ledger, home_state, refuse_linked_worktree
 from eawf.platform.registry import (
     Registry,
     RegistryReadError,
@@ -52,8 +52,25 @@ from eawf.platform.registry import (
     default_registry_path,
     read_registry,
 )
+from eawf.surfaces.cli.errors import UserError
 
 logger = logging.getLogger(__name__)
+
+#: The refusal of a project verb run where no eawf-managed repository resolves.
+#: It equals ``eawf.workflow.skills.catalog.NOT_MANAGED_REFUSAL``, restated
+#: because the catalog loads run-control models the statusline must not pay for.
+NOT_MANAGED_MESSAGE: Final = "not an eawf-managed repository; run eawf init to manage it"
+
+
+class NotManaged(UserError, FileNotFoundError):  # noqa: N818 - the CLI error kind is "NotManaged"
+    """No eawf-managed repository resolves for a verb that needs one.
+
+    It is a :class:`FileNotFoundError` as well, so a caller that handles a
+    missing state file keeps handling it.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(NOT_MANAGED_MESSAGE)
 
 
 class ScopeTier(StrEnum):
@@ -100,7 +117,9 @@ def resolve_state_path(workspace: Path | None) -> Path:
 
     1. ``EA_STATE`` environment variable.
     2. ``-w / --workspace`` flag.
-    3. Pwd-upward walk through parents.
+    3. Upward walk from the main checkout of the repository holding the
+       cwd, or from the cwd itself outside git
+       (:func:`~eawf.kernel.state.resolve.home_state`).
 
     Args:
         workspace: Optional workspace root from ``-w / --workspace``.
@@ -115,28 +134,28 @@ def resolve_state_path(workspace: Path | None) -> Path:
         instead (:func:`~eawf.kernel.state.resolve.fence_live_ledger`).
 
     Raises:
-        FileNotFoundError: When no candidate is found via the
-            three-tier precedence chain.
+        NotManaged: No candidate is found via the three-tier precedence
+            chain: no eawf-managed repository holds the cwd.
+        LinkedWorktreeStateError: ``EA_STATE`` or *workspace* lies inside a
+            linked worktree.
+        BareRepositoryError: No override was given and the cwd is in a
+            repository with no main working tree.
     """
     env = os.environ.get("EA_STATE")
     if env:
+        refuse_linked_worktree(Path(env))
         logger.debug(f"resolve_state_path env-hit path={env}")
         return fence_live_ledger(Path(env), os.environ)
     if workspace is not None:
+        refuse_linked_worktree(Path(workspace))
         candidate = Path(workspace) / ".ea" / "state.json"
         logger.debug(f"resolve_state_path workspace-flag path={candidate}")
         return fence_live_ledger(candidate, os.environ)
-    cur = Path.cwd().resolve()
-    for directory in [cur, *cur.parents]:
-        target = directory / ".ea" / "state.json"
-        # An epoch-2 tree need not hold the v1 document, so its epoch marker
-        # anchors the tree just as the document does.
-        if target.exists() or (directory / ".ea" / GENERATIONS_DIRNAME / MARKER_FILENAME).exists():
-            logger.debug(f"resolve_state_path pwd-upward-hit path={target}")
-            return fence_live_ledger(target, os.environ)
-    raise FileNotFoundError(
-        "No .ea/state.json found upward from cwd; pass -w or set EA_STATE",
-    )
+    target, found = home_state(Path.cwd())
+    if found:
+        logger.debug(f"resolve_state_path pwd-upward-hit path={target}")
+        return fence_live_ledger(target, os.environ)
+    raise NotManaged
 
 
 def _is_ancestor_or_equal(candidate: Path, descendant: Path) -> bool:
@@ -254,6 +273,8 @@ def resolve_scope_tier(
 
 
 __all__ = [
+    "NOT_MANAGED_MESSAGE",
+    "NotManaged",
     "ScopeResolution",
     "ScopeTier",
     "resolve_scope_tier",
