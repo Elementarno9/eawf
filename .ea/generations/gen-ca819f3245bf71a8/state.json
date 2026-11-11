@@ -1091,132 +1091,8 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 80775,
-  "milestone": {
-    "MLS-0108": {
-      "acceptance_bundle_revision": null,
-      "acceptance_journey": [
-        {
-          "action": "in a scratch git init directory with the 0.7.2 plugin enabled, pipe a /eawf:research prompt payload to the user-prompt hook wrapper, then the same payload with /eawf:plan",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "the research payload gives exit status 0, empty stdout and stderr and no block decision; the plan payload prints the not-managed refusal as a block decision with exit status 0",
-          "required": true,
-          "step_id": "AS-01"
-        },
-        {
-          "action": "run uv run eawf status --json from the main checkout and from a linked worktree, then uv run eawf -w <linked worktree> status",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "both status runs print the same active Milestone and open Task count; the -w run ends with exit status 1 naming a linked worktree",
-          "required": true,
-          "step_id": "AS-02"
-        },
-        {
-          "action": "classify a change set that touches only .ea/ paths with tools/ci_changes.py through its unit test, and read the parsed ci.yaml",
-          "actor": "system",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "the verdict is code=false, and ci-ok passes with every test job skipped",
-          "required": true,
-          "step_id": "AS-03"
-        },
-        {
-          "action": "run pre-commit run detect-secrets --all-files, then uv run pytest -q tests/unit/test_secret_scan_config.py",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "zero findings over the tracked files, and the regression test reports one finding per remaining detector token",
-          "required": true,
-          "step_id": "AS-04"
-        },
-        {
-          "action": "pipe a recorded payload with a millisecond resets_at to eawf cc statusline at COLUMNS=120, run eawf hook health ack, then render again",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "ctx, 5h and 7d rows show pace and countdown with each detail at column 36 and the cost reads API-equivalent; after the ack no hooks! segment shows",
-          "required": true,
-          "step_id": "AS-05"
-        },
-        {
-          "action": "in a fresh git init directory run eawf reflect run --local-only and open the overview page it names",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "exit status 0 and pages: <tmp path> is printed; the overview headline reads API-equivalent with list prices verified 2026-11-10",
-          "required": true,
-          "step_id": "AS-06"
-        },
-        {
-          "action": "run uv run eawf --version and read the top section of CHANGELOG.md",
-          "actor": "system",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "0.7.2 is printed and a ## [0.7.2] section names each of the nine areas",
-          "required": true,
-          "step_id": "AS-07"
-        }
-      ],
-      "accepted_binding": null,
-      "appetite": {
-        "amount": 62,
-        "budget_kind": "duration",
-        "unit": "hours"
-      },
-      "contributing_track_refs": [],
-      "created_at": "2026-11-10T11:29:23.993145Z",
-      "description": "Python patch release before the v0.8.0 rewrite, scoped by specs 12 to 21 of the 2026-11-09 v0.8.0 plan. CI stops running tests for state-only pushes; commands, hooks and the daemon find state through the main checkout; hooks fail open and skills work outside a managed repository; machine rows stay local; idle secret and prose gates go; the status line is restyled and installed per user; reflect prices honestly and draws its charts within bounds.",
-      "exclusions": [
-        "the seal commit, bindings by tree SHA, settlement and the four release verbs, left to v0.8.0 (spec 18)",
-        "the committed .ea tree, the runtime and cache folders and removal of .ea/artifacts and the marker files, left to v0.8.0 (spec 12)",
-        "removal of the epoch modules, the importer and the no-epoch lint, left to v0.8.0 (spec 14)",
-        "eawf worktree create, landing records, automatic reaping, sparse checkout and the console progress view, left to v0.8.0 (spec 13)",
-        "the committed-digest policy and the local-only tiers, left to v0.8.0 (spec 19)",
-        "the prose check catalogue and its baseline, left to v0.8.0 (spec 20)",
-        "the hook binary and its latency budgets, left to v0.8.0 (spec 17)",
-        "no rename of epoch in Python code",
-        "no v0.8 seal model: 0.7.2 ships under the 0.7.x commit rules"
-      ],
-      "key": "MLS-0108",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "outcome": "eawf 0.7.2 is released (uv run eawf --version prints 0.7.2) with: CI that runs no test job for a change touching only .ea/ paths, behind an always-running ci-ok job; state, status and the daemon resolved through the main checkout from any linked worktree; hooks that end with exit status 0 and stay silent outside a managed repository, refuse only managed-only skills there and record infrastructure failures as health rows, checked by eawf doctor hooks; probe rows in the local tier and eawf local tidy; detect-secrets with pattern detectors only and an empty baseline; no Vale; a status line with an ANSI theme, one column grid, pace and a 24-hour hook window, installed once per user; and reflect with dated price files, partial pricing, fixed accounting and chart geometry under test.",
-      "primary_track_ref": "eawf://EAWF/track/TRK-EAWF-CORE",
-      "required_batch_refs": [
-        "eawf://EAWF/batch/BAT-0391",
-        "eawf://EAWF/batch/BAT-0392",
-        "eawf://EAWF/batch/BAT-0393",
-        "eawf://EAWF/batch/BAT-0394",
-        "eawf://EAWF/batch/BAT-0395",
-        "eawf://EAWF/batch/BAT-0396"
-      ],
-      "revision": 4,
-      "status": "ACTIVE",
-      "target_date": null,
-      "title": "Ship 0.7.2: open hooks, one state home, quiet CI, clear surfaces",
-      "uid": "85a0bf82-9664-5ae1-9982-d2f779d588fb",
-      "updated_at": "2026-11-11T03:07:13.999604Z",
-      "urn": "eawf://EAWF/milestone/MLS-0108"
-    }
-  },
+  "canonical_sequence": 81919,
+  "milestone": {},
   "open_question": {
     "QST-0001": {
       "answer_refs": [],
@@ -11439,6 +11315,88 @@
       ],
       "updated_at": "2026-11-11T03:07:00.086346Z",
       "urn": "eawf://EAWF/pending-action/ACT-0059"
+    },
+    "ACT-0060": {
+      "assignee_ref": null,
+      "bundle_digest": "sha256:11d388d500faef8268f2ec200bd1f4a6139df071551e7ecf46032ea49bf167f9",
+      "created_at": "2026-11-11T06:18:48.092746Z",
+      "default_on_timeout": null,
+      "default_policy": null,
+      "dispositions": [
+        {
+          "acted_at": "2026-11-11T08:58:26.600115Z",
+          "option_id": "approve",
+          "outcome": "sealed",
+          "principal_id": "OP-0001",
+          "snoozed_until": null
+        }
+      ],
+      "harness_attestation": {
+        "harness": "claude-code",
+        "host_session_digest": "sha256:5ff43f4ce7f1ac5944968166ddcb9a09c9f14706ef063c3abe7d8d592d0bd9d4",
+        "payload_digest": "sha256:e960a3ed521ed5d5f23bdce1781f11d27e5bcf72bf31a18e81f19f4972b8bb70",
+        "permission_mode": null,
+        "question_ref": "eawf://EAWF/question/QST-0105",
+        "raise_gap_ms": 9559235,
+        "run_ref": null,
+        "tool_use_id": "toolu_01DehoenzDQG9auWQipPHSBk",
+        "transcript_check": "matched"
+      },
+      "id": "ACT-0060",
+      "idempotency_key": "accept-MLS-0108-11d388d500faef82",
+      "kind": "protected_approval",
+      "options": [
+        {
+          "consequence": "The Milestone is recorded as accepted on exactly this bundle. A later change needs a new acceptance.",
+          "cost": "Any change after acceptance needs a new bundle and a new acceptance.",
+          "effect": "approve",
+          "label": "Accept the Milestone",
+          "option_id": "approve",
+          "preview": "Milestone MLS-0108\n  before: in acceptance review\n  after:  accepted on bundle revision 1"
+        },
+        {
+          "consequence": "The Milestone stays in review and is not accepted. Nothing else changes.",
+          "cost": "Verified work waits unaccepted, and nothing says what would make it acceptable.",
+          "effect": "decline",
+          "label": "Do not accept it",
+          "option_id": "decline",
+          "preview": "Milestone MLS-0108\n  before: in acceptance review\n  after:  in acceptance review, not accepted"
+        },
+        {
+          "consequence": "The Milestone stays in review and a repair is requested. The next bundle revision is verified and asked about again.",
+          "cost": "Delivery waits for another verified revision and another question.",
+          "effect": "request_repair",
+          "label": "Ask for changes",
+          "option_id": "repair",
+          "preview": "Milestone MLS-0108\n  before: bundle revision 1 awaits acceptance\n  after:  repair requested; bundle revision 2 is verified next"
+        }
+      ],
+      "override_until": null,
+      "question": "Accept MLS-0108 on revision 1 of its acceptance bundle?",
+      "receipt_ref": "eawf://EAWF/evidence/EVD-0395",
+      "recommendation_rationale": "Every Batch stands on a verified head and the journey passed, so accepting records what the evidence already shows.",
+      "recommended_option_id": "approve",
+      "requested_by": {
+        "principal_id": "EAWF-PLANNER",
+        "principal_kind": "agent",
+        "run_ref": "eawf://EAWF/run/RUN-00002307"
+      },
+      "resolution_actor": {
+        "principal_id": "OP-0001",
+        "principal_kind": "human"
+      },
+      "revision": 2,
+      "selected_option_id": "approve",
+      "status": "SEALED",
+      "subject_ref": "eawf://EAWF/milestone/MLS-0108",
+      "terms": [
+        {
+          "expansion": "the Milestone, a planned delivery goal, you are asked to accept",
+          "term": "MLS-0108"
+        }
+      ],
+      "updated_at": "2026-11-11T08:58:26.600115Z",
+      "urn": "eawf://EAWF/pending-action/ACT-0060"
     }
   },
   "plan_revision": {
