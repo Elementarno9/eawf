@@ -251,6 +251,19 @@ if [ "${_eawf_event}" = "pre_tool_use" ] && [ "${_eawf_kind}" != "managed" ]; th
     fi
 fi
 
+# A prompt from a repository eawf does not manage, such as a clone nested in a
+# managed checkout, belongs to the managed tree it lies in, as the state
+# resolver answers for it there; the walk is the guard's. A tree whose main
+# checkout git cannot name is no-git and stays so: the resolver refuses it.
+if [ "${_eawf_event}" = "user_prompt_submit" ] && [ "${_eawf_kind}" = "unmanaged-git" ]; then
+    _eawf_guarded "${_eawf_cwd}"
+    if [ -n "${_eawf_g}" ]; then
+        _eawf_kind="managed"
+        _eawf_top="${_eawf_g}"
+        _eawf_main="${_eawf_g}"
+    fi
+fi
+
 # Outside a managed repository the hook does nothing and says nothing, except
 # that a skill which needs a managed repository is refused before it starts.
 if [ "${_eawf_kind}" != "managed" ] && [ "${_eawf_kind}" != "guarded" ]; then
@@ -407,6 +420,16 @@ _eawf_errors="$(mktemp "${TMPDIR:-/tmp}/eawf-hook.XXXXXX" 2>/dev/null)"
 if [ -z "${_eawf_errors}" ]; then
     _eawf_errors="/dev/null"
 fi
+# A host stops a hook at its timeout by a signal, which skips the removal
+# below; the traps remove the file then. Bash runs a trap once the child it
+# waits on has ended, so the trap only removes the file and writes no row.
+_eawf_clean() {
+    if [ "${_eawf_errors}" != "/dev/null" ]; then
+        rm -f "${_eawf_errors}"
+    fi
+}
+trap _eawf_clean EXIT
+trap 'exit 0' TERM INT HUP
 # -w names the session's own repository. A guarded call of a session that
 # drifted out of one runs without it: eawf resolves the session's directory,
 # the guard judges the call, and every other hook stands down there.

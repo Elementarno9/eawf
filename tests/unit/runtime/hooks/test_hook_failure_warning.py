@@ -466,15 +466,17 @@ def test_a_leftover_legacy_generation_is_taken_over(tree: Path, acked: bool) -> 
     if acked:
         (ea / HEALTH_ROTATED).write_bytes(_coded("acked") * 5)
     (ea / HEALTH_RECORD).write_bytes(_coded("current"))
-    # The previous release counted the cursor over the legacy file, then the record.
+    # A cursor over files this release no longer pairs: its offsets mean nothing.
     write_cursor(ea, 2 * len(_coded("legacy")))
 
     warning = take_failure_warning(ea)
 
     assert not legacy.exists()
     assert (ea / HEALTH_ROTATED).read_bytes() == _coded("legacy") * 3
-    assert warning is not None and warning.startswith("eawf: 2 hook failures")
-    assert take_failure_warning(ea) is None
+    # The cursor moved to the new end on adoption, so the adopted rows count as reported.
+    assert warning is None
+    record_failures(ea, [_failure("after")])
+    assert take_failure_warning(ea) is not None
 
 
 def test_a_writer_that_cannot_take_the_lock_still_appends(

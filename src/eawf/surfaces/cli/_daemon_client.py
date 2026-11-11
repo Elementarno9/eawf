@@ -51,6 +51,10 @@ logger = logging.getLogger(__name__)
 #: directly; this only bounds the round-trip RPC.
 DEFAULT_CALL_TIMEOUT_SECONDS: float = 30.0
 
+#: How long the absence check waits for a connect; a local socket either
+#: takes it or refuses it at once.
+_LISTENER_PROBE_SECONDS: float = 0.25
+
 #: Win32 status codes a peer that went away raises on the client's read:
 #: ERROR_BROKEN_PIPE, ERROR_NO_DATA, ERROR_PIPE_NOT_CONNECTED.
 PIPE_CLOSED_CODES: frozenset[int] = frozenset({109, 232, 233})
@@ -130,11 +134,38 @@ class DaemonRpcError(RuntimeError):
 
 
 class DaemonNotRunningError(ConnectionError):
-    """Raised on enter when no daemon answers and the client may not start one.
+    """Raised on enter when no daemon listens and the client may not start one.
+
+    No daemon listens when the socket node is absent or a connection to it
+    is refused; a daemon that takes the connection and answers late or not
+    at all is running, and fails with another error. On Windows a pipe that
+    cannot be opened counts as no daemon.
 
     A :class:`ConnectionError`, so every caller that already maps an
     ``OSError`` to "daemon unavailable" reports it the same way.
     """
+
+
+def _listener_present(runtime_dir: Path) -> bool:
+    """Return whether something takes a connection on *runtime_dir*'s daemon socket.
+
+    Args:
+        runtime_dir: The daemon runtime directory.
+
+    Returns:
+        Whether a connect succeeds; always ``False`` on Windows, whose pipe
+        probe cannot tell a busy daemon from an absent one.
+    """
+    sock_path = runtime_dir / "eawfd.sock"
+    if sys.platform == "win32" or not sock_path.exists():
+        return False
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+        probe.settimeout(_LISTENER_PROBE_SECONDS)
+        try:
+            probe.connect(str(sock_path))
+        except OSError:
+            return False
+    return True
 
 
 class DaemonClient:
@@ -198,6 +229,13 @@ class DaemonClient:
         else:
             pid = daemon_pid_if_ready(self._runtime_dir)
             if pid is None:
+                if _listener_present(self._runtime_dir):
+                    # A daemon took the connection but could not be named: it is
+                    # up and failing, which a hook must count, not skip.
+                    raise TimeoutError(
+                        f"a daemon listens under {self._runtime_dir.name!r} "
+                        "but did not answer its readiness ping"
+                    )
                 raise DaemonNotRunningError(
                     f"no eawfd daemon is running under {self._runtime_dir.name!r}"
                 )

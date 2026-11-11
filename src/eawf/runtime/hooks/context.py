@@ -115,4 +115,40 @@ def _no_git(cwd: Path) -> HookContext:
     return HookContext(kind="no-git", top=cwd, main=home)
 
 
-__all__ = ["MANAGED_ANCHORS", "HookContext", "HookContextKind", "resolve_hook_context"]
+def managed_tree(directory: Path) -> Path | None:
+    """Return the root of the managed tree *directory* lies in, or ``None``.
+
+    A managed tree is a git repository whose main checkout holds ``.ea/``, with
+    its subfolders and linked worktrees, or a directory outside any git
+    repository that holds ``.ea/state.json``, with everything under it. The
+    walk goes up to the filesystem root, as the hook wrapper's does: a level
+    holding ``.ea/state.json`` is kept, and a level holding ``.git`` asks git
+    once for its main checkout. A ``.git`` git does not take, and a
+    repository whose main checkout holds no ``.ea/``, are passed, since a
+    nested clone or a submodule may lie in a managed checkout further up.
+
+    Args:
+        directory: An absolute directory, its symlinks already resolved.
+
+    Returns:
+        The first managed main checkout upward, else the nearest directory
+        holding ``.ea/state.json``.
+    """
+    holder: Path | None = None
+    for candidate in (directory, *directory.parents):
+        if holder is None and (candidate / ".ea" / "state.json").is_file():
+            holder = candidate
+        if (candidate / ".git").exists():
+            context = resolve_hook_context(candidate)
+            if context.kind != "no-git" and (context.main / ".ea").is_dir():
+                return context.main
+    return holder
+
+
+__all__ = [
+    "MANAGED_ANCHORS",
+    "HookContext",
+    "HookContextKind",
+    "managed_tree",
+    "resolve_hook_context",
+]

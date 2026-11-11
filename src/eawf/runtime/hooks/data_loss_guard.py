@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from eawf.runtime.hooks import host_calls, runner
-from eawf.runtime.hooks.context import HookContext, resolve_hook_context
+from eawf.runtime.hooks.context import HookContext, managed_tree
 from eawf.runtime.hooks.event import HOST_HARNESSES, HookEvent
 from eawf.runtime.hooks.health import HookFailure, record_failures
 from eawf.runtime.sandbox.data_loss import DataLossDenial, judge_tool_call
@@ -71,8 +71,9 @@ def guard_pre_tool_use(
     """Judge one pre-tool call; record and return its denial, or return ``None``.
 
     The guard is on for a call when the session is in a managed tree (see
-    :func:`managed_tree`): the payload ``cwd`` lies in one, or the host's
-    project directory does, each read through its symlinks. Then the judge
+    :func:`~eawf.runtime.hooks.context.managed_tree`): the payload ``cwd``
+    lies in one, or the host's project directory does, each read through
+    its symlinks. Then the judge
     runs on the call and every denial it makes stands. Otherwise the guard is
     off, and nothing about the call decides that: a session that has nothing
     to do with a managed tree is not judged, even when its command names a
@@ -133,36 +134,6 @@ def _session_tree(
     return root
 
 
-def managed_tree(directory: Path) -> Path | None:
-    """Return the root of the managed tree *directory* lies in, or ``None``.
-
-    A managed tree is a git repository whose main checkout holds ``.ea/``, with
-    its subfolders and linked worktrees, or a directory outside any git
-    repository that holds ``.ea/state.json``, with everything under it. The
-    walk goes up to the filesystem root, as the hook wrapper's does: a level
-    holding ``.ea/state.json`` is kept, and a level holding ``.git`` asks git
-    once for its main checkout. A ``.git`` git does not take, and a
-    repository whose main checkout holds no ``.ea/``, are passed, since a
-    nested clone or a submodule may lie in a managed checkout further up.
-
-    Args:
-        directory: An absolute directory, its symlinks already resolved.
-
-    Returns:
-        The first managed main checkout upward, else the nearest directory
-        holding ``.ea/state.json``.
-    """
-    holder: Path | None = None
-    for candidate in (directory, *directory.parents):
-        if holder is None and (candidate / ".ea" / "state.json").is_file():
-            holder = candidate
-        if (candidate / ".git").exists():
-            context = resolve_hook_context(candidate)
-            if context.kind != "no-git" and (context.main / ".ea").is_dir():
-                return context.main
-    return holder
-
-
 def _record(
     event: HookEvent,
     payload: dict[str, Any],
@@ -216,5 +187,4 @@ __all__ = [
     "UNENFORCED_RUNTIMES",
     "deny_document",
     "guard_pre_tool_use",
-    "managed_tree",
 ]

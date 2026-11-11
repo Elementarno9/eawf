@@ -123,16 +123,17 @@ def test_no_start_outside_a_managed_repository(
     assert launches.calls == []
 
 
-def test_no_start_when_no_wrapper_named_the_repository(
+def test_no_start_when_neither_wrapper_nor_payload_named_the_repository(
     tree: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _context(monkeypatch, tree, "managed")
     launches = _launcher(monkeypatch)
+    monkeypatch.chdir(tree)
 
     result = CliRunner().invoke(
         app,
         ["hook", "run", "session_start", "--runtime", "claude"],
-        input=json.dumps({"session_id": "s1", "cwd": str(tree)}),
+        input=json.dumps({"session_id": "s1"}),
     )
 
     assert result.exit_code == 0, result.output
@@ -212,16 +213,23 @@ def test_request_daemon_start_detaches_every_stream(
 
 
 @pytest.mark.parametrize(
-    "runner",
-    [Path(".venv") / "bin" / "python", Path(".venv") / "Scripts" / "python.exe"],
+    ("runner", "launcher"),
+    [
+        (Path(".venv") / "bin" / "python", "eawf"),
+        (Path(".venv") / "Scripts" / "python.exe", "eawf.exe"),
+    ],
     ids=["posix", "windows"],
 )
-def test_daemon_start_prefers_the_main_checkouts_runner(tmp_path: Path, runner: Path) -> None:
+def test_daemon_start_prefers_the_main_checkouts_runner(
+    tmp_path: Path, runner: Path, launcher: str
+) -> None:
     """A hook in a linked worktree runs the branch's eawf; the daemon must not."""
     assert daemon_start_argv(tmp_path)[0] == sys.executable
     python = tmp_path / runner
     python.parent.mkdir(parents=True)
     python.write_text("", encoding="utf-8")
+    (python.parent / launcher).write_text("", encoding="utf-8")
+    (python.parent / launcher).chmod(0o755)
     assert daemon_start_argv(tmp_path) == [str(python), "-m", "eawf.runtime.daemon.main"]
 
 

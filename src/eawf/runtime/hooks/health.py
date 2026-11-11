@@ -208,10 +208,12 @@ def _rotate(ea_dir: Path) -> bool:
 
     An older generation an earlier release left as ``health.jsonl.1`` first
     becomes :data:`HEALTH_ROTATED`, replacing one an acknowledgement moved
-    aside, whose rows were all acknowledged; readers counted it first, so the
-    cursor's offsets keep their meaning. Then a record larger than
-    :data:`HEALTH_ROTATE_BYTES` replaces the older generation, and the cursor
-    moves back by the bytes dropped, clamped to what readers still see.
+    aside, whose rows were all acknowledged. This release's readers never
+    counted the legacy file, so every offset past the start shifts by the
+    two files' size difference; a cursor past the start therefore moves to
+    the new end, and the adopted rows count as reported. Then a record larger
+    than :data:`HEALTH_ROTATE_BYTES` replaces the older generation, and the
+    cursor moves back by the bytes dropped, clamped to what readers still see.
 
     Returns:
         Whether the record was rotated.
@@ -219,6 +221,9 @@ def _rotate(ea_dir: Path) -> bool:
     legacy = ea_dir / _LEGACY_ROTATED
     if legacy.is_file():
         os.replace(legacy, ea_dir / HEALTH_ROTATED)
+        if read_cursor(ea_dir):
+            sizes = (_identity(ea_dir / part) for part in (HEALTH_ROTATED, HEALTH_RECORD))
+            write_cursor(ea_dir, sum(size[1] for size in sizes if size is not None))
     path = ea_dir / HEALTH_RECORD
     try:
         size = path.stat().st_size

@@ -878,9 +878,15 @@ def _register_failure_warning(runner: HookRunner, *, ea_dir: Path) -> None:
     runner.register(HookEventType.SESSION_START, _hook, name=_FAILURE_WARNING_HOOK_NAME)
 
 
-def _register_daemon_start(runner: HookRunner, *, context: HookContext, named: bool) -> None:
-    """Register the background daemon start of a session in a managed repository.
+def _register_daemon_start(
+    runner: HookRunner, *, context: HookContext, named: bool, reported: bool, daemonless: bool
+) -> None:
+    """Register the background daemon start of a hook in a managed repository.
 
+    Session start always asks for one. Every other event asks only when one
+    of its daemon calls found no daemon running, and only when its claim on
+    the start stamp wins, so a busy session asks at most once a minute.
+    Registered after the capture hooks, so it runs once their calls are made.
     A launch that fails raises inside the handler, so the runner records it
     as one health row and the hook still answers as if nothing happened.
 
@@ -888,22 +894,45 @@ def _register_daemon_start(runner: HookRunner, *, context: HookContext, named: b
         runner: The runner dispatching this event.
         context: Where the hook fired; nothing is registered outside a
             managed repository.
-        named: Whether ``-w`` named the repository, as the host wrapper always
-            does after its own probe. A bare ``eawf hook run`` typed in some
-            checkout starts nothing, so a daemon is only ever started for the
-            repository a host session runs in.
+        named: Whether ``-w`` named the repository, as the host wrapper does
+            after its own probe.
+        reported: Whether the payload carried the ``cwd`` the context was
+            resolved from, as every host does and the 0.7.1 wrapper, which
+            never passes ``-w``, relies on. A hook resolved from the process's
+            own directory starts nothing: that directory is a shell's or a
+            test's, and in this checkout's own test suite it is the
+            developer's real repository.
+        daemonless: Whether the process was told to work without the
+            daemon, which then must not be what starts one.
     """
-    if context.kind != "managed" or not named:
+    if context.kind != "managed" or not (named or reported) or daemonless:
         return
-    from eawf.runtime.hooks.daemon_start import DAEMON_START_HOOK, request_daemon_start
+    from eawf.runtime.hooks.daemon_start import (
+        DAEMON_START_HOOK,
+        claim_daemon_start,
+        request_daemon_start,
+    )
     from eawf.runtime.hooks.event import HookEventType
     from eawf.runtime.hooks.runner import HookResult
 
-    def _hook(_event: HookEvent) -> HookResult:
+    ea_dir = context.main / ".ea"
+
+    def _session_start(_event: HookEvent) -> HookResult:
+        # The claim's outcome is not consulted: a new session always asks, and
+        # its stamp keeps the session's first tool calls from asking again.
+        claim_daemon_start(ea_dir)
         request_daemon_start(context.main)
         return HookResult(name=DAEMON_START_HOOK, output="")
 
-    runner.register(HookEventType.SESSION_START, _hook, name=DAEMON_START_HOOK)
+    def _when_absent(_event: HookEvent) -> HookResult:
+        if runner.daemon_absent and claim_daemon_start(ea_dir):
+            request_daemon_start(context.main)
+        return HookResult(name=DAEMON_START_HOOK, output="")
+
+    runner.register(HookEventType.SESSION_START, _session_start, name=DAEMON_START_HOOK)
+    for event_type in HookEventType:
+        if event_type != HookEventType.SESSION_START:
+            runner.register(event_type, _when_absent, name=DAEMON_START_HOOK)
 
 
 #: Runtimes whose session-start hook prints a host context document instead
@@ -1046,7 +1075,7 @@ def _payload_cwd(stdin_text: str) -> Path | None:
     return Path(cwd) if isinstance(cwd, str) and cwd else None
 
 
-def _hook_context(stdin_text: str, flags: GlobalFlags) -> HookContext:
+def _hook_context(stdin_text: str, flags: GlobalFlags, event_type: str) -> HookContext:
     """Return the repository context the hook fired in, resolved once per hook.
 
     ``-w`` comes first: the wrapper passes it only after its own probe found
@@ -1056,17 +1085,31 @@ def _hook_context(stdin_text: str, flags: GlobalFlags) -> HookContext:
     upward holding ``.ea/``. The guard judges a call against the payload
     ``cwd`` itself, never against this context's tree.
 
+    A prompt from a repository eawf does not manage belongs to the managed
+    tree it lies in, as :func:`~eawf.runtime.hooks.context.managed_tree`
+    walks up past a nested clone, the way the wrapper does and the state
+    resolver answers for it, so a managed-only skill is not refused there. A
+    tree whose main checkout git cannot name stays ``no-git``, since the
+    state resolver refuses it.
+
     Args:
         stdin_text: The hook payload.
         flags: The global flags.
+        event_type: The event argument as given.
 
     Returns:
         The resolved context.
     """
-    from eawf.runtime.hooks.context import resolve_hook_context
+    from eawf.runtime.hooks.context import HookContext, managed_tree, resolve_hook_context
 
-    cwd = flags.workspace or _payload_cwd(stdin_text) or Path.cwd()
-    return resolve_hook_context(cwd.resolve())
+    cwd = (flags.workspace or _payload_cwd(stdin_text) or Path.cwd()).resolve()
+    context = resolve_hook_context(cwd)
+    if context.kind != "unmanaged-git" or flags.workspace is not None:
+        return context
+    if event_type != "user_prompt_submit":
+        return context
+    root = managed_tree(cwd)
+    return context if root is None else HookContext(kind="managed", top=root, main=root)
 
 
 def _stood_down(context: HookContext, event_type: str, *, named: bool) -> bool:
@@ -1100,14 +1143,15 @@ def _stood_down(context: HookContext, event_type: str, *, named: bool) -> bool:
 
 
 def _emitted_host_answer(
-    event: HookEvent, results: list[HookResult], failed: frozenset[str]
+    event: HookEvent, results: list[HookResult], quiet: frozenset[str]
 ) -> bool:
     """Print the host-shaped answer an event owes instead of the envelope, if it owes one.
 
     Args:
         event: The dispatched event.
         results: What its hooks returned.
-        failed: The hooks whose failure was already named on stderr.
+        quiet: The hooks whose failure was already named on stderr, and those
+            whose daemon call found no daemon running.
 
     Returns:
         Whether an answer was printed, so the envelope must not be.
@@ -1133,10 +1177,15 @@ def _emitted_host_answer(
         # Claude Code reads a tool hook's stdout as a decision about the call; an
         # observer has none to give, so what it did goes to stderr alone. A hook
         # that skipped the call did nothing, and on every tool call of a session
-        # with no Run its line would only be noise in the host's log. A hook
+        # with no Run its line would only be noise in the host's log; so is a
+        # hook that found no daemon running, or has nothing to say. A hook
         # that failed already has its one failure line there.
         for result in results:
-            if result.name in failed or result.output.startswith(f"{result.name} skipped:"):
+            if (
+                result.name in quiet
+                or not result.output
+                or result.output.startswith(f"{result.name} skipped:")
+            ):
                 continue
             typer.echo(result.output, err=True)
         return True
@@ -1200,32 +1249,6 @@ def _guarded_pre_tool_use(
     typer.echo(orjson.dumps(deny_document(denial)).decode("utf-8"))
     typer.echo(f"{DATA_LOSS_GUARD_HOOK} deny {denial.rule}: {denial.reason}", err=True)
     return True
-
-
-def _unexpected_failures(failures: list[HookFailure], event: HookEvent) -> list[HookFailure]:
-    """Drop the failures a session start expects: a daemon not up yet.
-
-    Session start launches the daemon in the background, so a daemon call it
-    makes before that daemon answers finds none running. Counting that would
-    warn about every fresh session at the next one.
-
-    Args:
-        failures: What the runner caught, oldest first.
-        event: The dispatched event.
-
-    Returns:
-        *failures* without a session start's daemon-not-running calls.
-    """
-    from eawf.runtime.hooks.event import HookEventType
-    from eawf.runtime.hooks.health import DAEMON_CALL_FAILED
-
-    if event.event_type != HookEventType.SESSION_START:
-        return failures
-    return [
-        failure
-        for failure in failures
-        if not (failure.code == DAEMON_CALL_FAILED and failure.error == "DaemonNotRunningError")
-    ]
 
 
 def _report_failures(failures: list[HookFailure], *, ea_dir: Path, payload: dict[str, Any]) -> None:
@@ -1307,7 +1330,7 @@ def run(
     # Skip stdin read on a TTY so interactive smoke runs don't block
     # waiting for EOF; piped/redirected stdin reads normally.
     stdin_text = "" if sys.stdin.isatty() else sys.stdin.read()
-    context = _hook_context(stdin_text, flags)
+    context = _hook_context(stdin_text, flags, event_type)
     if _guarded_pre_tool_use(event_type, runtime.lower(), stdin_text, context, started_at):
         return
     if _stood_down(context, event_type, named=flags.workspace is not None):
@@ -1355,13 +1378,21 @@ def run(
     register_runtime_capture_hooks(runner, repo_root=repo_root)
     _register_projection_staleness(runner, repo_root=repo_root)
     _register_failure_warning(runner, ea_dir=context.main / ".ea")
-    _register_daemon_start(runner, context=context, named=flags.workspace is not None)
+    from eawf.surfaces.cli._dispatch import daemonless_requested
+
+    _register_daemon_start(
+        runner,
+        context=context,
+        named=flags.workspace is not None,
+        reported=_payload_cwd(stdin_text) is not None,
+        daemonless=daemonless_requested(flags),
+    )
     results = runner.run_event(event)
-    failures = _unexpected_failures(runner.failures, event)
+    failures = runner.failures
     _report_failures(failures, ea_dir=context.main / ".ea", payload=payload)
 
-    failed = frozenset(failure.hook for failure in failures)
-    if _emitted_host_answer(event, results, failed):
+    quiet = frozenset(failure.hook for failure in failures) | frozenset(runner.daemon_absent)
+    if _emitted_host_answer(event, results, quiet):
         return
 
     finished_at = datetime.now(UTC)

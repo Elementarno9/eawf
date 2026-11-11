@@ -91,7 +91,8 @@ def test_root_from_payload_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.chdir(elsewhere)
 
     def root(stdin: str, workspace: Path | None = None) -> Path:
-        return hook_command._hook_context(stdin, GlobalFlags(workspace=workspace)).main
+        flags = GlobalFlags(workspace=workspace)
+        return hook_command._hook_context(stdin, flags, "post_tool_use").main
 
     from_src = json.dumps({"cwd": str(main / "src")})
     # The -w flag wins over every cwd.

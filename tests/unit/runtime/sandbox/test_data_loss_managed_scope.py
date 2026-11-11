@@ -15,12 +15,11 @@ from typing import Any, Final
 
 import pytest
 
-from eawf.runtime.hooks.context import resolve_hook_context
+from eawf.runtime.hooks.context import managed_tree, resolve_hook_context
 from eawf.runtime.hooks.data_loss_guard import (
     DATA_LOSS_GUARD_HOOK,
     DENIAL_UNRECORDED,
     guard_pre_tool_use,
-    managed_tree,
 )
 from eawf.runtime.hooks.event import HookEvent, HookEventType
 from eawf.runtime.hooks.health import HEALTH_RECORD

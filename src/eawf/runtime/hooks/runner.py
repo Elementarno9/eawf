@@ -113,6 +113,10 @@ class HookRunner:
         self._hooks: dict[HookEventType, list[tuple[str, HookCallable]]] = {}
         #: Every handler failure of this runner's dispatches, oldest first.
         self.failures: list[HookFailure] = []
+        #: The handlers whose daemon call found no daemon running, in order.
+        #: The daemon exits when idle and hooks never start one in-line, so
+        #: that is the expected state after any pause, not a failure.
+        self.daemon_absent: list[str] = []
         # The event and handler being dispatched, so a failed daemon call
         # made through :meth:`recording_factory` is attributed to them.
         self._event_value = ""
@@ -221,6 +225,11 @@ class HookRunner:
 
         return _open
 
+    def _note_absent(self, error: BaseException) -> None:
+        # Kept as the last error too, so a handler that lets it propagate adds no failure.
+        self._last_error = error
+        self.daemon_absent.append(self._hook_name)
+
     def _note_failure(self, code: str, error: BaseException) -> None:
         # A handler that lets its failed daemon call propagate is one failure, not two.
         if self._last_error is error:
@@ -251,7 +260,14 @@ class _RecordingClient:
             self._context = self._factory()
             return self._context.__enter__()
         except Exception as exc:
-            self._runner._note_failure(DAEMON_CALL_FAILED, exc)
+            from eawf.surfaces.cli._daemon_client import DaemonNotRunningError
+
+            # The client raises this only when no listener takes a connection;
+            # a daemon that is up and refuses or times out is a failure.
+            if isinstance(exc, DaemonNotRunningError):
+                self._runner._note_absent(exc)
+            else:
+                self._runner._note_failure(DAEMON_CALL_FAILED, exc)
             raise
 
     def __exit__(
