@@ -267,6 +267,18 @@ PROMOTED_ARTIFACTS: Final[tuple[PathClass, ...]] = tuple(
             "src/eawf/workflow/release/packet_run.py",
         ),
         (
+            ".ea/artifacts/evidence/2026-11-13-stable-native-linux/dispatch-smoke-receipts.json",
+            "src/eawf/workflow/release/canary_receipts.py",
+        ),
+        (
+            ".ea/artifacts/evidence/2026-11-13-stable-native-linux/dispatch-check-*.json",
+            "src/eawf/workflow/release/canary_receipts.py",
+        ),
+        (
+            ".ea/artifacts/evidence/2026-11-13-stable-native-linux/packet-run-receipts.jsonl",
+            "src/eawf/workflow/release/packet_run.py",
+        ),
+        (
             ".ea/artifacts/evidence/2026-10-24-rc3-claude-host-facts/"
             "claude-project-document-cap.json",
             "src/eawf/platform/rules/data/host_facts.yaml",

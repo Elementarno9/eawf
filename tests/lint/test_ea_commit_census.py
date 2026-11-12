@@ -64,10 +64,10 @@ _CENSUS_TOOL = _REPO_ROOT / "tools" / "ea_commit_census.py"
 #: The most artifacts the commit policy may promote into git: the three
 #: single-file readers, the one measurement the host facts cite, one canary
 #: export per mapped release, the product canary receipts, for each of
-#: the five smoked releases its dispatch smoke receipt file beside the
+#: the six smoked releases its dispatch smoke receipt file beside the
 #: family of check documents that receipt is re-checked against, and each
 #: stable release's packet-run receipts.
-_PROMOTED_CEILING = 3 + 1 + len(CANARY_EVIDENCE_DIRS) + 1 + 5 * 2 + 3
+_PROMOTED_CEILING = 3 + 1 + len(CANARY_EVIDENCE_DIRS) + 1 + 6 * 2 + 4
 
 
 def _isolated_git_env() -> dict[str, str]:
@@ -329,6 +329,15 @@ _READERS = {
         "src/eawf/workflow/release/canary_receipts.py"
     ),
     "/".join((*CANARY_EVIDENCE_DIRS["REL-0.7.2"], PACKET_RECEIPTS_EXPORT_FILENAME)): (
+        "src/eawf/workflow/release/packet_run.py"
+    ),
+    "/".join((*CANARY_EVIDENCE_DIRS["REL-0.7.3"], DISPATCH_SMOKE_RECEIPTS_FILENAME)): (
+        "src/eawf/workflow/release/canary_receipts.py"
+    ),
+    "/".join((*CANARY_EVIDENCE_DIRS["REL-0.7.3"], "dispatch-check-*.json")): (
+        "src/eawf/workflow/release/canary_receipts.py"
+    ),
+    "/".join((*CANARY_EVIDENCE_DIRS["REL-0.7.3"], PACKET_RECEIPTS_EXPORT_FILENAME)): (
         "src/eawf/workflow/release/packet_run.py"
     ),
     **dict.fromkeys(_HOST_FACT_CITATIONS, "src/eawf/platform/rules/data/host_facts.yaml"),
