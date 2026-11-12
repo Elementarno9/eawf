@@ -1091,7 +1091,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 89290,
+  "canonical_sequence": 90656,
   "milestone": {
     "MLS-0109": {
       "acceptance_bundle_revision": null,
@@ -1193,14 +1193,15 @@
       "required_batch_refs": [
         "eawf://EAWF/batch/BAT-0399",
         "eawf://EAWF/batch/BAT-0400",
-        "eawf://EAWF/batch/BAT-0401"
+        "eawf://EAWF/batch/BAT-0401",
+        "eawf://EAWF/batch/BAT-0402"
       ],
-      "revision": 3,
+      "revision": 4,
       "status": "ACTIVE",
       "target_date": null,
       "title": "Ship 0.7.3 to finish a release unattended",
       "uid": "52e9352f-768f-5b63-8bee-e5f3996110ff",
-      "updated_at": "2026-11-12T15:38:41.776410Z",
+      "updated_at": "2026-11-12T19:46:35.505189Z",
       "urn": "eawf://EAWF/milestone/MLS-0109"
     }
   },
@@ -12228,6 +12229,388 @@
       ],
       "updated_at": "2026-11-12T15:38:09.462101Z",
       "urn": "eawf://EAWF/pending-action/ACT-0066"
+    },
+    "ACT-0067": {
+      "assignee_ref": null,
+      "bundle_digest": null,
+      "created_at": "2026-11-12T19:16:46.187185Z",
+      "default_on_timeout": null,
+      "default_policy": null,
+      "dispositions": [
+        {
+          "acted_at": "2026-11-12T19:25:14.232260Z",
+          "option_id": "include",
+          "outcome": "sealed",
+          "principal_id": "OP-0001",
+          "snoozed_until": null
+        }
+      ],
+      "harness_attestation": {
+        "harness": "claude-code",
+        "host_session_digest": "sha256:3414d1d8c38b7df7feaf78b5a280b9a5fde6e24ada9ff66ac4553f457ead1c35",
+        "payload_digest": "sha256:4843d9021d465ab670d3e743fc110249922350f73d64adbc4afa92f45f5711d4",
+        "permission_mode": null,
+        "question_ref": "eawf://EAWF/question/QST-0115",
+        "raise_gap_ms": 473073,
+        "run_ref": null,
+        "tool_use_id": "toolu_01QrdnRdwKusPH5RTzggVeCQ",
+        "transcript_check": "matched"
+      },
+      "id": "ACT-0067",
+      "idempotency_key": "v073-push-guard-decision-20261112",
+      "kind": "operator_decision",
+      "options": [
+        {
+          "consequence": "I add EAWF-0754 to the plan revision for BAT-0402. It adds eawf git push, which holds the state lock, and the guard refuses a plain git push from an agent session.",
+          "cost": "About 3 EU more, and one more behaviour change for every agent session in 0.7.3.",
+          "effect": "approve",
+          "label": "Add it to 0.7.3",
+          "option_id": "include",
+          "preview": "0.7.3 agent sessions, main checkout\n  git commit       refused -> eawf git commit\n  git cherry-pick  refused -> eawf git cherry-pick\n  git push         refused -> eawf git push   new"
+        },
+        {
+          "consequence": "EAWF-0754 stays a draft at priority P1. For this release I push while holding the state lock by a local script.",
+          "cost": "Agent pushes stay unprotected in 0.7.3 unless the agent takes the lock by hand.",
+          "effect": "decline",
+          "label": "Leave it for a later release",
+          "option_id": "defer",
+          "preview": "0.7.3 agent sessions, main checkout\n  git commit       refused -> eawf git commit\n  git cherry-pick  refused -> eawf git cherry-pick\n  git push         allowed, unprotected"
+        }
+      ],
+      "override_until": null,
+      "question": "Should 0.7.3 also protect agent pushes? The audit of BAT-0400 found that a plain git push stashes the state files for minutes while the pre-push checks run. A daemon write in that time is lost, the same loss the commit wrapper closed. Nothing guards or wraps git push today. It is filed as draft Task EAWF-0754.",
+      "receipt_ref": "eawf://EAWF/evidence/EVD-0425",
+      "recommendation_rationale": "The release is already complete and audited, and a second new guard deserves its own plan and review.",
+      "recommended_option_id": "defer",
+      "requested_by": {
+        "principal_id": "EAWF-PLANNER",
+        "principal_kind": "agent",
+        "run_ref": "eawf://EAWF/run/RUN-00002444"
+      },
+      "resolution_actor": {
+        "principal_id": "OP-0001",
+        "principal_kind": "human"
+      },
+      "revision": 2,
+      "selected_option_id": "include",
+      "status": "SEALED",
+      "subject_ref": "eawf://EAWF/milestone/MLS-0109",
+      "terms": [
+        {
+          "expansion": "the 0.7.3 patch-release Milestone",
+          "term": "MLS-0109"
+        },
+        {
+          "expansion": "Batch 1 of 0.7.3: release gates",
+          "term": "BAT-0399"
+        },
+        {
+          "expansion": "Batch 2 of 0.7.3: state and hook reliability",
+          "term": "BAT-0400"
+        },
+        {
+          "expansion": "a new fix Batch that would be appended to the Milestone",
+          "term": "BAT-0402"
+        },
+        {
+          "expansion": "the child plan revision that would add the fix Batch",
+          "term": "PRV-0351"
+        },
+        {
+          "expansion": "effort unit, about 30 minutes of agent time",
+          "term": "EU"
+        },
+        {
+          "expansion": "draft Task: hold the document lock around agent pushes",
+          "term": "EAWF-0754"
+        },
+        {
+          "expansion": "priority one, the highest of the open drafts",
+          "term": "P1"
+        },
+        {
+          "expansion": "the data-loss guard that refuses dangerous commands from agent sessions",
+          "term": "guard"
+        }
+      ],
+      "updated_at": "2026-11-12T19:25:14.232260Z",
+      "urn": "eawf://EAWF/pending-action/ACT-0067"
+    },
+    "ACT-0068": {
+      "assignee_ref": null,
+      "bundle_digest": null,
+      "created_at": "2026-11-12T19:17:00.466091Z",
+      "default_on_timeout": null,
+      "default_policy": null,
+      "dispositions": [
+        {
+          "acted_at": "2026-11-12T19:25:14.232260Z",
+          "option_id": "fix_tooling",
+          "outcome": "sealed",
+          "principal_id": "OP-0001",
+          "snoozed_until": null
+        }
+      ],
+      "harness_attestation": {
+        "harness": "claude-code",
+        "host_session_digest": "sha256:3414d1d8c38b7df7feaf78b5a280b9a5fde6e24ada9ff66ac4553f457ead1c35",
+        "payload_digest": "sha256:4843d9021d465ab670d3e743fc110249922350f73d64adbc4afa92f45f5711d4",
+        "permission_mode": null,
+        "question_ref": "eawf://EAWF/question/QST-0114",
+        "raise_gap_ms": 473073,
+        "run_ref": null,
+        "tool_use_id": "toolu_01QrdnRdwKusPH5RTzggVeCQ",
+        "transcript_check": "matched"
+      },
+      "id": "ACT-0068",
+      "idempotency_key": "v073-ledger-history-decision-20261112b",
+      "kind": "operator_decision",
+      "options": [
+        {
+          "consequence": "I draft PRV-0351 with one Task in BAT-0402 and ask you to approve it. The Task makes a squash after a Batch close pass the check, in the rebind verb or in the check itself. Then I rebind again and ask for the push.",
+          "cost": "About 3 EU and one more plan approval. The squashed history stays: one commit per Batch.",
+          "effect": "approve",
+          "label": "Fix the tooling in a new Batch",
+          "option_id": "fix_tooling",
+          "preview": "branch after the fix\n  BAT-0399  1 commit\n  BAT-0400  1 commit\n  BAT-0401  4 commits\n  BAT-0402  1 commit   new: history rows follow a rebind\n  state     1 commit\nnext release: squash after close works"
+        },
+        {
+          "consequence": "I rebuild the branch on the 12 original commits of BAT-0399 and BAT-0400, so the named commits are reachable again. I rebind the ledger rows back and rerun the four packet runs. No code changes.",
+          "cost": "About 2 EU and API spend for four packet runs. It gives up one commit per Batch for the first two Batches. The next release hits the same wall.",
+          "effect": "request_repair",
+          "label": "Restore the per-Task commits",
+          "option_id": "unsquash",
+          "preview": "branch after the rebuild\n  BAT-0399  3 commits   as first landed\n  BAT-0400  9 commits   as first landed\n  BAT-0401  4 commits   new hashes, packet runs redone\n  state     1 commit\nnext release: same problem again"
+        },
+        {
+          "consequence": "I push nothing and change nothing. The branch stays local at its current head with all three Batches complete.",
+          "cost": "0.7.3 waits until you decide.",
+          "effect": "decline",
+          "label": "Stop here, I will look myself",
+          "option_id": "hold",
+          "preview": "local branch feature/eawf-v0.7, 7 commits past dev\nnothing pushed, no pull request"
+        }
+      ],
+      "override_until": null,
+      "question": "How should 0.7.3 get past the ledger-history pre-push check? Six change-history rows name commits that the squash replaced. They record when the Tasks of BAT-0399 and BAT-0400 completed. The rebind verb supersedes ledger rows but cannot supersede history rows, so the first push is refused. All three Batches are complete and every other pre-push check passes.",
+      "receipt_ref": "eawf://EAWF/evidence/EVD-0424",
+      "recommendation_rationale": "The documented flow squashes after Batches close, so every later release would hit the same refusal.",
+      "recommended_option_id": "fix_tooling",
+      "requested_by": {
+        "principal_id": "EAWF-PLANNER",
+        "principal_kind": "agent",
+        "run_ref": "eawf://EAWF/run/RUN-00002444"
+      },
+      "resolution_actor": {
+        "principal_id": "OP-0001",
+        "principal_kind": "human"
+      },
+      "revision": 2,
+      "selected_option_id": "fix_tooling",
+      "status": "SEALED",
+      "subject_ref": "eawf://EAWF/milestone/MLS-0109",
+      "terms": [
+        {
+          "expansion": "the 0.7.3 patch-release Milestone",
+          "term": "MLS-0109"
+        },
+        {
+          "expansion": "Batch 1 of 0.7.3: release gates",
+          "term": "BAT-0399"
+        },
+        {
+          "expansion": "Batch 2 of 0.7.3: state and hook reliability",
+          "term": "BAT-0400"
+        },
+        {
+          "expansion": "a new fix Batch that would be appended to the Milestone",
+          "term": "BAT-0402"
+        },
+        {
+          "expansion": "the child plan revision that would add the fix Batch",
+          "term": "PRV-0351"
+        },
+        {
+          "expansion": "effort unit, about 30 minutes of agent time",
+          "term": "EU"
+        },
+        {
+          "expansion": "the pre-push check that every commit named in committed state is reachable from the branch",
+          "term": "ledger-history"
+        },
+        {
+          "expansion": "eawf batch rebind, which points state rows at the commits a squash produced",
+          "term": "rebind"
+        },
+        {
+          "expansion": "rewriting the branch as one commit per Batch before review",
+          "term": "squash"
+        },
+        {
+          "expansion": "a live run of a sample Task on one runtime, recorded as a receipt",
+          "term": "packet run"
+        },
+        {
+          "expansion": "application programming interface, here the paid model calls the live runs make",
+          "term": "API"
+        },
+        {
+          "expansion": "the integration branch where releases are prepared",
+          "term": "dev"
+        }
+      ],
+      "updated_at": "2026-11-12T19:25:14.232260Z",
+      "urn": "eawf://EAWF/pending-action/ACT-0068"
+    },
+    "ACT-0069": {
+      "assignee_ref": null,
+      "bundle_digest": "sha256:a869b1cc80535db6fc312fa3f68815199d8e6c2ab2e1c7354e0698adc35d61fb",
+      "created_at": "2026-11-12T19:45:47.096255Z",
+      "default_on_timeout": null,
+      "default_policy": null,
+      "dispositions": [
+        {
+          "acted_at": "2026-11-12T19:46:16.821221Z",
+          "option_id": "approve",
+          "outcome": "sealed",
+          "principal_id": "OP-0001",
+          "snoozed_until": null
+        }
+      ],
+      "harness_attestation": {
+        "harness": "claude-code",
+        "host_session_digest": "sha256:dda365228f11d8025ff0da75ab7fc37fe99bded2b48453d743e4395b8ec3cb14",
+        "payload_digest": "sha256:bd6c0c5b897b30926cb3ce42261318b950f13d5c9dd9afc327df040315fe0882",
+        "permission_mode": null,
+        "question_ref": "eawf://EAWF/question/QST-0116",
+        "raise_gap_ms": 16957,
+        "run_ref": null,
+        "tool_use_id": "toolu_01HDztven8VwHuU8zb4nSJax",
+        "transcript_check": "matched"
+      },
+      "id": "ACT-0069",
+      "idempotency_key": "v073-prv0351-approval-question-20261112",
+      "kind": "operator_decision",
+      "options": [
+        {
+          "consequence": "Apply PRV-0351 and deliver BAT-0402: both Tasks, the full test suite, one audit, one commit. The agent then stops before the first push and asks you.",
+          "cost": "2 Tasks, about 8 EU (1 EU is about 30 minutes of agent time). No API spend and none of your terminal time.",
+          "effect": "approve",
+          "label": "Approve and execute",
+          "option_id": "approve",
+          "preview": "BAT-0399 gates          done, 1 commit\nBAT-0400 reliability    done, 1 commit\nBAT-0401 release        done, 4 commits\nBAT-0402 fix            new, 1 commit\n  EAWF-0761 history check follows a rebind   M\n  EAWF-0754 locked agent pushes              M\nthen: push, review, accept, dev and main, publish 0.7.3"
+        },
+        {
+          "consequence": "Leave PRV-0351 unapplied. A child revision makes the changes you ask for and comes back for approval.",
+          "cost": "The first push of 0.7.3 stays refused until the revised plan is approved and delivered.",
+          "effect": "request_repair",
+          "label": "Request plan changes",
+          "option_id": "repair",
+          "preview": "PRV-0351 stays VALIDATED; PRV-0352 is drafted from your notes.\nMLS-0109 stays ACTIVE with three finished Batches, not pushed."
+        },
+        {
+          "consequence": "Leave PRV-0351 unapplied. No BAT-0402. The finished work stays local because the ledger history check refuses the push.",
+          "cost": "0.7.3 cannot be pushed until another plan fixes the check or the history is rebuilt by hand.",
+          "effect": "decline",
+          "label": "Do not run this plan",
+          "option_id": "decline",
+          "preview": "No BAT-0402.\nfeature/eawf-v0.7 stays 7 commits ahead of dev, not pushed.\nledger history check: 6 unreachable rows remain."
+        }
+      ],
+      "override_until": null,
+      "question": "Approve PlanRevision PRV-0351 for Milestone MLS-0109, release 0.7.3? It appends one Batch, BAT-0402, with two Tasks, and leaves the three finished Batches as they are. The first Task makes the ledger history check accept a squash made after a Batch closed, which is what refuses the first push today. The second Task changes behaviour for every agent session: a plain git push in a managed main checkout is refused, and the agent must use eawf git push. Plan: .ea/local/research/plans/2026-11-12-v0.7.3/plan-render-0351.md",
+      "receipt_ref": "eawf://EAWF/evidence/EVD-0426",
+      "recommendation_rationale": "It is the plan you chose in the two earlier decisions; it unblocks the push without rewriting state and closes the same data loss for pushes that 0.7.3 closed for commits.",
+      "recommended_option_id": "approve",
+      "requested_by": {
+        "principal_id": "EAWF-PLANNER",
+        "principal_kind": "agent",
+        "run_ref": "eawf://EAWF/run/RUN-00002444"
+      },
+      "resolution_actor": {
+        "principal_id": "OP-0001",
+        "principal_kind": "human"
+      },
+      "revision": 2,
+      "selected_option_id": "approve",
+      "status": "SEALED",
+      "subject_ref": "eawf://EAWF/milestone/MLS-0109",
+      "terms": [
+        {
+          "expansion": "the 0.7.3 patch-release Milestone",
+          "term": "MLS-0109"
+        },
+        {
+          "expansion": "the second plan revision of the 0.7.3 Milestone, a child of the applied PRV-0350",
+          "term": "PRV-0351"
+        },
+        {
+          "expansion": "the first plan revision of the 0.7.3 Milestone, already applied",
+          "term": "PRV-0350"
+        },
+        {
+          "expansion": "the next plan revision, drafted only if you request changes",
+          "term": "PRV-0352"
+        },
+        {
+          "expansion": "Batch 1: release gates that failed for 0.7.2",
+          "term": "BAT-0399"
+        },
+        {
+          "expansion": "Batch 2: state and hook reliability",
+          "term": "BAT-0400"
+        },
+        {
+          "expansion": "Batch 3: the 0.7.3 release train, version cut and evidence",
+          "term": "BAT-0401"
+        },
+        {
+          "expansion": "Batch 4, new: the history check fix and locked pushes",
+          "term": "BAT-0402"
+        },
+        {
+          "expansion": "Task: let a squash after a Batch closed pass the ledger history check",
+          "term": "EAWF-0761"
+        },
+        {
+          "expansion": "Task: hold the document lock around agent pushes and refuse plain git push",
+          "term": "EAWF-0754"
+        },
+        {
+          "expansion": "the pre-push hook that requires every commit the committed state names to be reachable from the branch",
+          "term": "ledger history check"
+        },
+        {
+          "expansion": "the integration branch where releases are prepared",
+          "term": "dev"
+        },
+        {
+          "expansion": "the stable branch that releases are tagged on",
+          "term": "main"
+        },
+        {
+          "expansion": "effort unit, about 30 minutes of agent time",
+          "term": "EU"
+        },
+        {
+          "expansion": "application programming interface, here the paid model calls live runs make",
+          "term": "API"
+        },
+        {
+          "expansion": "medium, about 2 hours of agent time",
+          "term": "M"
+        },
+        {
+          "expansion": "submitted and checked, waiting for approval",
+          "term": "VALIDATED"
+        },
+        {
+          "expansion": "approved and open for work",
+          "term": "ACTIVE"
+        }
+      ],
+      "updated_at": "2026-11-12T19:46:16.821221Z",
+      "urn": "eawf://EAWF/pending-action/ACT-0069"
     }
   },
   "plan_revision": {
@@ -320549,6 +320932,1832 @@
       "revision": 4,
       "status": "APPLIED",
       "updated_at": "2026-11-12T15:38:29.524290Z"
+    },
+    "PRV-0351": {
+      "approval": {
+        "action_ref": "eawf://EAWF/pending-action/ACT-0069",
+        "approved_at": "2026-11-12T19:46:26.488372Z",
+        "approved_by": {
+          "principal_id": "OP-0001",
+          "principal_kind": "operator"
+        },
+        "base_state_revision": 1,
+        "content_digest": "sha256:a869b1cc80535db6fc312fa3f68815199d8e6c2ab2e1c7354e0698adc35d61fb",
+        "head_bindings": [
+          {
+            "head_sha": "cacc5041956e0eba392a54d5af395e1b3ecc504c",
+            "repository_ref": "eawf://EAWF/repository/EAWF"
+          }
+        ],
+        "policy_revision": 1
+      },
+      "author": {
+        "principal_id": "EAWF-PLANNER",
+        "principal_kind": "service"
+      },
+      "base_state_revision": 1,
+      "body": {
+        "batches": [
+          {
+            "repository_ref": "eawf://EAWF/repository/EAWF",
+            "title": "Make daemon stop wait for exit and the suite launcher-independent",
+            "urn": "eawf://EAWF/batch/BAT-0399"
+          },
+          {
+            "repository_ref": "eawf://EAWF/repository/EAWF",
+            "title": "Guard agent commits, batch host calls, resume seals, fix the start race",
+            "urn": "eawf://EAWF/batch/BAT-0400"
+          },
+          {
+            "repository_ref": "eawf://EAWF/repository/EAWF",
+            "title": "Author the 0.7.3 release train, cut the version and record evidence",
+            "urn": "eawf://EAWF/batch/BAT-0401"
+          },
+          {
+            "repository_ref": "eawf://EAWF/repository/EAWF",
+            "title": "Let a squash after Batch close pass the history check; guard pushes",
+            "urn": "eawf://EAWF/batch/BAT-0402"
+          }
+        ],
+        "citations": [],
+        "dropped_atoms": [
+          {
+            "atom_ref": "A-18",
+            "reason": "over the 60-second Task gate cap: run once as BAT-0399 evidence and as acceptance step AS-03"
+          },
+          {
+            "atom_ref": "A-19",
+            "reason": "deferred to the release step: both rows need the merged, pushed commit and its green push CI, which come after this Batch"
+          }
+        ],
+        "dropped_tasks": [],
+        "milestone": {
+          "acceptance_journey": [
+            {
+              "action": "with a daemon running for the main checkout, run uv run eawf daemon stop and, as soon as it returns, uv run eawf daemon status",
+              "actor": "operator",
+              "evidence_kinds": [
+                "artifact"
+              ],
+              "expected_observation": "stop exits 0 and the status run reports no daemon running, with no daemon pid file or socket left in the tree's runtime directory",
+              "required": true,
+              "step_id": "AS-01"
+            },
+            {
+              "action": "run uv run pytest -q tests/unit/runtime/vcs/test_document_hold.py, then uv run pytest -q tests/unit/runtime/sandbox/test_data_loss.py -k commit",
+              "actor": "system",
+              "evidence_kinds": [
+                "artifact"
+              ],
+              "expected_observation": "exit status 0: plain git commit, git cherry-pick and a stash-ing pre-commit run are denied in a managed main checkout with a reason naming the wrapper verb, and a state write during a wrapped commit's hooks survives",
+              "required": true,
+              "step_id": "AS-02"
+            },
+            {
+              "action": "from an agent session with CLAUDECODE set, run uv run pytest -n0 -q tests/e2e/test_smoke_milestone.py",
+              "actor": "system",
+              "evidence_kinds": [
+                "artifact"
+              ],
+              "expected_observation": "the smoke passes: its operator seal is no longer refused because the suite clears the agent-session markers",
+              "required": true,
+              "step_id": "AS-03"
+            },
+            {
+              "action": "run uv run pytest -q tests/unit/runtime/daemon/test_host_call_cost.py tests/unit/runtime/daemon/test_host_question_seal_resume.py tests/unit/runtime/hooks/test_hook_daemon_down.py",
+              "actor": "system",
+              "evidence_kinds": [
+                "artifact"
+              ],
+              "expected_observation": "exit status 0: concurrent observations answer within the hook deadline in one document write, an interrupted seal resumes exactly once, and the claim race has one winner",
+              "required": true,
+              "step_id": "AS-04"
+            },
+            {
+              "action": "run uv run eawf --version and read the top section of CHANGELOG.md",
+              "actor": "system",
+              "evidence_kinds": [
+                "artifact"
+              ],
+              "expected_observation": "0.7.3 is printed and a ## [0.7.3] section carries upgrade notes on daemon stop waiting, the wrapper verbs eawf git commit and eawf git cherry-pick, and the line No state migration is required from 0.7.2",
+              "required": true,
+              "step_id": "AS-05"
+            },
+            {
+              "action": "run uv run eawf release preflight 0.7.3 --skip-ci-runs on the reviewed head",
+              "actor": "operator",
+              "evidence_kinds": [
+                "artifact"
+              ],
+              "expected_observation": "the membership and provider rows read pass; ancestry may stay red until the merge",
+              "required": true,
+              "step_id": "AS-06"
+            }
+          ],
+          "appetite": {
+            "amount": 16,
+            "budget_kind": "duration",
+            "unit": "hours"
+          },
+          "contributing_track_refs": [],
+          "description": "Python patch release that removes the stalls the 0.7.2 release hit. eawf daemon stop returns only once the daemon has exited, and the test suite passes the same from an agent session as from a terminal. Agent commits in a managed main checkout hold the document lock, host tool calls stop timing out under load, an interrupted approval seal resumes, and the daemon-start claim has one winner. The 0.7.3 train, version cut and release evidence ship in the same plan.",
+          "exclusions": [
+            "commits made by a person from a terminal or an IDE stay unprotected: only agent sessions are routed to the wrapper verbs, because a git hook cannot hold the document lock",
+            "linked worktrees stay outside the new commit rule of the data-loss guard",
+            "reviving the epoch-2 regressed-state refusal as a second safeguard, left as a follow-up",
+            "the session id variable that still leaks from agent sessions into tests, left as a backlog row",
+            "the data-loss guard judging words inside a quoted heredoc body, left as a backlog row",
+            "finishing or advancing the 0.7.2 release record, which stays at candidate",
+            "macOS and Windows canary evidence: the 0.7.3 export advertises linux only, as 0.7.2 did",
+            "pre-release dev tags: the 0.7.3 train is a single stable rung",
+            "the remaining draft Tasks EAWF-0741, EAWF-0744 and EAWF-0745"
+          ],
+          "key": "MLS-0109",
+          "outcome": "eawf 0.7.3 is released (uv run eawf --version prints 0.7.3) with: eawf daemon stop returning only after the daemon process has exited, or exiting 1 with daemon stop failed at its --timeout; a test suite whose outcome does not depend on agent-session environment markers; eawf git commit and eawf git cherry-pick holding the document lock around git, and the data-loss guard refusing plain git commit, git cherry-pick and a stash-ing pre-commit run from an agent session in a managed main checkout; host tool observations coalesced into one document write per batch with an indexed receipt lookup; an approval seal that resumes after a lock timeout and seals exactly once; one winner in the daemon-start claim race; and a 0.7.3 release train with its canary export, dispatch smokes and packet runs committed.",
+          "primary_track_ref": "eawf://EAWF/track/TRK-EAWF-CORE",
+          "required_batch_refs": [
+            "eawf://EAWF/batch/BAT-0399",
+            "eawf://EAWF/batch/BAT-0400",
+            "eawf://EAWF/batch/BAT-0401",
+            "eawf://EAWF/batch/BAT-0402"
+          ],
+          "target_date": null,
+          "title": "Ship 0.7.3 to finish a release unattended"
+        },
+        "milestone_urn": "eawf://EAWF/milestone/MLS-0109",
+        "new_surfaces": [],
+        "source_atoms": [
+          {
+            "atom_id": "A-01",
+            "mapped_criterion_ids": [
+              "CR-971",
+              "CR-972",
+              "CR-973",
+              "CR-975"
+            ],
+            "text": "Make eawf daemon stop return only once the daemon has exited, a successor counting as done"
+          },
+          {
+            "atom_id": "A-02",
+            "mapped_criterion_ids": [
+              "CR-973",
+              "CR-974"
+            ],
+            "text": "Exit 1 with daemon stop failed at the --timeout and keep the --json keys of daemon stop"
+          },
+          {
+            "atom_id": "A-03",
+            "mapped_criterion_ids": [
+              "CR-976",
+              "CR-977"
+            ],
+            "text": "Clear the agent-session markers for the whole test session from the imported constant"
+          },
+          {
+            "atom_id": "A-04",
+            "mapped_criterion_ids": [
+              "CR-978"
+            ],
+            "text": "Leave the operator-identity guard, the daemon client and the proof runner untouched"
+          },
+          {
+            "atom_id": "A-05",
+            "mapped_criterion_ids": [
+              "CR-979",
+              "CR-980",
+              "CR-981",
+              "CR-983"
+            ],
+            "text": "Ship eawf git commit and eawf git cherry-pick holding the document lock around git"
+          },
+          {
+            "atom_id": "A-06",
+            "mapped_criterion_ids": [
+              "CR-982"
+            ],
+            "text": "Deny plain git commit, git cherry-pick and a stash-ing pre-commit run from agents in a managed main checkout"
+          },
+          {
+            "atom_id": "A-07",
+            "mapped_criterion_ids": [
+              "CR-984",
+              "CR-987"
+            ],
+            "text": "Coalesce host tool observations per root into one document write per batch"
+          },
+          {
+            "atom_id": "A-08",
+            "mapped_criterion_ids": [
+              "CR-985"
+            ],
+            "text": "Index the receipt lookup by call id"
+          },
+          {
+            "atom_id": "A-09",
+            "mapped_criterion_ids": [
+              "CR-986"
+            ],
+            "text": "Drain queued host tool observations on a clean daemon shutdown"
+          },
+          {
+            "atom_id": "A-10",
+            "mapped_criterion_ids": [
+              "CR-988",
+              "CR-989",
+              "CR-990"
+            ],
+            "text": "Complete an approval seal that hit a lock timeout on the next answer, exactly once"
+          },
+          {
+            "atom_id": "A-11",
+            "mapped_criterion_ids": [
+              "CR-991",
+              "CR-992",
+              "CR-993"
+            ],
+            "text": "Leave exactly one winner in the daemon-start claim race, proved by a deterministic interleaving"
+          },
+          {
+            "atom_id": "A-12",
+            "mapped_criterion_ids": [
+              "CR-994",
+              "CR-995",
+              "CR-996"
+            ],
+            "text": "Author the 0.7.3 release train, its checkpoint configuration and its canary row"
+          },
+          {
+            "atom_id": "A-13",
+            "mapped_criterion_ids": [
+              "CR-997",
+              "CR-998"
+            ],
+            "text": "Cut version 0.7.3 with its changelog section, upgrade notes, release test and goldens"
+          },
+          {
+            "atom_id": "A-14",
+            "mapped_criterion_ids": [
+              "CR-999",
+              "CR-1000"
+            ],
+            "text": "Commit the REL-0.7.3 canary export and its acceptance walk"
+          },
+          {
+            "atom_id": "A-15",
+            "mapped_criterion_ids": [
+              "CR-1001"
+            ],
+            "text": "Promote the 0.7.3 evidence files in the commit policy, .gitignore and the census"
+          },
+          {
+            "atom_id": "A-16",
+            "mapped_criterion_ids": [
+              "CR-1002",
+              "CR-1003"
+            ],
+            "text": "Record passing dispatch smokes and packet runs for both runtimes on 0.7.3"
+          },
+          {
+            "atom_id": "A-17",
+            "mapped_criterion_ids": [
+              "CR-1004"
+            ],
+            "text": "Show the membership and provider preflight rows green for 0.7.3"
+          },
+          {
+            "atom_id": "A-18",
+            "mapped_criterion_ids": [],
+            "text": "Show the e2e milestone smoke passing from an agent session"
+          },
+          {
+            "atom_id": "A-19",
+            "mapped_criterion_ids": [],
+            "text": "Show the ancestry and ci_green preflight rows green for 0.7.3"
+          },
+          {
+            "atom_id": "A-20",
+            "mapped_criterion_ids": [
+              "CR-1005",
+              "CR-1006"
+            ],
+            "text": "Let a squash after a Batch closed, followed by a rebind, pass the ledger history check without a schema change"
+          },
+          {
+            "atom_id": "A-21",
+            "mapped_criterion_ids": [
+              "CR-1008"
+            ],
+            "text": "Keep the rebind idempotent and let a tree rebound once pass without a further write"
+          },
+          {
+            "atom_id": "A-22",
+            "mapped_criterion_ids": [
+              "CR-1007"
+            ],
+            "text": "Keep a history mention of a commit that was not rebound failing and the append-only check intact"
+          },
+          {
+            "atom_id": "A-23",
+            "mapped_criterion_ids": [
+              "CR-1009"
+            ],
+            "text": "Keep the doctor's unrepairable count truthful after the change"
+          },
+          {
+            "atom_id": "A-24",
+            "mapped_criterion_ids": [
+              "CR-1010",
+              "CR-1012",
+              "CR-1013"
+            ],
+            "text": "Ship the push verb of eawf git holding the document lock around git's push subcommand and its pre-push hooks"
+          },
+          {
+            "atom_id": "A-25",
+            "mapped_criterion_ids": [
+              "CR-1011"
+            ],
+            "text": "Deny plain git's push subcommand from agents in a managed main checkout, keeping the drift judgement"
+          },
+          {
+            "atom_id": "A-26",
+            "mapped_criterion_ids": [
+              "CR-1014"
+            ],
+            "text": "Register the push verb and regenerate the reference docs"
+          },
+          {
+            "atom_id": "A-27",
+            "mapped_criterion_ids": [
+              "CR-1015"
+            ],
+            "text": "Write the 0.7.3 changelog lines for the push verb and the squash fix"
+          }
+        ],
+        "tasks": [
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0399",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-971",
+                "kind": "behavioral",
+                "measurable_signal": "exit wait over a free, a released and a held singleton lock; gate: `uv run pytest tests/unit/runtime/daemon/test_lifecycle.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/daemon/test_lifecycle.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "wait_for_daemon_exit(runtime_dir: Path, *, previous_pid: int | None, timeout_seconds: float) -> None in src/eawf/runtime/daemon/lifecycle.py polls daemon_singleton_locked every STOP_POLL_INTERVAL_SECONDS: it returns at once on a free singleton lock, returns once a held lock is released mid-wait, and raises DaemonLifecycleError naming the timeout when the lock stays held past timeout_seconds.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-972",
+                "kind": "behavioral",
+                "measurable_signal": "a successor pid ends the wait, the stopped pid does not; gate: `uv run pytest tests/unit/runtime/daemon/test_lifecycle.py -k successor -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/daemon/test_lifecycle.py -k successor",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "wait_for_daemon_exit also returns without error while the lock is held when the pid file names a pid other than previous_pid, a successor another client spawned inside the wait; a pid file naming previous_pid keeps it waiting. It reads the pid through a new public reader read_daemon_pid(runtime_dir: Path) -> int | None in src/eawf/runtime/daemon/spawn.py.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-973",
+                "kind": "behavioral",
+                "measurable_signal": "stop waits after the reply and a wait timeout exits 1; gate: `uv run pytest tests/unit/surfaces/cli/test_daemon_stop_no_spawn.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "functional_suitability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/surfaces/cli/test_daemon_stop_no_spawn.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "stop_cmd (src/eawf/surfaces/cli/commands/daemon.py) reads the daemon pid before the daemon.shutdown call and, after a reply without error and on the win32 reply-lost path, calls wait_for_daemon_exit bounded by its existing --timeout. DaemonLifecycleError prints `daemon stop failed: <message>` to stderr and exits 1. The handler holds no polling loop, and the not-running and --evict-service paths are unchanged.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-974",
+                "kind": "behavioral",
+                "measurable_signal": "stop text and --json keys unchanged on every path; gate: `uv run pytest tests/unit/surfaces/cli/test_daemon_stop_no_spawn.py tests/unit/surfaces/cli/test_daemon_stop_pipe_closed.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "compatibility",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/surfaces/cli/test_daemon_stop_no_spawn.py tests/unit/surfaces/cli/test_daemon_stop_pipe_closed.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "eawf daemon stop adds no option and keeps its output: the success line `daemon shutting down at=<shutdown_at> drained=<drained>` and the --json keys shutdown_at and drained; shutdown_at, drained and running when no daemon runs; shutdown_at, drained and reply_lost on the win32 reply-lost path. Success now means the daemon is gone.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-975",
+                "kind": "behavioral",
+                "measurable_signal": "epoch-1 tree gate file with no error; gate: `uv run pytest tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py tests/integration/surfaces/cli/test_daemon_service_lifecycle.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py tests/integration/surfaces/cli/test_daemon_service_lifecycle.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The daemon that leaked out of tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py no longer outlives its stop: the file reports 129 passed and no error (128 passed and 1 error before this fix), and tests/integration/surfaces/cli/test_daemon_service_lifecycle.py stays green.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [],
+            "effort": "S",
+            "intent": "Closes the gap that cost the 0.7.2 release its epoch1_refusal receipt: `eawf daemon stop` returns once the daemon replies to daemon.shutdown (src/eawf/surfaces/cli/commands/daemon.py:415-475), while the socket, the pid file and the singleton lock go away afterwards (src/eawf/runtime/daemon/main.py:1037-1145), so a caller checking right after stop still sees a daemon. Add wait_for_daemon_exit in src/eawf/runtime/daemon/lifecycle.py beside wait_for_daemon_stopped: poll daemon_singleton_locked, which frees only after the socket and pid file are removed, and treat a pid file naming a pid other than the one read before the call as done, since a hook may auto-spawn a successor inside the window; that needs a public pid-file reader in src/eawf/runtime/daemon/spawn.py, where only the private _read_pid_file exists today. Bound the wait by the existing --timeout; on DaemonLifecycleError print daemon stop failed and exit 1, as daemon restart does. Keep the CLI handler a dispatch layer, add no option and keep the --json keys. Add one line to src/eawf/_data/help/daemon.md saying stop waits for exit. Restart, doctor and packet-producer shutdown paths stay as they are. tests/e2e/test_daemon_e2e.py stays green as Batch evidence.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Make daemon stop return only once the daemon has exited",
+            "urn": "eawf://EAWF/task/EAWF-0749",
+            "write_claims": [
+              "src/eawf/runtime/daemon/lifecycle.py",
+              "src/eawf/runtime/daemon/spawn.py",
+              "src/eawf/surfaces/cli/commands/daemon.py",
+              "src/eawf/_data/help/daemon.md",
+              "tests/unit/runtime/daemon/test_lifecycle.py",
+              "tests/unit/surfaces/cli/test_daemon_stop_no_spawn.py",
+              "tests/unit/surfaces/cli/test_daemon_stop_pipe_closed.py"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0399",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-976",
+                "kind": "behavioral",
+                "measurable_signal": "no agent-session marker visible inside a test; gate: `uv run pytest tests/unit/test_agent_session_isolation.py::test_no_agent_session_marker_is_visible -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/test_agent_session_isolation.py::test_no_agent_session_marker_is_visible",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "tests/conftest.py gains a session-scoped autouse fixture agent_session_env_isolation that deletes every variable named in AGENT_SESSION_ENV_MARKERS, imported from eawf.runtime.daemon.operator_identity with no marker name restated in tests/conftest.py, and restores them at session teardown; inside any test agent_session_runtime(os.environ) is None and no marker variable is set.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-977",
+                "kind": "behavioral",
+                "measurable_signal": "child suite launched with markers set sees none; gate: `uv run pytest tests/unit/test_agent_session_isolation.py::test_a_child_suite_launched_with_markers_set_sees_none -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/test_agent_session_isolation.py::test_a_child_suite_launched_with_markers_set_sees_none",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "tests/unit/test_agent_session_isolation.py::test_a_child_suite_launched_with_markers_set_sees_none runs a child pytest over a probe test with CLAUDECODE=1 and CODEX_THREAD_ID set in the child environment and asserts the probe passes; with the fixture removed the probe fails, so the suite's outcome no longer depends on whether an agent session or a terminal launches it.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-978",
+                "kind": "behavioral",
+                "measurable_signal": "operator-identity guard still refuses marked sessions; gate: `uv run pytest tests/integration/surfaces/cli/test_operator_identity_refusal.py tests/unit/runtime/daemon/test_daemon_client.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "security",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/surfaces/cli/test_operator_identity_refusal.py tests/unit/runtime/daemon/test_daemon_client.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The fix is test-only: src/eawf/runtime/daemon/operator_identity.py (the operator-identity guard), src/eawf/surfaces/cli/_daemon_client.py (the daemon client) and src/eawf/workflow/release/checkpoint_receipts.py (the proof runner) are untouched by this Task, and guard tests that set a marker explicitly still see operator_identity_refused.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [],
+            "effort": "XS",
+            "intent": "The release gate full_suite runs `just test-all` (src/eawf/workflow/release/train.py:746-751) in the caller's environment, so from Claude Code (CLAUDECODE) or Codex (CODEX_THREAD_ID) the end-to-end (e2e) smoke's operator seal is refused by the operator-identity guard and the suite fails only because of who launched it. Fix it in the tests: a session-scoped autouse fixture in tests/conftest.py, beside runtime_dir_isolation, that removes every variable in AGENT_SESSION_ENV_MARKERS (src/eawf/runtime/daemon/operator_identity.py:41-44) and restores them at teardown. Import the constant so a new marker is covered; never restate the variable names as a second source of truth. The product must keep forwarding the caller's identity, so the operator-identity guard, the daemon client (src/eawf/surfaces/cli/_daemon_client.py:396-398) and the proof runner (pinned_worktree and _run_in_tree in src/eawf/workflow/release/checkpoint_receipts.py) stay untouched, as do the two local marker strips in existing tests. Batch evidence, over the 60-second Task gate cap: CLAUDECODE=1 uv run pytest -n0 -q tests/e2e/test_smoke_milestone.py passes from an agent session; it failed before.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Make the test suite's outcome independent of who launches it",
+            "urn": "eawf://EAWF/task/EAWF-0750",
+            "write_claims": [
+              "tests/conftest.py",
+              "tests/unit/test_agent_session_isolation.py"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0400",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-979",
+                "kind": "behavioral",
+                "measurable_signal": "a state write during a wrapped commit's hooks survives, the control loses it; gate: `uv run pytest tests/unit/runtime/vcs/test_document_hold.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/vcs/test_document_hold.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "run_git_holding_document_lock(repo_root: Path, git_args: Sequence[str]) -> int in new src/eawf/runtime/vcs/document_hold.py takes the epoch-2 document lock (.ea/locks/epoch2/document, portalock, timeout DOCUMENT_HOLD_TIMEOUT_SECONDS = 120.0) before git starts and holds it until git exits. With a pre-commit hook that mimics pre-commit's stash, sleep and restore, a concurrent state write under the lock survives with the wrapper and is lost without it.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-980",
+                "kind": "behavioral",
+                "measurable_signal": "exit status passes through and the lock is free afterwards; gate: `uv run pytest tests/unit/runtime/vcs/test_document_hold.py::test_the_exit_status_passes_through_and_the_lock_is_released -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/vcs/test_document_hold.py::test_the_exit_status_passes_through_and_the_lock_is_released",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "run_git_holding_document_lock returns git's exit status unchanged (0, 1 and a failing hook's status) and releases the document lock on every path, git missing and KeyboardInterrupt included, so a fresh portalock.acquire of the lock succeeds at once afterwards.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-981",
+                "kind": "behavioral",
+                "measurable_signal": "wrapper verbs dispatch to the library and exit with git's status; gate: `uv run pytest tests/unit/surfaces/cli/test_git_guard_cli.py tests/integration/test_docs_autogen.py::test_committed_autogen_tree_matches_regeneration -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "functional_suitability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/surfaces/cli/test_git_guard_cli.py tests/integration/test_docs_autogen.py::test_committed_autogen_tree_matches_regeneration",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "`eawf git commit -- <git args>` and `eawf git cherry-pick -- <git args>`, a thin command group in new src/eawf/surfaces/cli/commands/git_guard.py registered in src/eawf/surfaces/cli/registry.py, pass every argument after -- to git through run_git_holding_document_lock and exit with git's status; the handler holds no lock logic, and docs/reference/autogen matches a fresh regeneration with the new verbs.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-982",
+                "kind": "behavioral",
+                "measurable_signal": "plain commit, cherry-pick and stash-ing pre-commit run denied in the main checkout only; gate: `uv run pytest tests/unit/runtime/sandbox/test_data_loss.py -k commit -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "safety",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/sandbox/test_data_loss.py -k commit",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The data-loss guard (src/eawf/runtime/sandbox/data_loss.py) gains DataLossPattern.UNLOCKED_STATE_COMMIT = \"unlocked_state_commit\" with a RULE_VALUES row and denies, from an agent session in a managed main checkout, git commit, git -C <main> commit, git cherry-pick and pre-commit run without --all-files or --files, the reason naming eawf git commit or eawf git cherry-pick; a linked worktree, an unmanaged repository and pre-commit run --all-files pass.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-983",
+                "kind": "behavioral",
+                "measurable_signal": "a real wrapped commit with a system hook ends without LockTimeout; gate: `uv run pytest tests/unit/runtime/vcs/test_document_hold.py::test_a_wrapped_commit_with_a_system_hook_never_times_out -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/vcs/test_document_hold.py::test_a_wrapped_commit_with_a_system_hook_never_times_out",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "Pre-commit-stage hooks under the wrapper never take the document lock themselves: one real wrapped commit in a scratch managed repository whose .pre-commit-config.yaml runs a language: system local hook exits 0 and raises no LockTimeout.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [],
+            "effort": "L",
+            "intent": "pre-commit stashes unstaged changes, checks out the index and restores the patch around its hooks (pre_commit staged_files_only), so a daemon state write landing in that window is lost; this caused three state-loss incidents in the main checkout. A git hook cannot hold the document lock: pre-commit stashes before any hook runs, and pre-commit install overwrites or demotes a wrapping hook script. This Task therefore departs from its draft wording: instead of the hooks taking the lock, ship wrapper verbs `eawf git commit` and `eawf git cherry-pick` that take git's arguments after -- and hold the epoch-2 document lock (src/eawf/runtime/daemon/epoch2_root.py:101-104, through portalock) around the whole git process; library in new src/eawf/runtime/vcs/document_hold.py, thin CLI in new src/eawf/surfaces/cli/commands/git_guard.py registered in src/eawf/surfaces/cli/registry.py. Route agents to them deterministically: the data-loss guard (src/eawf/runtime/sandbox/data_loss.py, which judges every agent Bash call and finds the main checkout with _in_main_checkout) denies plain git commit, git cherry-pick and a stash-ing pre-commit run from an agent session in a managed main checkout, naming the wrapper verb; the rule composes with the existing drifted_commit judge. Commits made by a person or an IDE stay unprotected, and linked worktrees stay unguarded. During a wrapped commit every daemon document session waits and may raise LockTimeout after 5 s: a loud failure instead of a silent loss; EAWF-0751 makes an interrupted seal resumable. Regenerate docs/reference/autogen for the new verbs.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Hold the document lock around agent commits and refuse plain git commit",
+            "urn": "eawf://EAWF/task/EAWF-0742",
+            "write_claims": [
+              "src/eawf/runtime/vcs/document_hold.py",
+              "src/eawf/surfaces/cli/commands/git_guard.py",
+              "src/eawf/surfaces/cli/registry.py",
+              "src/eawf/runtime/sandbox/data_loss.py",
+              "docs/reference/autogen",
+              "tests/unit/runtime/vcs/test_document_hold.py",
+              "tests/unit/surfaces/cli/test_git_guard_cli.py",
+              "tests/unit/runtime/sandbox/test_data_loss.py"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0400",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-984",
+                "kind": "behavioral",
+                "measurable_signal": "eight concurrent observations answer within 1.5 s in one document write; gate: `uv run pytest tests/unit/runtime/daemon/test_host_call_cost.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "performance_efficiency",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/daemon/test_host_call_cost.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "runtime.host.tool.observe (src/eawf/runtime/daemon/methods/host_tool.py) validates, resolves the Run, derives the call id, enqueues and answers; one drainer per root applies the queue in one session and one ledger_append_batch. Eight concurrent calls on a fixture tree inflated to real ledger sizes (about 14,000 receipts and 51,000 run records) each answer within 1.5 s, the hook deadline, and land as one document write.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-985",
+                "kind": "behavioral",
+                "measurable_signal": "receipt lookup by call id decodes only the matching lines; gate: `uv run pytest tests/unit/runtime/daemon/test_host_call_cost.py -k receipt -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "performance_efficiency",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/daemon/test_host_call_cost.py -k receipt",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "Finding a call's receipt (_call_receipt in src/eawf/runtime/daemon/host_calls.py) reads an index keyed by call id and validates only that call's lines; it never decodes the whole receipt collection per call, and a receipt appended after the index was built is still found.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-986",
+                "kind": "behavioral",
+                "measurable_signal": "queued observations land before a clean shutdown completes; gate: `uv run pytest tests/unit/runtime/daemon/test_host_tool_drain.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/daemon/test_host_tool_drain.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "Once the daemon is stopping (MethodContext.stopping set), the drainer applies every queued observation before its thread ends, so each observe call answered before a clean shutdown has its receipt and state_tool_phase events in the document. The drain lives in host_tool.py and host_calls.py; any call site needed elsewhere is recorded as a scope delta first.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-987",
+                "kind": "behavioral",
+                "measurable_signal": "content filing over batched observations; gate: `uv run pytest tests/integration/runtime/daemon/test_host_tool_content_filing.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "compatibility",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/runtime/daemon/test_host_tool_content_filing.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The observe answer still carries run_ref and call_id, the fields the tool hook reads (src/eawf/runtime/hooks/host_calls.py:318-328); receipt_id and status may drop from it. Host tool content filing keeps working with batched landing.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [],
+            "effort": "L",
+            "intent": "Under concurrent load one host tool observation holds the document lock for p50 1.6 s and p95 5.9 s (23-minute live daemon log on 0.7.2), so the hook's 1.5 s deadline (HOOK_DAEMON_DEADLINE_S, src/eawf/runtime/hooks/runner.py:60) lapses and 143 answers found the caller gone. Coalesce observations per root in src/eawf/runtime/daemon/methods/host_tool.py: the handler validates, resolves the Run from the status projection, derives the deterministic call id, enqueues and answers at once; one drainer thread per root applies all queued observations in one session and one ledger_append_batch. Index the receipt lookup by call id in src/eawf/runtime/daemon/host_calls.py (today _call_receipt re-reads 14,266 receipts per call, 211 ms), on the pattern of indexed_ledger_records (src/eawf/kernel/store/run_index.py:84). Drain the queue before a clean daemon shutdown, inside these two files: a call site in methods/daemon.py or main.py would touch the daemon stop work of EAWF-0749 and needs a recorded scope delta first. Gives up: the observe answer no longer carries receipt_id or status (the hook ignores them), and an observation is durable only once its batch lands. The approval seal resume is EAWF-0751, not this Task.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Batch host tool observations into one write and index receipt lookup",
+            "urn": "eawf://EAWF/task/EAWF-0743",
+            "write_claims": [
+              "src/eawf/runtime/daemon/methods/host_tool.py",
+              "src/eawf/runtime/daemon/host_calls.py",
+              "tests/unit/runtime/daemon/test_host_call_cost.py",
+              "tests/unit/runtime/daemon/test_host_tool_drain.py",
+              "tests/integration/runtime/daemon/test_host_tool_content_filing.py"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0400",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-988",
+                "kind": "behavioral",
+                "measurable_signal": "a seal interrupted by LockTimeout completes on the next answer; gate: `uv run pytest tests/unit/runtime/daemon/test_host_question_seal_resume.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/daemon/test_host_question_seal_resume.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "When the seal raises LockTimeout after answer_host_questions (src/eawf/runtime/daemon/methods/host_question.py) recorded the answers, the pending action stays unsealed and its questions stay ANSWERED; the next runtime.host.question.answer for the same call seals that action exactly once, with one resolution and one harness attestation (src/eawf/runtime/daemon/methods/harness_seal.py).",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-989",
+                "kind": "behavioral",
+                "measurable_signal": "no second seal after a resumed one; gate: `uv run pytest tests/unit/runtime/daemon/test_host_question_seal_resume.py::test_a_resumed_seal_is_never_sealed_again -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/daemon/test_host_question_seal_resume.py::test_a_resumed_seal_is_never_sealed_again",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The seal set is the union of the questions this call answered and standing ANSWERED questions whose marked pending action is still unsealed. A further answer after the resumed seal, and an answer for an action already sealed, seal nothing again and leave that pending action's revision unchanged.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-990",
+                "kind": "behavioral",
+                "measurable_signal": "host question producer and binding unchanged; gate: `uv run pytest tests/integration/runtime/daemon/test_host_question_producer.py tests/integration/workflow/delivery/test_host_question_binding.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "compatibility",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/runtime/daemon/test_host_question_producer.py tests/integration/workflow/delivery/test_host_question_binding.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "Host question behaviour outside the resume path is unchanged: tests/integration/runtime/daemon/test_host_question_producer.py and tests/integration/workflow/delivery/test_host_question_binding.py pass without edits.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [
+              "eawf://EAWF/task/EAWF-0743"
+            ],
+            "effort": "S",
+            "intent": "answer_host_questions records the answers in one session and seals the pending action in later sessions (src/eawf/runtime/daemon/methods/host_question.py:487-545). A LockTimeout in the seal leaves the answers recorded; a retried hook then finds the questions ANSWERED (_standing, lines 512-518), its answered set is empty, and nothing ever seals the action, so the operator's approval is lost. Make the seal resumable: seal the union of the questions this call answered and the standing answered questions whose marked pending action is still unsealed, exactly once, through the existing seal path in src/eawf/runtime/daemon/methods/harness_seal.py. EAWF-0742 makes long document-lock holds during wrapped commits expected, which makes this resume necessary. Runs after EAWF-0743 because both change how host calls take the document session.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Resume an approval seal that hit a lock timeout and seal it once",
+            "urn": "eawf://EAWF/task/EAWF-0751",
+            "write_claims": [
+              "src/eawf/runtime/daemon/methods/host_question.py",
+              "src/eawf/runtime/daemon/methods/harness_seal.py",
+              "tests/unit/runtime/daemon/test_host_question_seal_resume.py"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0400",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-991",
+                "kind": "behavioral",
+                "measurable_signal": "one winner in the forced interleaving; gate: `uv run pytest tests/unit/runtime/hooks/test_hook_daemon_down.py -k claim -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/hooks/test_hook_daemon_down.py -k claim",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "A deterministic interleaving case in tests/unit/runtime/hooks/test_hook_daemon_down.py drives claim_daemon_start (src/eawf/runtime/hooks/daemon_start.py) through patched rename and link so B renames A's fresh stamp and C claims in B's gap; exactly one claimant wins. The case is red on the code before this fix, where A and C both win.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-992",
+                "kind": "behavioral",
+                "measurable_signal": "stale race repeated 200 times with one winner per round; gate: `uv run pytest tests/unit/runtime/hooks/test_hook_daemon_down.py -k claim -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/hooks/test_hook_daemon_down.py -k claim",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "claim_daemon_start serialises only the stale path under a portalocker lock on the sibling file daemon-start.stamp.lock beside DAEMON_START_STAMP, never unlinked, and renews the stamp in place with os.utime after re-checking freshness under the lock, so the stamp name is never absent; the fresh path stays a lock-free O_EXCL create. The stale-case race repeated 200 times in-process gives one winner every round in under 10 s.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-993",
+                "kind": "behavioral",
+                "measurable_signal": "claim boundaries and the leftover-file check; gate: `uv run pytest tests/unit/runtime/hooks/test_hook_daemon_down.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "compatibility",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/hooks/test_hook_daemon_down.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The claim-boundaries cases (absent .ea, fresh, near-stale, stale and future-dated stamps) still pass, and the claim race scenario's leftover-file assertion admits only daemon-start.stamp and daemon-start.stamp.lock.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [],
+            "effort": "S",
+            "intent": "claim_daemon_start (src/eawf/runtime/hooks/daemon_start.py:110-180) rate-limits background daemon starts by creating a stamp only one process should win. On the stale path B renames the stamp A has just recreated; between B's rename and its link-back the stamp name is absent, so C's O_EXCL create succeeds and A and C both win (45 double winners in 2,000 stress rounds on Linux; the continuous integration (CI) flake is about 2 percent per run and not specific to macOS). Serialise only the stale path under a portalocker lock on a persistent sibling daemon-start.stamp.lock, never unlinked, and renew the stamp in place with os.utime after re-checking freshness under the lock; the fresh path stays a lock-free O_EXCL create. A flock prototype gave no double winner in 3,000 rounds. portalocker is already a dependency and gives Windows parity. Gives up one more file in .ea/local/hooks and a blocking acquisition on the rare stale path.",
+            "priority": "P2",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Leave one winner in the daemon-start claim race",
+            "urn": "eawf://EAWF/task/EAWF-0748",
+            "write_claims": [
+              "src/eawf/runtime/hooks/daemon_start.py",
+              "tests/unit/runtime/hooks/test_hook_daemon_down.py"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0401",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-994",
+                "kind": "behavioral",
+                "measurable_signal": "train resolved for version 0.7.3; gate: `uv run pytest tests/unit/workflow/release/test_release_trains.py::test_v073_patch_train -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "functional_suitability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/release/test_release_trains.py::test_v073_patch_train",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "src/eawf/workflow/release/train.py declares V073_TARGET_VERSION = \"0.7.3\" and V073_TRAIN with one ReleaseCheckpoint (release_key(V073_TARGET_VERSION), authority_epoch 2, gate_profile ReleaseGateProfile.STABLE, requires_membership True) and current_checkpoint_index 0, appended to RELEASE_TRAINS; REL-0.7.3 resolves to that train with exactly one stable rung requiring membership.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-995",
+                "kind": "behavioral",
+                "measurable_signal": "0.7.3 checkpoint configuration and admission; gate: `uv run pytest tests/unit/workflow/release/test_stable_checkpoint_config.py tests/integration/runtime/daemon/methods/test_patch_train_admission.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "functional_suitability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/release/test_stable_checkpoint_config.py tests/integration/runtime/daemon/methods/test_patch_train_admission.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "V073_RELEASE_CONFIG_YAML = render_checkpoint_config(rung=V073_TRAIN.checkpoint_for_version(V073_TARGET_VERSION), template=V07_CONFIG_TEMPLATE) is appended to CHECKPOINT_CONFIGS and renders the same targets and claims as the 0.7.2 configuration; V073_TARGET_VERSION, V073_TRAIN and V073_RELEASE_CONFIG_YAML are in __all__, and patch-train admission covers 0.7.3.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-996",
+                "kind": "behavioral",
+                "measurable_signal": "REL-0.7.3 canary row placed and listed as unrecorded; gate: `uv run pytest tests/unit/workflow/release/test_release_trains.py::test_v073_canary_row tests/lint/test_ea_commit_census.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "functional_suitability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/release/test_release_trains.py::test_v073_canary_row tests/lint/test_ea_commit_census.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "CANARY_EVIDENCE_DIRS (src/eawf/workflow/evidence/provider_certification.py) gains \"REL-0.7.3\": (\".ea\", \"artifacts\", \"evidence\", \"2026-11-13-stable-native-linux\") directly after the REL-0.7.2 row, so a 0.7.3 export without evidence of its own carries the 0.7.2 runtimes forward; UNRECORDED_RELEASES in tests/_canary_releases.py lists REL-0.7.3 with its map entry until EAWF-0753 lands the export.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-997",
+                "kind": "behavioral",
+                "measurable_signal": "version string and the 0.7.3 changelog section; gate: `uv run pytest tests/unit/workflow/release/test_release_0_7_3.py::test_version_and_changelog -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "maintainability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/release/test_release_0_7_3.py::test_version_and_changelog",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "uv run python tools/version_bump.py --patch leaves src/eawf/_version.py at 0.7.3, and CHANGELOG.md opens with `## [0.7.3] - YYYY-MM-DD` and `### Upgrade notes` stating that eawf daemon stop now returns only once the daemon has exited, that agent sessions in a managed main checkout are refused plain git commit and git cherry-pick and pointed to eawf git commit and eawf git cherry-pick, and the line No state migration is required from 0.7.2.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-998",
+                "kind": "behavioral",
+                "measurable_signal": "replaced release test and goldens at 0.7.3; gate: `uv run pytest tests/unit/workflow/release/test_release_0_7_3.py tests/golden/test_plugin_install_claude.py tests/golden/test_plugin_install_opencode.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "maintainability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/release/test_release_0_7_3.py tests/golden/test_plugin_install_claude.py tests/golden/test_plugin_install_opencode.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "tests/unit/workflow/release/test_release_0_7_2.py, which pins __version__ == \"0.7.2\", is replaced by test_release_0_7_3.py pinning 0.7.3 and the 0.7.3 section; the goldens tests/golden/plugin_install/claude/settings.json and tests/golden/plugin_install/opencode/plugins/eawf.js.golden are regenerated at 0.7.3; the 0.7.3 upgrade notes name both changes.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [
+              "eawf://EAWF/task/EAWF-0749",
+              "eawf://EAWF/task/EAWF-0750",
+              "eawf://EAWF/task/EAWF-0742",
+              "eawf://EAWF/task/EAWF-0743",
+              "eawf://EAWF/task/EAWF-0751",
+              "eawf://EAWF/task/EAWF-0748"
+            ],
+            "effort": "M",
+            "intent": "The release verbs refuse 0.7.3 until a train declares it (eawf release show 0.7.3 reports that no release train declares a checkpoint for it); 0.7.2 lost an operator reopen and two plan revisions because its train came after acceptance. Author the train on the 0.7.2 pattern (src/eawf/workflow/release/train.py:417-466 and 898-900), add the REL-0.7.3 canary evidence row, list REL-0.7.3 in UNRECORDED_RELEASES until EAWF-0753 lands its export, and update the train tests. Cut the version with uv run python tools/version_bump.py --patch and write the CHANGELOG.md section `## [0.7.3]` with `### Upgrade notes`, then one ### heading per area: daemon stop now waits for the daemon to exit; plain git commit and git cherry-pick are refused for agent sessions in a managed main checkout, use eawf git commit or eawf git cherry-pick; No state migration is required from 0.7.2; the version-pinned release test is replaced; the plugin_install goldens are regenerated. Replace tests/unit/workflow/release/test_release_0_7_2.py with test_release_0_7_3.py and list the deleted path with its reason in the commit body. Regenerate the two version-coupled goldens with uv run eawf snapshot update --kind plugin_install and diff them. Restart the daemon after the bump. The evidence directory name 2026-11-13-stable-native-linux is a label; EAWF-0753 uses the same one.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Author the 0.7.3 release train and cut the version",
+            "urn": "eawf://EAWF/task/EAWF-0752",
+            "write_claims": [
+              "src/eawf/workflow/release/train.py",
+              "src/eawf/workflow/evidence/provider_certification.py",
+              "src/eawf/_version.py",
+              "CHANGELOG.md",
+              "tests/_canary_releases.py",
+              "tests/integration/runtime/daemon/methods/test_patch_train_admission.py",
+              "tests/unit/workflow/release/test_release_trains.py",
+              "tests/unit/workflow/release/test_stable_checkpoint_config.py",
+              "tests/integration/workflow/release/test_dev3_canary_rehearsal_record.py",
+              "tests/lint/test_ea_commit_census.py",
+              "tests/unit/workflow/release/test_release_0_7_2.py",
+              "tests/unit/workflow/release/test_release_0_7_3.py",
+              "tests/unit/workflow/release/test_dev_cadence_rules.py",
+              "tests/golden/plugin_install"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0401",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-999",
+                "kind": "behavioral",
+                "measurable_signal": "release key of the export REL-0.7.3 reads; gate: `uv run pytest tests/integration/workflow/verify/test_canary_evidence_by_release.py::test_the_v073_export_is_its_own_prior -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "functional_suitability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/workflow/verify/test_canary_evidence_by_release.py::test_the_v073_export_is_its_own_prior",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The REL-0.7.3 canary export is committed at .ea/artifacts/evidence/2026-11-13-stable-native-linux/native-canary-evidence.json, produced by uv run eawf release canary-export 0.7.3 --os-class linux; load_canary_evidence and prior_canary_evidence (src/eawf/workflow/evidence/canary_export.py) both return release_key \"REL-0.7.3\", advertising exactly claude-code and codex, each on linux.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1000",
+                "kind": "behavioral",
+                "measurable_signal": "walk-module tests selected and passed for REL-0.7.3; gate: `uv run pytest tests/integration/workflow/release/test_dev3_canary_rehearsal_record.py -k REL-0.7.3 -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/workflow/release/test_dev3_canary_rehearsal_record.py -k REL-0.7.3",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "tests/fixtures/artifacts/2026-11-13-stable-native-linux/canary-acceptance-walk.json is committed, recorded with EAWF_RECORD_CANARY_WALK=REL-0.7.3, and UNRECORDED_RELEASES (tests/_canary_releases.py) no longer holds REL-0.7.3, so every release-parametrized test of the canary walk module runs for REL-0.7.3 and passes. While REL-0.7.3 stays listed, the selection is empty and the gate exits 5.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1001",
+                "kind": "behavioral",
+                "measurable_signal": "0.7.3 evidence promoted, re-included and censused; gate: `uv run pytest tests/lint/test_ea_commit_census.py tests/contract/platform/install/test_managed_ignore_block.py::test_repo_gitignore_block_is_current -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "security",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/lint/test_ea_commit_census.py tests/contract/platform/install/test_managed_ignore_block.py::test_repo_gitignore_block_is_current",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "PROMOTED_ARTIFACTS (src/eawf/kernel/store/commit_policy.py) gains the 2026-11-13-stable-native-linux directory in the canary tuple and rows for dispatch-smoke-receipts.json, dispatch-check-*.json and packet-run-receipts.jsonl, each in the commit adding its file; the managed .gitignore block re-includes them and is current; _READERS in tests/lint/test_ea_commit_census.py names each and the 5 * 2 term of _PROMOTED_CEILING becomes 6 * 2.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1002",
+                "kind": "behavioral",
+                "measurable_signal": "both runtimes smoked on linux for REL-0.7.3; gate: `uv run pytest tests/integration/workflow/release/test_v073_release_evidence.py::test_the_v073_smoke_backs_every_claimed_pair -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/workflow/release/test_v073_release_evidence.py::test_the_v073_smoke_backs_every_claimed_pair",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "dispatch-smoke-receipts.json in the 0.7.3 evidence directory names release_key \"REL-0.7.3\" and holds a scorecard \"pass\" receipt for (claude-code, linux) and (codex, linux) whose evidence_refs are dispatch-check-RUN-*.json and dispatch-check-codex-RUN-*.json files beside it; dispatch_smoke_gaps over those pairs returns (). The smoke scratch files commands.json, latency.json, frame-timeline.json and eawfd.log are not committed.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1003",
+                "kind": "behavioral",
+                "measurable_signal": "four packet runs pass on 0.7.3 at ancestors of HEAD; gate: `uv run pytest tests/integration/workflow/release/test_v073_release_evidence.py::test_the_v073_packet_runs_pass_on_both_runtimes_and_origins -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/workflow/release/test_v073_release_evidence.py::test_the_v073_packet_runs_pass_on_both_runtimes_and_origins",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "packet-run-receipts.jsonl in that directory holds four receipts, one latest per runtime (claude-code, codex) and origin (born_native, adopted), each with outcome \"pass\", eawf_version \"0.7.3\", os_class \"linux\", source_dirty false and an eawf_commit that is an ancestor of the checkout's HEAD by git merge-base --is-ancestor; a missing pair, a later fail or a commit off the line reds the test.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1004",
+                "kind": "behavioral",
+                "measurable_signal": "preflight membership and provider rows for 0.7.3; gate: `uv run pytest tests/integration/workflow/release/test_v073_release_evidence.py::test_the_v073_membership_and_provider_rows_pass -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/workflow/release/test_v073_release_evidence.py::test_the_v073_membership_and_provider_rows_pass",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "`uv run eawf release preflight 0.7.3 --skip-ci-runs` reports the membership and provider rows as pass: membership_probe and provider_probe (src/eawf/workflow/release/signal_probes.py) both return status pass for checkpoint_release_config(\"0.7.3\") read from this checkout. The command's own exit may stay non-zero while ancestry or ci_green are red before merge.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [
+              "eawf://EAWF/task/EAWF-0752"
+            ],
+            "effort": "M",
+            "intent": "Preflight needs evidence of 0.7.3's own. Evidence A, agent-safe: run uv run eawf release canary-export 0.7.3 --os-class linux (it needs a live, unexpired certification of the installed claude-code and codex; run eawf runtime certify first when one is missing), then EAWF_RECORD_CANARY_WALK=REL-0.7.3 uv run pytest tests/integration/workflow/release/test_dev3_canary_rehearsal_record.py -q to record the acceptance walk; remove REL-0.7.3 from UNRECORDED_RELEASES and add an own-prior test to tests/integration/workflow/verify/test_canary_evidence_by_release.py. Evidence B: the two live dispatch smokes run ONLY from the operator's own terminal, never from an agent session; they need live Claude and Codex logins and spend API tokens (about 4 minutes each): EAWF_SMOKE_PROVIDER=claude, then codex, with EAWF_SMOKE_EVIDENCE_DIR set to the 0.7.3 evidence directory, over uv run pytest -m e2e tests/e2e/test_smoke_milestone.py. Never unset the agent-session markers to get past the operator-identity guard. Then the four agent-run packet runs (uv run eawf release packet-run for claude-code and codex, born_native and adopted, each in an empty scratch directory outside the checkout), which also spend tokens and need a clean src/eawf at a branch commit; rerun all four after any squash. Promotions: add each evidence file to PROMOTED_ARTIFACTS, the managed .gitignore block and the census in the same commit that adds the file, since the 0.7.2 squash dropped them once. Delete the smoke scratch files, add tests/integration/workflow/release/test_v073_release_evidence.py from the 0.7.2 one, and refresh .secrets.baseline in the code commit.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Record the 0.7.3 release evidence and promote its files",
+            "urn": "eawf://EAWF/task/EAWF-0753",
+            "write_claims": [
+              ".ea/artifacts/evidence/2026-11-13-stable-native-linux",
+              "tests/fixtures/artifacts/2026-11-13-stable-native-linux/canary-acceptance-walk.json",
+              "src/eawf/kernel/store/commit_policy.py",
+              ".gitignore",
+              ".secrets.baseline",
+              "tests/lint/test_ea_commit_census.py",
+              "tests/_canary_releases.py",
+              "tests/integration/workflow/release/test_dev3_canary_rehearsal_record.py",
+              "tests/integration/workflow/verify/test_canary_evidence_by_release.py",
+              "tests/integration/workflow/release/test_v073_release_evidence.py"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0402",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1005",
+                "kind": "behavioral",
+                "measurable_signal": "squash after close then rebind leaves no unreachable finding; gate: `uv run pytest tests/integration/runtime/daemon/test_batch_squash_rebind.py::test_a_squash_after_a_batch_closed_passes_the_ledger_history_check -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/runtime/daemon/test_batch_squash_rebind.py::test_a_squash_after_a_batch_closed_passes_the_ledger_history_check",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "After a Batch closed on its source commits with a committed ChangeRecord naming one in changes[].after.value.head_sha, a squash, the branch moved to the squashed tip, rebind_squashed and a state commit, scan_ledger_history(repo, \"<base>..HEAD\") reports no unreachable finding in test_a_squash_after_a_batch_closed_passes_the_ledger_history_check; on the code before this change it reports one, in history/change.jsonl.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1006",
+                "kind": "behavioral",
+                "measurable_signal": "rebinds read from SHA-only supersessions alone; gate: `uv run pytest tests/unit/platform/lint/test_ledger_history.py -k rebound -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "functional_suitability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/platform/lint/test_ledger_history.py -k rebound",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "rebound_commits(content: bytes) -> dict[str, frozenset[str]] in src/eawf/platform/lint/ledger_history.py maps each SHA a superseded ledger line names to the SHAs its superseding line names in its place, counting only a superseding line whose payload equals the superseded one once every 40-hex string is masked; a superseding line that changes anything else in the payload, and a line nothing supersedes, contribute nothing; sealed snapshot lines are read before the live file's.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1007",
+                "kind": "behavioral",
+                "measurable_signal": "un-rebound commits and rewrites still red the gate; gate: `uv run pytest tests/integration/platform/lint/test_ledger_history_gate.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "safety",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/platform/lint/test_ledger_history_gate.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "scan_ledger_history leaves out only a mention in a file outside ledger/ whose commit was rebound to commits that are all reachable. It still reports as unreachable a history mention of a commit no ledger row rebinds, of one rebound only to an unreachable commit or dropped by the squash, and a ledger/ row naming a rebound commit that nothing supersedes; the append-only check still reds a rewritten history line.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1008",
+                "kind": "behavioral",
+                "measurable_signal": "a second rebind writes nothing and the check stays clean; gate: `uv run pytest tests/integration/runtime/daemon/test_batch_squash_rebind.py::test_a_rebind_run_again_appends_nothing_and_the_check_stays_clean -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/runtime/daemon/test_batch_squash_rebind.py::test_a_rebind_run_again_appends_nothing_and_the_check_stays_clean",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "After that rebind, rebind_squashed with the same map under a new idempotency key appends no row (rows 0), leaves history/change.jsonl byte-identical and the check clean, and a retry under the first key replays; a tree rebound once before this change, as this branch was under key v073-rebind-1, needs no further write, since the check reads the rebind from the ledger rows it already holds.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1009",
+                "kind": "behavioral",
+                "measurable_signal": "doctor counts only uncovered history mentions; gate: `uv run pytest tests/integration/observability/doctor/test_supersede_unreachable.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "operability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/observability/doctor/test_supersede_unreachable.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "plan_ledger_supersessions (src/eawf/observability/doctor/repair.py, unchanged) plans no row and counts no unrepairable finding for a history mention a rebind covers, and still counts an uncovered history mention as one unrepairable finding, so eawf doctor reports only what the ledger history check refuses.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [],
+            "effort": "M",
+            "intent": "The pre-push hook eawf hook ledger-history (scan_ledger_history, src/eawf/platform/lint/ledger_history.py) requires every commit an effective row of a committed LEDGER-tier file names to be reachable from the range's base or tip. When a Batch closes before eawf batch squash, history/change.jsonl keeps domain.task.completed records whose changes[].after.value.head_sha names the pre-squash commit; eawf batch rebind (rebind_squashed, src/eawf/runtime/daemon/methods/delivery_rebind.py; plan_rebind, src/eawf/workflow/integration/rebind.py) supersedes only ledger/ lines, and doctor repair counts history findings unrepairable (_grouped, src/eawf/observability/doctor/repair.py:389-401), so the push is refused though docs/rules/commit-granularity.md makes squash-after-close plus rebind the normal flow. Design: the check-side fallback. A superseding history row needs a schema change: ChangeRecord (src/eawf/kernel/store/changes.py:128-156) is closed with no supersedes field, needs the change_id and canonical_sequence of a document commit a rebind does not make, read_change_page would list the copy as a second change, and 0.7.2 readers drop lines with a new field (_read_tier). Instead the check reads the rebinds the ledgers record: a ledger/ line superseding an earlier line of the same ledger whose payload differs only in 40-hex strings rebinds each commit the earlier line named and it does not to the commits it names instead. A mention outside ledger/ is covered when its commit was rebound and every target is reachable. Use a local masking helper on SHA_RE; import nothing from eawf.workflow. Ledger rows keep the strict supersede rule; rebind and repair.py stay unchanged, so a tree rebound once needs no further write. Batch evidence: uv run eawf hook ledger-history --range origin/main..HEAD on this branch reports 0 unreachable.",
+            "priority": "P0",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Let a squash after Batch close pass the ledger history check",
+            "urn": "eawf://EAWF/task/EAWF-0761",
+            "write_claims": [
+              "src/eawf/platform/lint/ledger_history.py",
+              "tests/unit/platform/lint/test_ledger_history.py",
+              "tests/integration/platform/lint/test_ledger_history_gate.py",
+              "tests/integration/runtime/daemon/test_batch_squash_rebind.py",
+              "tests/integration/observability/doctor/test_supersede_unreachable.py"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0402",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1010",
+                "kind": "behavioral",
+                "measurable_signal": "push verb dispatches to the library and exits with git's status; gate: `uv run pytest tests/unit/surfaces/cli/test_git_guard_cli.py -k push -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "functional_suitability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/surfaces/cli/test_git_guard_cli.py -k push",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The push verb of `eawf git` (arguments after `--`), a third verb in src/eawf/surfaces/cli/commands/git_guard.py beside commit and cherry-pick, passes every argument after -- to git's push subcommand through run_git_holding_document_lock and exits with git's status, 0 and a failing pre-push hook's status alike; the handler holds no lock logic, and the git_app help names git's push subcommand.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1011",
+                "kind": "behavioral",
+                "measurable_signal": "plain push denied in the main checkout only, drift judge kept; gate: `uv run pytest tests/unit/runtime/sandbox/test_data_loss.py -k push -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "safety",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/sandbox/test_data_loss.py -k push",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "unlocked_state_commit in src/eawf/runtime/sandbox/data_loss.py (_judge_git) also denies git's push subcommand and git -C <main> push from an agent session in a managed main checkout, the reason naming the push verb of eawf git -- <git args>; a push in a linked worktree, a push in an unmanaged repository and the push verb of eawf git pass, and a push from a linked worktree whose working directory drifted out of the session's work tree is still denied as drifted_commit by _judge_drift.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1012",
+                "kind": "behavioral",
+                "measurable_signal": "a real wrapped push with a system pre-push hook ends without LockTimeout; gate: `uv run pytest tests/unit/runtime/vcs/test_document_hold.py::test_a_wrapped_push_with_a_system_pre_push_hook_never_times_out -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/vcs/test_document_hold.py::test_a_wrapped_push_with_a_system_pre_push_hook_never_times_out",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "test_a_wrapped_push_with_a_system_pre_push_hook_never_times_out builds a scratch managed repository with a local bare remote and a pre-push hook installed by pre-commit install --hook-type pre-push from a language: system local hook; run_git_holding_document_lock(repo, [\"push\", <remote>, <ref>]) returns 0, the remote branch names the pushed commit and no LockTimeout occurs.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1013",
+                "kind": "behavioral",
+                "measurable_signal": "a state write during a wrapped push's hooks survives, the control loses it; gate: `uv run pytest tests/unit/runtime/vcs/test_document_hold.py::test_a_state_write_during_a_wrapped_push_survives -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/runtime/vcs/test_document_hold.py::test_a_state_write_during_a_wrapped_push_survives",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "With a pre-push hook that mimics pre-commit's stash, sleep and restore, a concurrent state write made under the document lock while the hook sleeps survives a push through run_git_holding_document_lock and is lost by a plain push.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1014",
+                "kind": "behavioral",
+                "measurable_signal": "push verb registered, reference regenerated; gate: `uv run pytest tests/contract/surfaces/cli/test_verb_closure.py tests/integration/test_cli_help_groups.py tests/integration/test_docs_autogen.py::test_committed_autogen_tree_matches_regeneration -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "maintainability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/contract/surfaces/cli/test_verb_closure.py tests/integration/test_cli_help_groups.py tests/integration/test_docs_autogen.py::test_committed_autogen_tree_matches_regeneration",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "CLI_VERB_EFFECTS (src/eawf/surfaces/cli/verb_effects.py) gains a row for the push verb of the git group, with the effect its commit row declares, the git entry of src/eawf/surfaces/cli/verb_closure.py names push, the help panels golden stays unchanged, and docs/reference/autogen/cli.md lists push under eawf git and matches a fresh regeneration.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1015",
+                "kind": "behavioral",
+                "measurable_signal": "changelog names the push verb and the squash fix; gate: `uv run pytest tests/unit/workflow/release/test_release_0_7_3.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "maintainability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/release/test_release_0_7_3.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The ## [0.7.3] section of CHANGELOG.md adds a plain push to the refused commands in its upgrade notes and names the push verb of eawf git with its `--` argument form, gains a Data-loss guard bullet on the push verb of eawf git and a Release bullet saying a squash after a Batch closed now passes the ledger history check; test_release_0_7_3.py asserts both upgrade phrases and the phrase ledger history check in the Release area.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [
+              "eawf://EAWF/task/EAWF-0761"
+            ],
+            "effort": "M",
+            "intent": "The installed pre-push hook runs pre-commit with --from-ref and --to-ref and no file list, so pre-commit stashes the unstaged files for the whole pre-push run (stash = not args.all_files and not args.files, pre_commit/commands/run.py:344); a daemon write to the state document in that window is lost, the loss EAWF-0742 closed for commits. Mirror EAWF-0742: add eawf git push -- <git args> to src/eawf/surfaces/cli/commands/git_guard.py, dispatching to run_git_holding_document_lock (src/eawf/runtime/vcs/document_hold.py, unchanged), and extend unlocked_state_commit in _judge_git (src/eawf/runtime/sandbox/data_loss.py) to deny a plain git push from an agent session in a managed main checkout, naming the wrapper. Today push reaches only _judge_drift; the new denial takes precedence in the main checkout, as for commit, and the drift judgement stays for linked worktrees. DenyRule and RULE_VALUES need no new value. Deadlock check: the pre-push stage of .pre-commit-config.yaml runs commit-prefix-lint, branch-name-lint, ledger-history (reads git blobs only), mypy-pre-push, repo-state-tests (pytest -m repo_state -n 2) and plugin-doctor-drift (reads plugin files). By reading, none opens a daemon document session or takes the document lock; not every repo_state module was read: grep them for daemon-client or session use and record it in the Run report. Cost: the hold lasts the whole pre-push run, and every daemon document session in the main checkout meanwhile raises LockTimeout after 5 s: a loud failure instead of a silent loss. Register the verb in verb_effects.py and verb_closure.py and regenerate docs/reference/autogen; the help panels golden lists group names only and stays unchanged. Write the 0.7.3 changelog lines for this Task and EAWF-0761.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Hold the document lock around agent pushes",
+            "urn": "eawf://EAWF/task/EAWF-0754",
+            "write_claims": [
+              "src/eawf/surfaces/cli/commands/git_guard.py",
+              "src/eawf/runtime/sandbox/data_loss.py",
+              "src/eawf/surfaces/cli/verb_effects.py",
+              "src/eawf/surfaces/cli/verb_closure.py",
+              "docs/reference/autogen/cli.md",
+              "CHANGELOG.md",
+              "tests/unit/surfaces/cli/test_git_guard_cli.py",
+              "tests/unit/runtime/sandbox/test_data_loss.py",
+              "tests/unit/runtime/vcs/test_document_hold.py",
+              "tests/unit/workflow/release/test_release_0_7_3.py"
+            ]
+          }
+        ]
+      },
+      "content_digest": "sha256:a869b1cc80535db6fc312fa3f68815199d8e6c2ab2e1c7354e0698adc35d61fb",
+      "created_at": "2026-11-12T19:43:18.642083Z",
+      "head_bindings": [
+        {
+          "head_sha": "cacc5041956e0eba392a54d5af395e1b3ecc504c",
+          "repository_ref": "eawf://EAWF/repository/EAWF"
+        }
+      ],
+      "key": "PRV-0351",
+      "parent_key": "PRV-0350",
+      "policy_revision": 1,
+      "provider_tuple": [
+        "claude"
+      ],
+      "revision": 4,
+      "status": "APPLIED",
+      "updated_at": "2026-11-12T19:46:35.505189Z"
     }
   },
   "project": {
@@ -333254,34 +335463,6 @@
       "uid": "dcd2b0bb-d23f-526e-9d57-02fc83753e8a",
       "updated_at": "2026-11-11T20:36:12.755881Z",
       "urn": "eawf://EAWF/task/EAWF-0745"
-    },
-    "EAWF-0754": {
-      "active_run_ref": null,
-      "batch_ref": null,
-      "contract_revision": 1,
-      "created_at": "2026-11-12T17:18:05.595684Z",
-      "criteria": [],
-      "due_scope": null,
-      "integrated_binding": null,
-      "intent": "The installed pre-push hook runs pre-commit with a ref range, so pre-commit stashes the unstaged state files for the whole run of the pre-push hooks, which takes minutes. A daemon write to the state document in that window is lost, the same loss the commit wrapper closed. Add an eawf git push verb that holds the document lock around git push, and have the data-loss guard refuse a plain git push from an agent session in a managed main checkout and name the wrapper. Found by the fresh-context audit of the 0.7.3 reliability Batch.",
-      "key": "EAWF-0754",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "priority": "P1",
-      "revision": 1,
-      "status": "DRAFT",
-      "title": "Hold the document lock around agent pushes",
-      "uid": "8f072ec6-11b0-52d1-93bd-c6f74967c7f3",
-      "updated_at": "2026-11-12T17:18:05.595684Z",
-      "urn": "eawf://EAWF/task/EAWF-0754"
     },
     "EAWF-0755": {
       "active_run_ref": null,
