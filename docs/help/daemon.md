@@ -15,6 +15,8 @@ eawf daemon logs --tail 200  # print recent daemon log lines
 eawf daemon ping             # round-trip health check
 ```
 
+`stop` returns only once the daemon has exited and released its runtime directory, waiting up to `--timeout` seconds after the daemon answers; a daemon still running at that point makes `stop` fail with exit 1. The wait is never shorter than 5 seconds, so `--timeout 0` skips the drain but still waits for the process to exit.
+
 The CLI cold-spawns the daemon automatically on the first daemon RPC or mutating call when it is not already running. The spawn is silent unless `EAWF_VERBOSE=1` is set. `restart` re-renders an installed launchd/systemd service so upgrades do not leave the supervisor pointing at an old binary.
 
 ## Transport

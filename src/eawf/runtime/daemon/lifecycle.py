@@ -25,6 +25,7 @@ from eawf.runtime.daemon.spawn import (
     DaemonSpawnTimeoutError,
     auto_spawn_daemon,
     daemon_pid_if_ready,
+    read_daemon_pid,
     request_daemon_shutdown,
 )
 
@@ -32,6 +33,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_STOP_TIMEOUT_SECONDS: float = 30.0
 STOP_POLL_INTERVAL_SECONDS: float = 0.05
+# A daemon that has answered its shutdown still closes its server, which may
+# take up to 1.5 s (client flush 0.5 s plus close 1.0 s), then cancels its
+# tasks and removes its runtime entries before it frees the lock. A caller's
+# zero drain window must not shrink that wait to nothing.
+EXIT_WAIT_FLOOR_SECONDS: float = 5.0
 
 
 class DaemonLifecycleError(RuntimeError):
@@ -98,6 +104,44 @@ def wait_for_daemon_stopped(
     raise DaemonLifecycleError(
         f"daemon did not stop within {timeout_seconds:.1f}s pid={previous_pid}"
     )
+
+
+def wait_for_daemon_exit(
+    runtime_dir: Path,
+    *,
+    previous_pid: int | None,
+    timeout_seconds: float,
+) -> None:
+    """Wait until a daemon asked to shut down has left its runtime directory.
+
+    The daemon answers the shutdown before it tears down, and it frees the
+    singleton lock only after removing its socket and pid file, so a free
+    lock means the stop is complete. A pid file naming another pid while the
+    lock is held means a successor another client spawned already holds the
+    runtime, so the stopped daemon is gone too.
+
+    Args:
+        runtime_dir: Daemon runtime directory.
+        previous_pid: PID the pid file named before the shutdown request,
+            or ``None`` when it named none.
+        timeout_seconds: Bound on the wait, raised to at least
+            ``EXIT_WAIT_FLOOR_SECONDS``.
+
+    Raises:
+        DaemonLifecycleError: When the lock is still held by the stopping
+            daemon at the deadline.
+    """
+    bound = max(timeout_seconds, EXIT_WAIT_FLOOR_SECONDS)
+    deadline = time.monotonic() + bound
+    while daemon_singleton_locked(runtime_dir):
+        current_pid = read_daemon_pid(runtime_dir)
+        if current_pid is not None and current_pid != previous_pid:
+            return
+        if time.monotonic() >= deadline:
+            raise DaemonLifecycleError(
+                f"daemon did not exit within {bound:.1f}s pid={previous_pid}"
+            )
+        time.sleep(STOP_POLL_INTERVAL_SECONDS)
 
 
 def wait_for_predecessor(
@@ -305,5 +349,6 @@ __all__ = [
     "DaemonLifecycleResult",
     "restart_daemon",
     "start_daemon",
+    "wait_for_daemon_exit",
     "wait_for_daemon_stopped",
 ]

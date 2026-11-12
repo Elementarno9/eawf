@@ -60,6 +60,7 @@ from eawf.runtime.daemon.spawn import (
     DaemonSpawnTimeoutError,
     auto_spawn_daemon,
     daemon_pid_if_ready,
+    read_daemon_pid,
 )
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.flags import GlobalFlags
@@ -412,6 +413,27 @@ def _handle_supervised_agent_on_stop(*, evict_service: bool) -> bool:
     return False
 
 
+def _wait_for_exit_or_fail(previous_pid: int | None, timeout: int) -> None:
+    """Block until the stopped daemon has exited, or exit 1 at the timeout.
+
+    Args:
+        previous_pid: PID the pid file named before the shutdown request.
+        timeout: The stop verb's ``--timeout`` in seconds.
+
+    Raises:
+        typer.Exit: With code 1 when the daemon outlives the timeout.
+    """
+    from eawf.runtime.daemon.lifecycle import DaemonLifecycleError, wait_for_daemon_exit
+
+    try:
+        wait_for_daemon_exit(
+            runtime_dir(), previous_pid=previous_pid, timeout_seconds=float(timeout)
+        )
+    except DaemonLifecycleError as exc:
+        typer.echo(f"daemon stop failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
 @daemon_app.command("stop")
 def stop_cmd(
     ctx: typer.Context,
@@ -424,7 +446,10 @@ def stop_cmd(
     ] = False,
     timeout: Annotated[
         int,
-        typer.Option("--timeout", help="Drain window in seconds (1-600)."),
+        typer.Option(
+            "--timeout",
+            help="Drain window and exit wait in seconds (1-600; the exit wait is at least 5).",
+        ),
     ] = 30,
     evict_service: Annotated[
         bool,
@@ -440,7 +465,9 @@ def stop_cmd(
     """Request graceful daemon shutdown, never starting a daemon to stop it.
 
     With no daemon running there is nothing to stop, so this reports that
-    and exits 0 rather than cold-spawning one only to shut it down.
+    and exits 0 rather than cold-spawning one only to shut it down. After
+    the daemon answers, this waits up to ``--timeout`` for it to exit, so
+    success means the daemon is gone.
     """
     from eawf.surfaces.cli._daemon_client import DaemonNotRunningError
 
@@ -456,6 +483,9 @@ def stop_cmd(
         )
         return
     params: dict[str, Any] = {"drain": not no_drain, "timeout_seconds": timeout}
+    # Read before the request: the stopping daemon removes its pid file, and
+    # a pid read afterwards could already name a successor.
+    previous_pid = read_daemon_pid(runtime_dir())
     try:
         response = _run_rpc("daemon.shutdown", params, spawn=False)
     except DaemonNotRunningError:
@@ -472,6 +502,7 @@ def stop_cmd(
         if sys.platform != "win32":
             typer.echo(f"daemon shutdown failed: {exc}", err=True)
             raise typer.Exit(code=1) from exc
+        _wait_for_exit_or_fail(previous_pid, timeout)
         emit_json_or_text(
             {"shutdown_at": None, "drained": None, "reply_lost": True},
             "daemon shutting down (closed the transport before replying)",
@@ -481,6 +512,8 @@ def stop_cmd(
     except (ConnectionRefusedError, FileNotFoundError, DaemonSpawnTimeoutError) as exc:
         typer.echo(f"daemon not reachable: {exc}", err=True)
         raise typer.Exit(code=1) from exc
+    if "error" not in response:
+        _wait_for_exit_or_fail(previous_pid, timeout)
     _emit_or_fail(
         response,
         "daemon shutting down at={shutdown_at} drained={drained}",

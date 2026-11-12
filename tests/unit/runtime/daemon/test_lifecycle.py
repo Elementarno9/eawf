@@ -11,9 +11,11 @@ from eawf.runtime.daemon.lifecycle import (
     DaemonLifecycleError,
     restart_daemon,
     start_daemon,
+    wait_for_daemon_exit,
     wait_for_daemon_stopped,
 )
 from eawf.runtime.daemon.service_install import ServiceEnvelope
+from eawf.runtime.daemon.spawn import read_daemon_pid
 
 
 def test_start_daemon_reuses_ready_process(
@@ -200,3 +202,182 @@ def test_wait_for_daemon_stopped_rejects_non_positive_timeout(tmp_path: Path) ->
     """Stop waiter rejects an unbounded/immediate-invalid window."""
     with pytest.raises(DaemonLifecycleError, match="must be positive"):
         wait_for_daemon_stopped(tmp_path, previous_pid=41, timeout_seconds=0)
+
+
+def _script_lock(monkeypatch: pytest.MonkeyPatch, states: list[bool]) -> list[bool]:
+    """Answer ``daemon_singleton_locked`` from *states*, repeating the last one."""
+    seen: list[bool] = []
+
+    def _locked(_runtime: Path) -> bool:
+        state = states[min(len(seen), len(states) - 1)]
+        seen.append(state)
+        return state
+
+    monkeypatch.setattr(lifecycle, "daemon_singleton_locked", _locked)
+    return seen
+
+
+def _script_pid(monkeypatch: pytest.MonkeyPatch, pid: int | None) -> None:
+    monkeypatch.setattr(lifecycle, "read_daemon_pid", lambda _runtime: pid)
+
+
+def test_wait_for_daemon_exit_returns_at_once_on_a_free_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen = _script_lock(monkeypatch, [False])
+    _script_pid(monkeypatch, 41)
+
+    wait_for_daemon_exit(tmp_path, previous_pid=41, timeout_seconds=5.0)
+
+    assert seen == [False]
+
+
+def test_wait_for_daemon_exit_free_lock_with_zero_timeout_returns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A zero window still checks the lock once before giving up."""
+    _script_lock(monkeypatch, [False])
+    _script_pid(monkeypatch, None)
+
+    wait_for_daemon_exit(tmp_path, previous_pid=None, timeout_seconds=0.0)
+
+
+def test_wait_for_daemon_exit_returns_once_the_lock_is_released(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen = _script_lock(monkeypatch, [True, True, False])
+    _script_pid(monkeypatch, 41)
+
+    wait_for_daemon_exit(tmp_path, previous_pid=41, timeout_seconds=5.0)
+
+    assert seen == [True, True, False]
+
+
+def test_wait_for_daemon_exit_waits_while_the_pid_file_is_gone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Teardown removes the pid file before it frees the lock; keep waiting."""
+    seen = _script_lock(monkeypatch, [True, False])
+    _script_pid(monkeypatch, None)
+
+    wait_for_daemon_exit(tmp_path, previous_pid=41, timeout_seconds=5.0)
+
+    assert seen == [True, False]
+
+
+def test_wait_for_daemon_exit_raises_naming_the_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(lifecycle, "EXIT_WAIT_FLOOR_SECONDS", 0.0)
+    seen = _script_lock(monkeypatch, [True])
+    _script_pid(monkeypatch, 41)
+
+    with pytest.raises(DaemonLifecycleError, match=r"did not exit within 0\.2s"):
+        wait_for_daemon_exit(tmp_path, previous_pid=41, timeout_seconds=0.2)
+
+    assert len(seen) >= 2
+
+
+def test_wait_for_daemon_exit_zero_timeout_on_a_held_lock_raises_at_the_floor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A zero window still waits out the floor before it gives up."""
+    monkeypatch.setattr(lifecycle, "EXIT_WAIT_FLOOR_SECONDS", 0.2)
+    seen = _script_lock(monkeypatch, [True])
+    _script_pid(monkeypatch, 41)
+
+    with pytest.raises(DaemonLifecycleError, match=r"within 0\.2s"):
+        wait_for_daemon_exit(tmp_path, previous_pid=41, timeout_seconds=0.0)
+
+    assert len(seen) >= 2
+
+
+def test_wait_for_daemon_exit_zero_timeout_waits_for_a_lock_released_soon(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A zero drain window is no reason to give up on a daemon still exiting."""
+    seen = _script_lock(monkeypatch, [True, True, True, False])
+    _script_pid(monkeypatch, 41)
+    monkeypatch.setattr(lifecycle.time, "sleep", lambda _seconds: None)
+
+    wait_for_daemon_exit(tmp_path, previous_pid=41, timeout_seconds=0.0)
+
+    assert seen == [True, True, True, False]
+
+
+def test_wait_for_daemon_exit_timeout_above_the_floor_is_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(lifecycle, "EXIT_WAIT_FLOOR_SECONDS", 0.1)
+    _script_lock(monkeypatch, [True])
+    _script_pid(monkeypatch, 41)
+
+    with pytest.raises(DaemonLifecycleError, match=r"within 0\.3s"):
+        wait_for_daemon_exit(tmp_path, previous_pid=41, timeout_seconds=0.3)
+
+
+def test_wait_for_daemon_exit_polls_at_the_stop_interval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _script_lock(monkeypatch, [True, True, False])
+    _script_pid(monkeypatch, 41)
+    sleeps: list[float] = []
+    monkeypatch.setattr(lifecycle.time, "sleep", sleeps.append)
+
+    wait_for_daemon_exit(tmp_path, previous_pid=41, timeout_seconds=5.0)
+
+    assert sleeps == [lifecycle.STOP_POLL_INTERVAL_SECONDS] * 2
+
+
+def test_wait_for_daemon_exit_returns_on_a_successor_pid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A successor another client spawned holds the lock under a new pid."""
+    seen = _script_lock(monkeypatch, [True])
+    _script_pid(monkeypatch, 42)
+
+    wait_for_daemon_exit(tmp_path, previous_pid=41, timeout_seconds=5.0)
+
+    assert seen == [True]
+
+
+def test_wait_for_daemon_exit_successor_without_a_previous_pid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _script_lock(monkeypatch, [True])
+    _script_pid(monkeypatch, 42)
+
+    wait_for_daemon_exit(tmp_path, previous_pid=None, timeout_seconds=5.0)
+
+
+def test_wait_for_daemon_exit_successor_check_keeps_waiting_on_the_same_pid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The pid file still naming the stopping daemon is no successor."""
+    monkeypatch.setattr(lifecycle, "EXIT_WAIT_FLOOR_SECONDS", 0.0)
+    _script_lock(monkeypatch, [True])
+    _script_pid(monkeypatch, 41)
+
+    with pytest.raises(DaemonLifecycleError, match="did not exit"):
+        wait_for_daemon_exit(tmp_path, previous_pid=41, timeout_seconds=0.15)
+
+
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        ("4242\n1\n2026-01-01T00:00:00Z\n", 4242),
+        ("7", 7),
+        ("", None),
+        ("not-a-pid\n", None),
+    ],
+)
+def test_read_daemon_pid_parses_the_first_line(
+    tmp_path: Path, content: str, expected: int | None
+) -> None:
+    (tmp_path / "eawfd.pid").write_text(content, encoding="utf-8")
+
+    assert read_daemon_pid(tmp_path) == expected
+
+
+def test_read_daemon_pid_without_a_pid_file_is_none(tmp_path: Path) -> None:
+    assert read_daemon_pid(tmp_path) is None

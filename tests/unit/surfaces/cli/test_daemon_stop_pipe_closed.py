@@ -83,38 +83,50 @@ def test_pipe_client_other_error_stays_a_runtime_error(
     assert not isinstance(excinfo.value, ConnectionResetError)
 
 
-def _reset_on_shutdown(monkeypatch: pytest.MonkeyPatch, platform: str) -> None:
-    """Make ``daemon.shutdown`` lose its reply to a reset under *platform*."""
+def _reset_on_shutdown(monkeypatch: pytest.MonkeyPatch, platform: str) -> list[tuple[object, ...]]:
+    """Make ``daemon.shutdown`` lose its reply to a reset under *platform*.
+
+    Returns:
+        The recorded exit waits, as ``(previous_pid, timeout_seconds)``.
+    """
+    waits: list[tuple[object, ...]] = []
 
     def _raise(*_args: object, **_kwargs: object) -> dict[str, object]:
         raise ConnectionResetError("daemon closed the pipe before replying")
 
+    def _wait(_runtime: object, *, previous_pid: int | None, timeout_seconds: float) -> None:
+        waits.append((previous_pid, timeout_seconds))
+
     monkeypatch.setattr("eawf.surfaces.cli.commands.daemon._run_rpc", _raise)
+    monkeypatch.setattr("eawf.surfaces.cli.commands.daemon.read_daemon_pid", lambda _rt: 41)
+    monkeypatch.setattr("eawf.runtime.daemon.lifecycle.wait_for_daemon_exit", _wait)
     monkeypatch.setattr(
         "eawf.surfaces.cli.commands.daemon._handle_supervised_agent_on_stop",
         lambda *, evict_service: False,
     )
     monkeypatch.setattr(sys, "platform", platform)
+    return waits
 
 
 def test_stop_reports_a_lost_reply_as_a_shutdown_on_win32(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """On win32 a closed pipe on ``daemon.shutdown`` exits clean, not with a tuple."""
-    _reset_on_shutdown(monkeypatch, "win32")
+    waits = _reset_on_shutdown(monkeypatch, "win32")
 
     result = runner.invoke(app, ["daemon", "stop"])
 
     assert result.exit_code == 0, result.output
     assert "shutting down" in result.output
     assert "109" not in result.output
+    assert waits == [(41, 30.0)]
 
 
 def test_stop_lost_reply_json_on_win32(monkeypatch: pytest.MonkeyPatch) -> None:
     """The JSON envelope names the lost reply and leaves the timing unknown."""
-    _reset_on_shutdown(monkeypatch, "win32")
+    waits = _reset_on_shutdown(monkeypatch, "win32")
 
-    result = runner.invoke(app, ["--json", "daemon", "stop"])
+    result = runner.invoke(app, ["--json", "daemon", "stop", "--timeout", "5"])
 
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["result"] == {
@@ -122,6 +134,25 @@ def test_stop_lost_reply_json_on_win32(monkeypatch: pytest.MonkeyPatch) -> None:
         "drained": None,
         "reply_lost": True,
     }
+    assert waits == [(41, 5.0)]
+
+
+def test_stop_lost_reply_wait_timeout_fails_on_win32(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A daemon that lost the reply and never exits is a failed stop."""
+    from eawf.runtime.daemon.lifecycle import DaemonLifecycleError
+
+    _reset_on_shutdown(monkeypatch, "win32")
+
+    def _wait(_runtime: object, *, previous_pid: int | None, timeout_seconds: float) -> None:
+        raise DaemonLifecycleError("daemon did not exit within 30.0s pid=41")
+
+    monkeypatch.setattr("eawf.runtime.daemon.lifecycle.wait_for_daemon_exit", _wait)
+
+    result = runner.invoke(app, ["daemon", "stop"])
+
+    assert result.exit_code == 1, result.output
+    assert "daemon stop failed: daemon did not exit within 30.0s" in result.stderr
+    assert "shutting down" not in result.stdout
 
 
 @pytest.mark.parametrize("platform", ["linux", "darwin"])
@@ -130,11 +161,12 @@ def test_stop_reset_is_a_fault_off_win32(
     monkeypatch: pytest.MonkeyPatch, platform: str, json_flag: list[str]
 ) -> None:
     """A reset over a Unix socket is a real failure, never a lost reply."""
-    _reset_on_shutdown(monkeypatch, platform)
+    waits = _reset_on_shutdown(monkeypatch, platform)
 
     result = runner.invoke(app, [*json_flag, "daemon", "stop"])
 
     assert result.exit_code == 1, result.output
+    assert waits == []
     assert result.exception is None or isinstance(result.exception, SystemExit)
     assert "reply_lost" not in result.output
     assert "shutting down" not in result.output

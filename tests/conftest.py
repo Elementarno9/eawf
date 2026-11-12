@@ -28,6 +28,7 @@ from eawf.kernel.spec.intent import IntentBrief
 from eawf.platform.lint.flake_quarantine import LaneReport, load_quarantine, partition
 from eawf.platform.lint.kind_taxonomy import kind_for_test_path, marker_conflict
 from eawf.runtime.daemon.churn import SUITE_SESSION_ENV, RuntimeDirSnapshot, snapshot_runtime_dir
+from eawf.runtime.daemon.operator_identity import AGENT_SESSION_ENV_MARKERS
 from eawf.runtime.vcs.branch_name import main_checkout
 
 # Every test's fsync checks its descriptor and flushes nothing; see the module.
@@ -277,6 +278,29 @@ def runtime_dir_isolation() -> Iterator[RuntimeDirIsolation]:
         else:
             os.environ[SUITE_SESSION_ENV] = previous_session
         shutil.rmtree(isolated, ignore_errors=True)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def agent_session_env_isolation() -> Iterator[None]:
+    """Hide the launching agent session's markers from every test.
+
+    The operator-identity guard refuses an operator principal named from an
+    agent session, so without this a suite launched by an agent fails its
+    sealing smokes while the same suite passes from a terminal. Every
+    in-process CLI call and every subprocess env built from ``os.environ``
+    inherits the scrub; a test that needs a marker sets it explicitly. The
+    marker list is the guard's own, so a new runtime is covered.
+
+    Yields:
+        Nothing; the prior values are restored on teardown.
+    """
+    monkeypatch = pytest.MonkeyPatch()
+    for name, _runtime in AGENT_SESSION_ENV_MARKERS:
+        monkeypatch.delenv(name, raising=False)
+    try:
+        yield
+    finally:
+        monkeypatch.undo()
 
 
 @pytest.fixture(scope="session", autouse=True)

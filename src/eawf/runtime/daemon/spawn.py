@@ -387,6 +387,21 @@ def daemon_pid_if_ready(runtime_dir: Path) -> int | None:
     return _ping_daemon_once(runtime_dir)
 
 
+def read_daemon_pid(runtime_dir: Path) -> int | None:
+    """Return the PID the daemon pid file records, without probing the daemon.
+
+    Unlike :func:`daemon_pid_if_ready` this answers while the daemon refuses
+    readiness probes, as it does once a shutdown has begun.
+
+    Args:
+        runtime_dir: Daemon runtime directory holding ``eawfd.pid``.
+
+    Returns:
+        The recorded PID, or ``None`` when the file is missing or unparseable.
+    """
+    return _read_pid_file(runtime_dir / "eawfd.pid")
+
+
 def request_daemon_shutdown(
     runtime_dir: Path,
     *,
@@ -684,6 +699,7 @@ __all__ = [
     "auto_spawn_daemon",
     "daemon_environ",
     "daemon_pid_if_ready",
+    "read_daemon_pid",
     "request_daemon_shutdown",
     "wait_for_daemon_ready",
 ]
