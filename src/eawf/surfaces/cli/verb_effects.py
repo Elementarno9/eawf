@@ -319,6 +319,8 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "local tidy": _read(),
     "paths local": _read(),
     "worktree gc": _read(),
+    "git commit": _read(),
+    "git cherry-pick": _read(),
     "help": _read(),
     "version": _read(),
     "scope-debug": _read(),

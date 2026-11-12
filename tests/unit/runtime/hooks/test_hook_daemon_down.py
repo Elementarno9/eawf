@@ -10,6 +10,7 @@ processes. The launcher is stubbed, and fails the test if a hook waits on it.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import shutil
@@ -26,6 +27,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import portalocker
 import pytest
 from typer.testing import CliRunner  # noqa: EAWF024 the hook's exit and output are the contract
 
@@ -347,25 +349,117 @@ def _stamp_path(_s: _Scene) -> None:
     assert pytest.approx(86400.0) == UNANSWERED_REPEAT_S
 
 
+def _race(ea: Path) -> list[bool]:
+    """Let eight threads claim *ea*'s start at once; return each one's answer."""
+    won: list[bool] = []
+    barrier = threading.Barrier(8)
+
+    def _claim() -> None:
+        barrier.wait()
+        won.append(claim_daemon_start(ea))
+
+    threads = [threading.Thread(target=_claim) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        # A ceiling against a hung claim, not a budget: it fires only if a claim never returns.
+        thread.join(timeout=10)
+        assert not thread.is_alive(), "a start claim never returned"
+    return won
+
+
 def _claim_race(s: _Scene) -> None:
     ea = s.tree / ".ea"
     for setup in ("fresh", "stale"):
         if setup == "stale":
             _age(s.stamp, DAEMON_START_INTERVAL_S + 5)
-        won: list[bool] = []
-        barrier = threading.Barrier(8)
+        assert sorted(_race(ea)) == [False] * 7 + [True], setup
+        # Only the stamp and the stale path's lock file, which is never removed.
+        left = {p.name for p in s.stamp.parent.iterdir()}
+        assert s.stamp.name in left
+        assert left <= {"daemon-start.stamp", "daemon-start.stamp.lock"}, setup
 
-        def _claim(barrier: threading.Barrier = barrier, won: list[bool] = won) -> None:
-            barrier.wait()
-            won.append(claim_daemon_start(ea))
 
-        threads = [threading.Thread(target=_claim) for _ in range(8)]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
-        assert sorted(won) == [False] * 7 + [True], setup
-        assert [p.name for p in s.stamp.parent.iterdir() if p.name != s.stamp.name] == []
+def _claim_race_repeated(s: _Scene) -> None:
+    # A double winner showed up in about one stale race in fifty.
+    ea = s.tree / ".ea"
+    assert claim_daemon_start(ea) is True
+    for round_ in range(200):
+        _age(s.stamp, DAEMON_START_INTERVAL_S + 5)
+        assert sorted(_race(ea)) == [False] * 7 + [True], round_
+
+
+def _claim_interleaving(s: _Scene) -> None:
+    # B looks at a stale stamp; A renews it before B acts on the look; C
+    # claims while B acts on it. Each of B's freshness looks lets the next
+    # of A and C run a whole claim right after the look.
+    ea = s.tree / ".ea"
+    assert claim_daemon_start(ea) is True
+    _age(s.stamp, DAEMON_START_INTERVAL_S + 5)
+    real_fresh = daemon_start._fresh
+    others = ["A", "C"]
+    nested: list[str] = []
+    won: dict[str, bool] = {}
+
+    def _look(stamp: Path) -> bool:
+        fresh = real_fresh(stamp)
+        if others and not nested:
+            nested.append(others.pop(0))
+            won[nested[0]] = claim_daemon_start(ea)
+            nested.clear()
+        return fresh
+
+    s.monkeypatch.setattr(daemon_start, "_fresh", _look)
+    won["B"] = claim_daemon_start(ea)
+    assert won == {"A": True, "B": False, "C": False}
+
+
+def _claim_lock_fails(s: _Scene) -> None:
+    # A filesystem without file locks: the claimant loses and says so once.
+    ea = s.tree / ".ea"
+    assert claim_daemon_start(ea) is True
+    _age(s.stamp, DAEMON_START_INTERVAL_S + 5)
+
+    def _refuse(_file: object, _flags: object) -> None:
+        raise portalocker.LockException(OSError(errno.ENOLCK, "No locks available"))
+
+    s.monkeypatch.setattr(portalocker, "lock", _refuse)
+    s.monkeypatch.setattr(daemon_start, "_warned_no_start", False)
+    warnings: list[str] = []
+    s.monkeypatch.setattr(daemon_start.sys.stderr, "write", warnings.append)
+    assert claim_daemon_start(ea) is False
+    assert claim_daemon_start(ea) is False
+    assert len(warnings) == 1
+    assert "no background daemon start" in warnings[0]
+    assert "local/hooks/daemon-start.stamp.lock cannot be locked (LockException)" in warnings[0]
+    assert str(s.tree) not in warnings[0]
+
+
+def _claim_stamp_vanishes(s: _Scene) -> None:
+    # The stamp is removed between the look under the lock and the re-date:
+    # the claimant loses without a warning, and the next claim creates it.
+    ea = s.tree / ".ea"
+    assert claim_daemon_start(ea) is True
+    _age(s.stamp, DAEMON_START_INTERVAL_S + 5)
+    real_fresh = daemon_start._fresh
+    looks: list[Path] = []
+
+    def _look(stamp: Path) -> bool:
+        fresh = real_fresh(stamp)
+        looks.append(stamp)
+        if len(looks) == 2:
+            stamp.unlink()
+        return fresh
+
+    s.monkeypatch.setattr(daemon_start, "_fresh", _look)
+    s.monkeypatch.setattr(daemon_start, "_warned_no_start", False)
+    warnings: list[str] = []
+    s.monkeypatch.setattr(daemon_start.sys.stderr, "write", warnings.append)
+    assert claim_daemon_start(ea) is False
+    assert len(looks) == 2
+    assert warnings == []
+    assert claim_daemon_start(ea) is True
+    assert s.stamp.is_file()
 
 
 def _claim_boundaries(s: _Scene) -> None:
@@ -397,6 +491,10 @@ _SCENES: dict[str, Callable[[_Scene], None]] = {
     "session-start-stamps": _session_start_stamps,
     "stamp-path": _stamp_path,
     "claim-race": _claim_race,
+    "claim-race-repeated": _claim_race_repeated,
+    "claim-interleaving": _claim_interleaving,
+    "claim-lock-fails": _claim_lock_fails,
+    "claim-stamp-vanishes": _claim_stamp_vanishes,
     "claim-boundaries": _claim_boundaries,
 }
 
@@ -513,7 +611,7 @@ def _unwritable(s: _Scene) -> None:
     hooks = s.tree / ".ea" / HOOKS_DIR
     hooks.mkdir(parents=True)
     hooks.chmod(0o500)
-    s.monkeypatch.setattr(daemon_start, "_warned_unwritable", False)
+    s.monkeypatch.setattr(daemon_start, "_warned_no_start", False)
     try:
         warnings: list[str] = []
         s.monkeypatch.setattr(daemon_start.sys.stderr, "write", warnings.append)

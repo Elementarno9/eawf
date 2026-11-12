@@ -6,11 +6,14 @@ case executes the mutation it names.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import get_args
 
 import pytest
 
+from eawf.runtime.daemon.methods.host_deny import DenyRule
 from eawf.runtime.sandbox.data_loss import (
     JUDGED_TOOLS,
     RULE_VALUES,
@@ -195,11 +198,12 @@ def test_surf_051_a_commit_from_a_drifted_working_directory_is_denied(
 @pytest.mark.parametrize(
     ("command", "where"),
     [
-        ("git commit -m x", "main"),
-        ("git commit -m x", "main/src"),
-        ("git -C {main} commit -m x", "worktree"),
-        ("cd {main} && git commit -m x", "worktree"),
+        ("git push", "main"),
+        ("git push", "main/src"),
+        ("git -C {main} push", "worktree"),
+        ("cd {main} && git push", "worktree"),
         ("git -C {worktree} commit -m x", "main"),
+        ("cd {worktree} && git commit -m x", "main"),
         ("git -C {worktree} push", "main"),
         ("git --git-dir={main}/.git push", "worktree"),
     ],
@@ -234,8 +238,8 @@ def test_surf_051_an_anchored_or_explicit_commit_is_allowed(
         "git -C .ea/worktrees/w1 status",
         "git -C .ea/worktrees/w1 restore --staged src/a.py",
         "git -C .ea/worktrees/w1 stash list",
-        "git commit -m 'rm -rf .ea; git push'",
-        "git commit -F - <<'EOF'\nrm -rf .ea\necho x > .ea/state.json\nEOF",
+        "git -C .ea/worktrees/w1 commit -m 'rm -rf .ea; git push'",
+        "git -C .ea/worktrees/w1 commit -F - <<'EOF'\nrm -rf .ea\necho x > .ea/state.json\nEOF",
         "echo 'git worktree remove .ea/worktrees/w1'",
         "eawf worktree cleanup --wave P01-I01-W01",
         "uv run pytest -q tests/unit",
@@ -376,12 +380,13 @@ def test_surf_051_a_command_given_as_argv_is_judged(tree: _Tree) -> None:
     assert denial is not None and denial.pattern is CANONICAL
 
 
-def test_surf_052_the_per_call_set_is_exactly_four_patterns() -> None:
+def test_surf_052_the_per_call_set_is_exactly_five_patterns() -> None:
     assert {pattern.value for pattern in DataLossPattern} == {
         "foreign_worktree_mutation",
         "out_of_root_worktree",
         "drifted_commit",
         "canonical_store_edit",
+        "unlocked_state_commit",
     }
     assert set(RULE_VALUES) == {*(p.value for p in DataLossPattern), UNJUDGED_RULE}
     assert "Read" not in JUDGED_TOOLS and "Grep" not in JUDGED_TOOLS
@@ -552,3 +557,115 @@ def test_a_worktree_removal_denial_names_who_removes_it(tree: _Tree, command: st
     assert denial is not None and denial.pattern is FOREIGN
     assert "eawf worktree gc --dry-run" in denial.reason
     assert "per landed, clean tree, for the operator" in denial.reason
+
+
+UNLOCKED = DataLossPattern.UNLOCKED_STATE_COMMIT
+
+#: A command line, or a function that spells it with the directory it names.
+_Command = str | Callable[[Path], str]
+
+
+def _spelled(command: _Command, path: Path) -> str:
+    return command if isinstance(command, str) else command(path)
+
+
+def _commit_in(tree: Path) -> str:
+    return f"git -C {tree} commit -m x"
+
+
+def _cd_and_commit(tree: Path) -> str:
+    return f"cd {tree} && git commit -m x"
+
+
+def _cherry_pick_in(tree: Path) -> str:
+    return f"git -C {tree} cherry-pick --continue"
+
+
+@pytest.mark.parametrize(
+    ("command", "where", "wrapper"),
+    [
+        ("git commit -m x", "main", "eawf git commit"),
+        ("git commit -m x", "main/src", "eawf git commit"),
+        (_commit_in, "worktree", "eawf git commit"),
+        (_cd_and_commit, "worktree", "eawf git commit"),
+        ("git add -A && git commit -m y", "main", "eawf git commit"),
+        ("rtk git -c user.name=x commit -am y", "main", "eawf git commit"),
+        ("git commit -m 'rm -rf .ea; git push'", "main", "eawf git commit"),
+        ("git cherry-pick abc1234", "main", "eawf git cherry-pick"),
+        (_cherry_pick_in, "worktree", "eawf git cherry-pick"),
+        ("pre-commit run", "main", "eawf git commit"),
+        ("pre-commit", "main", "eawf git commit"),
+        ("pre-commit run ruff --hook-stage pre-commit", "main/src", "eawf git commit"),
+        ("pre-commit run --files", "main", "eawf git commit"),
+        ("uv run pre-commit run", "main", "eawf git commit"),
+        ("uv run --frozen pre-commit run mypy", "main", "eawf git commit"),
+        ("uv run --with pre-commit pre-commit run", "main", "eawf git commit"),
+        ("uv run --project . pre-commit run", "main", "eawf git commit"),
+        ("uv run -p 3.14 -- pre-commit run", "main", "eawf git commit"),
+    ],
+)
+def test_an_unlocked_state_commit_in_the_main_checkout_is_denied(
+    tree: _Tree, command: _Command, where: str, wrapper: str
+) -> None:
+    cwd = {"main": tree.main, "main/src": tree.main / "src", "worktree": tree.worktree}[where]
+    denial = judge_tool_call(
+        "Bash", {"command": _spelled(command, tree.main)}, cwd=cwd, anchor=tree.main
+    )
+    assert denial is not None and denial.pattern is UNLOCKED
+    assert f"{wrapper} -- <git args>" in denial.reason
+    assert denial.rule == "unlocked_state_commit"
+    assert RULE_VALUES[denial.rule]
+
+
+@pytest.mark.parametrize(
+    ("command", "where"),
+    [
+        ("git commit -m x", "worktree"),
+        ("git cherry-pick abc1234", "worktree"),
+        ("pre-commit run", "worktree"),
+        ("git commit -m x", "workspace"),
+        (_commit_in, "main"),
+        ("pre-commit run --all-files", "main"),
+        ("pre-commit run -a", "main"),
+        ("pre-commit run --files src/a.py", "main"),
+        ("pre-commit run ruff --files=src/a.py", "main"),
+        ("uv run pre-commit run --all-files", "main"),
+        ("uv run --with pre-commit pre-commit run --all-files", "main"),
+        ("pre-commit install", "main"),
+        ("pre-commit --version", "main"),
+        ("eawf git commit -- -m x", "main"),
+        ("uv run eawf git commit -- -m x", "main"),
+        ("eawf git cherry-pick -- abc1234", "main"),
+        ("git log --oneline -1 && git status", "main"),
+    ],
+)
+def test_a_commit_outside_the_main_checkout_or_through_the_wrapper_is_allowed(
+    tree: _Tree, command: _Command, where: str
+) -> None:
+    cwd = {"main": tree.main, "worktree": tree.worktree, "workspace": tree.workspace}[where]
+    denial = judge_tool_call(
+        "Bash", {"command": _spelled(command, tree.worktree)}, cwd=cwd, anchor=cwd
+    )
+    assert denial is None
+
+
+@pytest.mark.parametrize(
+    "command", ["git commit -m x", "git cherry-pick abc1234", "pre-commit run", "pre-commit"]
+)
+def test_a_commit_in_an_unmanaged_repository_is_allowed(tmp_path: Path, command: str) -> None:
+    plain = tmp_path / "plain"
+    (plain / ".git").mkdir(parents=True)
+    assert judge_tool_call("Bash", {"command": command}, cwd=plain, anchor=plain) is None
+
+
+def test_a_drifted_commit_into_a_worktree_still_names_the_drift(tree: _Tree) -> None:
+    # The unlocked-commit judge looks only at the main checkout, so a commit that
+    # drifted into a linked worktree keeps the drift refusal.
+    denial = judge_tool_call(
+        "Bash", {"command": "git commit -m x"}, cwd=tree.worktree, anchor=tree.main
+    )
+    assert denial is not None and denial.pattern is DRIFT
+
+
+def test_every_pattern_is_a_rule_the_daemon_records_a_commit_denial_under() -> None:
+    assert set(get_args(DenyRule)) == {*(p.value for p in DataLossPattern), UNJUDGED_RULE}

@@ -157,6 +157,7 @@ COMMAND_PANELS: dict[str, str] = {
     # clone, init are the entry points into a tracked workspace).
     "clone-repo": "vcs",
     "coauthor": "vcs",
+    "git": "vcs",
     "init": "vcs",
     "publish": "vcs",
     "repo": "vcs",

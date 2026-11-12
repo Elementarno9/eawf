@@ -493,7 +493,9 @@ def answer_host_questions(
     question to resolve. A question the operator left unanswered stays waiting.
     Once the answers are recorded, each answered question marked with a pending
     action seals that action, or reports why it did not; a refused seal leaves
-    the recorded answer standing.
+    the recorded answer standing. A seal an earlier report of the call left
+    unfinished, its action still waiting, is completed here with the answer
+    the run ledger holds, and only when this report repeats it.
 
     Returns:
         The answer, and the firehose rows the seals appended, to publish once the

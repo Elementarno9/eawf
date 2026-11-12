@@ -2,14 +2,16 @@
 
 A hook's daemon call must answer inside its deadline on a document of many
 megabytes, so the work it does under the document lock is bounded: the Runs of
-a host session are read from the status projection, one observation reads and
-writes the document once for all its ledger appends, finding the call's receipt
-validates only the receipts carrying its id, and the hook pings the daemon at
-most once before its call.
+a host session are read from the status projection, an observation is answered
+once queued and the queued ones land with one document read and write, finding
+the call's receipt reads an index keyed by call id and validates only the
+receipts carrying its id, and the hook pings the daemon at most once before its
+call.
 """
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import copy
 import json
@@ -39,20 +41,35 @@ from eawf.kernel.store.compaction import (
     read_status_rows,
     write_document,
 )
-from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records, render_ledger_line
+from eawf.kernel.store.ledger import (
+    SNAPSHOT_DIRNAME,
+    LedgerRecord,
+    LedgerSnapshotError,
+    LedgerTornTailError,
+    read_collection_records,
+    read_ledger_records,
+    render_ledger_line,
+)
 from eawf.kernel.store.paths import (
     collection_ledger_paths,
+    ledger_path,
     record_ledger_path,
     status_projection_path,
 )
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
-from eawf.runtime.daemon import epoch2_root, epoch2_transaction, host_calls
+from eawf.runtime.daemon import epoch2_root, epoch2_transaction, host_calls, methods
 from eawf.runtime.daemon.epoch2_recovery import replay_native_wal
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootFencedError
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append, ledger_append_batch
-from eawf.runtime.daemon.host_calls import HostCallReceipt, host_call_id, observe_host_call
+from eawf.runtime.daemon.host_calls import (
+    HostCallObservation,
+    HostCallQueue,
+    HostCallReceipt,
+    host_call_id,
+)
 from eawf.runtime.daemon.methods.host_subagent import HARNESS_ACTORS
+from eawf.runtime.daemon.methods.host_tool import HOST_TOOL_OBSERVE_METHOD
 from eawf.runtime.daemon.methods.permission import host_session_runs
 from eawf.runtime.hooks import daemon_start
 from eawf.runtime.hooks import runner as runner_module
@@ -65,6 +82,7 @@ from eawf.surfaces.cli.errors import DaemonVersionMismatch
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     document_path,
     firehose_path,
+    method_context,
     provision,
     root_context,
     seed,
@@ -230,9 +248,8 @@ def _counted_io(monkeypatch: pytest.MonkeyPatch) -> dict[str, int]:
     return counts
 
 
-def _observe(context: Epoch2RootContext, *, key: str = _CALL_KEY, output: str | None) -> Any:
-    return observe_host_call(
-        context,
+def _observation(*, key: str = _CALL_KEY, output: str | None) -> HostCallObservation:
+    return HostCallObservation(
         run_ref=parse_qualified_urn(RUN_URN),
         tool_name="Bash",
         host_call_key=key,
@@ -241,6 +258,21 @@ def _observe(context: Epoch2RootContext, *, key: str = _CALL_KEY, output: str | 
         actor=HARNESS_ACTORS["claude-code"],
         now=_NOW,
     )
+
+
+def _drain_now(drain: Callable[[], None]) -> None:
+    drain()
+
+
+def _never() -> bool:
+    return False
+
+
+def _observe(context: Epoch2RootContext, *, key: str = _CALL_KEY, output: str | None) -> Any:
+    """Queue one observation and drain it on this thread; raise what refused it."""
+    observation = _observation(key=key, output=output)
+    landing = HostCallQueue(context, stopping=_never).put(observation, start=_drain_now)
+    return observation.call_id, landing.result(timeout=0)
 
 
 def _ledgers(provisioned: CanaryProvision) -> dict[str, bytes]:
@@ -798,6 +830,301 @@ def test_a_corrupt_receipt_of_the_call_is_still_refused(
 
     with pytest.raises(ValueError, match="tool_id"):
         _observe(root_context(canary, tmp_path / "runtime"), output="ok")
+
+
+def _receipt_decodes(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record every receipt ledger line the lookup decodes to learn its call."""
+    seen: list[str] = []
+    original = json.loads
+
+    def counting(text: Any, *args: Any, **kwargs: Any) -> Any:
+        if isinstance(text, str) and HOST_KIND in text:
+            seen.append(text)
+        return original(text, *args, **kwargs)
+
+    monkeypatch.setattr(json, "loads", counting)
+    return seen
+
+
+HOST_KIND: Final = '"payload_kind":"host_call_receipt"'
+
+
+def _append_receipt(provisioned: CanaryProvision, record: LedgerRecord) -> Path:
+    path = record_ledger_path(document_path(provisioned), Epoch2Collection.RECEIPT, record.payload)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"{render_ledger_line(record)}\n")
+    return path
+
+
+def test_receipt_appended_after_the_index_was_built_is_found_by_its_lines_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    provisioned = _canary(tmp_path / "repo", {RUN_KEY: _run(RUN_KEY, RunStatus.RUNNING, SESSION)})
+    _file_receipts(provisioned, 10_000, own=False)
+    context = root_context(provisioned, tmp_path / "runtime")
+    first = _observe(context, key="toolu_first", output="ok")
+    own_id = host_call_id(parse_qualified_urn(RUN_URN), _CALL_KEY)
+    _append_receipt(provisioned, _receipt_record(own_id, 20_001))
+
+    with monkeypatch.context() as patch:
+        decoded = _receipt_decodes(patch)
+        seen = _validations(patch)
+        _, receipt = _observe(context, output="ok")
+
+    assert first[1] is not None
+    assert receipt is not None and receipt.receipt_id == f"receipt-{20_001:016x}"
+    # The first call's own receipt and the one appended since: never the 10,000 before.
+    assert len(decoded) == 2
+    assert len(seen) == 1
+
+
+@pytest.mark.parametrize("lines", [0, 1, 2])
+def test_receipt_lookup_of_a_short_ledger(tmp_path: Path, lines: int) -> None:
+    provisioned = _canary(tmp_path / "repo", {RUN_KEY: _run(RUN_KEY, RunStatus.RUNNING, SESSION)})
+    own_id = host_call_id(parse_qualified_urn(RUN_URN), _CALL_KEY)
+    if lines:
+        _file_receipts(provisioned, lines - 1, own=True)
+    context = root_context(provisioned, tmp_path / "runtime")
+
+    _, receipt = _observe(context, output="ok")
+
+    assert receipt is not None
+    if lines:
+        assert receipt.receipt_id == f"receipt-{lines:016x}"
+    receipts = [
+        item.payload["receipt_id"]
+        for item in read_collection_records(document_path(provisioned), Epoch2Collection.RECEIPT)
+        if item.payload.get("call_id") == own_id
+    ]
+    assert receipts == [receipt.receipt_id]
+
+
+def test_receipt_of_another_run_under_the_same_call_id_is_not_returned(tmp_path: Path) -> None:
+    provisioned = _canary(tmp_path / "repo", {RUN_KEY: _run(RUN_KEY, RunStatus.RUNNING, SESSION)})
+    own_id = host_call_id(parse_qualified_urn(RUN_URN), _CALL_KEY)
+    other = _receipt_record(own_id, 7)
+    payload = copy.deepcopy(other.payload)
+    other_run = RUN_URN.replace(RUN_KEY, "RUN-00000099")
+    payload["run_ref"] = other_run
+    payload["result"]["run_ref"] = other_run
+    _append_receipt(provisioned, other.model_copy(update={"payload": payload}))
+    _append_receipt(provisioned, _receipt_naming_no_call())
+
+    _, receipt = _observe(root_context(provisioned, tmp_path / "runtime"), output="ok")
+
+    assert receipt is not None and receipt.receipt_id != f"receipt-{7:016x}"
+
+
+def _receipt_naming_no_call() -> LedgerRecord:
+    """A receipt line whose payload names no call id, so no lookup can return it."""
+    return LedgerRecord(
+        collection=Epoch2Collection.RECEIPT,
+        record_key="receipt-loose",
+        status="recorded",
+        recorded_at=_NOW,
+        payload={"payload_kind": "host_call_receipt", "note": "no call id"},
+    )
+
+
+def test_receipt_ledger_replaced_by_a_rename_is_read_again_whole(
+    tmp_path: Path,
+) -> None:
+    provisioned = _canary(tmp_path / "repo", {RUN_KEY: _run(RUN_KEY, RunStatus.RUNNING, SESSION)})
+    _file_receipts(provisioned, 3, own=False)
+    context = root_context(provisioned, tmp_path / "runtime")
+    _observe(context, key="toolu_first", output="ok")
+    own_id = host_call_id(parse_qualified_urn(RUN_URN), _CALL_KEY)
+    path = _append_receipt(provisioned, _receipt_record(own_id, 50))
+    # A sanctioned rewrite lands through a rename: same bytes, a new inode.
+    staged = path.with_suffix(".staged")
+    staged.write_bytes(path.read_bytes())
+    staged.replace(path)
+
+    _, receipt = _observe(context, output="ok")
+
+    assert receipt is not None and receipt.receipt_id == f"receipt-{50:016x}"
+
+
+def test_receipt_ledger_with_a_torn_tail_is_refused_until_repaired(tmp_path: Path) -> None:
+    provisioned = _canary(tmp_path / "repo", {RUN_KEY: _run(RUN_KEY, RunStatus.RUNNING, SESSION)})
+    _file_receipts(provisioned, 2, own=False)
+    context = root_context(provisioned, tmp_path / "runtime")
+    _observe(context, key="toolu_first", output="ok")
+    own_id = host_call_id(parse_qualified_urn(RUN_URN), _CALL_KEY)
+    path = _append_receipt(provisioned, _receipt_record(own_id, 60))
+    whole = path.read_bytes()
+    path.write_bytes(whole[:-5])
+
+    with pytest.raises(LedgerTornTailError):
+        _observe(context, output="ok")
+    path.write_bytes(whole)
+    _, receipt = _observe(context, output="ok")
+
+    assert receipt is not None and receipt.receipt_id == f"receipt-{60:016x}"
+
+
+def test_receipt_ledger_with_a_snapshot_not_matching_its_digest_is_refused(
+    tmp_path: Path,
+) -> None:
+    provisioned = _canary(tmp_path / "repo", {RUN_KEY: _run(RUN_KEY, RunStatus.RUNNING, SESSION)})
+    _file_receipts(provisioned, 1, own=False)
+    path = record_ledger_path(
+        document_path(provisioned), Epoch2Collection.RECEIPT, _receipt_payload(f"call-{1:016x}", 1)
+    )
+    snapshots = path.parent / SNAPSHOT_DIRNAME
+    snapshots.mkdir()
+    (snapshots / f"{path.stem}.{'0' * 64}.jsonl").write_bytes(path.read_bytes())
+
+    with pytest.raises(LedgerSnapshotError):
+        _observe(root_context(provisioned, tmp_path / "runtime"), output="ok")
+
+
+# ---- eight concurrent observations answer in time and land as one write -----------------------
+
+#: The live tree's ledger sizes the hook deadline was missed on.
+_LIVE_RECEIPTS: Final = 14_000
+_LIVE_RUN_RECORDS: Final = 51_000
+
+
+def _inflate(provisioned: CanaryProvision, context: Epoch2RootContext) -> None:
+    """Grow the canary's receipt and run ledgers to the live tree's sizes.
+
+    The run ledger is filled with other Runs' copies of the real lines one
+    observation leaves, so every line is one the daemon itself writes.
+    """
+    _file_receipts(provisioned, _LIVE_RECEIPTS, own=False)
+    _observe(context, key="toolu_seed", output="seed")
+    path = ledger_path(document_path(provisioned), Epoch2Collection.RUN)
+    seeded = path.read_text(encoding="utf-8").splitlines()
+    own = [line for line in seeded if RUN_KEY in line]
+    lines: list[str] = []
+    number = 0
+    while len(seeded) + len(lines) < _LIVE_RUN_RECORDS:
+        other = f"RUN-{20_000_000 + number:08d}"
+        lines.extend(line.replace(RUN_KEY, other) for line in own)
+        number += 1
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write("".join(f"{line}\n" for line in lines))
+
+
+async def _observe_load(
+    ctx: Any, provisioned: CanaryProvision, number: int, landed: Callable[[], bool]
+) -> tuple[Any, bool]:
+    """Observe one load call; return its answer and whether a write had landed by then."""
+    answer = await methods.dispatch(
+        HOST_TOOL_OBSERVE_METHOD,
+        ctx,
+        {
+            "repo_root": str(provisioned.root),
+            "harness": "claude-code",
+            "host_session_id": SESSION,
+            "tool_name": "Bash",
+            "host_call_key": f"toolu_load{number:04d}",
+            "phase": "result",
+            "output": f"{number} passed",
+        },
+    )
+    return answer, landed()
+
+
+@contextlib.contextmanager
+def _lock_held(
+    provisioned: CanaryProvision, runtime: Path
+) -> Iterator[tuple[threading.Event, threading.Event]]:
+    """Hold the tree's document lock on another thread until the first yielded event is set.
+
+    The second yielded event is set once the holder has let the lock go, for
+    whatever reason, so a caller can tell an answer given under the lock from
+    one given after it.
+    """
+    holder = root_context(provisioned, runtime)
+    held, release, let_go = threading.Event(), threading.Event(), threading.Event()
+
+    def hold() -> None:
+        try:
+            with holder.session([RUN_URN]):
+                held.set()
+                release.wait(30)
+        finally:
+            let_go.set()
+
+    thread = threading.Thread(target=hold, name="lock-holder")
+    thread.start()
+    try:
+        assert held.wait(10), "the holder never took the document lock"
+        yield release, let_go
+    finally:
+        release.set()
+        thread.join(30)
+
+
+def _gate_writes(monkeypatch: pytest.MonkeyPatch, gate: threading.Event) -> None:
+    """Keep every document write waiting until *gate* is set, so the drainer stays busy."""
+    write = epoch2_root.write_document
+
+    def gated_write(path: Path, document: dict[str, Any], **kwargs: Any) -> None:
+        gate.wait(30)
+        write(path, document, **kwargs)
+
+    monkeypatch.setattr(epoch2_root, "write_document", gated_write)
+
+
+@pytest.mark.parametrize("contended", [True, False], ids=["lock-held", "drainer-busy"])
+def test_concurrent_observations_answer_within_the_hook_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, contended: bool
+) -> None:
+    # An answer that waited for its write would outlast the hook deadline, so
+    # each call must answer before any write has landed: under the lock held
+    # elsewhere, or behind a drainer whose write cannot finish.
+    provisioned = _canary(tmp_path / "repo", {RUN_KEY: _run(RUN_KEY, RunStatus.RUNNING, SESSION)})
+    ctx = method_context(tmp_path / "runtime")
+    _inflate(provisioned, ctx.native_root_context(tree_root(provisioned)))
+    counts = _counted_io(monkeypatch)
+
+    def eight(landed: Callable[[], bool]) -> Callable[[], Any]:
+        async def calls() -> list[tuple[Any, bool]]:
+            return await asyncio.gather(
+                *(_observe_load(ctx, provisioned, n, landed) for n in range(8))
+            )
+
+        return calls
+
+    if contended:
+        # Another session holds the lock, as under live load: every call queues
+        # before the drainer can take one, so the eight land together.
+        with _lock_held(provisioned, tmp_path / "holder") as (release, let_go):
+            answered = asyncio.run(
+                _answer_then(eight(lambda: let_go.is_set() or counts["write"] > 0), release)
+            )
+    else:
+        gate = threading.Event()
+        _gate_writes(monkeypatch, gate)
+        answered = asyncio.run(_answer_then(eight(lambda: counts["write"] > 0), gate))
+
+    assert [landed for _, landed in answered] == [False] * 8, "an answer waited for its write"
+    run_ref = parse_qualified_urn(RUN_URN)
+    expected = [host_call_id(run_ref, f"toolu_load{n:04d}") for n in range(8)]
+    assert [answer for answer, _ in answered] == [
+        {"run_ref": RUN_URN, "call_id": call_id} for call_id in expected
+    ]
+    filed = {
+        item.payload.get("call_id")
+        for item in read_collection_records(document_path(provisioned), Epoch2Collection.RECEIPT)
+    }
+    assert set(expected) <= filed
+    if contended:
+        assert counts == {"read": 1, "write": 1}
+    else:
+        assert 1 <= counts["write"] <= 8
+
+
+async def _answer_then(
+    calls: Callable[[], Any], release: threading.Event
+) -> list[tuple[Any, bool]]:
+    answered: list[tuple[Any, bool]] = await calls()
+    release.set()
+    return answered
 
 
 # ---- a hook's daemon call pings once ----------------------------------------------------------

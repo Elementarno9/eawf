@@ -11,7 +11,8 @@ the tree makes the newcomer log ``run duplicate-daemon`` and exit 0, so the
 launch needs no liveness probe first.
 
 The module imports only the standard library and the detach kwargs because
-every hook that finds no daemon loads it.
+every hook that finds no daemon loads it; the lock library is loaded only to
+renew a stale stamp.
 """
 
 from __future__ import annotations
@@ -112,46 +113,43 @@ def claim_daemon_start(ea_dir: Path) -> bool:
 
     The claim is the stamp's creation, which only one process can win. A
     stamp older than :data:`DAEMON_START_INTERVAL_S`, or dated in the future
-    by a clock set back, is retired by renaming it to a name of this
-    process's own, which only one process can do to a given file, and the
-    claim is tried once more. A process whose rename took a stamp another
-    had just made puts it back and loses.
+    by a clock set back, is re-dated to now under a lock on
+    ``daemon-start.stamp.lock`` beside it, by the one process that still
+    finds it stale once it holds the lock; that process wins.
 
     Args:
         ea_dir: The tree's ``.ea`` directory.
 
     Returns:
         Whether this process may launch the daemon now; ``False`` too when
-        *ea_dir* is not a directory or the stamp cannot be written, since a
-        tree that cannot be stamped cannot be rate-limited either. Where
-        nothing can be written no health row can be either, so the first
-        such refusal in a process prints one warning line on stderr and no
-        later one does: a tree whose ``.ea/local/hooks`` is read-only gets
-        no background start and no record of it.
+        *ea_dir* is not a directory, the stamp cannot be written or its lock
+        file cannot be locked, since a tree that cannot be stamped cannot be
+        rate-limited either. Where nothing can be written no health row can
+        be either, so the first such refusal in a process prints one warning
+        line on stderr and no later one does: a tree whose
+        ``.ea/local/hooks`` is read-only, or sits on a filesystem without
+        file locks, gets no background start and no record of it.
     """
     if not ea_dir.is_dir():
         return False
     try:
         return _claim(ea_dir / DAEMON_START_STAMP)
     except OSError as exc:
-        _warn_unwritable(exc)
+        _warn_no_start(f"{HOOKS_DIR.as_posix()} is not writable ({type(exc).__name__})")
         return False
 
 
-def _warn_unwritable(exc: OSError) -> None:
-    """Print the one warning a process gives about a hook directory it cannot write."""
-    global _warned_unwritable
-    if _warned_unwritable:
+def _warn_no_start(reason: str) -> None:
+    """Print the one warning a process gives about a background start it cannot claim."""
+    global _warned_no_start
+    if _warned_no_start:
         return
-    _warned_unwritable = True
-    sys.stderr.write(
-        f"eawf hook: no background daemon start: {HOOKS_DIR.as_posix()} "
-        f"is not writable ({type(exc).__name__})\n"
-    )
+    _warned_no_start = True
+    sys.stderr.write(f"eawf hook: no background daemon start: {reason}\n")
 
 
-#: Whether this process has printed :func:`_warn_unwritable`'s line.
-_warned_unwritable = False
+#: Whether this process has printed :func:`_warn_no_start`'s line.
+_warned_no_start = False
 
 
 def _claim(stamp: Path) -> bool:
@@ -161,20 +159,45 @@ def _claim(stamp: Path) -> bool:
         return True
     if _fresh(stamp):
         return False
-    retired = stamp.with_name(f"{stamp.name}.{os.getpid()}.{time.monotonic_ns()}")
-    try:
-        os.rename(stamp, retired)
-    except FileNotFoundError:
-        return False
-    if _fresh(retired):
-        # Another process renewed the stamp between this one's look and its
-        # rename; the renewal stands.
-        with contextlib.suppress(FileExistsError):
-            os.link(retired, stamp)
-        retired.unlink()
-        return False
-    retired.unlink()
-    return _created(stamp)
+    return _renewed(stamp)
+
+
+def _renewed(stamp: Path) -> bool:
+    """Renew the stale *stamp* in place; return whether this call renewed it.
+
+    Renewals are serialised by an operating-system lock on a sibling file
+    that is never removed, and the stamp is re-dated rather than replaced:
+    a stamp name that is briefly absent lets a lock-free creation win
+    beside the renewal. The lock is held only for one look and one re-date,
+    and the operating system drops it when its holder dies, so the wait is
+    unbounded and needs no timeout.
+    """
+    # Imported here so the common fresh-stamp path loads nothing beyond the
+    # standard library.
+    import portalocker
+
+    lock = stamp.with_name(f"{stamp.name}.lock")
+    with lock.open("a") as held:
+        try:
+            portalocker.lock(held, portalocker.LOCK_EX)
+        except portalocker.LockException as exc:
+            # Not an OSError: a filesystem without file locks would otherwise
+            # crash the hook instead of costing one background start.
+            name = (HOOKS_DIR / lock.name).as_posix()
+            _warn_no_start(f"{name} cannot be locked ({type(exc).__name__})")
+            return False
+        try:
+            if _fresh(stamp):
+                return False
+            # A stamp removed since the look under the lock is left to the
+            # next claim's creation, as one absent at the look is.
+            try:
+                os.utime(stamp)
+            except FileNotFoundError:
+                return False
+            return True
+        finally:
+            portalocker.unlock(held)
 
 
 def _mtime(path: Path) -> float | None:
@@ -287,7 +310,7 @@ def _created(stamp: Path) -> bool:
 
 
 def _fresh(stamp: Path) -> bool:
-    """Return whether *stamp* holds off a start now; a vanished stamp is a renewal underway."""
+    """Return whether *stamp* holds off a start now; a vanished one is left to the next creation."""
     try:
         age = time.time() - stamp.stat().st_mtime
     except FileNotFoundError:

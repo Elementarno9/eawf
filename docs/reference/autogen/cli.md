@@ -179,6 +179,15 @@ Run install-readiness checks (tools, state, config).
 |---|---|
 | `hooks` | Run each installed plugin bundle's hooks against the hook contract; needs no tree. |
 
+### `eawf git`
+
+Run git commit or git cherry-pick while holding the state document lock, so a daemon write is not lost while commit hooks stash files.
+
+| Verb | Summary |
+|---|---|
+| `cherry-pick` | Run git cherry-pick with the arguments after --, holding the document lock. |
+| `commit` | Run git commit with the arguments after --, holding the document lock. |
+
 ### `eawf help`
 
 Show prose help topics (exit-codes, daemon, profiles, urns, migration, upgrade-from-0.6, streaming, limitations).

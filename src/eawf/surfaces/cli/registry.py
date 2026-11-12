@@ -232,6 +232,8 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("local", "eawf.surfaces.cli.commands.local", "local_app"),
     GroupRow("paths", "eawf.surfaces.cli.commands.paths", "paths_app"),
     GroupRow("worktree", "eawf.surfaces.cli.commands.worktree", "worktree_app"),
+    # git commit and cherry-pick holding the state document lock.
+    GroupRow("git", "eawf.surfaces.cli.commands.git_guard", "git_app"),
     # Completion + prose help topics.
     GroupRow("completion", "eawf.surfaces.cli.commands.completion", "completion_app"),
     GroupRow("help", "eawf.surfaces.cli.commands.help", "help_app"),

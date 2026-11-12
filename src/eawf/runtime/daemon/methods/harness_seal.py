@@ -13,8 +13,9 @@ asks: no raise before the answer, answers supplied in the tool input it was rais
 with, a multi-select call, option labels that are not the action's in its order, a
 question asked in other words than the action presents as, an answer that is not one
 of the labels, one action marked twice, an action not held or not waiting at the
-marked revision, no operator claim, an action addressed to another principal, or a
-transcript that contradicts the report.
+marked revision, no operator claim, an action addressed to another principal, a
+transcript that contradicts the report, or a retry that resumes a seal with another
+question or answer than the run ledger recorded for the call.
 
 The words are those :func:`~eawf.workflow.host_question.present_pending_action`
 renders for the action at the marked revision: the question with its marker line,
@@ -52,6 +53,7 @@ from pydantic import BaseModel, ConfigDict
 from eawf.kernel.config.operator_claim import claimed_operator
 from eawf.kernel.identity import QualifiedUrn, parse_qualified_urn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.state.enums import OpenQuestionStatus
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import OPERATOR_PRINCIPAL_PREFIX
 from eawf.kernel.state.epoch2.pending_action import (
@@ -73,7 +75,7 @@ from eawf.runtime.daemon.methods.delivery_approval import (
     action_urn,
     held_actions,
 )
-from eawf.runtime.runtimes.host_transcript import question_exchange
+from eawf.runtime.runtimes.host_transcript import question_exchange, scrubbed_words
 from eawf.workflow.delivery.acceptance_approval import ApprovalRefusal
 from eawf.workflow.host_question import (
     QuestionPresentationError,
@@ -115,6 +117,7 @@ class HarnessSealRefusal(StrEnum):
     OPERATOR_UNCLAIMED = "harness_operator_unclaimed"
     ASSIGNEE_MISMATCH = "harness_assignee_mismatch"
     TRANSCRIPT_MISMATCH = "harness_transcript_mismatch"
+    ANSWER_CHANGED = "harness_answer_changed"
 
 
 class SealRefusal(BaseModel):
@@ -509,6 +512,68 @@ def _seal(
     return commit.envelopes
 
 
+def _resumable(
+    call: HostQuestionCall,
+    *,
+    answered: Sequence[HostQuestionLine],
+    raised: Mapping[int, HostQuestionLine],
+) -> tuple[HostQuestionLine, ...]:
+    """Return the questions of *call* an earlier report answered, which this one answers too.
+
+    An earlier report whose seal stopped short -- its session timed out on the
+    document lock -- left the answer recorded and the action waiting, so its
+    retry reads them here from the run ledger rather than from this report.
+    """
+    done = {line.position for line in answered}
+    return tuple(
+        line
+        for position, asked in enumerate(call.questions)
+        if position not in done
+        and (line := raised.get(position)) is not None
+        and line.question.status is OpenQuestionStatus.ANSWERED
+        and asked.question in call.answers
+    )
+
+
+def _require_recorded(call: HostQuestionCall, line: HostQuestionLine) -> None:
+    """Refuse a retry that does not repeat the question and answer the run ledger holds.
+
+    The recorded answer is final, so a resumed seal seals it and nothing else. Both
+    sides are compared as the record holds them, after the same scrubbing.
+
+    Raises:
+        _SealRefusedError: ``harness_question_mismatch`` when the retry asks other
+            words than the recorded question, or ``harness_answer_changed`` when
+            its answer is not the recorded option or reply.
+    """
+    asked = call.questions[line.position]
+    question = line.question
+    if (scrubbed_words(asked.question) or "a question with no words") != question.question:
+        raise _SealRefusedError(
+            HarnessSealRefusal.QUESTION_MISMATCH,
+            f"the retry asks other words than {question.key} was recorded with",
+        )
+    said = scrubbed_words(call.answers[asked.question]) or "an answer with no words"
+    chosen = next((option.key for option in question.options if option.label == said), None)
+    reply = None if question.reply is None else question.reply.text
+    if (chosen, None if chosen is not None else said) != (question.chosen_option_key, reply):
+        raise _SealRefusedError(
+            HarnessSealRefusal.ANSWER_CHANGED,
+            f"the retry answers {question.key} otherwise than the answer recorded for it",
+        )
+
+
+def _unsealed(
+    call: HostQuestionCall, line: HostQuestionLine, held: Mapping[str, PendingAction]
+) -> bool:
+    """Return whether the action *line* is marked with still waits at the marked revision."""
+    mark = action_marker(call.questions[line.position].question)
+    if mark is None or mark[0] not in held:
+        return False
+    action = held[mark[0]]
+    return action.status is PendingActionStatus.WAITING and action.revision == mark[1]
+
+
 def seal_from_host_answer(
     context: Epoch2RootContext,
     authority: RootAuthority,
@@ -522,13 +587,18 @@ def seal_from_host_answer(
 ) -> HarnessSeal:
     """Seal each action a question answered by this call is marked with.
 
+    A question an earlier report of the call answered is sealed too while its
+    marked action still waits at the marked revision, so a seal cut short after
+    the answer was recorded completes on the retry; once the action is sealed,
+    or has moved, such a question seals nothing and reports nothing.
+
     Args:
         context: The native context of the tree.
         authority: The fence-cleared tree, read for the marked actions.
         call: The host's report of the call, with its answers.
         answered: The questions this call answered, as just recorded.
         raised: The questions of this call already recorded before this report,
-            by position.
+            by position, at their latest revision.
         scope: What the questions are scoped to, which addresses an action the
             tree does not hold.
         run: The Run the host session is on, if any.
@@ -538,8 +608,10 @@ def seal_from_host_answer(
         Each action sealed and each marked action refused, with the rows to
         publish.
     """
+    resumable = _resumable(call, answered=answered, raised=raised)
     marks = {
-        line.position: action_marker(call.questions[line.position].question) for line in answered
+        line.position: action_marker(call.questions[line.position].question)
+        for line in (*answered, *resumable)
     }
     if call.harness != "claude-code" or not any(marks.values()):
         return HarnessSeal()
@@ -552,13 +624,16 @@ def seal_from_host_answer(
     sealed: list[str] = []
     refusals: list[SealRefusal] = []
     envelopes: list[Envelope] = []
-    for line in answered:
+    resumed = {line.position: line for line in resumable if _unsealed(call, line, held)}
+    for line in sorted((*answered, *resumed.values()), key=lambda line: line.position):
         mark = marks[line.position]
         if mark is None:
             continue
         key, revision = mark
         ref = str(held[key].urn) if key in held else str(action_urn(scope, key))
         try:
+            if line.position in resumed:
+                _require_recorded(call, line)
             admitted = _admit(
                 call,
                 line,

@@ -36,12 +36,13 @@ HOST_TOOL_DENY_METHOD: Final = "runtime.host.tool.deny"
 
 _HostText = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=256)]
 
-#: The rules a denial may name: the four patterns and the fail-closed refusal.
+#: The rules a denial may name: the five patterns and the fail-closed refusal.
 DenyRule = Literal[
     "foreign_worktree_mutation",
     "out_of_root_worktree",
     "drifted_commit",
     "canonical_store_edit",
+    "unlocked_state_commit",
     "unjudged",
 ]
 

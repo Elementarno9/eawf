@@ -3,7 +3,9 @@
 The ledger-history repair re-files content lines with an ``unreachable_shas``
 declaration beside their fields, and those lines stay committed. Filing a tool result
 reads the artifact ledger first, so neither that declaration nor any other Run's line
-may refuse the filing; and the declared line itself still reads back as content.
+may refuse the filing; and the declared line itself still reads back as content. The
+observation is answered once queued, with the Run and the call id the hook reads, and its
+filing has landed once the call's loop has ended.
 """
 
 from __future__ import annotations
@@ -14,12 +16,14 @@ from typing import Any, Final
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.identity import parse_qualified_urn
 from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record, read_collection_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.platform.lint.ledger_history import UNREACHABLE_KEY
 from eawf.runtime.daemon.content_store import CONTENT_REF_PREFIX
+from eawf.runtime.daemon.host_calls import host_call_id
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.host_tool import HOST_TOOL_OBSERVE_METHOD
 from eawf.runtime.daemon.methods.run_content import RUN_CONTENT_READ_METHOD
@@ -88,6 +92,13 @@ def _observe_result(ctx: MethodContext, canary: CanaryProvision) -> Any:
     )
 
 
+def _receipt_of(canary: CanaryProvision, call_id: str) -> dict[str, Any]:
+    """Return the one host call receipt filed for *call_id*."""
+    records = read_collection_records(document_path(canary), Epoch2Collection.RECEIPT)
+    (payload,) = [item.payload for item in records if item.payload.get("call_id") == call_id]
+    return payload
+
+
 def _filed_refs(canary: CanaryProvision) -> list[str]:
     records = read_collection_records(document_path(canary), Epoch2Collection.ARTIFACT)
     return [record.record_key for record in records]
@@ -100,9 +111,10 @@ def test_a_declared_row_no_longer_refuses_tool_results(
 
     answer = _observe_result(ctx, canary)
 
-    assert answer["status"] == "succeeded"
-    assert answer["receipt_id"]
-    assert answer["run_ref"] == RUN_URN
+    call_id = host_call_id(parse_qualified_urn(RUN_URN), "toolu_01bash")
+    assert answer == {"run_ref": RUN_URN, "call_id": call_id}
+    receipt = _receipt_of(canary, call_id)
+    assert receipt["result"]["status"] == "succeeded"
     filed = [ref for ref in _filed_refs(canary) if ref != _DECLARED_REF]
     assert len(filed) == 1
     assert filed[0].startswith(f"{CONTENT_REF_PREFIX}run-00000010/")
@@ -111,7 +123,7 @@ def test_a_declared_row_no_longer_refuses_tool_results(
         ctx,
         canary,
         urn=RUN_URN,
-        refs=[filed[0], answer["receipt_id"]],
+        refs=[filed[0], receipt["receipt_id"]],
     )
     assert own["missing"] == []
     by_ref, by_receipt = own["contents"]
@@ -128,7 +140,7 @@ def test_another_runs_malformed_row_never_refuses_a_filing(
 
     answer = _observe_result(ctx, canary)
 
-    assert answer["status"] == "succeeded"
+    assert _receipt_of(canary, answer["call_id"])["result"]["status"] == "succeeded"
     assert len(_filed_refs(canary)) == 2
 
 

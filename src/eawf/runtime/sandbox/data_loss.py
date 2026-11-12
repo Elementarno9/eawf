@@ -1,8 +1,8 @@
-"""The fail-closed per-call guard over the four data-loss patterns.
+"""The fail-closed per-call guard over the five data-loss patterns.
 
 A host harness runs its own tools, so a call that would destroy state Eawf owns has
 to be refused before it runs, in the harness's pre-tool hook. Per-call guards cost
-measured latency on every call, so exactly four patterns are judged here, each an
+measured latency on every call, so exactly five patterns are judged here, each an
 irreversible mutation of owned state:
 
 - :attr:`DataLossPattern.FOREIGN_WORKTREE_MUTATION` -- a managed worktree removed,
@@ -18,6 +18,11 @@ irreversible mutation of owned state:
 - :attr:`DataLossPattern.CANONICAL_STORE_EDIT` -- a direct write to a canonical state
   or store file, which only the daemon may change, or a ``git clean`` or ``git reset
   --hard`` in the main checkout, which discards the daemon's uncommitted state with it.
+- :attr:`DataLossPattern.UNLOCKED_STATE_COMMIT` -- a ``git commit``, a ``git
+  cherry-pick`` or a stashing ``pre-commit run`` in the main checkout. Commit hooks
+  stash the unstaged files and restore them afterwards, so a daemon write to the state
+  document in between is lost; ``eawf git commit`` and ``eawf git cherry-pick`` hold
+  the document lock for the whole git process instead.
 
 Everything else is advisory or post-hoc. A rule Eawf enforces at its own mutator is
 not judged again here: an ``eawf`` command line is never judged, because the verb it
@@ -55,6 +60,7 @@ class DataLossPattern(StrEnum):
     OUT_OF_ROOT_WORKTREE = "out_of_root_worktree"
     DRIFTED_COMMIT = "drifted_commit"
     CANONICAL_STORE_EDIT = "canonical_store_edit"
+    UNLOCKED_STATE_COMMIT = "unlocked_state_commit"
 
 
 #: The rule a denial names when the call could not be judged at all.
@@ -89,7 +95,7 @@ MANAGED_WORKTREE_ROOTS: Final[tuple[tuple[str, ...], ...]] = (
 )
 
 #: The revision of the data-loss policy a recorded denial belongs to.
-DATA_LOSS_POLICY_REVISION: Final = 2
+DATA_LOSS_POLICY_REVISION: Final = 3
 
 #: What each rule held when it refused: the roots or files it protects.
 RULE_VALUES: Final[dict[str, str]] = {
@@ -99,6 +105,7 @@ RULE_VALUES: Final[dict[str, str]] = {
     DataLossPattern.CANONICAL_STORE_EDIT.value: (
         ".ea/state.json .ea/store .ea/ledger .ea/telemetry.db .ea/local/epoch2 .ea/generations"
     ),
+    DataLossPattern.UNLOCKED_STATE_COMMIT.value: "the state document lock eawf git commit holds",
     UNJUDGED_RULE: "fail closed",
 }
 
@@ -195,6 +202,22 @@ _GC_ADVICE: Final = (
 _GIT_VALUED: Final = frozenset({"-c", "--namespace", "--exec-path", "--config-env"})
 #: The ``env`` options that take a value, which is not the command env runs.
 _ENV_VALUED: Final = frozenset({"-C", "--chdir", "-u", "--unset"})
+#: The ``uv run`` options that take a value, which is not the program uv runs.
+_UV_RUN_VALUED: Final = frozenset(
+    {
+        "--extra", "--no-extra", "--group", "--no-group", "--only-group",
+        "--no-editable-package", "--env-file", "-w", "--with", "--with-editable",
+        "--with-requirements", "--package", "--python-platform", "--index", "--default-index",
+        "-i", "--index-url", "--extra-index-url", "-f", "--find-links", "--index-strategy",
+        "--keyring-provider", "-P", "--upgrade-package", "--upgrade-group", "--resolution",
+        "--prerelease", "--prerelease-package", "--fork-strategy", "--exclude-newer",
+        "--exclude-newer-package", "--no-sources-package", "--reinstall-package", "--link-mode",
+        "-C", "--config-setting", "--config-settings-package", "--no-build-isolation-package",
+        "--no-build-package", "--no-binary-package", "--cache-dir", "--refresh-package", "-p",
+        "--python", "--color", "--allow-insecure-host", "--directory", "--project",
+        "--config-file",
+    }
+)  # fmt: skip
 #: A backslash-newline the shell drops before it splits words, unless the
 #: backslash is itself escaped.
 _LINE_CONTINUATION = re.compile(r"(?<!\\)((?:\\\\)*)\\\n")
@@ -665,6 +688,9 @@ def _judge_words(
         return None
     if name == "git":
         return _judge_git(args, shell)
+    pre_commit = _pre_commit_args(name, args)
+    if pre_commit is not None:
+        return _judge_pre_commit(pre_commit, shell)
     return _judge_file_command(name, args, shell)
 
 
@@ -907,6 +933,14 @@ def _judge_git(args: list[str], shell: _Shell) -> DataLossDenial | None:
     subcommand, rest = args[index], args[index + 1 :]
     if subcommand == "worktree":
         return _judge_git_worktree(rest, where, shell)
+    if subcommand in {"commit", "cherry-pick"} and _in_main_checkout(where):
+        return _deny(
+            DataLossPattern.UNLOCKED_STATE_COMMIT,
+            f"git {subcommand} in the main checkout is refused: commit hooks stash the "
+            "unstaged files, and a daemon state write made meanwhile is lost; run "
+            f"eawf git {subcommand} -- <git args>, which holds the state document lock "
+            "until git exits",
+        )
     if subcommand in {"commit", "push"}:
         return _judge_drift(subcommand, where=where, explicit=explicit, shell=shell)
     if subcommand in {"checkout", "restore"}:
@@ -1023,6 +1057,47 @@ def _discards_work(subcommand: str, args: list[str]) -> bool:
     if subcommand == "switch":
         return any(arg in {"-f", "--force", "--discard-changes"} for arg in args)
     return False
+
+
+def _pre_commit_args(name: str, args: list[str]) -> list[str] | None:
+    """Return the arguments of a ``pre-commit`` call, run directly or through ``uv run``."""
+    if name == "pre-commit":
+        return args
+    if name != "uv" or args[:1] != ["run"]:
+        return None
+    index = 1
+    while index < len(args) and args[index].startswith("-") and args[index] != "--":
+        index += 2 if args[index] in _UV_RUN_VALUED else 1
+    if index < len(args) and args[index] == "--":
+        index += 1
+    if index < len(args) and os.path.basename(args[index]) == "pre-commit":
+        return args[index + 1 :]
+    return None
+
+
+def _judge_pre_commit(args: list[str], shell: _Shell) -> DataLossDenial | None:
+    """Judge a ``pre-commit`` call; a bare one runs the hooks like ``pre-commit run``.
+
+    pre-commit stashes the unstaged files around its hooks unless it is given
+    the files to check, through ``--all-files`` or ``--files``.
+    """
+    if args and args[0] != "run":
+        return None
+    options = args[1:]
+    named = False
+    for index, arg in enumerate(options):
+        following = options[index + 1 : index + 2]
+        # A --files that names no file leaves pre-commit with none, and it stashes.
+        files = arg == "--files" and bool(following) and not following[0].startswith("-")
+        named = named or files or arg in {"--all-files", "-a"} or arg.startswith("--files=")
+    if named or not _in_main_checkout(shell.cwd):
+        return None
+    return _deny(
+        DataLossPattern.UNLOCKED_STATE_COMMIT,
+        "pre-commit run without --all-files or --files in the main checkout is refused: it "
+        "stashes the unstaged files, and a daemon state write made meanwhile is lost; pass "
+        "--all-files or --files, or commit through eawf git commit -- <git args>",
+    )
 
 
 def _judge_foreign_reset(subcommand: str, where: Path, shell: _Shell) -> DataLossDenial | None:

@@ -5,4 +5,4 @@ planning: action, batch, campaign, decision, memory, milestone, plan, question, 
 runtime: cc, config, daemon, follow, hook, mcp, plugin, profile, rules, runtime, session, skill, statusline
 ship: release, sync
 ui: completion, help, render-output, status, ui, verbs, version
-vcs: clone-repo, coauthor, init, publish, repo, store, wal, workspace, worktree
+vcs: clone-repo, coauthor, git, init, publish, repo, store, wal, workspace, worktree

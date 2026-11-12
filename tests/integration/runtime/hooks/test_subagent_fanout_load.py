@@ -353,8 +353,7 @@ def test_five_subagents_adopt_within_the_deadline_under_load(
         assert delivery.failures == []
     assert len(traffic.answers) == len(traffic.deliveries)
     results = traffic.answers[1::2]
-    assert all(answer["receipt_id"] for answer in results), results
-    assert {answer["status"] for answer in results} == {"succeeded"}
+    assert all(answer["run_ref"] == RUN_URN and answer["call_id"] for answer in results), results
 
     with capsys.disabled():
         slowest = max(delivery.seconds for delivery in [*starts, *stops])
