@@ -10,7 +10,7 @@ This patch release makes `eawf daemon stop` wait until the daemon is gone, guard
 
 ### Upgrade notes
 
-- **`eawf daemon stop` waits for the daemon to exit.** The verb now returns only once the daemon process has exited. It waits at least 5 seconds and up to `--timeout` seconds (default 30); if the daemon is still there after that, it prints `daemon stop failed` and exits 1. Scripts that stop and then start the daemon no longer race the old process.
+- **`eawf daemon stop` waits for the daemon to exit.** The verb now returns only once the daemon process has exited. It returns as soon as the daemon is gone and waits up to `--timeout` seconds (default 30), never less than 5; if the daemon is still there after that, it prints `daemon stop failed` and exits 1. Scripts that stop and then start the daemon no longer race the old process.
 - **Agent commits in the main checkout go through `eawf git`.** From an agent session in a managed main checkout, a plain `git commit`, `git cherry-pick` or a `pre-commit run` that stashes files is refused by the data-loss guard (rule `unlocked_state_commit`), because commit hooks stash and restore unstaged files and a daemon write to the state document in between is lost. Use `eawf git commit -- <git args>` and `eawf git cherry-pick -- <git args>`, which hold the state document lock until git exits. Commits a person makes from a terminal or an editor are not affected, and not protected; linked worktrees are not guarded.
 - **No state migration.** No state migration is required from 0.7.2.
 - **Version test and goldens.** The test that pinned version 0.7.2 and its changelog section is replaced by one for 0.7.3, and the plugin_install goldens are regenerated for the new version.

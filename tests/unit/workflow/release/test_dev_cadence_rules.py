@@ -105,3 +105,34 @@ def test_version_and_changelog() -> None:
 def test_version_and_changelog_section_absent_is_refused() -> None:
     with pytest.raises(AssertionError, match=r"no ## \[9\.9\.9\] section"):
         _section("# Changelog\n\n## [0.7.1]\n\n- x\n", "9.9.9")
+
+
+def test_the_0_7_2_section_stays_in_place() -> None:
+    text = _CHANGELOG.read_text(encoding="utf-8")
+    headings = re.findall(r"^## \[([^\]]+)\]", text, re.M)
+    assert headings[headings.index("0.7.2") + 1] == "0.7.1"
+    assert headings.index(__version__) <= headings.index("0.7.2")
+    dated = re.search(r"^## \[0\.7\.2\][^\n]*\n(.*?)(?=^## \[)", text, re.M | re.S)
+    assert dated is not None
+    section = dated.group(1)
+    areas = (
+        "Upgrade notes",
+        ".ea layout",
+        "Worktrees and state home",
+        "Epoch fence",
+        "Hooks and skills",
+        "Status line",
+        "Reflect",
+        "CI",
+        "Release",
+        "Digests and secret scan",
+        "Prose",
+    )
+    assert [area for area in areas if f"### {area}\n" not in section] == []
+    phrases = (
+        "No state migration is required from 0.7.1",
+        "eawf plugin update",
+        "eawf doctor hooks",
+        "eawf local tidy",
+    )
+    assert [phrase for phrase in phrases if phrase not in section] == []
