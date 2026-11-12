@@ -7,6 +7,7 @@ the library's alone.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -22,6 +23,9 @@ from eawf.surfaces.cli.commands import git_guard
 from tests._linked_worktree import git, repo_with_linked_worktree
 
 runner = CliRunner()
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_COMMAND_ROW_RE = re.compile(r"^│ (\S+)\s", re.MULTILINE)
 
 
 @pytest.fixture
@@ -129,10 +133,12 @@ def test_a_push_exits_with_the_status_of_a_failing_pre_push_hook(repo: Path) -> 
     assert git(bare, "branch", "--list") == ""
 
 
-def test_the_git_group_help_names_push(repo: Path) -> None:
+def test_the_git_group_help_names_push(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Rich styles the help wherever this variable is set, as on the hosted runners.
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
     result = runner.invoke(app, ["git", "--help"])
     assert result.exit_code == 0, result.output
-    verbs = [line.strip("│ ").split(" ")[0] for line in result.output.splitlines()]
+    verbs = _COMMAND_ROW_RE.findall(_ANSI_RE.sub("", result.output))
     assert {"commit", "cherry-pick", "push"} <= set(verbs), result.output
 
 
