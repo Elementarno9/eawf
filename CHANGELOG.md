@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.7.3] - 2026-11-12
+
+This patch release makes `eawf daemon stop` wait until the daemon is gone, guards agent commits in a managed main checkout with the state document lock, answers host tool observations at once and writes them in batches, lets an approval seal cut short by a lock timeout finish on the next identical answer, leaves one winner when several hooks race to start the daemon, and declares the 0.7.3 release train. No state migration is required from 0.7.2.
+
+### Upgrade notes
+
+- **`eawf daemon stop` waits for the daemon to exit.** The verb now returns only once the daemon process has exited. It waits at least 5 seconds and up to `--timeout` seconds (default 30); if the daemon is still there after that, it prints `daemon stop failed` and exits 1. Scripts that stop and then start the daemon no longer race the old process.
+- **Agent commits in the main checkout go through `eawf git`.** From an agent session in a managed main checkout, a plain `git commit`, `git cherry-pick` or a `pre-commit run` that stashes files is refused by the data-loss guard (rule `unlocked_state_commit`), because commit hooks stash and restore unstaged files and a daemon write to the state document in between is lost. Use `eawf git commit -- <git args>` and `eawf git cherry-pick -- <git args>`, which hold the state document lock until git exits. Commits a person makes from a terminal or an editor are not affected, and not protected; linked worktrees are not guarded.
+- **No state migration.** No state migration is required from 0.7.2.
+- **Version test and goldens.** The test that pinned version 0.7.2 and its changelog section is replaced by one for 0.7.3, and the plugin_install goldens are regenerated for the new version.
+
+### Daemon
+
+- **Stop waits for exit.** `eawf daemon stop` reads the daemon's pid before asking it to shut down and then waits on the daemon's singleton lock, as described in the upgrade notes; `--timeout 0` stays valid and still waits the 5 second floor.
+- **One winner in the start race.** When several hooks find no daemon and claim its start at once, exactly one claimant wins. On a filesystem without file locks, the claimant loses and prints one warning naming the lock file instead of crashing the hook.
+
+### Data-loss guard
+
+- **`eawf git commit` and `eawf git cherry-pick`.** The new `eawf git` verbs run git while holding the state document lock and keep holding it until git exits, however many interrupts arrive. The guard judges `uv run --with pre-commit pre-commit run` as `pre-commit`, skipping `uv run` options and their values.
+
+### Host tool observations
+
+- **Answered at once, written in batches.** `runtime.host.tool.observe` resolves the Run, queues the call and answers at once with `run_ref` and `call_id`; its answer no longer carries `receipt_id` or `status`. One drainer per repository writes every queued call in one batch, and a receipt is looked up by call id through an in-memory index.
+- **Lock waits and stops.** A batch that times out on the state document lock keeps its calls queued in order and the drainer tries again. On a daemon stop the drainer gives up after a 15 second grace and logs the lost calls by count and call id, so a stop never hangs.
+
+### Approval seals
+
+- **Resume after a lock timeout.** An approval seal interrupted by a lock timeout is completed by the next identical answer to the same call, exactly once; a further answer seals nothing again.
+- **A changed answer is refused.** A retry with other question words is refused with `harness_question_mismatch`, and a retry with another option or reply with `harness_answer_changed`; nothing changes.
+
+### Test suite
+
+- **No agent-session markers.** The test suite hides the agent-session environment markers from every test, so it passes the same from an agent session as from a terminal.
+
+### Release
+
+- **0.7.3 train.** The release verbs now resolve 0.7.3: its train has one stable checkpoint that requires canary membership, with the same targets and claims as 0.7.2, and a 0.7.3 canary export without evidence of its own carries the 0.7.2 runtimes forward.
+
 ## [0.7.2] - 2026-11-11
 
 This patch release lets eawf hooks and skills behave safely outside a repository eawf manages, makes every worktree of a repository share one state and one daemon, reorganises `.ea/local`, stops pushes that change only `.ea` from running tests, restyles the status line and speeds up its redraw, makes hook calls to the daemon cheaper, lets the release pipeline accept fixes pushed after a Batch closed, and reworks `eawf reflect` on dated, verified price files. No state migration is required from 0.7.1, but read the upgrade notes: hooks now fail open, and the plugin must be updated after the package.

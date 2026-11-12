@@ -1,4 +1,4 @@
-"""The 0.7.2 cut: the package version and the changelog section naming its ten areas."""
+"""The 0.7.3 cut: the package version and the changelog section naming its six areas."""
 
 from __future__ import annotations
 
@@ -13,18 +13,29 @@ from eawf.surfaces.cli._version_display import compose_display_version
 
 _CHANGELOG = Path(__file__).resolve().parents[4] / "CHANGELOG.md"
 
-#: The ten areas of the 0.7.2 patch, each a third-level heading of its section.
+#: The six areas of the 0.7.3 patch, each a third-level heading of its section.
 _AREAS = (
-    ".ea layout",
-    "Worktrees and state home",
-    "Epoch fence",
-    "Hooks and skills",
-    "Status line",
-    "Reflect",
-    "CI",
+    "Daemon",
+    "Data-loss guard",
+    "Host tool observations",
+    "Approval seals",
+    "Test suite",
     "Release",
-    "Digests and secret scan",
-    "Prose",
+)
+
+#: What the upgrade notes must tell a user before the areas begin.
+_UPGRADE_PHRASES = (
+    "`eawf daemon stop`",
+    "only once the daemon process has exited",
+    "`daemon stop failed`",
+    "`unlocked_state_commit`",
+    "`git commit`",
+    "`git cherry-pick`",
+    "`eawf git commit -- <git args>`",
+    "`eawf git cherry-pick -- <git args>`",
+    "No state migration is required from 0.7.2",
+    "replaced by one for 0.7.3",
+    "plugin_install goldens are regenerated",
 )
 
 
@@ -45,21 +56,22 @@ def _section(text: str, version: str) -> list[str]:
 
 
 def test_version_and_changelog() -> None:
-    assert __version__ == "0.7.2"
-    assert eawf.__version__ == "0.7.2"
-    assert compose_display_version().split("+")[0] == "0.7.2"
+    assert __version__ == "0.7.3"
+    assert eawf.__version__ == "0.7.3"
+    assert compose_display_version().split("+")[0] == "0.7.3"
 
     text = _CHANGELOG.read_text(encoding="utf-8")
     first = next(line for line in text.splitlines() if line.startswith("## "))
-    assert first == "## [0.7.2] - 2026-11-11"
-    section = _section(text, "0.7.2")
+    assert first == "## [0.7.3] - 2026-11-12"
+    section = _section(text, "0.7.3")
     headings = [line.removeprefix("### ") for line in section if line.startswith("### ")]
     assert headings == ["Upgrade notes", *_AREAS]
     body = "\n".join(section)
     # The release probe needs one line naming the migration outcome.
-    assert "No state migration is required from 0.7.1" in body
-    for command in ("eawf plugin update", "eawf doctor hooks", "eawf local tidy"):
-        assert command in body
+    assert "No state migration is required from 0.7.2" in body
+    upgrade = "\n".join(section[: section.index(f"### {_AREAS[0]}")])
+    for phrase in _UPGRADE_PHRASES:
+        assert phrase in upgrade, phrase
     # A changelog speaks to users: no lifecycle keys, no machine paths.
     assert not re.search(r"\b(?:EAWF|BAT|MLS|PRV)-\d{4}\b", body)
     # An absolute path opens with a slash that follows no path character.
@@ -82,4 +94,4 @@ def test_section_lookup_boundaries() -> None:
     with pytest.raises(LookupError):
         _section(sample, "9.9")
     with pytest.raises(LookupError):
-        _section("", "0.7.2")
+        _section("", "0.7.3")

@@ -39,6 +39,8 @@ from eawf.workflow.release.train import (
     V071_TRAIN,
     V072_RELEASE_CONFIG_YAML,
     V072_TRAIN,
+    V073_RELEASE_CONFIG_YAML,
+    V073_TRAIN,
     checkpoint_config_yaml,
     train_for_key,
     train_for_version,
@@ -61,12 +63,14 @@ def test_train_for_version_resolves_each_train() -> None:
     assert train_for_version("0.7.0") is V07_TRAIN
     assert train_for_version("0.7.1") is V071_TRAIN
     assert train_for_version("0.7.2") is V072_TRAIN
+    assert train_for_version("0.7.3") is V073_TRAIN
 
 
 def test_train_for_key_matches_train_for_version() -> None:
     assert train_for_key("REL-0.7.0") is V07_TRAIN
     assert train_for_key("REL-0.7.1") is V071_TRAIN
     assert train_for_key("REL-0.7.2") is V072_TRAIN
+    assert train_for_key("REL-0.7.3") is V073_TRAIN
 
 
 def test_train_for_version_refuses_an_undeclared_version() -> None:
@@ -87,7 +91,7 @@ def test_train_for_version_refuses_a_malformed_version() -> None:
 def test_trains_declare_disjoint_ladders_oldest_first() -> None:
     keys = [rung.release_key for train in RELEASE_TRAINS for rung in train.checkpoints]
     assert len(keys) == len(set(keys))
-    assert RELEASE_TRAINS[-2:] == (V071_TRAIN, V072_TRAIN)
+    assert RELEASE_TRAINS[-3:] == (V071_TRAIN, V072_TRAIN, V073_TRAIN)
 
 
 def test_the_patch_train_is_one_stable_rung() -> None:
@@ -220,14 +224,13 @@ def test_v072_patch_train(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> No
     _stage_membership(monkeypatch, tmp_path, "REL-0.7.1", _REF)
     assert checkpoint_release_config("0.7.1", repo_root=tmp_path).release_key == "REL-0.7.1"
 
-    with pytest.raises(KeyError, match=r"no release configuration authored for '0\.7\.3'"):
-        checkpoint_release_config("0.7.3", repo_root=tmp_path)
+    with pytest.raises(KeyError, match=r"no release configuration authored for '0\.7\.4'"):
+        checkpoint_release_config("0.7.4", repo_root=tmp_path)
 
 
 def test_v072_canary_row(tmp_path: Path) -> None:
     keys = list(provider_certification.CANARY_EVIDENCE_DIRS)
     assert keys.index("REL-0.7.2") == keys.index("REL-0.7.1") + 1
-    assert keys[-1] == "REL-0.7.2"
     assert (
         provider_certification.CANARY_EVIDENCE_DIRS["REL-0.7.2"]
         != provider_certification.CANARY_EVIDENCE_DIRS["REL-0.7.1"]
@@ -259,4 +262,90 @@ def test_current_train_moves_to_the_second_patch_once_it_has_a_record() -> None:
         RELEASE_TRAINS, recorded_keys=[*older, "REL-0.7.1", "REL-0.7.2"], advances=()
     )
     assert moved.train_id == "TRAIN-0.7.2"
+    assert moved.current_checkpoint_index == 0
+
+
+def test_v073_patch_train(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    assert V073_TRAIN.train_id == "TRAIN-0.7.3"
+    assert V073_TRAIN.target_version == "0.7.3"
+    assert V073_TRAIN.current_checkpoint_index == 0
+    assert len(V073_TRAIN.checkpoints) == 1
+    rung = V073_TRAIN.checkpoints[0]
+    assert rung.release_key == "REL-0.7.3"
+    assert rung.gate_profile is ReleaseGateProfile.STABLE
+    assert rung.authority_epoch == 2
+    assert rung.requires_membership
+    assert predecessor_rung(V073_TRAIN, "0.7.3") is None
+    assert train_for_key("REL-0.7.3") is V073_TRAIN
+    assert RELEASE_TRAINS[-1] is V073_TRAIN
+
+    assert (
+        render_checkpoint_config(rung=rung, template=V07_CONFIG_TEMPLATE)
+        == V073_RELEASE_CONFIG_YAML
+    )
+    assert CHECKPOINT_CONFIGS["0.7.3"] == V073_RELEASE_CONFIG_YAML
+    assert V072_RELEASE_CONFIG_YAML.replace("0.7.2", "0.7.3") == V073_RELEASE_CONFIG_YAML
+    patch, previous = (
+        parse_release_config(V073_RELEASE_CONFIG_YAML),
+        parse_release_config(V072_RELEASE_CONFIG_YAML),
+    )
+    assert patch.targets == previous.targets
+    assert patch.platform_claims == previous.platform_claims
+    assert patch.runtime_claims == previous.runtime_claims
+
+    with pytest.raises(ReleaseConfigError, match=r"'REL-0\.7\.3' requires non-empty"):
+        load_release_config(V073_RELEASE_CONFIG_YAML, train=V073_TRAIN)
+    loaded = load_release_config(
+        with_membership_refs(V073_RELEASE_CONFIG_YAML, membership_refs=(_REF,)),
+        train=V073_TRAIN,
+    )
+    assert loaded.release_key == "REL-0.7.3"
+
+    ref = "milestone://eawf/MLS-0109"
+    _stage_membership(monkeypatch, tmp_path, "REL-0.7.3", ref)
+    resolved = checkpoint_release_config("0.7.3", repo_root=tmp_path)
+    assert resolved.release_key == "REL-0.7.3"
+    assert resolved.membership_refs == (ref,)
+
+
+def test_v073_canary_row(tmp_path: Path) -> None:
+    keys = list(provider_certification.CANARY_EVIDENCE_DIRS)
+    assert keys.index("REL-0.7.3") == keys.index("REL-0.7.2") + 1
+    assert keys[-1] == "REL-0.7.3"
+    assert provider_certification.CANARY_EVIDENCE_DIRS["REL-0.7.3"] == (
+        ".ea",
+        "artifacts",
+        "evidence",
+        "2026-11-13-stable-native-linux",
+    )
+    assert (
+        provider_certification.CANARY_EVIDENCE_DIRS["REL-0.7.3"]
+        != provider_certification.CANARY_EVIDENCE_DIRS["REL-0.7.2"]
+    )
+
+    with pytest.raises(ValueError, match="canary_export_no_prior"):
+        prior_canary_evidence(tmp_path, "REL-0.7.3")
+
+    committed = canary_evidence_path(_REPO_ROOT, "REL-0.7.2")
+    staged = canary_evidence_path(tmp_path, "REL-0.7.2")
+    staged.parent.mkdir(parents=True)
+    staged.write_bytes(committed.read_bytes())
+    previous = load_canary_evidence(tmp_path, "REL-0.7.2")
+    assert previous is not None
+    assert previous.advertised
+
+    assert load_canary_evidence(tmp_path, "REL-0.7.3") is None
+    carried = prior_canary_evidence(tmp_path, "REL-0.7.3")
+    assert carried.release_key == "REL-0.7.2"
+    assert carried.advertised == previous.advertised
+
+
+def test_current_train_moves_to_the_third_patch_once_it_has_a_record() -> None:
+    older = [rung.release_key for rung in V07_TRAIN.checkpoints]
+    patches = [*older, "REL-0.7.1", "REL-0.7.2"]
+    stays = current_train(RELEASE_TRAINS, recorded_keys=patches, advances=())
+    assert stays.train_id == "TRAIN-0.7.2"
+
+    moved = current_train(RELEASE_TRAINS, recorded_keys=[*patches, "REL-0.7.3"], advances=())
+    assert moved.train_id == "TRAIN-0.7.3"
     assert moved.current_checkpoint_index == 0

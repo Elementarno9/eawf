@@ -12,4 +12,4 @@ from typing import Final
 #: Releases mapped in ``CANARY_EVIDENCE_DIRS`` whose canary export, commit
 #: policy rows and ignore lines land in a later commit. Remove a key once
 #: its export is committed.
-UNRECORDED_RELEASES: Final[frozenset[str]] = frozenset()
+UNRECORDED_RELEASES: Final[frozenset[str]] = frozenset({"REL-0.7.3"})

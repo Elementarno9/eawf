@@ -186,3 +186,53 @@ def test_v072_admission(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None
     shown = asyncio.run(show(ctx, {}))
     assert shown["train_id"] == "TRAIN-0.7.2"
     assert shown["record"]["key"] == SECOND_KEY
+
+
+THIRD_PATCH = "0.7.3"
+THIRD_KEY = "REL-0.7.3"
+THIRD_REF = "milestone://eawf/MLS-0109"
+
+
+def _commit_export(repo_root: Path, key: str, ref: str) -> None:
+    """Commit an accepted canary export for *key* whose membership is *ref*."""
+    document: dict[str, Any] = accepted_canary_export({"reference": ref})
+    document["release_key"] = key
+    path = canary_evidence_path(repo_root, key)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+
+def test_v073_admission(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    assert required_contract_ids(THIRD_PATCH) == required_contract_ids(SECOND_PATCH)
+    for key, directory in (
+        (SECOND_KEY, "patch-0.7.2-stable"),
+        (THIRD_KEY, "patch-0.7.3-stable"),
+    ):
+        monkeypatch.setitem(
+            provider_certification.CANARY_EVIDENCE_DIRS,
+            key,
+            (".ea", "artifacts", "evidence", directory),
+        )
+    ctx = context(tmp_path)
+    state_path = Path(str(ctx.state_path))
+    _commit_export(tmp_path, SECOND_KEY, SECOND_REF)
+    asyncio.run(create(ctx, {"version": SECOND_PATCH, "membership_refs": [SECOND_REF]}))
+    before = read_release_records(state_path)[SECOND_KEY]
+
+    with pytest.raises(ReleaseConfigError, match=r"'REL-0\.7\.3' requires non-empty"):
+        checkpoint_release_config(THIRD_PATCH, repo_root=tmp_path)
+    _commit_export(tmp_path, THIRD_KEY, THIRD_REF)
+    config = checkpoint_release_config(THIRD_PATCH, repo_root=tmp_path)
+    assert config.release_key == THIRD_KEY
+    assert config.membership_refs == (THIRD_REF,)
+
+    result = asyncio.run(create(ctx, {"version": THIRD_PATCH, "membership_refs": [THIRD_REF]}))
+
+    assert result["release"]["key"] == THIRD_KEY
+    assert result["release"]["status"] == ReleaseStatus.DRAFT.value
+    assert result["supersedes_release_ref"] is None
+    assert read_release_records(state_path)[SECOND_KEY] == before
+    assert asyncio.run(show(ctx, {"version": SECOND_PATCH}))["train_id"] == "TRAIN-0.7.2"
+    shown = asyncio.run(show(ctx, {}))
+    assert shown["train_id"] == "TRAIN-0.7.3"
+    assert shown["record"]["key"] == THIRD_KEY
