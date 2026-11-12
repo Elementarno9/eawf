@@ -171,7 +171,7 @@ ROOT_ENTRY_EXCEPTIONS: Final[tuple[RootEntryException, ...]] = (
     _entry("local", "tooling", "reclaims expired entries of the machine-local store"),
     _entry("paths", "tooling", "prints the local folders an agent may write"),
     _entry("worktree", "tooling", "lists the linked worktrees a garbage collection may reap"),
-    _entry("git", "tooling", "runs git commit and cherry-pick under the state document lock"),
+    _entry("git", "tooling", "runs git commit, cherry-pick and push under the state document lock"),
     _entry("help", "tooling", "prints prose help topics"),
     _entry("version", "tooling", "prints the installed version"),
     _entry("scope-debug", "tooling", "prints the resolved global flags, hidden"),

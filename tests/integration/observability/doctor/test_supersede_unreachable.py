@@ -350,6 +350,46 @@ def test_a_cherry_pick_rebinds_by_patch_id(tmp_path: Path) -> None:
     assert row.unreachable == ()
 
 
+def test_a_history_mention_a_rebind_covers_is_neither_planned_nor_counted(repo: Repo) -> None:
+    (squashed_line, _) = repo.ledger.read_bytes().decode().splitlines()
+    record = LedgerRecord.model_validate_json(squashed_line)
+    legacy = {**record.payload["legacy_refs"], "commit": repo.landed}
+    legacy["outcome"] = f"landed as {repo.landed}"
+    payload = {**record.payload, "legacy_refs": legacy}
+    append_ledger_record(
+        repo.ledger,
+        record.model_copy(update={"payload": payload, "supersedes": line_digest(squashed_line)}),
+    )
+    # Drop the dangling binding so only the history mentions it.
+    dangling_line = repo.ledger.read_bytes().decode().splitlines()[1]
+    dangling = LedgerRecord.model_validate_json(dangling_line)
+    declared = UnreachableSha(sha=repo.dangling, archive_ref="refs/tags/x", reason="dangling")
+    append_ledger_record(
+        repo.ledger,
+        dangling.model_copy(
+            update={
+                "payload": {**dangling.payload, "unreachable_shas": [declared.model_dump()]},
+                "supersedes": line_digest(dangling_line),
+            }
+        ),
+    )
+    history = repo.ledger.parent.parent / "history" / "change.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    with history.open("a", encoding="utf-8") as handle:
+        for change_id, sha in (("c-1", repo.squashed), ("c-2", repo.dangling)):
+            change = {"field": "integrated_binding", "after": {"value": {"head_sha": sha}}}
+            handle.write(json.dumps({"change_id": change_id, "changes": [change]}) + "\n")
+    _git(repo.root, "add", "-A")
+    _git(repo.root, "commit", "-q", "-m", "state: rebind")
+    _git(repo.root, "update-ref", "refs/remotes/origin/main", "HEAD")
+
+    planned, unrepairable = plan_ledger_supersessions(repo.root)
+
+    # The squashed commit's mention is covered by the rebind; the dangling one is not.
+    assert planned == ()
+    assert unrepairable == 1
+
+
 def test_two_commits_sharing_the_tree_are_declared_not_guessed(tmp_path: Path) -> None:
     root = _init_repo(tmp_path)
     _git(root, "checkout", "-q", "-b", "side")

@@ -19,10 +19,11 @@ irreversible mutation of owned state:
   or store file, which only the daemon may change, or a ``git clean`` or ``git reset
   --hard`` in the main checkout, which discards the daemon's uncommitted state with it.
 - :attr:`DataLossPattern.UNLOCKED_STATE_COMMIT` -- a ``git commit``, a ``git
-  cherry-pick`` or a stashing ``pre-commit run`` in the main checkout. Commit hooks
-  stash the unstaged files and restore them afterwards, so a daemon write to the state
-  document in between is lost; ``eawf git commit`` and ``eawf git cherry-pick`` hold
-  the document lock for the whole git process instead.
+  cherry-pick``, a ``git push`` or a stashing ``pre-commit run`` in the main checkout.
+  Commit and pre-push hooks stash the unstaged files and restore them afterwards, so a
+  daemon write to the state document in between is lost; ``eawf git commit``, ``eawf
+  git cherry-pick`` and ``eawf git push`` hold the document lock for the whole git
+  process instead.
 
 Everything else is advisory or post-hoc. A rule Eawf enforces at its own mutator is
 not judged again here: an ``eawf`` command line is never judged, because the verb it
@@ -933,10 +934,11 @@ def _judge_git(args: list[str], shell: _Shell) -> DataLossDenial | None:
     subcommand, rest = args[index], args[index + 1 :]
     if subcommand == "worktree":
         return _judge_git_worktree(rest, where, shell)
-    if subcommand in {"commit", "cherry-pick"} and _in_main_checkout(where):
+    if subcommand in {"commit", "cherry-pick", "push"} and _in_main_checkout(where):
+        hooks = "pre-push hooks" if subcommand == "push" else "commit hooks"
         return _deny(
             DataLossPattern.UNLOCKED_STATE_COMMIT,
-            f"git {subcommand} in the main checkout is refused: commit hooks stash the "
+            f"git {subcommand} in the main checkout is refused: {hooks} stash the "
             "unstaged files, and a daemon state write made meanwhile is lost; run "
             f"eawf git {subcommand} -- <git args>, which holds the state document lock "
             "until git exits",

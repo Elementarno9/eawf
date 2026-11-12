@@ -33,6 +33,8 @@ _UPGRADE_PHRASES = (
     "`git cherry-pick`",
     "`eawf git commit -- <git args>`",
     "`eawf git cherry-pick -- <git args>`",
+    "`git push`",
+    "`eawf git push -- <git args>`",
     "No state migration is required from 0.7.2",
     "replaced by one for 0.7.3",
     "plugin_install goldens are regenerated",
@@ -85,6 +87,11 @@ def test_version_and_changelog() -> None:
             len(following),
         )
         assert any(line.startswith("- **") for line in following[:stop]), area
+    release = "\n".join(section[section.index("### Release") :])
+    assert "ledger history check" in release
+    assert "`eawf git push`" in "\n".join(
+        section[section.index("### Data-loss guard") : section.index("### Host tool observations")]
+    )
 
 
 def test_section_lookup_boundaries() -> None:

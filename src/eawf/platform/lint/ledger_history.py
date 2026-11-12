@@ -21,7 +21,10 @@ Two checks hold those lines, over every committed ledger file (the LEDGER tier o
   supersedes) that names a commit must be an ancestor of the range's base or tip.
   A row may declare a SHA it knowingly keeps in ``unreachable_shas``, each entry
   naming the archive ref that preserves the commit and the reason; that row's
-  mention of the SHA is exempt.
+  mention of the SHA is exempt. A line of a file outside ``ledger/`` (the change
+  history) cannot be superseded, so its mention of a commit a squash replaced is
+  exempt when the ledgers record that rebind (:func:`rebound_commits`) and every
+  replacement is live.
 
 The tip counts as live alongside the base because the branch lands by fast-forward,
 so an ancestor of the tip becomes an ancestor of the default branch on landing.
@@ -265,6 +268,53 @@ def _superseded(content: bytes) -> frozenset[str]:
         for row in rows
         if isinstance(row, dict) and isinstance(row.get("supersedes"), str)
     )
+
+
+def rebound_commits(content: bytes) -> dict[str, frozenset[str]]:
+    """Read which commit replaced which from the rebinds one ledger records.
+
+    A rebind is a line superseding an earlier line of the same ledger whose
+    payload equals the superseded payload once every 40-hex string is masked.
+    Equal masked text puts the SHAs of both payloads in the same places, so
+    each SHA that changed maps to the one now in its place. A superseding
+    line that changes anything else is a correction, not a rebind.
+
+    Args:
+        content: The whole ledger, its sealed snapshot's lines first.
+
+    Returns:
+        Each SHA a superseded line names, mapped to every SHA a rebind put in
+        its place; a ledger without rebinds maps nothing.
+
+    Raises:
+        LedgerTornTailError: The content ends mid-line.
+        orjson.JSONDecodeError: A line is not JSON.
+    """
+    lines = split_ledger_lines(content)
+    rows = [orjson.loads(line) for line in lines]
+    payloads = {
+        line_digest(line): row.get("payload")
+        for line, row in zip(lines, rows, strict=True)
+        if isinstance(row, dict)
+    }
+    rebound: dict[str, set[str]] = {}
+    for row in rows:
+        if not isinstance(row, dict) or row.get("supersedes") not in payloads:
+            continue
+        before = orjson.dumps(payloads[row["supersedes"]], option=orjson.OPT_SORT_KEYS).decode()
+        after = orjson.dumps(row.get("payload"), option=orjson.OPT_SORT_KEYS).decode()
+        # NUL is escaped inside JSON text, so the mask cannot match payload bytes.
+        if SHA_RE.sub("\0", before) != SHA_RE.sub("\0", after):
+            continue
+        for old, new in zip(SHA_RE.findall(before), SHA_RE.findall(after), strict=True):
+            if old != new:
+                rebound.setdefault(old, set()).add(new)
+    return {sha: frozenset(targets) for sha, targets in rebound.items()}
+
+
+def _is_record_ledger(path: str) -> bool:
+    """Whether *path* holds ledger records a later row can supersede."""
+    return PurePosixPath(path).parent.name == LEDGER_DIRNAME or snapshot_owner(path) is not None
 
 
 def _declared(value: Any) -> Iterator[Any]:
@@ -539,14 +589,25 @@ def scan_ledger_history(repo: Path, spec: str) -> LedgerHistoryReport:
     mentions: list[ShaMention] = []
     malformed: list[MalformedDeclaration] = []
     ledgers = _ledger_paths_at(repo, tip_ref)
+    blobs = {path: _blob(repo, tip_ref, path) for path in ledgers}
     for path in ledgers:
         owner = snapshot_owner(path)
         later = _superseded(_blob(repo, tip_ref, owner)) if owner is not None else frozenset()
-        found, bad = sha_mentions(path, _blob(repo, tip_ref, path), superseded_later=later)
+        found, bad = sha_mentions(path, blobs[path], superseded_later=later)
         mentions.extend(found)
         malformed.extend(bad)
+    rebound: dict[str, set[str]] = {}
+    for live in ledgers:
+        if PurePosixPath(live).parent.name != LEDGER_DIRNAME:
+            continue
+        snapshots = {path: blobs[path] for path in ledgers if snapshot_owner(path) == live}
+        for sha, targets in rebound_commits(_ledger_bytes(snapshots, blobs[live])).items():
+            rebound.setdefault(sha, set()).update(targets)
     commits = _resolve_commits(repo, (m.sha for m in mentions))
     reachable = frozenset(_git(repo, "rev-list", base_sha, tip_sha).decode("ascii").split())
+    # A history line cannot be superseded; a rebind recorded in the ledgers stands for it.
+    covered = {sha for sha, targets in rebound.items() if targets <= reachable}
+    mentions = [m for m in mentions if _is_record_ledger(m.path) or m.sha not in covered]
     return LedgerHistoryReport(
         range=spec,
         base=base_sha,
@@ -573,6 +634,7 @@ __all__ = [
     "append_only_finding",
     "is_ledger_path",
     "parse_range",
+    "rebound_commits",
     "scan_ledger_history",
     "sha_mentions",
     "snapshot_findings",

@@ -321,6 +321,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "worktree gc": _read(),
     "git commit": _read(),
     "git cherry-pick": _read(),
+    "git push": _read(),
     "help": _read(),
     "version": _read(),
     "scope-debug": _read(),

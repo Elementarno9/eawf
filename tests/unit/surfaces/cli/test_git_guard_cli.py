@@ -1,4 +1,4 @@
-"""``eawf git commit`` and ``eawf git cherry-pick`` hand git's arguments to the library.
+"""``eawf git commit``, ``cherry-pick`` and ``push`` hand git's arguments to the library.
 
 The handler resolves the main checkout, passes every argument after ``--`` to
 :func:`run_git_holding_document_lock` and exits with git's status; the lock is
@@ -103,7 +103,40 @@ def test_the_verb_exits_with_gits_status(repo: Path, argv: list[str], expected: 
     assert result.exit_code == expected, result.output
 
 
-@pytest.mark.parametrize("verb", ["commit", "cherry-pick"])
+def _remote(repo: Path) -> Path:
+    """Add a local bare repository as ``origin`` and return it; nothing leaves the disk."""
+    bare = repo.parent.parent / "remote.git"
+    git(repo.parent, "init", "-q", "--bare", str(bare))
+    git(repo, "remote", "add", "origin", str(bare))
+    return bare
+
+
+def test_a_push_passes_every_argument_after_the_separator(repo: Path) -> None:
+    bare = _remote(repo)
+    result = runner.invoke(app, ["git", "push", "--", "-q", "origin", "main:pushed"])
+    assert result.exit_code == 0, result.output
+    assert git(bare, "rev-parse", "pushed") == git(repo, "rev-parse", "HEAD")
+
+
+def test_a_push_exits_with_the_status_of_a_failing_pre_push_hook(repo: Path) -> None:
+    bare = _remote(repo)
+    hook = repo / ".git" / "hooks" / "pre-push"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    hook.write_text("#!/bin/sh\nexit 7\n", encoding="utf-8")
+    hook.chmod(0o755)
+    result = runner.invoke(app, ["git", "push", "--", "-q", "origin", "main"])
+    assert result.exit_code == 1, result.output
+    assert git(bare, "branch", "--list") == ""
+
+
+def test_the_git_group_help_names_push(repo: Path) -> None:
+    result = runner.invoke(app, ["git", "--help"])
+    assert result.exit_code == 0, result.output
+    verbs = [line.strip("│ ").split(" ")[0] for line in result.output.splitlines()]
+    assert {"commit", "cherry-pick", "push"} <= set(verbs), result.output
+
+
+@pytest.mark.parametrize("verb", ["commit", "cherry-pick", "push"])
 def test_the_handler_dispatches_to_the_library_and_takes_no_lock(
     repo: Path, monkeypatch: pytest.MonkeyPatch, verb: str
 ) -> None:

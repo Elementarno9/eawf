@@ -181,12 +181,13 @@ Run install-readiness checks (tools, state, config).
 
 ### `eawf git`
 
-Run git commit or git cherry-pick while holding the state document lock, so a daemon write is not lost while commit hooks stash files.
+Run git commit, git cherry-pick or git push while holding the state document lock, so a daemon write is not lost while commit or pre-push hooks stash files.
 
 | Verb | Summary |
 |---|---|
 | `cherry-pick` | Run git cherry-pick with the arguments after --, holding the document lock. |
 | `commit` | Run git commit with the arguments after --, holding the document lock. |
+| `push` | Run git push with the arguments after --, holding the document lock. |
 
 ### `eawf help`
 

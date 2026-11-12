@@ -8,6 +8,7 @@ Verbs:
 
 - ``eawf git commit -- <git args>`` runs ``git commit <git args>``.
 - ``eawf git cherry-pick -- <git args>`` runs ``git cherry-pick <git args>``.
+- ``eawf git push -- <git args>`` runs ``git push <git args>``.
 """
 
 from __future__ import annotations
@@ -26,8 +27,8 @@ from eawf.surfaces.cli.flags import GlobalFlags
 git_app = typer.Typer(
     name="git",
     help=(
-        "Run git commit or git cherry-pick while holding the state document lock, "
-        "so a daemon write is not lost while commit hooks stash files."
+        "Run git commit, git cherry-pick or git push while holding the state document "
+        "lock, so a daemon write is not lost while commit or pre-push hooks stash files."
     ),
     no_args_is_help=True,
     add_completion=False,
@@ -64,6 +65,12 @@ def git_commit(ctx: typer.Context, git_args: _GitArgs = None) -> None:
 def git_cherry_pick(ctx: typer.Context, git_args: _GitArgs = None) -> None:
     """Run git cherry-pick with the arguments after --, holding the document lock."""
     _run(ctx, "cherry-pick", git_args)
+
+
+@git_app.command("push")
+def git_push(ctx: typer.Context, git_args: _GitArgs = None) -> None:
+    """Run git push with the arguments after --, holding the document lock."""
+    _run(ctx, "push", git_args)
 
 
 __all__ = ["git_app"]

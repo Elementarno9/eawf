@@ -25,6 +25,14 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.kernel.delivery.acceptance import MilestoneAcceptanceBundle
+from eawf.kernel.store.changes import (
+    ChangeRecord,
+    ChangeTier,
+    FieldChange,
+    StoredValue,
+    append_change_record,
+    change_log_path,
+)
 from eawf.kernel.store.compaction import compact_terminal_record, read_document
 from eawf.kernel.store.ledger import (
     LedgerRecord,
@@ -38,6 +46,7 @@ from eawf.kernel.store.ledger import (
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
+from eawf.platform.lint.ledger_history import scan_ledger_history
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.methods.delivery_acceptance import DELIVERY_RECORD_EVIDENCE_METHOD
@@ -418,6 +427,83 @@ def test_a_second_rebind_appends_nothing_and_a_retry_replays(tmp_path: Path) -> 
     assert again["rows"] == 0
     assert replay == {**first, "replayed": True}
     assert _line_count(canary) == lines
+
+
+def _commit_state(canary: CanaryProvision, repo: Path, message: str) -> None:
+    """Commit the generation's ledgers and history, as a ``state:`` commit does."""
+    generation = document_path(canary).parent.relative_to(repo)
+    git(repo, "add", "-f", "--", f"{generation}/ledger", f"{generation}/history")
+    git(repo, "commit", "-q", "-m", message)
+
+
+def _closed_squashed_rebound(
+    tmp_path: Path,
+) -> tuple[CanaryProvision, Path, str, list[str], SquashMap, Any]:
+    """Close the Batches on their source commits, squash and rebind.
+
+    The close files a committed change record naming the source head of
+    EAWF-0042, which no rebind rewrites; the squash leaves that commit
+    unreachable from the branch. The rebind's rows are not committed yet.
+    """
+    canary, repo, base, shas = make_tree(tmp_path)
+    tree_a = git(repo, "rev-parse", f"{shas[2]}^{{tree}}")
+    append_change_record(
+        document_path(canary),
+        ChangeRecord(
+            change_id="evt-0001:task:EAWF-0042",
+            tier=ChangeTier.COMMITTED,
+            collection=Epoch2Collection.TASK,
+            record_key="EAWF-0042",
+            event_name="domain.task.completed",
+            revision_before=5,
+            revision_after=6,
+            canonical_sequence=1,
+            actor_ref="DAEMON",
+            recorded_at=AT,
+            changes=(
+                FieldChange(
+                    field="integrated_binding",
+                    before=None,
+                    after=StoredValue.of({"head_sha": shas[2], "tree_sha": tree_a}),
+                ),
+            ),
+        ),
+    )
+    _commit_state(canary, repo, "state: close the Batches")
+    squash_map = _squash_and_point(repo, base)
+    answer = rebind(tmp_path, canary, squash_map, "rebind-1")
+    return canary, repo, base, shas, squash_map, answer
+
+
+def test_a_squash_after_a_batch_closed_passes_the_ledger_history_check(tmp_path: Path) -> None:
+    canary, repo, base, shas, _, answer = _closed_squashed_rebound(tmp_path)
+    history = change_log_path(document_path(canary), ChangeTier.COMMITTED)
+    _commit_state(canary, repo, "state: rebind the squashed Batches")
+
+    report = scan_ledger_history(repo, f"{base}..HEAD")
+
+    assert answer["rows"] == 6
+    # The history row still names the source head: the rebind wrote no history.
+    assert shas[2] in history.read_text(encoding="utf-8")
+    assert shas[2] not in git(repo, "rev-list", base, "HEAD").split()
+    assert report.unreachable == ()
+    assert report.clean
+
+
+def test_a_rebind_run_again_appends_nothing_and_the_check_stays_clean(tmp_path: Path) -> None:
+    canary, repo, base, _, squash_map, first = _closed_squashed_rebound(tmp_path)
+    history = change_log_path(document_path(canary), ChangeTier.COMMITTED)
+    before, lines = history.read_bytes(), _line_count(canary)
+
+    again = rebind(tmp_path, canary, squash_map, "rebind-2")
+    replay = rebind(tmp_path, canary, squash_map, "rebind-1")
+
+    assert again["rows"] == 0
+    assert replay == {**first, "replayed": True}
+    assert _line_count(canary) == lines
+    assert history.read_bytes() == before
+    _commit_state(canary, repo, "state: rebind the squashed Batches")
+    assert scan_ledger_history(repo, f"{base}..HEAD").clean
 
 
 def test_rebind_refuses_a_branch_not_at_the_squashed_tip(tmp_path: Path) -> None:

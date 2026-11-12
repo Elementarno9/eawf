@@ -10,6 +10,7 @@ is tested in the integration tier.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
@@ -20,6 +21,7 @@ from typer.main import get_command
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     LedgerTornTailError,
+    compose_ledger_content,
     line_digest,
     render_ledger_line,
     split_ledger_lines,
@@ -36,6 +38,7 @@ from eawf.platform.lint.ledger_history import (
     append_only_finding,
     is_ledger_path,
     parse_range,
+    rebound_commits,
     sha_mentions,
     unreachable_findings,
 )
@@ -223,6 +226,99 @@ def test_reachability_refuses_a_torn_or_non_json_ledger() -> None:
         sha_mentions(_TASK_LEDGER, b'{"a": 1}')
     with pytest.raises(orjson.JSONDecodeError):
         sha_mentions(_TASK_LEDGER, b"not json\n")
+
+
+# --- rebound commits ------------------------------------------------------------
+
+_OLD, _NEW, _KEPT, _OTHER = "1" * 40, "2" * 40, "3" * 40, "4" * 40
+
+
+def _bound(**payload: object) -> str:
+    return render_ledger_line(
+        LedgerRecord.model_validate(
+            {
+                "collection": "batch",
+                "record_key": "BMR-1",
+                "status": "landed",
+                "recorded_at": "2026-10-01T00:00:00Z",
+                "payload": payload,
+            }
+        )
+    )
+
+
+def _replaced(line: str, **payload: object) -> str:
+    """Return a row superseding *line*, recorded later, with *payload* in its place."""
+    record = LedgerRecord.model_validate_json(line)
+    return render_ledger_line(
+        record.model_copy(
+            update={
+                "supersedes": line_digest(line),
+                "recorded_at": datetime(2026, 10, 2, tzinfo=UTC),
+                "payload": payload,
+            }
+        )
+    )
+
+
+def test_rebound_reads_an_empty_and_a_single_unsuperseded_ledger() -> None:
+    assert rebound_commits(b"") == {}
+    assert rebound_commits(_content([_bound(head_sha=_OLD)])) == {}
+
+
+def test_rebound_maps_each_replaced_sha_to_the_sha_in_its_place() -> None:
+    bound = _bound(head_sha=_OLD, parent_sha=_KEPT, reason=f"read at {_OLD}")
+    rebind = _replaced(bound, head_sha=_NEW, parent_sha=_KEPT, reason=f"read at {_NEW}")
+    assert rebound_commits(_content([bound, rebind])) == {_OLD: frozenset({_NEW})}
+
+
+def test_rebound_unions_the_targets_of_one_sha_across_lines() -> None:
+    first, second = _bound(head_sha=_OLD), _bound(parent_sha=_OLD, at=1)
+    lines = [
+        first,
+        second,
+        _replaced(first, head_sha=_NEW),
+        _replaced(second, parent_sha=_OTHER, at=1),
+    ]
+    assert rebound_commits(_content(lines)) == {_OLD: frozenset({_NEW, _OTHER})}
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        ({"head_sha": _OLD, "reason": "r"}, {"head_sha": _NEW, "reason": "a different reason"}),
+        ({"head_sha": _OLD}, {"head_sha": None}),
+        ({"head_sha": _OLD}, {"head_sha": _NEW, "extra": 1}),
+        # Only full 40-hex strings are masked: a 41-hex or 64-hex change is a payload change.
+        ({"head_sha": _OLD, "digest": "c" * 41}, {"head_sha": _NEW, "digest": "a" * 41}),
+        ({"head_sha": _OLD, "digest": "c" * 64}, {"head_sha": _NEW, "digest": "b" * 64}),
+    ],
+)
+def test_rebound_ignores_a_superseding_line_that_changes_more_than_commits(
+    before: dict[str, object], after: dict[str, object]
+) -> None:
+    bound = _bound(**before)
+    assert rebound_commits(_content([bound, _replaced(bound, **after)])) == {}
+
+
+def test_rebound_ignores_a_line_superseding_an_unknown_digest() -> None:
+    bound = _bound(head_sha=_OLD)
+    orphan = LedgerRecord.model_validate_json(_replaced(bound, head_sha=_NEW))
+    stray = render_ledger_line(orphan.model_copy(update={"supersedes": "sha256:" + "0" * 64}))
+    assert rebound_commits(_content([bound, stray])) == {}
+
+
+def test_rebound_reads_a_sealed_snapshot_before_its_live_file() -> None:
+    bound = _bound(head_sha=_OLD)
+    snapshot, live = _content([bound]), _content([_replaced(bound, head_sha=_NEW)])
+    assert rebound_commits(compose_ledger_content(snapshot, live)) == {_OLD: frozenset({_NEW})}
+
+
+def test_rebound_refuses_a_torn_or_non_json_ledger() -> None:
+    with pytest.raises(LedgerTornTailError):
+        rebound_commits(b'{"a": 1}')
+    with pytest.raises(orjson.JSONDecodeError):
+        rebound_commits(b"not json\n")
 
 
 # --- range parsing ------------------------------------------------------------

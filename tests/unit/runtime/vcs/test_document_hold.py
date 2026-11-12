@@ -1,6 +1,7 @@
 """A git command run under the state document lock keeps a concurrent state write.
 
-Each case runs real git in a scratch repository. The stash case uses a hook that
+Each case runs real git in a scratch repository; a push goes to a bare repository
+beside it, never over a network. The stash cases use a hook that
 does what pre-commit does around its hooks: it saves the unstaged diff, checks
 the tree out from the index, waits, and applies the diff again, checking the
 tree out once more when the apply conflicts.
@@ -87,8 +88,8 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return root
 
 
-def _hook(repo: Path, body: str) -> None:
-    hook = repo / ".git" / "hooks" / "pre-commit"
+def _hook(repo: Path, body: str, name: str = "pre-commit") -> None:
+    hook = repo / ".git" / "hooks" / name
     hook.parent.mkdir(parents=True, exist_ok=True)
     hook.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
     hook.chmod(0o755)
@@ -155,6 +156,107 @@ def test_a_state_write_during_the_hook_stash_is_lost_without_the_wrapper(
         repo, tmp_path, lambda: subprocess.run(["git", "commit", "-q", "-m", "x"]).returncode
     )
     assert final == _UNSTAGED, "the control must reproduce the loss the wrapper prevents"
+
+
+def _origin(repo: Path, tmp_path: Path) -> Path:
+    """Add a local bare repository as ``origin``, seed it with ``main``, and return it."""
+    bare = tmp_path / "origin.git"
+    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(bare))
+    git(repo, "remote", "add", "origin", str(bare))
+    git(repo, "push", "-q", "origin", "main")
+    return bare
+
+
+def _push_beside_a_state_write(repo: Path, tmp_path: Path, push: Callable[[], int]) -> str:
+    """Push a new commit while a writer rewrites the state file in the pre-push hook window."""
+    marker, patch = tmp_path / "stashed", tmp_path / "stash.patch"
+    marker.unlink(missing_ok=True)
+    script = tmp_path / "stash_hook.py"
+    script.write_text(_STASH_HOOK, encoding="utf-8")
+    _hook(repo, f'exec "{sys.executable}" "{script}" "{marker}" "{patch}"', name="pre-push")
+    # Each call pushes a commit of its own, so git has a ref to update and runs the hook.
+    commits = len(git(repo, "rev-list", "HEAD").split())
+    _stage(repo, f"change-{commits}.txt")
+    git(repo, "commit", "-q", "-m", "pushed")
+    (repo / ".ea" / "state.json").write_text(_UNSTAGED, encoding="utf-8")
+    done: list[str] = []
+    writer = threading.Thread(target=_write_once_stashed, args=(repo, marker, done))
+    writer.start()
+    status = push()
+    writer.join(timeout=60)
+    assert status == 0
+    assert done == ["written"]
+    return (repo / ".ea" / "state.json").read_text(encoding="utf-8")
+
+
+def test_a_state_write_during_a_wrapped_push_survives(repo: Path, tmp_path: Path) -> None:
+    bare = _origin(repo, tmp_path)
+    # The control first: a plain push loses the write the wrapper keeps.
+    plain = _push_beside_a_state_write(
+        repo, tmp_path, lambda: subprocess.run(["git", "push", "-q", "origin", "main"]).returncode
+    )
+    assert plain == _UNSTAGED, "the control must reproduce the loss the wrapper prevents"
+    wrapped = _push_beside_a_state_write(
+        repo,
+        tmp_path,
+        lambda: run_git_holding_document_lock(repo, ["push", "-q", "origin", "main"]),
+    )
+    assert wrapped == _WRITTEN
+    assert git(bare, "rev-parse", "main") == git(repo, "rev-parse", "HEAD")
+
+
+def test_a_wrapped_push_with_a_system_pre_push_hook_never_times_out(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lay_epoch2_tree(repo)
+    (repo / ".pre-commit-config.yaml").write_text(
+        "repos:\n"
+        "  - repo: local\n"
+        "    hooks:\n"
+        "      - id: eawf-lint\n"
+        "        name: eawf lint\n"
+        f"        entry: {sys.executable} -m eawf hook email-leak-lint\n"
+        "        language: system\n"
+        "        pass_filenames: false\n"
+        "        always_run: true\n"
+        "        stages: [pre-push]\n",
+        encoding="utf-8",
+    )
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "tree")
+    bare = _origin(repo, tmp_path)
+    subprocess.run(
+        [sys.executable, "-m", "pre_commit", "install", "--hook-type", "pre-push"], check=True
+    )
+    # A hook that took the document lock would wait out the hold and time out.
+    monkeypatch.setenv("EA_LOCK_TIMEOUT", "2.0")
+    _stage(repo)
+    git(repo, "commit", "-q", "-m", "x")
+    # An unstaged change makes pre-commit stash, as it does in a daemon-managed checkout.
+    (repo / ".ea" / "state.json").write_text(_UNSTAGED, encoding="utf-8")
+    # A hang raises TimeoutExpired; the ceiling never bounds a push that finished.
+    result = subprocess.run(
+        [sys.executable, "-c", _WRAPPED_PUSH, str(repo)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "LockTimeout" not in output
+    assert "eawf lint" in output and "Passed" in output, output
+    assert git(bare, "rev-parse", "main") == git(repo, "rev-parse", "HEAD")
+    assert (repo / ".ea" / "state.json").read_text(encoding="utf-8") == _UNSTAGED
+
+
+#: Runs the wrapper in its own process, as ``eawf git push`` does, with the hook
+#: output visible to the test.
+_WRAPPED_PUSH = """\
+import sys
+from pathlib import Path
+from eawf.runtime.vcs.document_hold import run_git_holding_document_lock
+sys.exit(run_git_holding_document_lock(Path(sys.argv[1]), ["push", "origin", "main"]))
+"""
 
 
 class _InterruptedProcess:

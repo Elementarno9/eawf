@@ -6,12 +6,12 @@ The format is based on Keep a Changelog [1], and this project adheres to Semanti
 
 ## [0.7.3] - 2026-11-12
 
-This patch release makes `eawf daemon stop` wait until the daemon is gone, guards agent commits in a managed main checkout with the state document lock, answers host tool observations at once and writes them in batches, lets an approval seal cut short by a lock timeout finish on the next identical answer, leaves one winner when several hooks race to start the daemon, and declares the 0.7.3 release train. No state migration is required from 0.7.2.
+This patch release makes `eawf daemon stop` wait until the daemon is gone, guards agent commits and pushes in a managed main checkout with the state document lock, answers host tool observations at once and writes them in batches, lets an approval seal cut short by a lock timeout finish on the next identical answer, leaves one winner when several hooks race to start the daemon, lets a squash after a Batch closed pass the ledger history check, and declares the 0.7.3 release train. No state migration is required from 0.7.2.
 
 ### Upgrade notes
 
 - **`eawf daemon stop` waits for the daemon to exit.** The verb now returns only once the daemon process has exited. It returns as soon as the daemon is gone and waits up to `--timeout` seconds (default 30), never less than 5; if the daemon is still there after that, it prints `daemon stop failed` and exits 1. Scripts that stop and then start the daemon no longer race the old process.
-- **Agent commits in the main checkout go through `eawf git`.** From an agent session in a managed main checkout, a plain `git commit`, `git cherry-pick` or a `pre-commit run` that stashes files is refused by the data-loss guard (rule `unlocked_state_commit`), because commit hooks stash and restore unstaged files and a daemon write to the state document in between is lost. Use `eawf git commit -- <git args>` and `eawf git cherry-pick -- <git args>`, which hold the state document lock until git exits. Commits a person makes from a terminal or an editor are not affected, and not protected; linked worktrees are not guarded.
+- **Agent commits in the main checkout go through `eawf git`.** From an agent session in a managed main checkout, a plain `git commit`, `git cherry-pick`, `git push` or a `pre-commit run` that stashes files is refused by the data-loss guard (rule `unlocked_state_commit`), because commit and pre-push hooks stash and restore unstaged files and a daemon write to the state document in between is lost. Use `eawf git commit -- <git args>`, `eawf git cherry-pick -- <git args>` and `eawf git push -- <git args>`, which hold the state document lock until git exits. Commits a person makes from a terminal or an editor are not affected, and not protected; linked worktrees are not guarded.
 - **No state migration.** No state migration is required from 0.7.2.
 - **Version test and goldens.** The test that pinned version 0.7.2 and its changelog section is replaced by one for 0.7.3, and the plugin_install goldens are regenerated for the new version.
 
@@ -23,6 +23,7 @@ This patch release makes `eawf daemon stop` wait until the daemon is gone, guard
 ### Data-loss guard
 
 - **`eawf git commit` and `eawf git cherry-pick`.** The new `eawf git` verbs run git while holding the state document lock and keep holding it until git exits, however many interrupts arrive. The guard judges `uv run --with pre-commit pre-commit run` as `pre-commit`, skipping `uv run` options and their values.
+- **`eawf git push`.** `eawf git push -- <git args>` runs `git push` while holding the state document lock for the whole pre-push run, so pre-commit's stash of unstaged files in the pre-push hooks no longer loses a daemon write. Meanwhile a daemon write in the main checkout fails with a lock timeout instead of being lost. A push from a linked worktree is not guarded, and one whose working directory drifted out of the session's work tree is still refused as `drifted_commit`.
 
 ### Host tool observations
 
@@ -41,6 +42,7 @@ This patch release makes `eawf daemon stop` wait until the daemon is gone, guard
 ### Release
 
 - **0.7.3 train.** The release verbs now resolve 0.7.3: its train has one stable checkpoint that requires canary membership, with the same targets and claims as 0.7.2, and a 0.7.3 canary export without evidence of its own carries the 0.7.2 runtimes forward.
+- **Squash after a Batch closed.** A squash after a Batch closed now passes the ledger history check: `eawf hook ledger-history` accepts a change-history mention of a commit that `eawf batch rebind` rebound to a reachable commit. A mention of a commit nobody rebound still fails.
 
 ## [0.7.2] - 2026-11-11
 

@@ -198,10 +198,6 @@ def test_surf_051_a_commit_from_a_drifted_working_directory_is_denied(
 @pytest.mark.parametrize(
     ("command", "where"),
     [
-        ("git push", "main"),
-        ("git push", "main/src"),
-        ("git -C {main} push", "worktree"),
-        ("cd {main} && git push", "worktree"),
         ("git -C {worktree} commit -m x", "main"),
         ("cd {worktree} && git commit -m x", "main"),
         ("git -C {worktree} push", "main"),
@@ -581,6 +577,14 @@ def _cherry_pick_in(tree: Path) -> str:
     return f"git -C {tree} cherry-pick --continue"
 
 
+def _push_in(tree: Path) -> str:
+    return f"git -C {tree} push origin HEAD"
+
+
+def _cd_and_push(tree: Path) -> str:
+    return f"cd {tree} && git push"
+
+
 @pytest.mark.parametrize(
     ("command", "where", "wrapper"),
     [
@@ -593,6 +597,11 @@ def _cherry_pick_in(tree: Path) -> str:
         ("git commit -m 'rm -rf .ea; git push'", "main", "eawf git commit"),
         ("git cherry-pick abc1234", "main", "eawf git cherry-pick"),
         (_cherry_pick_in, "worktree", "eawf git cherry-pick"),
+        ("git push", "main", "eawf git push"),
+        ("git push -u origin feature/x", "main/src", "eawf git push"),
+        (_push_in, "worktree", "eawf git push"),
+        (_cd_and_push, "worktree", "eawf git push"),
+        ("rtk git -c push.default=current push", "main", "eawf git push"),
         ("pre-commit run", "main", "eawf git commit"),
         ("pre-commit", "main", "eawf git commit"),
         ("pre-commit run ruff --hook-stage pre-commit", "main/src", "eawf git commit"),
@@ -636,6 +645,11 @@ def test_an_unlocked_state_commit_in_the_main_checkout_is_denied(
         ("eawf git commit -- -m x", "main"),
         ("uv run eawf git commit -- -m x", "main"),
         ("eawf git cherry-pick -- abc1234", "main"),
+        ("git push origin HEAD", "worktree"),
+        ("git push", "workspace"),
+        (_push_in, "main"),
+        ("eawf git push -- origin HEAD", "main"),
+        ("uv run eawf git push -- -u origin feature/x", "main"),
         ("git log --oneline -1 && git status", "main"),
     ],
 )
@@ -650,7 +664,8 @@ def test_a_commit_outside_the_main_checkout_or_through_the_wrapper_is_allowed(
 
 
 @pytest.mark.parametrize(
-    "command", ["git commit -m x", "git cherry-pick abc1234", "pre-commit run", "pre-commit"]
+    "command",
+    ["git commit -m x", "git cherry-pick abc1234", "git push", "pre-commit run", "pre-commit"],
 )
 def test_a_commit_in_an_unmanaged_repository_is_allowed(tmp_path: Path, command: str) -> None:
     plain = tmp_path / "plain"
@@ -665,6 +680,19 @@ def test_a_drifted_commit_into_a_worktree_still_names_the_drift(tree: _Tree) -> 
         "Bash", {"command": "git commit -m x"}, cwd=tree.worktree, anchor=tree.main
     )
     assert denial is not None and denial.pattern is DRIFT
+
+
+@pytest.mark.parametrize("command", ["git push", "git push origin HEAD"])
+def test_a_drifted_push_into_a_worktree_still_names_the_drift(tree: _Tree, command: str) -> None:
+    denial = judge_tool_call("Bash", {"command": command}, cwd=tree.worktree, anchor=tree.main)
+    assert denial is not None and denial.pattern is DRIFT
+    assert "git -C <path> push" in denial.reason
+
+
+def test_a_push_denial_in_the_main_checkout_names_the_pre_push_hooks(tree: _Tree) -> None:
+    denial = judge_tool_call("Bash", {"command": "git push"}, cwd=tree.main, anchor=tree.main)
+    assert denial is not None and denial.pattern is UNLOCKED
+    assert "pre-push hooks stash the unstaged files" in denial.reason
 
 
 def test_every_pattern_is_a_rule_the_daemon_records_a_commit_denial_under() -> None:
