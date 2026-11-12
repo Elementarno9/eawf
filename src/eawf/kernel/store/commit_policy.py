@@ -205,6 +205,7 @@ PROMOTED_ARTIFACTS: Final[tuple[PathClass, ...]] = tuple(
                 "2026-10-30-stable-native-linux",
                 "2026-11-08-stable-native-linux",
                 "2026-11-11-stable-native-linux",
+                "2026-11-13-stable-native-linux",
             )
         ),
         (
