@@ -1,0 +1,76 @@
+---
+name: test
+description: "Design, add, repair or run a bounded test contract."
+argument-hint: "<design|add|repair|run> <target...> [--kind <unit|property|integration|golden|conformance|e2e>] [--invariant <text>] [--case <text>...] [--command <command>...] [--seed <N>] [--examples <N>] [--mode <inspect|apply>] [--budget <spec>] [--dry-run]"
+user-invocable: true
+disable-model-invocation: false
+---
+
+# /test
+
+Design, add, repair or run a bounded test contract.
+
+## 1. Authority
+
+- In an eawf-managed repository: an operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
+- Operates on: test contract, through no lifecycle route; this is an explicit skill contract.
+- Effects: Leased test-workspace edits and test execution; no canonical RPC.
+- Allowed RPCs: none. This skill calls no daemon RPC.
+- Canonical state: never mutated by this skill.
+- Local write root: none.
+- Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one or the standalone use below says where.
+- Standalone use (degraded): Apply mode edits and runs tests under the operator's own permissions; no Run, lease or receipt exists.
+
+## 2. Context
+
+The behavior named by `<target...>`, its source, call sites and public contract, and, in add or repair mode, the leased Task workspace that grants the write.
+
+Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
+
+## 3. Task
+
+Choose and, when authorized, implement the cheapest oracle that can falsify the stated behavior.
+
+```text
+/test <design|add|repair|run> <target...> [--kind <unit|property|integration|golden|conformance|e2e>] [--invariant <text>] [--case <text>...] [--command <command>...] [--seed <N>] [--examples <N>] [--mode <inspect|apply>] [--budget <spec>] [--dry-run]
+```
+
+Select exactly one action: `design`, `add`, `repair`, `run`. An option the selected action does not declare is refused before you start.
+
+## 4. Method
+
+1. Read source, call sites, and public contract before selecting test kind.
+2. For a defect, reproduce red on the pre-fix basis before accepting green. For a new public CLI, RPC, schema, lifecycle, or golden, establish the contract fixture first.
+3. Cover required boundaries and error paths. Use property or metamorphic tests only for a named invariant or relation.
+4. Avoid tests that merely mirror implementation and mocks that substitute interaction for truth. Golden updates require a paired diff and independent review.
+5. Apply mode consumes an existing Task grant; strategy mode writes nothing. Run targeted commands and report unrelated failures separately.
+
+## 4b. Applicable rules
+
+The obligations the effective rule graph holds for activities `test`. They bind what you do; they grant no capability.
+
+- must: **Finish independent work first and block only when proceeding is unsafe.** When part of the scope fails or awaits an answer, finish every independent part, state what was left undone and why, and raise a question only where the dependent work begins. Block only when proceeding on any assumption would be unsafe, or useless if wrong; unattended, record a typed open question and continue.
+- must: **Name the command and exit status behind a claim.** Back every verification claim with the command executed and its exit status; a green claim whose run cannot be located in the receipt is a fabrication, not an oversight.
+- must: **Re-execute only what failed.** After a failure, re-execute only what failed, unless the change is cross-cutting, the artifact is a cross-scope scorecard, or a release gate needs a full pass.
+
+## 5. Constraints
+
+- Stop on ambiguous contract, unobservable oracle, unsafe fixture, nondeterminism that cannot be controlled, or any request to weaken/delete a valid existing test.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
+
+## 6. Output
+
+Output one TestSkillReport. Its `summary` states the strategy, kind, oracle, files, red/green receipts where applicable, covered cases, unverified cases, and commands. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
+
+The report validates against `TestSkillReport`, and its terminal outcome is exactly one of `strategy_ready`, `tests_added`, `passed`, `failed`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /test` before returning it. It carries these fields and no other; a nested field is written under its parent.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skill_id` | `"test"` | yes | The id of the skill that produced the report. |
+| `outcome` | one of `"strategy_ready"`, `"tests_added"`, `"passed"`, `"failed"`, `"blocked"` | yes | How the invocation ended; the result. |
+| `summary` | string | no | Explanation of the outcome and what supports it; never the result. |
+| `coverage` | object | yes | What the pass covered and did not. |
+| `coverage.covered` | list of string | yes | What the pass covered. |
+| `coverage.not_covered` | list of object | yes | What the pass did not cover, with a reason each. |
+| `coverage.not_covered[].item` | string | yes | What the pass did not reach. |
+| `coverage.not_covered[].reason` | string | yes | Why it was not reached. |

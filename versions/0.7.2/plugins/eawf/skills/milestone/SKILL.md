@@ -1,0 +1,76 @@
+---
+name: milestone
+description: "Define, show, activate or cancel a Milestone."
+argument-hint: "<define|show|activate|cancel> [<milestone-ref>] [--track <ref>] [--title <text>] [--outcome <text>] [--appetite <duration>] [--exclude <text>...] [--journey-step <text>...] [--batch <ref>...] [--reason <text>] [--from-spec <path|->] [--dry-run]"
+user-invocable: true
+disable-model-invocation: true
+---
+
+# /milestone
+
+Define, show, activate or cancel a Milestone.
+
+## 1. Authority
+
+- Needs an eawf-managed repository; outside one the hook refuses it with `not an eawf-managed repository; run eawf init to manage it`.
+- Only an authenticated operator initiates this skill, by design: it is kept out of the model's reach. An agent may prepare evidence or recommend the invocation, but never calls it.
+- Operates on: Milestone, through `projection.milestone.read`, `eawf milestone create`, `eawf milestone activate`, `eawf milestone cancel`.
+- Effects: The Milestone read plus its create, activate and cancel verbs.
+- Allowed RPCs: `projection.milestone.read`, `eawf milestone create` (`domain.milestone.create`), `eawf milestone activate` (`domain.milestone.activate`), `eawf milestone cancel` (`domain.milestone.cancel`). Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
+- Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
+- Local write root: none.
+- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
+
+## 2. Context
+
+One Milestone, named by `<milestone-ref>` or defined by this invocation, within its Track.
+
+Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
+
+## 3. Task
+
+You operate one Milestone through the selected define, show, activate, or cancel action.
+
+```text
+/milestone <define|show|activate|cancel> [<milestone-ref>] [--track <ref>] [--title <text>] [--outcome <text>] [--appetite <duration>] [--exclude <text>...] [--journey-step <text>...] [--batch <ref>...] [--reason <text>] [--from-spec <path|->] [--dry-run]
+```
+
+Select exactly one action: `define`, `show`, `activate`, `cancel`. An option the selected action does not declare is refused before you start.
+
+## 4. Method
+
+1. Resolve its Track, exact revision, outcome, appetite, exclusions, acceptance journey, repository set, and required Batches.
+2. For define, make the outcome observable and the acceptance journey executable. Keep exclusions explicit. Never infer missing scope merely to make the contract complete.
+3. For activate, require an approved current contract, satisfiable repository ownership, no blocking policy conflict, and a valid planning route. Preview the activation consequences.
+4. For cancel, enumerate active or pending descendants and require their legal disposition. Preserve every receipt and reason.
+5. Submit only the selected action's RPC with expected revision and idempotency key, then render the resulting Milestone state.
+
+## 4b. Applicable rules
+
+The obligations the effective rule graph holds for activities `plan`. They bind what you do; they grant no capability.
+
+- must: **Give every activity a non-empty rule set.** Keep every activity governed by at least one rule; an activity whose effective rule set is empty is a defect, never a statement that no rules apply.
+- must: **Scope conduct rules to the closed activity set.** Scope an activity-bound rule only to research, plan, design, implement, test, review, integrate, commit, release, deploy or operate; a rule scoped to any other activity is refused with the offending value named.
+- must: **Finish independent work first and block only when proceeding is unsafe.** When part of the scope fails or awaits an answer, finish every independent part, state what was left undone and why, and raise a question only where the dependent work begins. Block only when proceeding on any assumption would be unsafe, or useless if wrong; unattended, record a typed open question and continue.
+- must: **Dispatch independent units of work together.** Dispatch independent units of work together rather than in sequence, where neither consumes the other's output; a sequential dispatch of independent units is a recorded miss.
+- must: **Evaluate the practice set at each decision point.** Retrieve the current activity's practice set with one query and evaluate it at each decision point rather than recalling it: at least before dispatching work, before presenting a choice to the operator and before emitting a terminal report.
+- must: **Expand every abbreviation on first use.** Expand every abbreviation, internal code and lifecycle identifier on first use in an operator-facing surface; write for a competent newcomer, not for the author of the state.
+- must: **Record a scope delta before widening the work.** Record a typed scope delta against the task before any widening work begins; an unrecorded widening fails review even when the added work is correct.
+- must: **Surface a decision as a typed choice with named options.** Surface a decision as a typed choice with named options, never as free text, and give each option a plain-prose description of what happens if it is selected.
+
+## 5. Constraints
+
+- Stop on stale revision, missing outcome proof, contradictory exclusions, unresolved descendant disposition, authority failure, or need for an operator scope decision.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
+
+## 6. Output
+
+Output one MilestoneSkillReport. Its `summary` states the action, contract summary, before/after revisions, descendant effects, receipt, acceptance gaps, and blockers. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
+
+The report validates against `MilestoneSkillReport`, and its terminal outcome is exactly one of `shown`, `defined`, `activated`, `cancelled`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /milestone` before returning it. It carries these fields and no other; a nested field is written under its parent.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skill_id` | `"milestone"` | yes | The id of the skill that produced the report. |
+| `outcome` | one of `"shown"`, `"defined"`, `"activated"`, `"cancelled"`, `"blocked"` | yes | How the invocation ended; the result. |
+| `summary` | string | no | Explanation of the outcome and what supports it; never the result. |

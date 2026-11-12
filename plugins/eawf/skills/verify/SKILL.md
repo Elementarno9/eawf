@@ -12,7 +12,8 @@ Verify one Delivery Batch at one exact revision, as auditor or as reviewer.
 
 ## 1. Authority
 
-- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Needs an eawf-managed repository; outside one the hook refuses it with `not an eawf-managed repository; run eawf init to manage it`.
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
 - Operates on: Batch, through `projection.batch.detail.read`, `projection.evidence.read`, `runtime.delivery.verify_batch`, `runtime.delivery.assess_completion`, `eawf milestone open-approval`.
 - Effects: Batch and evidence reads plus the Batch verification, Task completion and acceptance-question verbs, which file verification receipts.
 - Allowed RPCs: `projection.batch.detail.read`, `projection.evidence.read`, `runtime.delivery.verify_batch`, `runtime.delivery.assess_completion`, `eawf milestone open-approval` (`runtime.delivery.open_acceptance_approval`). Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
@@ -73,7 +74,7 @@ The obligations the effective rule graph holds for activities `review`, `test` a
 
 ## 6. Output
 
-Output one report whose `summary` gives the audit or review result: per-criterion verdicts with the falsifier attempted, or stable findings with severity and evidence. Aggregate verdicts are derived from rows, never asserted.
+Output one report whose `summary` gives the audit or review result: per-criterion verdicts with the falsifier attempted, or stable findings with severity and evidence. Aggregate verdicts are derived from rows, never asserted. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
 
 The report validates against `VerificationReport`, and its terminal outcome is exactly one of `passed`, `failed`, `unverified`, `stale`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /verify` before returning it. It carries these fields and no other; a nested field is written under its parent.
 

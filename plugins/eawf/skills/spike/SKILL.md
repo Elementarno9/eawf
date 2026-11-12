@@ -1,7 +1,7 @@
 ---
 name: spike
 description: "Build, test, independently verify and present a local proof of concept."
-argument-hint: "<idea...> [--hypothesis <text>] [--confirm <condition>] [--reject <condition>] [--from <ref>...] [--constraint <text>...] [--stack <auto|python|shell|node|other>] [--entrypoint <relative-path>] [--verify <command>...] [--fixture <ref>...] [--provider <id>...] [--agents <2..8>] [--budget <spec>] [--slug <slug>] [--local-root <path-under-.ea/local/spikes>] [--network <deny|allow>] [--retention <keep|expire-after-review>] [--resume <folder>]"
+argument-hint: "<idea...> [--hypothesis <text>] [--confirm <condition>] [--reject <condition>] [--from <ref>...] [--constraint <text>...] [--stack <auto|python|shell|node|other>] [--entrypoint <relative-path>] [--verify <command>...] [--fixture <ref>...] [--provider <id>...] [--agents <2..8>] [--budget <spec>] [--slug <slug>] [--local-root <path-under-spikes>] [--network <deny|allow>] [--retention <keep|expire-after-review>] [--resume <folder>]"
 user-invocable: true
 disable-model-invocation: false
 ---
@@ -12,14 +12,15 @@ Build, test, independently verify and present a local proof of concept.
 
 ## 1. Authority
 
-- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- In an eawf-managed repository: an operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
 - Operates on: proof of concept, through `runtime.run.dispatch`, `runtime.evidence.spike_report.file`.
 - Effects: Writes only under the resolved local spike folder; separate builder and verifier Runs; the report is filed and its contracts submitted for promotion.
 - Allowed RPCs: `runtime.run.dispatch`, `runtime.evidence.spike_report.file`. Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
 - Run tools: `repo_read`, `submit_report`, `submit_evidence`. These exist only inside a native Run eawf dispatches; a host session has none of them and uses the `eawf` commands above instead.
 - Canonical state: never mutated by this skill.
-- Local write root: `.ea/local/spikes`; nothing is written outside it.
-- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
+- Local write root: the folder `eawf paths local --kind spikes` prints in an eawf-managed repository; outside one, none, unless `--save <path>` names a file or the standalone use below says where.
+- Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one or the standalone use below says where.
+- Standalone use (degraded): Builds in a temporary directory outside the repository, deleted at the end; a host subagent verifies; nothing is filed.
 
 ## 2. Context
 
@@ -32,12 +33,12 @@ Resolve the subject before acting. Name every entity with its identifier and its
 Build the smallest runnable proof of concept that discriminates the stated idea. This is local experimental work, not a Campaign and not product implementation.
 
 ```text
-/spike <idea...> [--hypothesis <text>] [--confirm <condition>] [--reject <condition>] [--from <ref>...] [--constraint <text>...] [--stack <auto|python|shell|node|other>] [--entrypoint <relative-path>] [--verify <command>...] [--fixture <ref>...] [--provider <id>...] [--agents <2..8>] [--budget <spec>] [--slug <slug>] [--local-root <path-under-.ea/local/spikes>] [--network <deny|allow>] [--retention <keep|expire-after-review>] [--resume <folder>]
+/spike <idea...> [--hypothesis <text>] [--confirm <condition>] [--reject <condition>] [--from <ref>...] [--constraint <text>...] [--stack <auto|python|shell|node|other>] [--entrypoint <relative-path>] [--verify <command>...] [--fixture <ref>...] [--provider <id>...] [--agents <2..8>] [--budget <spec>] [--slug <slug>] [--local-root <path-under-spikes>] [--network <deny|allow>] [--retention <keep|expire-after-review>] [--resume <folder>]
 ```
 
 ## 4. Method
 
-1. Allocate `.ea/local/spikes/<date>-<slug>/` or the validated resume folder. Never write canonical stores, tracked product paths, or another local root.
+1. Allocate `<date>-<slug>/` in the folder `eawf paths local --kind spikes` prints, or the validated resume folder. Never write canonical stores, tracked product paths, or another local root.
 2. Before coding, write `spike.yaml` with question, hypothesis, observable confirm and reject conditions, inputs, exclusions, safety/network policy, and hard budget.
 3. Build real source or scripts, fixtures, and a runnable entrypoint. Optimize only for the stated discriminator; do not grow production architecture around the experiment.
 4. Run the exact verification commands and capture bounded machine-readable observations, logs, environment assumptions, and result receipts. When an observation depends on which provider ran it, set each contract environment's `provider_tuple` to the sorted, distinct providers the probe ran through, from `--provider` or the dispatch provider set; leave it empty when the measurement does not depend on the provider, because a non-empty tuple restricts where the contract transfers. Then extract contracts from those observations: for each probed surface, state what it is, what it accepts and returns, and its non-empty boundary - the conditions under which the observation stops holding. An observation records that a run printed something; a contract records what the surface is. Emit each as a MeasuredContract and promote it through the evidence-promotion path so it becomes a canonical artifact a plan can cite by ArtifactUrn. A contract with an empty boundary is not extracted.
@@ -61,7 +62,7 @@ The obligations the effective rule graph holds for activities `research`, `test`
 
 ## 6. Output
 
-Output one SpikeReport. Its `summary` states the folder, hypothesis, commands, observations, contracts, verdict, limitations, independent verifier result, operator demo, retention, and stop reason.
+Output one SpikeReport. Its `summary` states the folder, hypothesis, commands, observations, contracts, verdict, limitations, independent verifier result, operator demo, retention, and stop reason. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
 
 The report validates against `SpikeReport`, and its terminal outcome is exactly one of `ready`, `inconclusive`, `failed`, `cancelled`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /spike` before returning it. It carries these fields and no other; a nested field is written under its parent.
 

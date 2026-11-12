@@ -12,13 +12,14 @@ Design, add, repair or run a bounded test contract.
 
 ## 1. Authority
 
-- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- In an eawf-managed repository: an operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
 - Operates on: test contract, through no lifecycle route; this is an explicit skill contract.
 - Effects: Leased test-workspace edits and test execution; no canonical RPC.
 - Allowed RPCs: none. This skill calls no daemon RPC.
 - Canonical state: never mutated by this skill.
 - Local write root: none.
-- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
+- Outside an eawf-managed repository: no Run, Task, Campaign or daemon exists, and the operator's own permissions bound this skill. Skip every RPC below. Use only the `eawf` commands marked as working anywhere. Write no file unless `--save <path>` names one or the standalone use below says where.
+- Standalone use (degraded): Apply mode edits and runs tests under the operator's own permissions; no Run, lease or receipt exists.
 
 ## 2. Context
 
@@ -59,7 +60,7 @@ The obligations the effective rule graph holds for activities `test`. They bind 
 
 ## 6. Output
 
-Output one TestSkillReport. Its `summary` states the strategy, kind, oracle, files, red/green receipts where applicable, covered cases, unverified cases, and commands.
+Output one TestSkillReport. Its `summary` states the strategy, kind, oracle, files, red/green receipts where applicable, covered cases, unverified cases, and commands. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
 
 The report validates against `TestSkillReport`, and its terminal outcome is exactly one of `strategy_ready`, `tests_added`, `passed`, `failed`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /test` before returning it. It carries these fields and no other; a nested field is written under its parent.
 

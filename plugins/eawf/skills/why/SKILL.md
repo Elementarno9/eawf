@@ -12,7 +12,8 @@ Explain the provenance of an entity; read-only.
 
 ## 1. Authority
 
-- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Needs an eawf-managed repository; outside one the hook refuses it with `not an eawf-managed repository; run eawf init to manage it`.
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
 - Operates on: any canonical entity, through `projection.history.read`, `projection.evidence.read`, `semantic.result.read`, `runtime.run.events.read`.
 - Effects: Read-only provenance queries.
 - Allowed RPCs: `projection.history.read`, `projection.evidence.read`, `semantic.result.read`, `runtime.run.events.read`. Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
@@ -53,7 +54,7 @@ No rule in the effective rule graph is scoped to this skill, which selects no ac
 
 ## 6. Output
 
-Output one WhyReport. Its `summary` states the answer, subject revision, provenance path, nodes, active-versus-historical distinctions, gaps, references, and stop reason.
+Output one WhyReport. Its `summary` states the answer, subject revision, provenance path, nodes, active-versus-historical distinctions, gaps, references, and stop reason. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
 
 The report validates against `WhyReport`, and its terminal outcome is exactly one of `explained`, `partial`, `not_found`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /why` before returning it. It carries these fields and no other; a nested field is written under its parent.
 
