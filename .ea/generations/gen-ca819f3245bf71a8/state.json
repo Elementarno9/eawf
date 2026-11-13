@@ -1091,7 +1091,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 90882,
+  "canonical_sequence": 90887,
   "milestone": {},
   "open_question": {
     "QST-0001": {
@@ -339745,6 +339745,62 @@
       "uid": "c4cf01f9-30f9-5887-a0c7-ad429a457f82",
       "updated_at": "2026-11-13T04:33:18.032939Z",
       "urn": "eawf://EAWF/task/EAWF-0764"
+    },
+    "EAWF-0765": {
+      "active_run_ref": null,
+      "batch_ref": null,
+      "contract_revision": 1,
+      "created_at": "2026-11-13T06:06:54.075526Z",
+      "criteria": [],
+      "due_scope": null,
+      "integrated_binding": null,
+      "intent": "eawf release pipeline calls release.advance_train whenever the open checkpoint is the released one. A train with one stable rung has no next checkpoint, so the daemon answers ladder_exhausted, the pipeline exits 1 with a raw daemon error instead of a typed refusal, and the repin and evidence steps never run. Seen on the 0.7.3 release after the observe step reported released. Treat the last rung as a completed advance, journal it, and run the remaining steps; add a test with a single-rung train. Also keep the daemon answering during the publish wait: it idled out and the candidate step was refused.",
+      "key": "EAWF-0765",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P1",
+      "revision": 1,
+      "status": "DRAFT",
+      "title": "Finish the release pipeline on a train's last rung",
+      "uid": "f0c1c37f-547c-5a5d-adf6-632e423b6f73",
+      "updated_at": "2026-11-13T06:06:54.075526Z",
+      "urn": "eawf://EAWF/task/EAWF-0765"
+    },
+    "EAWF-0766": {
+      "active_run_ref": null,
+      "batch_ref": null,
+      "contract_revision": 1,
+      "created_at": "2026-11-13T06:06:55.685427Z",
+      "criteria": [],
+      "due_scope": null,
+      "integrated_binding": null,
+      "intent": "Three live console tests failed once each under load during the 0.7.3 release and passed alone and on a rerun: test_ui_030_ui_026 in test_run_stall_live.py on a CI shard, and test_run_062_an_edit_that_changes_nothing_records_no_line in test_transcript_file_live.py in the pipeline's full suite. They poll the console through a helper with a 15 second arrival timeout in test_transcript_live.py. The pipeline's full_suite gate needs a green whole run, so one such failure costs a 20 minute rerun. Find what the wait depends on and remove the wall-clock budget.",
+      "key": "EAWF-0766",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P2",
+      "revision": 1,
+      "status": "DRAFT",
+      "title": "Make the live console arrival tests independent of host load",
+      "uid": "21f6b876-8ce3-536e-948f-8d37c6e1b87d",
+      "updated_at": "2026-11-13T06:06:55.685427Z",
+      "urn": "eawf://EAWF/task/EAWF-0766"
     }
   },
   "track": {
