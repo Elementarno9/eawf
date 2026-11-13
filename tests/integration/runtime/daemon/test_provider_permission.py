@@ -1,10 +1,10 @@
 """The daemon owns the provider permission: its key, its lapse and its refusals.
 
 Every case drives the real ``runtime.permission.*`` verbs against a
-provisioned canary. The provider's deadline is placed relative to the
-real clock, far ahead for a record that must stay open and a few
-milliseconds ahead for one that must lapse, so the lapse is crossed by
-waiting past a deadline the test chose rather than by patching a clock.
+provisioned canary. The deadline a test gives and the time the daemon
+methods read come from one clock that only the test moves, so a lapse is
+crossed by advancing that clock and never depends on how long a call
+takes.
 
 The hold refusal is asserted here, on the daemon, independently of the
 read projection a surface binds to: passing one cannot stand in for the
@@ -14,8 +14,7 @@ other.
 from __future__ import annotations
 
 import asyncio
-import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import Any, Final
 
@@ -27,6 +26,7 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods import permission as permission_methods
 from eawf.runtime.daemon.methods.permission import (
     PERMISSION_DECIDE_METHOD,
     PERMISSION_EXPIRE_METHOD,
@@ -52,8 +52,42 @@ REPOSITORY_TOO: Final = {"approve": ["operator", "repository"], "deny": ["reposi
 #: How far ahead a deadline sits that no test outlasts.
 FAR: Final = timedelta(hours=1)
 
-#: How far ahead a deadline sits that a test waits past.
+#: How far ahead a deadline sits that a test advances the clock past.
 NEAR: Final = timedelta(milliseconds=50)
+
+
+class Clock:
+    """The time the permission methods read, moved only by the test."""
+
+    def __init__(self) -> None:
+        self._instant = datetime.now(UTC)
+
+    def now(self, tz: tzinfo) -> datetime:
+        """Return the instant the test set, whatever the wall clock reads.
+
+        Args:
+            tz: The zone the caller asks for; the instant is always UTC.
+
+        Returns:
+            The instant the clock stands at.
+        """
+        return self._instant
+
+    def advance(self, by: timedelta) -> None:
+        """Move the clock forward.
+
+        Args:
+            by: How far to move it.
+        """
+        self._instant += by
+
+
+@pytest.fixture(autouse=True)
+def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
+    """Stand a test-moved clock in for the one the permission methods read."""
+    stepped = Clock()
+    monkeypatch.setattr(permission_methods, "datetime", stepped)
+    return stepped
 
 
 @pytest.fixture
@@ -89,7 +123,7 @@ def open_one(
     action_class: str = "tool",
     authority: dict[str, list[str]] = OPERATOR_ONLY,
 ) -> dict[str, Any]:
-    """Record one call the provider holds, with a deadline *ahead* of now."""
+    """Record one call the provider holds, with a deadline *ahead* of the daemon's now."""
     return call(
         PERMISSION_OPEN_METHOD,
         ctx,
@@ -99,7 +133,7 @@ def open_one(
         tool_id="run_scoped_command",
         action_class=action_class,
         request_scope="run the test suite once",
-        deadline_at=(datetime.now(UTC) + ahead).isoformat(),
+        deadline_at=(permission_methods.datetime.now(UTC) + ahead).isoformat(),
         approval_authority=authority,
     )
 
@@ -142,11 +176,6 @@ def permission_lines(canary: CanaryProvision, runtime_root: Path) -> list[dict[s
         for item in records
         if item.payload.get("payload_kind") == "provider_permission"
     ]
-
-
-def wait_past(deadline: timedelta) -> None:
-    """Sleep until a deadline placed *deadline* ahead has certainly passed."""
-    time.sleep(deadline.total_seconds() * 2)
 
 
 # ---------------------------------------------------------------------------
@@ -210,10 +239,10 @@ def test_run_051_resolving_a_permission_writes_nothing_but_the_permission(
 
 
 def test_run_051_a_lapse_is_recorded_as_expired_by_the_provider(
-    canary: CanaryProvision, ctx: MethodContext
+    canary: CanaryProvision, ctx: MethodContext, clock: Clock
 ) -> None:
     open_one(ctx, canary, ahead=NEAR)
-    wait_past(NEAR)
+    clock.advance(NEAR * 2)
 
     answer = call(PERMISSION_EXPIRE_METHOD, ctx, repo_root=str(canary.root), urn=RUN_URN)
 
@@ -223,9 +252,11 @@ def test_run_051_a_lapse_is_recorded_as_expired_by_the_provider(
     assert resolution["principal_ref"] is None
 
 
-def test_run_051_an_expiry_is_recorded_once(canary: CanaryProvision, ctx: MethodContext) -> None:
+def test_run_051_an_expiry_is_recorded_once(
+    canary: CanaryProvision, ctx: MethodContext, clock: Clock
+) -> None:
     open_one(ctx, canary, ahead=NEAR)
-    wait_past(NEAR)
+    clock.advance(NEAR * 2)
     call(PERMISSION_EXPIRE_METHOD, ctx, repo_root=str(canary.root), urn=RUN_URN)
 
     again = call(PERMISSION_EXPIRE_METHOD, ctx, repo_root=str(canary.root), urn=RUN_URN)
@@ -245,10 +276,10 @@ def test_run_051_an_open_permission_is_not_expired_early(
 
 
 def test_run_051_a_late_answer_records_the_expiry_and_is_refused(
-    canary: CanaryProvision, ctx: MethodContext, runtime_root: Path
+    canary: CanaryProvision, ctx: MethodContext, runtime_root: Path, clock: Clock
 ) -> None:
     urn = open_one(ctx, canary, ahead=NEAR)["permission"]["urn"]
-    wait_past(NEAR)
+    clock.advance(NEAR * 2)
 
     with pytest.raises(DaemonValidationError, match="permission_lapsed"):
         decide(ctx, canary, urn, "approve")
@@ -324,10 +355,10 @@ def test_run_052_the_daemon_refuses_a_hold_on_a_provider_permission(
 
 
 def test_run_052_a_hold_is_refused_even_on_a_lapsed_permission(
-    canary: CanaryProvision, ctx: MethodContext
+    canary: CanaryProvision, ctx: MethodContext, clock: Clock
 ) -> None:
     urn = open_one(ctx, canary, ahead=NEAR)["permission"]["urn"]
-    wait_past(NEAR)
+    clock.advance(NEAR * 2)
 
     with pytest.raises(DaemonValidationError, match=PROTECTED_ACTION_REQUIRED):
         decide(ctx, canary, urn, "hold")
