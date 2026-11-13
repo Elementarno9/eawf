@@ -1091,122 +1091,8 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 90791,
-  "milestone": {
-    "MLS-0109": {
-      "acceptance_bundle_revision": null,
-      "acceptance_journey": [
-        {
-          "action": "with a daemon running for the main checkout, run uv run eawf daemon stop and, as soon as it returns, uv run eawf daemon status",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "stop exits 0 and the status run reports no daemon running, with no daemon pid file or socket left in the tree's runtime directory",
-          "required": true,
-          "step_id": "AS-01"
-        },
-        {
-          "action": "run uv run pytest -q tests/unit/runtime/vcs/test_document_hold.py, then uv run pytest -q tests/unit/runtime/sandbox/test_data_loss.py -k commit",
-          "actor": "system",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "exit status 0: plain git commit, git cherry-pick and a stash-ing pre-commit run are denied in a managed main checkout with a reason naming the wrapper verb, and a state write during a wrapped commit's hooks survives",
-          "required": true,
-          "step_id": "AS-02"
-        },
-        {
-          "action": "from an agent session with CLAUDECODE set, run uv run pytest -n0 -q tests/e2e/test_smoke_milestone.py",
-          "actor": "system",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "the smoke passes: its operator seal is no longer refused because the suite clears the agent-session markers",
-          "required": true,
-          "step_id": "AS-03"
-        },
-        {
-          "action": "run uv run pytest -q tests/unit/runtime/daemon/test_host_call_cost.py tests/unit/runtime/daemon/test_host_question_seal_resume.py tests/unit/runtime/hooks/test_hook_daemon_down.py",
-          "actor": "system",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "exit status 0: concurrent observations answer within the hook deadline in one document write, an interrupted seal resumes exactly once, and the claim race has one winner",
-          "required": true,
-          "step_id": "AS-04"
-        },
-        {
-          "action": "run uv run eawf --version and read the top section of CHANGELOG.md",
-          "actor": "system",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "0.7.3 is printed and a ## [0.7.3] section carries upgrade notes on daemon stop waiting, the wrapper verbs eawf git commit and eawf git cherry-pick, and the line No state migration is required from 0.7.2",
-          "required": true,
-          "step_id": "AS-05"
-        },
-        {
-          "action": "run uv run eawf release preflight 0.7.3 --skip-ci-runs on the reviewed head",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "the membership and provider rows read pass; ancestry may stay red until the merge",
-          "required": true,
-          "step_id": "AS-06"
-        }
-      ],
-      "accepted_binding": null,
-      "appetite": {
-        "amount": 16,
-        "budget_kind": "duration",
-        "unit": "hours"
-      },
-      "contributing_track_refs": [],
-      "created_at": "2026-11-12T15:37:05.927618Z",
-      "description": "Python patch release that removes the stalls the 0.7.2 release hit. eawf daemon stop returns only once the daemon has exited, and the test suite passes the same from an agent session as from a terminal. Agent commits in a managed main checkout hold the document lock, host tool calls stop timing out under load, an interrupted approval seal resumes, and the daemon-start claim has one winner. The 0.7.3 train, version cut and release evidence ship in the same plan.",
-      "exclusions": [
-        "commits made by a person from a terminal or an IDE stay unprotected: only agent sessions are routed to the wrapper verbs, because a git hook cannot hold the document lock",
-        "linked worktrees stay outside the new commit rule of the data-loss guard",
-        "reviving the epoch-2 regressed-state refusal as a second safeguard, left as a follow-up",
-        "the session id variable that still leaks from agent sessions into tests, left as a backlog row",
-        "the data-loss guard judging words inside a quoted heredoc body, left as a backlog row",
-        "finishing or advancing the 0.7.2 release record, which stays at candidate",
-        "macOS and Windows canary evidence: the 0.7.3 export advertises linux only, as 0.7.2 did",
-        "pre-release dev tags: the 0.7.3 train is a single stable rung",
-        "the remaining draft Tasks EAWF-0741, EAWF-0744 and EAWF-0745"
-      ],
-      "key": "MLS-0109",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "outcome": "eawf 0.7.3 is released (uv run eawf --version prints 0.7.3) with: eawf daemon stop returning only after the daemon process has exited, or exiting 1 with daemon stop failed at its --timeout; a test suite whose outcome does not depend on agent-session environment markers; eawf git commit and eawf git cherry-pick holding the document lock around git, and the data-loss guard refusing plain git commit, git cherry-pick and a stash-ing pre-commit run from an agent session in a managed main checkout; host tool observations coalesced into one document write per batch with an indexed receipt lookup; an approval seal that resumes after a lock timeout and seals exactly once; one winner in the daemon-start claim race; and a 0.7.3 release train with its canary export, dispatch smokes and packet runs committed.",
-      "primary_track_ref": "eawf://EAWF/track/TRK-EAWF-CORE",
-      "required_batch_refs": [
-        "eawf://EAWF/batch/BAT-0399",
-        "eawf://EAWF/batch/BAT-0400",
-        "eawf://EAWF/batch/BAT-0401",
-        "eawf://EAWF/batch/BAT-0402",
-        "eawf://EAWF/batch/BAT-0403",
-        "eawf://EAWF/batch/BAT-0404"
-      ],
-      "revision": 6,
-      "status": "ACTIVE",
-      "target_date": null,
-      "title": "Ship 0.7.3 to finish a release unattended",
-      "uid": "52e9352f-768f-5b63-8bee-e5f3996110ff",
-      "updated_at": "2026-11-13T03:29:59.254860Z",
-      "urn": "eawf://EAWF/milestone/MLS-0109"
-    }
-  },
+  "canonical_sequence": 90882,
+  "milestone": {},
   "open_question": {
     "QST-0001": {
       "answer_refs": [],
@@ -12909,6 +12795,88 @@
       ],
       "updated_at": "2026-11-13T03:29:43.203705Z",
       "urn": "eawf://EAWF/pending-action/ACT-0071"
+    },
+    "ACT-0072": {
+      "assignee_ref": null,
+      "bundle_digest": "sha256:2a36a2f9a35c9f1a736e4279f3d6bc268ab35775d83ebbe17a00884e22f6b68c",
+      "created_at": "2026-11-13T04:33:40.306455Z",
+      "default_on_timeout": null,
+      "default_policy": null,
+      "dispositions": [
+        {
+          "acted_at": "2026-11-13T04:36:47.113958Z",
+          "option_id": "approve",
+          "outcome": "sealed",
+          "principal_id": "OP-0001",
+          "snoozed_until": null
+        }
+      ],
+      "harness_attestation": {
+        "harness": "claude-code",
+        "host_session_digest": "sha256:80f91fb6c8da3a811c0c1a2c479d4e847b89a01413838029f0129e11884c371e",
+        "payload_digest": "sha256:06a407bfa667c033fb1acae0ab506fba14e15f9dffd56b53c57713d98916d17b",
+        "permission_mode": null,
+        "question_ref": "eawf://EAWF/question/QST-0119",
+        "raise_gap_ms": 175088,
+        "run_ref": null,
+        "tool_use_id": "toolu_016W8uUMwSRZJT6HqjN2bkGW",
+        "transcript_check": "matched"
+      },
+      "id": "ACT-0072",
+      "idempotency_key": "accept-MLS-0109-2a36a2f9a35c9f1a",
+      "kind": "protected_approval",
+      "options": [
+        {
+          "consequence": "The Milestone is recorded as accepted on exactly this bundle. A later change needs a new acceptance.",
+          "cost": "Any change after acceptance needs a new bundle and a new acceptance.",
+          "effect": "approve",
+          "label": "Accept the Milestone",
+          "option_id": "approve",
+          "preview": "Milestone MLS-0109\n  before: in acceptance review\n  after:  accepted on bundle revision 1"
+        },
+        {
+          "consequence": "The Milestone stays in review and is not accepted. Nothing else changes.",
+          "cost": "Verified work waits unaccepted, and nothing says what would make it acceptable.",
+          "effect": "decline",
+          "label": "Do not accept it",
+          "option_id": "decline",
+          "preview": "Milestone MLS-0109\n  before: in acceptance review\n  after:  in acceptance review, not accepted"
+        },
+        {
+          "consequence": "The Milestone stays in review and a repair is requested. The next bundle revision is verified and asked about again.",
+          "cost": "Delivery waits for another verified revision and another question.",
+          "effect": "request_repair",
+          "label": "Ask for changes",
+          "option_id": "repair",
+          "preview": "Milestone MLS-0109\n  before: bundle revision 1 awaits acceptance\n  after:  repair requested; bundle revision 2 is verified next"
+        }
+      ],
+      "override_until": null,
+      "question": "Accept MLS-0109 on revision 1 of its acceptance bundle?",
+      "receipt_ref": "eawf://EAWF/evidence/EVD-0439",
+      "recommendation_rationale": "Every Batch stands on a verified head and the journey passed, so accepting records what the evidence already shows.",
+      "recommended_option_id": "approve",
+      "requested_by": {
+        "principal_id": "EAWF-PLANNER",
+        "principal_kind": "agent",
+        "run_ref": "eawf://EAWF/run/RUN-00002444"
+      },
+      "resolution_actor": {
+        "principal_id": "OP-0001",
+        "principal_kind": "human"
+      },
+      "revision": 2,
+      "selected_option_id": "approve",
+      "status": "SEALED",
+      "subject_ref": "eawf://EAWF/milestone/MLS-0109",
+      "terms": [
+        {
+          "expansion": "the Milestone, a planned delivery goal, you are asked to accept",
+          "term": "MLS-0109"
+        }
+      ],
+      "updated_at": "2026-11-13T04:36:47.113958Z",
+      "urn": "eawf://EAWF/pending-action/ACT-0072"
     }
   },
   "plan_revision": {
@@ -339749,6 +339717,34 @@
       "uid": "c8741b15-b86e-5de4-b821-adf2b23d7fda",
       "updated_at": "2026-11-12T17:18:19.667577Z",
       "urn": "eawf://EAWF/task/EAWF-0760"
+    },
+    "EAWF-0764": {
+      "active_run_ref": null,
+      "batch_ref": null,
+      "contract_revision": 1,
+      "created_at": "2026-11-13T04:33:18.032939Z",
+      "criteria": [],
+      "due_scope": null,
+      "integrated_binding": null,
+      "intent": "In tests/integration/runtime/daemon/test_provider_permission.py, test_run_051_an_expiry_is_recorded_once asserts only that the second expire returns nothing, so it passes with the clock frozen; assert that the first expire returns the permission key. test_run_052_a_hold_is_refused_even_on_a_lapsed_permission does not depend on the lapse either, because the hold check runs before the lapse check. Both predate 0.7.3. Found by the fresh-context audit of the 0.7.3 expiry test Batch.",
+      "key": "EAWF-0764",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P3",
+      "revision": 1,
+      "status": "DRAFT",
+      "title": "Assert the first expiry in the permission expiry-once test",
+      "uid": "c4cf01f9-30f9-5887-a0c7-ad429a457f82",
+      "updated_at": "2026-11-13T04:33:18.032939Z",
+      "urn": "eawf://EAWF/task/EAWF-0764"
     }
   },
   "track": {
