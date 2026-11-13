@@ -1,0 +1,406 @@
+#!/usr/bin/env bash
+# Eä hook wrapper (codex runtime, session_end event).
+# Generator: eawf plugin install codex (managed file; re-render via
+# `eawf plugin update codex`; hand-edits are detected by `eawf plugin doctor`).
+#
+# Every path ends in exit 0. A hook that cannot run must not stop the host
+# session, so an infrastructure failure becomes a health row in the managed
+# repository instead of an exit status, and no child exit status passes
+# through. A deny or refusal is a JSON document on stdout. For that reason
+# errexit stays off: each step checks its own outcome.
+
+if [ "${EAWF_HOOKS:-}" = "off" ]; then
+    exit 0
+fi
+
+_eawf_event="session_end"
+case "${_eawf_event}" in
+    "" | *[!a-z_]*) exit 0 ;;
+esac
+
+_eawf_payload=""
+if [ ! -t 0 ]; then
+    _eawf_payload="$(cat)"
+fi
+
+# Context probe, before any interpreter starts. The host names its working
+# directory in the payload; hosts put it near the top, so only the head is
+# searched, which keeps a large tool response from slowing every hook. The
+# reading is sure only when it is the payload's one "cwd" key and its value
+# holds no escape but \\ and \/; a pre-tool call read unsure is handed to
+# eawf, whose JSON parser reads the top-level field. The value is only ever
+# tested as a path, never evaluated.
+_eawf_cwd=""
+_eawf_cwd_sure=""
+_eawf_cwd_re='"cwd"[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)"'
+if [[ "${_eawf_payload:0:8192}" =~ ${_eawf_cwd_re} ]]; then
+    _eawf_cwd="${BASH_REMATCH[1]}"
+    _eawf_rest="${_eawf_cwd//\\\\/}"
+    _eawf_rest="${_eawf_rest//\\\//}"
+    case "${_eawf_rest}" in
+        *\\*) ;;
+        *) _eawf_cwd_sure="yes" ;;
+    esac
+    # A JSON string holds no raw control byte, so \001 stands in for an
+    # escaped backslash while \/ is decoded. The replacement is a bare "/":
+    # bash 3.2 keeps the backslash of a "\/" replacement in double quotes.
+    _eawf_cwd="${_eawf_cwd//\\\\/$'\001'}"
+    _eawf_cwd="${_eawf_cwd//\\\///}"
+    _eawf_cwd="${_eawf_cwd//$'\001'/\\}"
+    if [ -n "${_eawf_cwd_sure}" ] && [ "${_eawf_event}" = "pre_tool_use" ]; then
+        _eawf_rest="${_eawf_payload#*\"cwd\"}"
+        _eawf_key_re='"cwd"[[:space:]]*:'
+        if [[ "${_eawf_rest}" =~ ${_eawf_key_re} ]]; then
+            _eawf_cwd_sure=""
+        fi
+    fi
+    _eawf_rest=""
+elif [ -z "${_eawf_payload}" ]; then
+    # No payload names no call to judge, so there is nothing to read unsure.
+    _eawf_cwd_sure="yes"
+fi
+if [ -z "${_eawf_cwd}" ] || [ ! -d "${_eawf_cwd}" ]; then
+    _eawf_cwd="${PWD}"
+fi
+# A health row names the host session it happened in; an id is plain text.
+_eawf_session=""
+_eawf_session_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_.:-]{1,128})"'
+if [[ "${_eawf_payload:0:8192}" =~ ${_eawf_session_re} ]]; then
+    _eawf_session="${BASH_REMATCH[1]}"
+fi
+
+# Set _eawf_r to the main checkout of the separate git directory $1, else to
+# nothing. git records no main tree for one, but a linked tree registered
+# inside it shows it: the main checkout is the nearest directory above a
+# registered tree whose .git file names $1 itself.
+_eawf_registered_main() {
+    _eawf_r=""
+    local entry tree link common
+    common="$(CDPATH="" && cd -P -- "$1" 2>/dev/null && pwd -P)" || return 0
+    for entry in "${common}"/worktrees/*/gitdir; do
+        [ -f "${entry}" ] || continue
+        IFS= read -r tree <"${entry}" || [ -n "${tree}" ] || continue
+        tree="$(CDPATH="" && cd -P -- "${entry%/*}" 2>/dev/null && cd -P -- "${tree%/.git}" 2>/dev/null && pwd -P)" || continue
+        while [ -n "${tree}" ] && [ "${tree}" != "/" ]; do
+            tree="${tree%/*}"
+            [ -f "${tree:-/}/.git" ] || continue
+            IFS= read -r link <"${tree:-/}/.git" || [ -n "${link}" ] || continue
+            link="$(CDPATH="" && cd -P -- "${tree:-/}" 2>/dev/null && cd -P -- "${link#gitdir: }" 2>/dev/null && pwd -P)" || continue
+            if [ "${link}" = "${common}" ]; then
+                _eawf_r="${tree:-/}"
+                return 0
+            fi
+        done
+    done
+    return 0
+}
+
+# Set _eawf_p_kind (managed, unmanaged-git or no-git), _eawf_p_top and
+# _eawf_p_main for the directory $1. A subfolder or a linked worktree answers
+# for its main checkout, where the repository's .ea lives. The main checkout
+# follows eawf's named_main_root: a common directory named .git sits in it,
+# any other names it through core.worktree, the tree itself is it for the
+# main tree of a separate git directory, and a linked tree of one finds it
+# through the trees registered inside it. A common config set bare, or a
+# linked tree whose main checkout none of these names, is no-git, as the
+# state resolver refuses it; the upward walk below still finds a managed
+# checkout such a tree lies in.
+_eawf_probe() {
+    _eawf_p_kind="no-git"
+    _eawf_p_top=""
+    _eawf_p_main=""
+    local probe top common gitdir main key value bare="" worktree=""
+    probe="$(git -C "$1" rev-parse --path-format=absolute --show-toplevel --git-common-dir --git-dir 2>/dev/null)" || return 0
+    case "${probe}" in
+        *$'\n'*$'\n'*$'\n'*) return 0 ;;
+        *$'\n'*$'\n'*) ;;
+        *) return 0 ;;
+    esac
+    top="${probe%%$'\n'*}"
+    probe="${probe#*$'\n'}"
+    common="${probe%%$'\n'*}"
+    gitdir="${probe#*$'\n'}"
+    if [ "${common}" != "${gitdir}" ] || [ "${common##*/}" != ".git" ]; then
+        while read -r key value; do
+            case "${key}" in
+                core.bare) bare="${value}" ;;
+                core.worktree) worktree="${value}" ;;
+            esac
+        done <<<"$(git config --file "${common}/config" --get-regexp '^core\.(bare|worktree)$' 2>/dev/null)"
+    fi
+    case "${bare}" in
+        [Tt][Rr][Uu][Ee] | [Yy][Ee][Ss] | [Oo][Nn] | 1) return 0 ;;
+    esac
+    if [ "${common##*/}" = ".git" ]; then
+        main="${common%/*}"
+    elif [ -n "${worktree}" ]; then
+        main="$(CDPATH="" && cd "${common}" 2>/dev/null && cd "${worktree}" 2>/dev/null && pwd -P)" || return 0
+    elif [ "${common}" = "${gitdir}" ]; then
+        main="${top}"
+    else
+        _eawf_registered_main "${common}"
+        [ -n "${_eawf_r}" ] || return 0
+        main="${_eawf_r}"
+    fi
+    _eawf_p_top="${top}"
+    _eawf_p_main="${main}"
+    _eawf_p_kind="unmanaged-git"
+    if [ -f "${_eawf_p_main}/.ea/state.json" ]; then
+        _eawf_p_kind="managed"
+    fi
+    if [ -f "${_eawf_p_main}/.ea/generations/EPOCH2_ACTIVE.json" ]; then
+        _eawf_p_kind="managed"
+    fi
+    return 0
+}
+
+_eawf_probe "${_eawf_cwd}"
+_eawf_kind="${_eawf_p_kind}"
+_eawf_top="${_eawf_p_top}"
+_eawf_main="${_eawf_p_main}"
+
+# The data-loss guard is on for a call when the session is in a managed tree:
+# the cwd or the host's project directory lies in a git repository whose main
+# checkout holds .ea/ (a subfolder or a linked worktree of it included), or
+# under a directory outside git that holds .ea/state.json. Each is read
+# through its symlinks. Nothing in the tool input but the cwd decides this,
+# and the cwd is only ever tested as a path.
+
+# Set _eawf_g to the managed tree the directory $1 lies in, else to nothing.
+# Going up its real path to the root, a level holding .ea/state.json is kept
+# as a tree outside git, and a level holding .git asks git once whether it
+# is a repository; one whose main checkout holds .ea is the answer. A .git git
+# does not take, or a repository eawf does not manage, is passed: a nested
+# clone or a submodule may lie in a managed checkout further up. The level
+# the cwd probe already answered for is not asked again.
+_eawf_guarded() {
+    _eawf_g=""
+    local back="${PWD}" d holder="" main
+    CDPATH="" cd -P -- "$1" 2>/dev/null || return 0
+    d="${PWD}"
+    cd -- "${back}" 2>/dev/null
+    [ "${d}" = "/" ] && d=""
+    while :; do
+        if [ -z "${holder}" ] && [ -f "${d}/.ea/state.json" ]; then
+            holder="${d:-/}"
+        fi
+        if [ -e "${d}/.git" ]; then
+            if [ "${_eawf_kind}" != "no-git" ] && [ "${d:-/}" = "${_eawf_top}" ]; then
+                main="${_eawf_main}"
+            else
+                _eawf_probe "${d:-/}"
+                main="${_eawf_p_main}"
+            fi
+            if [ -n "${main}" ] && [ -d "${main}/.ea" ]; then
+                _eawf_g="${main}"
+                return 0
+            fi
+        fi
+        [ -n "${d}" ] || break
+        d="${d%/*}"
+    done
+    _eawf_g="${holder}"
+    return 0
+}
+
+# Set _eawf_g to the managed tree the session is in, else to nothing. A cwd
+# read unsure leaves the wrapper's own directory to be asked as well.
+_eawf_session_tree() {
+    _eawf_g=""
+    _eawf_guarded "${_eawf_cwd}"
+    [ -n "${_eawf_g}" ] && return 0
+    if [ -z "${_eawf_cwd_sure}" ] && [ "${PWD}" != "${_eawf_cwd}" ]; then
+        _eawf_guarded "${PWD}"
+        [ -n "${_eawf_g}" ] && return 0
+    fi
+    return 0
+}
+
+# A judged call of a session in a managed tree goes to the guard, which then
+# judges it whole; outside one it stands down here. A call whose cwd was read
+# unsure goes to the guard too, which judges by the cwd of the parsed payload
+# whatever -w names; with no managed tree found, no health row may create an
+# .ea. A managed checkout the probe found keeps its -w.
+if [ "${_eawf_event}" = "pre_tool_use" ] && [ "${_eawf_kind}" != "managed" ]; then
+    _eawf_session_tree
+    if [ -n "${_eawf_g}" ]; then
+        _eawf_kind="guarded"
+        _eawf_top="${_eawf_g}"
+        _eawf_main="${_eawf_g}"
+    elif [ -z "${_eawf_cwd_sure}" ]; then
+        _eawf_kind="guarded"
+        _eawf_top=""
+        _eawf_main=""
+    fi
+fi
+
+# A prompt from a repository eawf does not manage, such as a clone nested in a
+# managed checkout, belongs to the managed tree it lies in, as the state
+# resolver answers for it there; the walk is the guard's. A tree whose main
+# checkout git cannot name is no-git and stays so: the resolver refuses it.
+if [ "${_eawf_event}" = "user_prompt_submit" ] && [ "${_eawf_kind}" = "unmanaged-git" ]; then
+    _eawf_guarded "${_eawf_cwd}"
+    if [ -n "${_eawf_g}" ]; then
+        _eawf_kind="managed"
+        _eawf_top="${_eawf_g}"
+        _eawf_main="${_eawf_g}"
+    fi
+fi
+
+# Outside a managed repository the hook does nothing and says nothing, except
+# that a skill which needs a managed repository is refused before it starts.
+if [ "${_eawf_kind}" != "managed" ] && [ "${_eawf_kind}" != "guarded" ]; then
+    exit 0
+fi
+
+# Print $1 as valid UTF-8: a byte that is not part of a valid character is
+# dropped by iconv where it runs; without a working iconv every byte above
+# ASCII becomes "?", which loses the text's other characters but never the row.
+_eawf_utf8() {
+    local out=""
+    if command -v iconv >/dev/null 2>&1; then
+        out="$(printf '%s' "$1" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null)"
+    fi
+    if [ -z "${out}" ] && [ -n "$1" ]; then
+        out="$(printf '%s' "$1" | LC_ALL=C tr '\200-\377' '?')"
+    fi
+    printf '%s' "${out}"
+}
+
+# Keep one health row for an infrastructure failure: code, error, detail.
+# A value is made valid UTF-8, cut to 500 bytes without splitting a
+# character, every control character becomes a space, then quotes and
+# backslashes are escaped, so the row is always one valid JSON line.
+_eawf_json_escape() {
+    local LC_ALL=C
+    local s n=0 b need=1
+    s="$(_eawf_utf8 "${1-}" | tr '\000-\037' ' ')"
+    if [ -n "${s:500:1}" ]; then
+        s="${s:0:500}"
+        # Back up over continuation bytes to the last character's lead byte.
+        while [ "${n}" -lt 3 ]; do
+            b="${s:$((499 - n)):1}"
+            case "${b}" in
+                [$'\200'-$'\277']) n=$((n + 1)) ;;
+                *) break ;;
+            esac
+        done
+        b="${s:$((499 - n)):1}"
+        case "${b}" in
+            [$'\300'-$'\337']) need=2 ;;
+            [$'\340'-$'\357']) need=3 ;;
+            [$'\360'-$'\367']) need=4 ;;
+        esac
+        if [ $((n + 1)) -lt "${need}" ]; then
+            s="${s:0:$((499 - n))}"
+        fi
+    fi
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    printf '%s' "$s"
+}
+# The wrapper only appends: rotation takes the record's lock, which bash
+# cannot take portably, so the next Python hook that runs rotates.
+_eawf_health() {
+    [ -n "${_eawf_main}" ] || return 0
+    local record="${_eawf_main}/.ea/local/hooks/health.jsonl"
+    mkdir -p "${record%/*}" 2>/dev/null || return 0
+    local session="null"
+    if [ -n "${_eawf_session}" ]; then
+        session="\"${_eawf_session}\""
+    fi
+    printf '{"at":"%s","event":"%s","hook":"wrapper","code":"%s","error":"%s","detail":"%s","session_id":%s}\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%S+00:00)" \
+        "${_eawf_event}" \
+        "$1" \
+        "$(_eawf_json_escape "$2")" \
+        "$(_eawf_json_escape "$3")" \
+        "${session}" >>"${record}" 2>/dev/null
+    return 0
+}
+
+# PATH bootstrap: a hook fired from inside a git worktree (or a GUI-launched
+# agent) can inherit a minimal PATH that omits the uv install dir. Appending
+# the common single-user install locations, rather than prepending them,
+# leaves any uv already on PATH authoritative.
+for _eawf_bin in "${HOME:-}/.local/bin" "${HOME:-}/.cargo/bin" /opt/homebrew/bin /usr/local/bin; do
+    case ":${PATH}:" in
+        *":${_eawf_bin}:"*) ;;
+        *)
+            if [ -d "${_eawf_bin}" ]; then
+                PATH="${PATH}:${_eawf_bin}"
+            fi
+            ;;
+    esac
+done
+export PATH
+
+_eawf_uv="$(command -v uv 2>/dev/null)"
+if [ -z "${_eawf_uv}" ]; then
+    _eawf_health runner_missing uv "uv is not on PATH"
+    exit 0
+fi
+
+# The project's own eawf comes first, the working tree's before the main
+# checkout's: a global eawf of another version speaks a different hook
+# contract. `--no-sync` runs that environment as installed instead of syncing
+# it on every hook. An eawf on PATH runs with `--no-project`, so uv leaves the
+# repository's environment alone.
+if [ -x "${_eawf_top}/.venv/bin/eawf" ] || [ -x "${_eawf_top}/.venv/Scripts/eawf.exe" ]; then
+    _eawf_run=(run --project "${_eawf_top}" --no-sync)
+elif [ -x "${_eawf_main}/.venv/bin/eawf" ] || [ -x "${_eawf_main}/.venv/Scripts/eawf.exe" ]; then
+    _eawf_run=(run --project "${_eawf_main}" --no-sync)
+elif command -v eawf >/dev/null 2>&1; then
+    _eawf_run=(run --no-project)
+else
+    _eawf_health runner_missing eawf "no eawf in the project environment or on PATH"
+    exit 0
+fi
+
+_eawf_errors="$(mktemp "${TMPDIR:-/tmp}/eawf-hook.XXXXXX" 2>/dev/null)"
+if [ -z "${_eawf_errors}" ]; then
+    _eawf_errors="/dev/null"
+fi
+# A host stops a hook at its timeout by a signal, which skips the removal
+# below; the traps remove the file then. Bash runs a trap once the child it
+# waits on has ended, so the trap only removes the file and writes no row.
+_eawf_clean() {
+    if [ "${_eawf_errors}" != "/dev/null" ]; then
+        rm -f "${_eawf_errors}"
+    fi
+}
+trap _eawf_clean EXIT
+trap 'exit 0' TERM INT HUP
+# -w names the session's own repository. A guarded call of a session that
+# drifted out of one runs without it: eawf resolves the session's directory,
+# the guard judges the call, and every other hook stands down there.
+_eawf_named=()
+if [ "${_eawf_kind}" = "managed" ]; then
+    _eawf_named=(-w "${_eawf_main}")
+fi
+_eawf_out="$(printf '%s' "${_eawf_payload}" | "${_eawf_uv}" "${_eawf_run[@]}" eawf ${_eawf_named[@]+"${_eawf_named[@]}"} hook run "${_eawf_event}" --runtime codex 2>"${_eawf_errors}")"
+_eawf_status=$?
+_eawf_detail=""
+if [ "${_eawf_errors}" != "/dev/null" ]; then
+    if [ "${_eawf_status}" -ne 0 ]; then
+        _eawf_detail="$(tail -n 1 "${_eawf_errors}" 2>/dev/null)"
+    else
+        cat "${_eawf_errors}" >&2
+    fi
+    rm -f "${_eawf_errors}"
+fi
+if [ "${_eawf_status}" -ne 0 ]; then
+    # What a failed child printed is not an answer the host may act on.
+    _eawf_health hook_exit "exit ${_eawf_status}" "${_eawf_detail}"
+    exit 0
+fi
+# Codex parses a hook's stdout: only session start's context document and
+# the pre-tool guard's deny are meant for it.
+case "${_eawf_event}" in
+    session_start | pre_tool_use) ;;
+    *) exit 0 ;;
+esac
+if [ -n "${_eawf_out}" ]; then
+    printf '%s\n' "${_eawf_out}"
+fi
+exit 0

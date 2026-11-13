@@ -1,0 +1,75 @@
+---
+name: attend
+description: "Work the Attention queue: pending actions, open questions and open pauses."
+argument-hint: "[<list|prepare|resolve>] [<item-ref>] [--kind <action|question|pause>] [--urgency <watch|normal|high|urgent>] [--option <id>] [--answer <text>] [--limit <N>] [--scope <urn>] [--dry-run]"
+user-invocable: true
+disable-model-invocation: false
+---
+
+# /attend
+
+Work the Attention queue: pending actions, open questions and open pauses.
+
+## 1. Authority
+
+- Needs an eawf-managed repository; outside one the hook refuses it with `not an eawf-managed repository; run eawf init to manage it`.
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
+- Operates on: PendingAction, through `projection.attention.read`, `projection.notifications.read`, `eawf milestone seal-approval`, `eawf action decide-permission`.
+- Operator-only actions: `resolve`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`) and never chooses the recommended option itself. In Claude Code, present the bound question the answer carries with AskUserQuestion verbatim, the action marker on its first line included: the operator's answer to that marked question is the approval, or the choice, and that answer seals it. Then complete the act under your own principal, citing the sealed action; an agent still cannot name an `OP-` key. Codex sessions have no AskUserQuestion, so their operator acts stay terminal-only: print the answer's `numbered_prompt` verbatim and stop; the operator relays the reply with `eawf question answer` (`runtime.question.answer_numbered`) from their own terminal, the console answers the same record, and the first answer wins.
+- Effects: Attention reads plus the approval and permission verbs that answer a pending action, when resolve is explicitly selected.
+- Allowed RPCs: `projection.attention.read`, `projection.notifications.read`, `eawf milestone seal-approval` (`runtime.delivery.seal_acceptance_approval`), `eawf action decide-permission` (`runtime.permission.decide`), `eawf question answer` (`runtime.question.answer_numbered`), `eawf question open-decision` (`runtime.question.open_decision`). Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
+- Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
+- Local write root: none.
+- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
+
+## 2. Context
+
+The Attention queue of the scope named by `--scope`, or of the current project when it is omitted, and the item named by `<item-ref>` when one is given.
+
+Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
+
+## 3. Task
+
+You triage the Attention queue for one scope and prepare each item for the operator. You resolve nothing that requires their authority.
+
+```text
+/attend [<list|prepare|resolve>] [<item-ref>] [--kind <action|question|pause>] [--urgency <watch|normal|high|urgent>] [--option <id>] [--answer <text>] [--limit <N>] [--scope <urn>] [--dry-run]
+```
+
+Select exactly one action: `list`, `prepare`, `resolve`. An option the selected action does not declare is refused before you start.
+
+## 4. Method
+
+1. Read the queue. Three kinds live here and they are not interchangeable: a PendingAction is a request for an effect; an OpenQuestion is a knowledge gap; an OpenPause is an operational condition the daemon observed.
+2. For each item, establish what the operator needs in order to answer: the exact subject and revision, the options with their consequences, the evidence behind each, and what happens if they do nothing.
+3. Order by urgency and deadline, not by arrival. Interrupt-now first, then decisions that are due, then invalidated proofs, then recovery, then watch.
+4. Where an item is answerable from evidence rather than authority — a question whose answer already exists in the claim ledger — answer it and record the evidence rather than spending operator attention.
+5. Present what remains. Each option carries a rendering of what choosing it produces, every term expanded, one recommendation, and the recommendation is the durable choice rather than the cheap one.
+
+## 4b. Applicable rules
+
+The obligations the effective rule graph holds for activities `operate`. They bind what you do; they grant no capability.
+
+- must: **Finish independent work first and block only when proceeding is unsafe.** When part of the scope fails or awaits an answer, finish every independent part, state what was left undone and why, and raise a question only where the dependent work begins. Block only when proceeding on any assumption would be unsafe, or useless if wrong; unattended, record a typed open question and continue.
+- must: **Measure projection size against each runtime cap.** Record the projection byte size and each certified runtime's declared cap in the render transaction, and fail rather than truncate a projection over any cap. Record a cap only as a measured value with provenance, never a figure chosen for headroom; report one not re-measured on a certified runtime version as stale.
+- must: **Record each conduct deviation as a typed local row.** Record every conduct deviation, including a practice whose trigger fired and whose obligation was not met, as a typed row in the machine-local store, never the committed surface, bound to its run and breached obligation, with detection method, severity, evidence reference and disposition.
+- must: **Record the goal before the first mutating action.** Before the first mutating action, record the task as a typed goal bound to the declared success criteria of the entity it serves.
+
+## 5. Constraints
+
+- You never resolve a protected action, and you never let silence stand as consent to an irreversible effect.
+- You never merge the three ledgers. A question rendered as an action, or a pause rendered as a question, loses the distinction the operator needs.
+- If an item has no consequence either way, close it rather than asking.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `needs_operator` or `blocked` with the reason rather than guessing.
+
+## 6. Output
+
+Output one report whose `summary` gives the prepared attention set: per item, its kind, subject, exact revision, options with consequences, evidence, recommendation, and what happens on no answer. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
+
+The report validates against `AttentionSkillReport`, and its terminal outcome is exactly one of `listed`, `prepared`, `resolved`, `needs_operator`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /attend` before returning it. It carries these fields and no other; a nested field is written under its parent.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skill_id` | `"attend"` | yes | The id of the skill that produced the report. |
+| `outcome` | one of `"listed"`, `"prepared"`, `"resolved"`, `"needs_operator"`, `"blocked"` | yes | How the invocation ended; the result. |
+| `summary` | string | no | Explanation of the outcome and what supports it; never the result. |

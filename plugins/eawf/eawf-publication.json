@@ -1,9 +1,9 @@
 {
-  "bundle": "sha256:bea1636f6fab8f787bf773f016dfd1d154c253b43d203933d6de9eb626ad3cfb",
+  "bundle": "sha256:b8c54c2ddd3e847a410eb807ac1323cf43edf258e56e7b271c5d7f6d46338638",
   "catalog": "sha256:06eaca657b65a31fb64e9dfae181a4bcf229c0c593b5282e3dbc3fd0be68e95b",
   "files": [
     {
-      "digest": "sha256:68af1ee8670d2c5f78a75b04b309bc9070425fd57f85b142c5fc8a83d62cbf39",
+      "digest": "sha256:a7081bd4ee4039e26a57f3921453761478d3d3c638d66d23050ee6ca8b2f4a31",
       "kind": "manifest",
       "path": ".codex-plugin/plugin.json"
     },
@@ -281,5 +281,5 @@
     }
   ],
   "target_epoch": 2,
-  "verb_catalog": "sha256:50da6a2442dd536737d16d6bc57ab9d335d977e3db531863c7c1b6ee624f8425"
+  "verb_catalog": "sha256:6131f25fd5e39bbd81849618187f11644c8bf861cc77ece898ed0c149163d3d3"
 }
