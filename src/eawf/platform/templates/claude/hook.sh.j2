@@ -5,7 +5,9 @@
    (main-checkout-relative files that mark a managed repository),
    health_record (the health record path relative to the main checkout),
    prompt_refusal and tool_refusal (the JSON documents refusing a
-   managed-only skill from a prompt and from the skill tool). POSIX bash 3.2
+   managed-only skill from a prompt and from the skill tool),
+   v08_layout_message (the line a tree in the eawf 0.8 layout answers with
+   at session start). POSIX bash 3.2
    compatible. -#}
 #!/usr/bin/env bash
 # Eä hook wrapper ({{ runtime }} runtime{% if event_type %}, {{ event_type }} event{% endif %}).
@@ -263,6 +265,18 @@ if [ "${_eawf_event}" = "user_prompt_submit" ] && [ "${_eawf_kind}" = "unmanaged
         _eawf_top="${_eawf_g}"
         _eawf_main="${_eawf_g}"
     fi
+fi
+
+# A main checkout holding .ea/state beside no .ea/generations is in the eawf
+# 0.8 layout, which this build cannot read: running eawf or its data-loss
+# guard there would judge a tree it misreads. Every event stands down, the
+# cwd's own checkout and one the guard walk found alike. Session start takes
+# no walk, so it names the newer client only for the cwd's own checkout.
+if [ -n "${_eawf_main}" ] && [ -d "${_eawf_main}/.ea/state" ] && [ ! -e "${_eawf_main}/.ea/generations" ]; then
+    if [ "${_eawf_event}" = "session_start" ]; then
+        printf '%s\n' '{{ v08_layout_message }}'
+    fi
+    exit 0
 fi
 
 # Outside a managed repository the hook does nothing and says nothing, except

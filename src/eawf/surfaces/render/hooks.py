@@ -21,7 +21,10 @@ The output is a small bash wrapper that:
    :data:`~eawf.runtime.hooks.context.MANAGED_ANCHORS`, so a subfolder or a
    linked worktree answers for it. Outside one the wrapper prints nothing,
    except the not-managed refusal of a managed-only skill (from the
-   ``skill-classes.tsv`` beside it), and exits 0.
+   ``skill-classes.tsv`` beside it), and exits 0. A main checkout in the eawf
+   0.8 layout (``.ea/state`` beside no ``.ea/generations``) stands down on
+   every event and prints :data:`~eawf.kernel.migration.epoch2.canary.
+   V08_LAYOUT_MESSAGE` at session start.
 4. In a managed repository, pipes the payload to ``uv run <mode> eawf -w
    <main> hook run <event> --runtime <runtime>``. An eawf in the working
    tree's or the main checkout's ``.venv`` runs with ``--project <root>
@@ -49,6 +52,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from eawf.kernel.migration.epoch2.canary import V08_LAYOUT_MESSAGE
 from eawf.runtime.hooks.context import MANAGED_ANCHORS
 from eawf.runtime.hooks.event import HookEventType
 from eawf.runtime.hooks.health import HEALTH_RECORD
@@ -177,6 +181,7 @@ def _render(event_type: str, *, runtime: str) -> str:
             {"decision": "block", "reason": NOT_MANAGED_REFUSAL}, separators=(",", ":")
         ),
         tool_refusal=json.dumps(tool_refusal, separators=(",", ":")),
+        v08_layout_message=V08_LAYOUT_MESSAGE,
     )
     if not rendered.endswith("\n"):
         rendered = rendered + "\n"

@@ -216,6 +216,36 @@ def test_v08_layout_line(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     assert str(refused.value) == V08_LAYOUT_MESSAGE
 
 
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+def test_v08_layout_session_start_prints_the_line_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runtime: str
+) -> None:
+    root = _v08_tree(tmp_path)
+    monkeypatch.chdir(root)
+    session = {"hook_event_name": "SessionStart", "session_id": "host-1", "cwd": str(root)}
+    started = runner.invoke(
+        app, ["hook", "run", "session_start", "--runtime", runtime], input=json.dumps(session)
+    )
+    assert started.exit_code == 0, started.output
+    assert started.stdout == f"{V08_LAYOUT_MESSAGE}\n"
+    assert started.stderr == ""
+
+
+def test_v08_layout_user_prompt_submit_is_silent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _v08_tree(tmp_path)
+    monkeypatch.chdir(root)
+    prompted = runner.invoke(
+        app,
+        ["hook", "run", "user_prompt_submit", "--runtime", "claude"],
+        input=json.dumps(_prompt(root)),
+    )
+    assert prompted.exit_code == 0, prompted.output
+    assert prompted.stdout == ""
+    assert prompted.stderr == ""
+
+
 def test_uses_v08_layout_needs_state_without_generations(tmp_path: Path) -> None:
     tree = tmp_path / ".ea"
     assert not uses_v08_layout(tree)

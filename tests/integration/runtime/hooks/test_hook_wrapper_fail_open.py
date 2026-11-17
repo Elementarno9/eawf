@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import time
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,7 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.kernel.config.schema import MAX_PERMISSION_WAIT_SECONDS
+from eawf.kernel.migration.epoch2.canary import V08_LAYOUT_MESSAGE
 from eawf.runtime.hooks.health import HEALTH_RECORD, read_health_rows, take_failure_warning
 from eawf.runtime.runtimes.claude.hook_map import (
     _PERMISSION_TIMEOUT_MARGIN_S,
@@ -30,6 +32,7 @@ from eawf.runtime.runtimes.claude.hook_map import (
 from eawf.runtime.runtimes.claude.plugin_package import package_plugin
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import hook as hook_command
+from eawf.surfaces.render.hooks import render_hook_wrapper
 from eawf.workflow.skills.catalog import NOT_MANAGED_REFUSAL
 from tests._linked_worktree import git, repo_with_linked_worktree
 
@@ -445,3 +448,160 @@ def test_unmanaged_stand_down_budget(wrapper: Path, tmp_path: Path) -> None:
     assert "--target-epoch" not in help_text
     assert not hasattr(hook_command, "_refused_stale_bundle")
     assert not hasattr(hook_command, "_stood_down_for_epoch")
+
+
+# ---- 0.8 layout stand-down -------------------------------------------------------------------
+
+_RUNTIMES: tuple[str, ...] = ("claude", "codex")
+_V08_QUIET_EVENTS: tuple[str, ...] = (
+    "user_prompt_submit",
+    "pre_tool_use",
+    "post_tool_use",
+    "subagent_stop",
+)
+_RECORDING_EAWF = '#!/bin/bash\ncat >/dev/null\nprintf \'eawf %s\\n\' "$*" >>"$EAWF_TEST_LOG"\n'
+
+
+def _rendered_wrapper(directory: Path, runtime: str) -> Path:
+    path = directory / f"eawf-hook-{runtime}.sh"
+    directory.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_hook_wrapper(runtime=runtime), encoding="utf-8")
+    return path
+
+
+def _recording_env(tmp_path: Path) -> dict[str, str]:
+    """An environment whose uv and eawf only record that they ran."""
+    stubs = tmp_path / "stubs"
+    _stub(stubs, "uv", _STUB_UV)
+    _stub(stubs, "eawf", _RECORDING_EAWF)
+    return _env(tmp_path, f"{stubs}:{_SYSTEM_PATH}")
+
+
+def _v08_repo(root: Path) -> Path:
+    repo = _scratch_repo(root)
+    (repo / ".ea" / "state").mkdir(parents=True)
+    return repo
+
+
+@pytest.mark.parametrize("runtime", _RUNTIMES)
+def test_v08_session_start_prints_the_layout_line_once(tmp_path: Path, runtime: str) -> None:
+    script = _rendered_wrapper(tmp_path / "plugin", runtime)
+    repo = _v08_repo(tmp_path / "v08")
+    subfolder = repo / "src"
+    subfolder.mkdir()
+    env = _recording_env(tmp_path)
+
+    for cwd in (repo, subfolder):
+        result = _run(script, "session_start", {"cwd": str(cwd)}, cwd=cwd, env=env)
+        assert (result.returncode, result.stdout, result.stderr) == (
+            0,
+            f"{V08_LAYOUT_MESSAGE}\n",
+            "",
+        ), cwd
+    assert _calls(tmp_path) == []
+    assert _health(repo) == []
+
+
+@pytest.mark.parametrize("runtime", _RUNTIMES)
+@pytest.mark.parametrize("event", _V08_QUIET_EVENTS)
+def test_v08_tool_and_prompt_events_stand_down_silently(
+    tmp_path: Path, runtime: str, event: str
+) -> None:
+    script = _rendered_wrapper(tmp_path / "plugin", runtime)
+    repo = _v08_repo(tmp_path / "v08")
+    payload = {"cwd": str(repo), "tool_name": "Bash", "prompt": "/eawf:plan x"}
+
+    result = _run(script, event, payload, cwd=repo, env=_recording_env(tmp_path))
+
+    assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
+    assert _calls(tmp_path) == []
+    assert _health(repo) == []
+
+
+@pytest.mark.parametrize("runtime", _RUNTIMES)
+@pytest.mark.parametrize("layout", ["state-and-generations", "v07-state-json", "state-file"])
+def test_v08_probe_leaves_other_layouts_as_before(
+    tmp_path: Path, runtime: str, layout: str
+) -> None:
+    """Only a .ea/state directory beside no generations stands down; the rest run as before."""
+    script = _rendered_wrapper(tmp_path / "plugin", runtime)
+    repo = _scratch_repo(tmp_path / "repo")
+    ea = repo / ".ea"
+    ea.mkdir()
+    if layout == "state-and-generations":
+        (ea / "state").mkdir()
+        (ea / "generations").mkdir()
+        (ea / "generations" / "EPOCH2_ACTIVE.json").write_text("{}", encoding="utf-8")
+    elif layout == "v07-state-json":
+        (ea / "state.json").write_text("{}", encoding="utf-8")
+    else:
+        (ea / "state").write_text("", encoding="utf-8")
+        (ea / "state.json").write_text("{}", encoding="utf-8")
+    env = _recording_env(tmp_path)
+
+    for event in ("session_start", "pre_tool_use"):
+        result = _run(script, event, {"cwd": str(repo)}, cwd=repo, env=env)
+        assert (result.returncode, result.stdout) == (0, ""), event
+    assert [line for line in _calls(tmp_path) if line.startswith("eawf ")] == [
+        f"eawf -w {repo} hook run {event} --runtime {runtime}"
+        for event in ("session_start", "pre_tool_use")
+    ]
+
+
+def test_v08_layout_line_has_one_owner() -> None:
+    source = files("eawf.platform.templates.claude").joinpath("hook.sh.j2").read_text("utf-8")
+    assert V08_LAYOUT_MESSAGE not in source
+    assert "or later" not in source
+    for runtime in _RUNTIMES:
+        assert V08_LAYOUT_MESSAGE.encode() in render_hook_wrapper(runtime=runtime).encode()
+
+
+@pytest.mark.parametrize("runtime", _RUNTIMES)
+@pytest.mark.parametrize("event", ["pre_tool_use", "user_prompt_submit", "session_start"])
+def test_v08_tree_found_by_the_guard_walk_stands_down(
+    tmp_path: Path, runtime: str, event: str
+) -> None:
+    """A clone nested in a 0.8 tree reaches no eawf; only the cwd's own tree prints the line."""
+    script = _rendered_wrapper(tmp_path / "plugin", runtime)
+    repo = _v08_repo(tmp_path / "v08")
+    nested = _scratch_repo(repo / "vendor" / "clone")
+    payload = {"cwd": str(nested), "tool_name": "Bash", "prompt": "/eawf:plan x"}
+
+    result = _run(script, event, payload, cwd=nested, env=_recording_env(tmp_path))
+
+    assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
+    assert _calls(tmp_path) == []
+    assert _health(repo) == []
+
+
+@pytest.mark.parametrize("runtime", _RUNTIMES)
+def test_v08_project_dir_outside_git_stands_down(tmp_path: Path, runtime: str) -> None:
+    script = _rendered_wrapper(tmp_path / "plugin", runtime)
+    repo = _v08_repo(tmp_path / "v08")
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    env = {**_recording_env(tmp_path), "CLAUDE_PROJECT_DIR": str(repo)}
+
+    result = _run(script, "pre_tool_use", {"cwd": str(plain)}, cwd=plain, env=env)
+
+    assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
+    assert _calls(tmp_path) == []
+    assert _health(repo) == []
+
+
+@pytest.mark.parametrize("runtime", _RUNTIMES)
+def test_v08_tree_keeps_a_nested_managed_clone_running(tmp_path: Path, runtime: str) -> None:
+    script = _rendered_wrapper(tmp_path / "plugin", runtime)
+    repo = _v08_repo(tmp_path / "v08")
+    nested = _scratch_repo(repo / "vendor" / "clone")
+    (nested / ".ea").mkdir()
+    (nested / ".ea" / "state.json").write_text("{}", encoding="utf-8")
+    env = _recording_env(tmp_path)
+
+    for event in ("pre_tool_use", "user_prompt_submit"):
+        result = _run(script, event, {"cwd": str(nested)}, cwd=nested, env=env)
+        assert (result.returncode, result.stdout) == (0, ""), event
+    assert [line for line in _calls(tmp_path) if line.startswith("eawf ")] == [
+        f"eawf -w {nested} hook run {event} --runtime {runtime}"
+        for event in ("pre_tool_use", "user_prompt_submit")
+    ]

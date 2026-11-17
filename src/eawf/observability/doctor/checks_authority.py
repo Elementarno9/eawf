@@ -12,13 +12,20 @@ The verdict per gap follows what the gap means for the next native write:
   tree still runs on epoch 1 although one of the two files says otherwise.
 - A marker that does not parse is broken (``fail``): nobody can say which
   generation the tree would read from.
+- A tree in the eawf 0.8 layout is unreadable by this release (``fail``):
+  the row names the layout instead of reporting an undeclared epoch 1.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
+from eawf.kernel.migration.epoch2.canary import (
+    GENERATIONS_DIRNAME,
+    MARKER_FILENAME,
+    V08_LAYOUT_MESSAGE,
+    uses_v08_layout,
+)
 from eawf.kernel.state.epoch2.authority import AuthorityGap, resolve_authority
 from eawf.observability.doctor.models import CheckResult
 
@@ -38,6 +45,8 @@ def check_authority_epoch(*, workspace: Path | None) -> CheckResult:
     if workspace is None:
         return CheckResult(name=CHECK_NAME, status="ok", detail="no workspace anchor")
     root = Path(workspace) / ".ea"
+    if uses_v08_layout(root):
+        return CheckResult(name=CHECK_NAME, status="fail", detail=V08_LAYOUT_MESSAGE)
     authority = resolve_authority(root)
     if authority.gap is None:
         return CheckResult(

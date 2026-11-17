@@ -7,6 +7,10 @@ group resolves the command path before any handler runs and refuses, on a
 0.6 tree, every verb of a contract group the effect table classifies as
 writing, and the console, whose views read only a generation. A read verb
 still answers there and reports the tree as epoch 1.
+
+A tree in the eawf 0.8 layout is refused outright, read verbs included, with
+the line that names the newer client; only help, the version, the hooks, the
+status lines and doctor still answer there.
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ import logging
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, NoReturn
 
 import click
 
@@ -110,6 +114,28 @@ def refuses(verb: str, *, bare: bool) -> bool:
     )
 
 
+#: Command paths a tree in the eawf 0.8 layout still answers: help and the
+#: version, the hooks a host fires on every event, the status lines it polls,
+#: and doctor, which names the layout as its finding. A path matches an entry
+#: equal to it or nested under it.
+_V08_EXEMPT_VERBS: Final = ("help", "version", "hook", "cc statusline", "statusline", "doctor")
+
+#: The next step a refused 0.8 tree is given in place of the 0.6 upgrade path.
+_V08_NEXT_STEP: Final = "install eawf 0.8 or later, then run the command again"
+
+
+def v08_exempt(verb: str) -> bool:
+    """Return whether the command path ``verb`` still answers on a 0.8-layout tree.
+
+    Args:
+        verb: The space-joined path after ``eawf``; empty for a bare ``eawf``.
+
+    Returns:
+        ``True`` when ``verb`` is, or is nested under, an exempt path.
+    """
+    return any(verb == entry or verb.startswith(f"{entry} ") for entry in _V08_EXEMPT_VERBS)
+
+
 def addressed_document(
     verb: str, workspace: Path | None, environ: Mapping[str, str]
 ) -> Path | None:
@@ -118,9 +144,9 @@ def addressed_document(
     A verb of :data:`REPO_ROOTED_GROUPS` addresses the ``--workspace`` root or
     the working directory. Every other verb follows the state resolver's
     precedence: ``EA_STATE``, then the ``--workspace`` root, then the first
-    ``.ea`` above the working directory that holds ``state.json`` or the epoch
-    marker. Only file existence is asked, so the check costs one walk of
-    ``stat`` calls.
+    ``.ea`` above the working directory that holds ``state.json``, the epoch
+    marker or the eawf 0.8 layout. Only file existence is asked, so the check
+    costs one walk of ``stat`` calls.
 
     Args:
         verb: The space-joined command path after ``eawf``.
@@ -131,6 +157,7 @@ def addressed_document(
         The document path, which need not exist, or ``None`` when the walk
         finds no tree.
     """
+    from eawf.kernel.migration.epoch2.canary import uses_v08_layout
     from eawf.kernel.state.io import epoch_marker_present
 
     if verb.split(" ", 1)[0] in REPO_ROOTED_GROUPS:
@@ -142,7 +169,11 @@ def addressed_document(
     cwd = Path.cwd().resolve()
     for directory in (cwd, *cwd.parents):
         ea_dir = directory / ".ea"
-        if (ea_dir / "state.json").exists() or epoch_marker_present(ea_dir):
+        if (
+            (ea_dir / "state.json").exists()
+            or epoch_marker_present(ea_dir)
+            or uses_v08_layout(ea_dir)
+        ):
             return ea_dir / "state.json"
     return None
 
@@ -162,8 +193,42 @@ def is_unmigrated_tree(state_path: Path) -> bool:
     return state_path.is_file() and not epoch_marker_present(state_path.parent)
 
 
+def _refuse_v08_tree(verb: str, flags: GlobalFlags) -> NoReturn:
+    """Emit the 0.8-layout refusal and exit with the migration-required code.
+
+    The envelope keeps the 0.6 refusal's kind, error code and exit code, but
+    its hint names the newer client: the bucket's default hint describes the
+    0.6 upgrade path, which would send a 0.8 user backwards.
+
+    Args:
+        verb: The refused command path, for the log line.
+        flags: The output flags the envelope renders under.
+
+    Raises:
+        typer.Exit: Always, with the migration-required exit code.
+    """
+    import typer
+
+    from eawf.kernel.migration.epoch2.canary import V08_LAYOUT_MESSAGE
+    from eawf.surfaces.cli.output import emit_json_or_text
+
+    logger.info(f"upgrade_refusal refused verb={verb!r} layout=v08")
+    err = cli_errors.MigrationRequired(V08_LAYOUT_MESSAGE, kind=MIGRATION_REQUIRED_KIND)
+    env = cli_errors.build_envelope(err, error_code=ErrorCode.MIGRATION_REQUIRED).model_copy(
+        update={"suggested_next_step": _V08_NEXT_STEP}
+    )
+    emit_json_or_text(
+        env.model_dump(mode="json", exclude_none=False), cli_errors._render_text(env), flags=flags
+    )
+    raise typer.Exit(err.exit_code)
+
+
 def enforce(root: click.Group, ctx: click.Context, args: list[str]) -> None:
-    """Refuse a writing verb or the console aimed at a 0.6 tree, else return.
+    """Refuse a verb a tree cannot serve, else return.
+
+    A tree in the eawf 0.8 layout refuses every verb outside the exempt
+    paths, read verbs included: this release cannot read it at all. A 0.6
+    tree refuses the console and every writing verb.
 
     Args:
         root: The root group.
@@ -174,15 +239,27 @@ def enforce(root: click.Group, ctx: click.Context, args: list[str]) -> None:
         typer.Exit: With the migration-required exit code, after the
             error envelope is emitted.
     """
+    from eawf.kernel.migration.epoch2.canary import uses_v08_layout
+
     if "--help" in args:
         return
     verb = command_path(root, ctx, args)
-    if not refuses(verb, bare=not args):
+    exempt = v08_exempt(verb)
+    refused_on_06 = refuses(verb, bare=not args)
+    if exempt and not refused_on_06:
         return
     params: dict[str, Any] = ctx.params
     workspace = params.get("workspace")
     state_path = addressed_document(verb, Path(workspace) if workspace else None, os.environ)
-    if state_path is None or not is_unmigrated_tree(state_path):
+    if state_path is None:
+        return
+    flags = GlobalFlags(
+        json_output=bool(params.get("json_output")),
+        plain_output=bool(params.get("plain_output")),
+    )
+    if not exempt and uses_v08_layout(state_path.parent):
+        _refuse_v08_tree(verb or CONSOLE_VERB, flags)
+    if not refused_on_06 or not is_unmigrated_tree(state_path):
         return
     shown = verb or CONSOLE_VERB
     logger.info(f"upgrade_refusal refused verb={shown!r} tree={state_path.parent.name}")
@@ -192,10 +269,7 @@ def enforce(root: click.Group, ctx: click.Context, args: list[str]) -> None:
             f"`eawf {shown}` was refused and nothing was written; {UPGRADE_STEPS}",
             kind=MIGRATION_REQUIRED_KIND,
         ),
-        flags=GlobalFlags(
-            json_output=bool(params.get("json_output")),
-            plain_output=bool(params.get("plain_output")),
-        ),
+        flags=flags,
         error_code=ErrorCode.MIGRATION_REQUIRED,
     )
 
@@ -204,7 +278,7 @@ class UpgradeRefusalTyperGroup(RegistryOrderedTyperGroup):
     """The root group: runs :func:`enforce` before any subcommand resolves."""
 
     def invoke(self, ctx: click.Context) -> Any:
-        """Refuse a writing verb aimed at a 0.6 tree, then dispatch as usual."""
+        """Refuse a verb the addressed tree cannot serve, then dispatch as usual."""
         enforce(self, ctx, [*ctx._protected_args, *ctx.args])
         return super().invoke(ctx)
 
@@ -220,4 +294,5 @@ __all__ = [
     "enforce",
     "is_unmigrated_tree",
     "refuses",
+    "v08_exempt",
 ]

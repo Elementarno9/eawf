@@ -18,12 +18,19 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
+from eawf.kernel.migration.epoch2.canary import (
+    GENERATIONS_DIRNAME,
+    MARKER_FILENAME,
+    V08_LAYOUT_MESSAGE,
+)
+from eawf.observability.doctor.checks_authority import check_authority_epoch
+from eawf.platform.install.instrument_probe import PROBE_VERSION, ProbeReport, ProbeResult
 from eawf.surfaces.cli import exit_codes, upgrade_refusal
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.error_codes import ErrorCode
 from eawf.surfaces.cli.verb_contract import CONTRACT_GROUPS
 from eawf.surfaces.cli.verb_effects import CLI_VERB_EFFECTS
+from tests._epoch2_helpers import lay_epoch2_tree
 
 pytestmark = pytest.mark.integration
 
@@ -224,3 +231,166 @@ def test_addressed_document_is_none_where_no_tree_is_found(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     assert upgrade_refusal.addressed_document("status", None, {}) is None
+
+
+# ---- a tree in the eawf 0.8 layout --------------------------------------------
+
+
+@pytest.fixture
+def v08_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A tree in the eawf 0.8 layout: ``.ea/state/`` and no ``.ea/generations``."""
+    root = tmp_path / "repo"
+    (root / ".ea" / "state").mkdir(parents=True)
+    monkeypatch.delenv("EA_STATE", raising=False)
+    monkeypatch.chdir(root)
+    return root
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["status"],
+        ["task", "list"],
+        ["decision", "list"],
+        ["task", "create"],
+        ["config", "set"],
+        ["ui"],
+        ["no-such-verb"],
+    ],
+)
+def test_rel_021_v08_tree_refuses_read_and_write_verbs(v08_tree: Path, argv: list[str]) -> None:
+    before = _digest(v08_tree)
+    result = runner.invoke(app, ["--json", *argv])
+    assert result.exit_code == exit_codes.ATTACH_FAILURE, result.output
+    envelope = json.loads(result.output)
+    assert envelope["message"] == V08_LAYOUT_MESSAGE
+    assert envelope["data"]["kind"] == upgrade_refusal.MIGRATION_REQUIRED_KIND
+    assert envelope["error_code"] == ErrorCode.MIGRATION_REQUIRED.value
+    assert "0.7.0rc4" not in envelope["suggested_next_step"]
+    assert _digest(v08_tree) == before
+
+
+def test_rel_021_v08_refusal_prints_the_line_as_text(v08_tree: Path) -> None:
+    result = runner.invoke(app, ["status"])
+    assert result.exit_code == exit_codes.ATTACH_FAILURE
+    assert V08_LAYOUT_MESSAGE in result.output
+    assert "epoch 1 (undeclared)" not in result.output
+    assert "0.7.0rc4" not in result.output
+
+
+def test_rel_021_v08_bare_invocation_refuses(v08_tree: Path) -> None:
+    result = runner.invoke(app, [])
+    assert result.exit_code == exit_codes.ATTACH_FAILURE
+    assert V08_LAYOUT_MESSAGE in result.output
+
+
+def test_rel_021_v08_tree_found_from_a_subdirectory(
+    v08_tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sub = v08_tree / "src" / "pkg"
+    sub.mkdir(parents=True)
+    monkeypatch.chdir(sub)
+    result = runner.invoke(app, ["--json", "status"])
+    assert result.exit_code == exit_codes.ATTACH_FAILURE, result.output
+    assert json.loads(result.output)["message"] == V08_LAYOUT_MESSAGE
+
+
+def test_rel_021_v08_workspace_flag_addresses_the_tree(
+    v08_tree: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    for argv in (["status"], ["task", "list"]):
+        result = runner.invoke(app, ["--json", "--workspace", str(v08_tree), *argv])
+        assert result.exit_code == exit_codes.ATTACH_FAILURE, result.output
+        assert json.loads(result.output)["message"] == V08_LAYOUT_MESSAGE
+
+
+@pytest.mark.parametrize(
+    ("argv", "stdin"),
+    [
+        (["--help"], None),
+        (["--version"], None),
+        (["help"], None),
+        (["version"], None),
+        (["task", "list", "--help"], None),
+        (["hook", "run", "user_prompt_submit", "--runtime", "claude"], "{}"),
+        (["hook", "path-leak-lint", "--help"], None),
+        (["cc", "statusline"], "{}"),
+        (["statusline", "doctor"], None),
+    ],
+)
+def test_rel_021_v08_exempt_verbs_still_answer(
+    v08_tree: Path, argv: list[str], stdin: str | None
+) -> None:
+    result = runner.invoke(app, argv, input=stdin)
+    assert result.exit_code != exit_codes.ATTACH_FAILURE, result.output
+    assert upgrade_refusal.MIGRATION_REQUIRED_KIND not in result.output
+    assert V08_LAYOUT_MESSAGE not in result.output
+
+
+def test_rel_021_v08_doctor_fails_the_authority_row(
+    v08_tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def green_probe(*_args: object, **_kwargs: object) -> ProbeReport:
+        tools = ("git", "python", "uv")
+        return ProbeReport(
+            probe_version=PROBE_VERSION,
+            profile_ids=["core"],
+            results=[ProbeResult(name=t, kind="hard", status="ok", path=t) for t in tools],
+        )
+
+    # Pin the tool probes so the verdict reflects the tree, not the host.
+    monkeypatch.setattr("eawf.observability.doctor.checks.probe", green_probe)
+    result = runner.invoke(app, ["--json", "doctor"])
+    assert result.exit_code != exit_codes.ATTACH_FAILURE, result.output
+    body = json.loads(result.output)
+    rows = {row["name"]: row for row in body["checks"]}
+    assert rows["authority_epoch"]["status"] == "fail"
+    assert rows["authority_epoch"]["detail"] == V08_LAYOUT_MESSAGE
+    assert "epoch 1 (undeclared)" not in result.output
+    assert body["status"] == "fail"
+    assert result.exit_code == 1
+
+
+def test_rel_021_v08_doctor_row_boundaries(tmp_path: Path) -> None:
+    assert check_authority_epoch(workspace=None).status == "ok"
+    (tmp_path / ".ea").mkdir()
+    plain = check_authority_epoch(workspace=tmp_path)
+    assert (plain.status, plain.detail) == ("ok", "epoch 1 (undeclared)")
+    (tmp_path / ".ea" / "state").mkdir()
+    v08 = check_authority_epoch(workspace=tmp_path)
+    assert (v08.status, v08.detail) == ("fail", V08_LAYOUT_MESSAGE)
+    (tmp_path / ".ea" / GENERATIONS_DIRNAME).mkdir()
+    assert check_authority_epoch(workspace=tmp_path).detail != V08_LAYOUT_MESSAGE
+
+
+def test_rel_021_v08_rule_spares_a_07_tree_and_an_unmanaged_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("EA_STATE", raising=False)
+    native = tmp_path / "native"
+    lay_epoch2_tree(native)
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    for root in (native, bare):
+        monkeypatch.chdir(root)
+        result = runner.invoke(app, ["status"])
+        assert result.exit_code != exit_codes.ATTACH_FAILURE, result.output
+        assert V08_LAYOUT_MESSAGE not in result.output
+
+
+def test_rel_021_v08_state_file_is_not_the_08_layout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("EA_STATE", raising=False)
+    (tmp_path / ".ea").mkdir()
+    (tmp_path / ".ea" / "state").write_text("{}")
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["status"])
+    assert V08_LAYOUT_MESSAGE not in result.output
+
+
+def test_rel_021_v08_addressed_document_walks_to_an_08_tree(v08_tree: Path) -> None:
+    found = upgrade_refusal.addressed_document("status", None, {})
+    assert found == (v08_tree / ".ea" / "state.json").resolve()
