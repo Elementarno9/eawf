@@ -5,7 +5,9 @@ squash library, which writes the branch's commits again as one commit per Batch
 plus a trailing ``state:`` commit on a new branch, never moving the source
 branch, and writes the map from each source commit to the commit now carrying
 it. ``batch rebind`` sends that map to the daemon, which supersedes every
-ledger row still naming a source commit. Neither pushes.
+ledger row still naming a source commit. ``batch rebind-rewritten`` does the
+same for a history rewritten in place, from a git filter-repo commit map.
+None of them pushes.
 """
 
 from __future__ import annotations
@@ -43,9 +45,17 @@ _MAP_FILE_HELP: Final = "The map batch squash wrote; the branch must point at it
 _KEY_HELP: Final = "Caller's name for this request; a retry replays its receipt."
 _ACTOR_HELP: Final = "Principal key the request is attributed to."
 
+_REWRITE_MAP_HELP: Final = (
+    "A git filter-repo commit map: a header line 'old new', then one pair of full hashes per line."
+)
+_DRY_RUN_HELP: Final = "Print the counts a real run would, writing nothing."
+
 #: The daemon verb ``batch rebind`` sends, spelled here so the Typer tree builds
 #: without the daemon method registry on the path.
 DELIVERY_REBIND_SQUASHED: Final = "runtime.delivery.rebind_squashed"
+
+#: The daemon verb ``batch rebind-rewritten`` sends, spelled here for the same reason.
+DELIVERY_REBIND_REWRITTEN: Final = "runtime.delivery.rebind_rewritten"
 
 
 @batch_app.command("squash")
@@ -156,3 +166,49 @@ def batch_rebind_cmd(
     )
     if answer is not None:
         _answer(ctx, answer, operation=DELIVERY_REBIND_SQUASHED, urn=subject, revision=None)
+
+
+@batch_app.command("rebind-rewritten")
+def batch_rebind_rewritten_cmd(
+    ctx: typer.Context,
+    map_file: Annotated[Path, typer.Option("--map-file", help=_REWRITE_MAP_HELP)],
+    idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
+    actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
+    dry_run: Annotated[bool, typer.Option("--dry-run", help=_DRY_RUN_HELP)] = False,
+) -> None:
+    """Supersede every ledger row naming a commit a history rewrite replaced.
+
+    Run it after rewriting history in place, such as author fields, with every
+    tree kept. The daemon confirms each new commit exists and keeps its tree,
+    appends one superseding row per ledger line naming an old commit and
+    records each applied pair in .ea/store/rewrite_map.jsonl.
+    """
+    from eawf.surfaces.cli.commands.domain_integration import _answer, _send
+    from eawf.workflow.integration.rebind import RewriteMapError, load_rewrite_map
+
+    try:
+        rewrite_map = load_rewrite_map(map_file)
+    except RewriteMapError as exc:
+        cli_errors.emit_error(
+            cli_errors.UserError(str(exc), kind="rewrite_map_invalid"), flags=ctx.obj
+        )
+        return
+    except OSError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=ctx.obj)
+        return
+    subject = str(map_file)
+    answer = _send(
+        ctx,
+        DELIVERY_REBIND_REWRITTEN,
+        {
+            "actor": actor,
+            "idempotency_key": idempotency_key,
+            "rewrite_map": rewrite_map.model_dump(mode="json"),
+            "dry_run": dry_run,
+        },
+        urn=subject,
+        verb_text="batch rebind-rewritten",
+        key=idempotency_key,
+    )
+    if answer is not None:
+        _answer(ctx, answer, operation=DELIVERY_REBIND_REWRITTEN, urn=subject, revision=None)

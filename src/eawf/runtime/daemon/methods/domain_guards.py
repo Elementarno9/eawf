@@ -606,12 +606,28 @@ def _host_merge_observed(inputs: GuardInputs) -> bool:
 
 
 def _reconciliation_matched(inputs: GuardInputs) -> bool:
-    """Return whether the landed commit is the exact head the Batch pinned."""
+    """Return whether the landed commit is the exact head the Batch pinned.
+
+    Both commits are compared as a recorded history rewrite resolves them, so
+    a pinned head the rewrite replaced matches its replacement. The document
+    sits at ``<tree_root>/generations/<generation>/state.json``.
+
+    Raises:
+        DaemonValidationError: ``rewrite_map_invalid``: the record of rewrite
+            pairs is malformed or cyclic.
+    """
     landed = _landed_reconciliation(inputs)
     if landed is None or not isinstance(inputs.record, DeliveryBatch):
         return False
     binding = inputs.record.current_head_binding
-    return binding is not None and landed.matched_head_sha == binding.head_sha
+    if binding is None or landed.matched_head_sha is None:
+        return False
+    # Imported here: the delivery verbs import these guards.
+    from eawf.runtime.daemon.methods.delivery_rebind import recorded_rewrites
+
+    rewritten = recorded_rewrites(inputs.document_path.parents[2])
+    matched, pinned = landed.matched_head_sha, binding.head_sha
+    return rewritten.get(matched, matched) == rewritten.get(pinned, pinned)
 
 
 def _reason_recorded(inputs: GuardInputs) -> bool:

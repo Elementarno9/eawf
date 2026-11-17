@@ -128,6 +128,7 @@ _KEPT_STORES = (
     "release_checkpoint_receipt",
     "release_train_advance",
     "conformance_stage",
+    "rewrite_map",
 )
 
 

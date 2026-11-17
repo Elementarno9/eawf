@@ -1,7 +1,8 @@
-"""Which Batch a ledger row is rebound through, and what a document still names."""
+"""Which Batch a ledger row is rebound through, what a document still names, and rewrite maps."""
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -10,14 +11,28 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.runtime.content import StoredContent
-from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record
+from eawf.kernel.store.ledger import (
+    LedgerRecord,
+    append_ledger_record,
+    line_digest,
+    render_ledger_line,
+)
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.workflow.integration.rebind import (
+    REWRITE_MAP_INVALID,
     RebindDropError,
+    RewriteMap,
+    RewriteMapError,
+    append_rewrite_pairs,
     document_mentions,
+    load_rewrite_map,
     only_commits_rebound,
+    pairs_to_record,
     plan_rebind,
+    read_rewrite_pairs,
+    recorded_hashes,
+    rewrite_map_path,
     row_batch,
 )
 from eawf.workflow.integration.squash import SquashMap
@@ -229,3 +244,147 @@ def test_a_head_and_tree_pair_that_is_no_exact_binding_keeps_its_tree(tmp_path: 
     binding = {"head_sha": OLD, "tree_sha": "f" * 40}
 
     assert _rebound_binding(tmp_path, binding) == {"head_sha": NEW, "tree_sha": "f" * 40}
+
+
+# ---- a history-rewrite map in git filter-repo format ----------------------------
+
+TWIN, KEPT = "c" * 40, "d" * 40
+HEADER = "old                                      new\n"
+
+
+def _map_file(tmp_path: Path, body: str, header: str = HEADER) -> Path:
+    path = tmp_path / "commit-map"
+    path.write_text(header + body, encoding="utf-8")
+    return path
+
+
+def test_rewrite_map_loads_many_to_one_and_identity_pairs(tmp_path: Path) -> None:
+    path = _map_file(tmp_path, f"{OLD} {NEW}\n{TWIN}\t{NEW}\n{KEPT} {KEPT}\n")
+
+    assert load_rewrite_map(path) == RewriteMap(commits={OLD: NEW, TWIN: NEW, KEPT: KEPT})
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [("", {}), (f"{OLD} {NEW}\n", {OLD: NEW}), (f"{OLD} {NEW}", {OLD: NEW})],
+    ids=["header-only", "single", "no-trailing-newline"],
+)
+def test_rewrite_map_boundaries(tmp_path: Path, body: str, expected: dict[str, str]) -> None:
+    assert load_rewrite_map(_map_file(tmp_path, body)).commits == expected
+
+
+@pytest.mark.parametrize(
+    ("header", "body", "line", "reason"),
+    [
+        ("", "", 1, "header"),
+        ("new old\n", "", 1, "header"),
+        (HEADER, f"{OLD}\n", 2, "two full"),
+        (HEADER, f"{OLD} {NEW} {TWIN}\n", 2, "two full"),
+        (HEADER, f"{OLD} {NEW[:-1]}\n", 2, "two full"),
+        (HEADER, f"{OLD.upper()} {NEW}\n", 2, "two full"),
+        (HEADER, f"{OLD} {NEW}\n\n{TWIN} {NEW}\n", 3, "two full"),
+        (HEADER, f"{OLD} {NEW}\n{TWIN} {NEW}\n{OLD} {KEPT}\n", 4, "repeat"),
+        (HEADER, f"{OLD} {'0' * 40}\n", 2, "zero"),
+    ],
+    ids=[
+        "empty-file",
+        "wrong-header",
+        "one-hash",
+        "three-hashes",
+        "short-hash",
+        "uppercase",
+        "blank-line",
+        "repeated-old",
+        "zero-new",
+    ],
+)
+def test_rewrite_map_refuses_naming_the_line(
+    tmp_path: Path, header: str, body: str, line: int, reason: str
+) -> None:
+    with pytest.raises(RewriteMapError, match=f"{REWRITE_MAP_INVALID}: line {line}: .*{reason}"):
+        load_rewrite_map(_map_file(tmp_path, body, header))
+
+
+def test_rewrite_map_model_is_closed_and_refuses_a_zero_hash() -> None:
+    with pytest.raises(ValidationError, match="extra"):
+        RewriteMap.model_validate({"commits": {}, "head": NEW})
+    with pytest.raises(ValidationError, match="zero"):
+        RewriteMap(commits={OLD: "0" * 40})
+    with pytest.raises(ValidationError):
+        RewriteMap(commits={OLD: NEW[:-1]})
+    with pytest.raises(ValidationError):
+        RewriteMap.model_validate({"commits": "x"})
+
+
+def test_rewrite_map_plans_commit_by_commit_ignoring_batches(tmp_path: Path) -> None:
+    state = tmp_path / "state.json"
+    batch = _record(Epoch2Collection.BATCH, "BAT-0007", {"key": "BAT-0007", "head_sha": OLD})
+    append_ledger_record(ledger_path(state, Epoch2Collection.BATCH), batch)
+    evidence = _record(Epoch2Collection.EVIDENCE, "EV-1", {"summary": f"saw {TWIN} and {KEPT}"})
+    append_ledger_record(ledger_path(state, Epoch2Collection.EVIDENCE), evidence)
+
+    rows = plan_rebind(
+        state,
+        RewriteMap(commits={OLD: NEW, TWIN: NEW, KEPT: KEPT}),
+        TASKS,
+        trees={NEW: NEW_TREE},
+        parents={},
+        recorded_at=datetime(2026, 11, 17, tzinfo=UTC),
+    )
+
+    assert [row.record.payload for row in rows] == [
+        {"key": "BAT-0007", "head_sha": NEW},
+        {"summary": f"saw {NEW} and {KEPT}"},
+    ]
+    assert [row.batch_key for row in rows] == [None, None]
+    assert rows[1].rebinds == {TWIN: NEW}
+
+
+def test_recorded_hashes_reads_effective_lines_of_every_ledger(tmp_path: Path) -> None:
+    state = tmp_path / "state.json"
+    assert recorded_hashes(state) == frozenset()
+    first = _record(Epoch2Collection.RECEIPT, "PRF-1", {"head_sha": OLD, "digest": "e" * 64})
+    path = ledger_path(state, Epoch2Collection.RECEIPT)
+    append_ledger_record(path, first)
+    assert recorded_hashes(state) == frozenset({OLD})
+    append_ledger_record(
+        path,
+        first.model_copy(
+            update={
+                "payload": {"head_sha": NEW},
+                "supersedes": line_digest(render_ledger_line(first)),
+            }
+        ),
+    )
+
+    assert recorded_hashes(state) == frozenset({NEW})
+
+
+AT_PAIR = datetime(2026, 11, 17, 9, 30, tzinfo=UTC)
+
+
+def test_rewrite_pairs_append_once_and_read_back(tmp_path: Path) -> None:
+    path = rewrite_map_path(tmp_path / ".ea")
+    rewrite_map = RewriteMap(commits={OLD: NEW, TWIN: NEW, KEPT: KEPT})
+    assert read_rewrite_pairs(path) == ()
+
+    first = pairs_to_record(rewrite_map, read_rewrite_pairs(path), at=AT_PAIR)
+    append_rewrite_pairs(path, first)
+    again = pairs_to_record(rewrite_map, read_rewrite_pairs(path), at=AT_PAIR)
+
+    assert path == tmp_path / ".ea" / "store" / "rewrite_map.jsonl"
+    assert [(pair.old, pair.new) for pair in first] == [(OLD, NEW), (TWIN, NEW)]
+    assert again == ()
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert [sorted(json.loads(line)) for line in lines] == [["applied_at", "new", "old"]] * 2
+    assert read_rewrite_pairs(path) == first
+
+
+def test_a_rewrite_pair_line_is_closed(tmp_path: Path) -> None:
+    path = rewrite_map_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"old": OLD, "new": NEW, "applied_at": "x", "extra": 1}) + "\n")
+
+    with pytest.raises(RewriteMapError, match="rewrite_map_invalid: line 1") as caught:
+        read_rewrite_pairs(path)
+    assert isinstance(caught.value.__cause__, ValidationError)

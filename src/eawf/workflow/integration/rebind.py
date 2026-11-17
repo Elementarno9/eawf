@@ -16,6 +16,11 @@ binding's ``parent_sha`` becomes the new head's parent, and an exact revision
 binding's ``tree_sha`` its tree. A proof receipt keeps its ``tree_sha``,
 because the freshness key covers it and the gate ran on that tree.
 
+A history rewrite in place -- author fields rewritten, every tree kept -- gives
+every commit a new hash. Its :class:`RewriteMap`, read from a git filter-repo
+commit map, is planned the same way, commit by commit: it names no Batch commit
+to rebind a row through.
+
 Planning reads and never writes; the daemon verb applying the plan verifies
 the rewritten commits first.
 """
@@ -23,22 +28,32 @@ the rewritten commits first.
 from __future__ import annotations
 
 import json
+import os
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Final
 
+from pydantic import AwareDatetime, BaseModel, ConfigDict, ValidationError, field_validator
+
 from eawf.kernel.runtime.content import CONTENT_LINE_CHARS
+from eawf.kernel.state.models import ShaStr
+from eawf.kernel.store.commit_policy import CommitPolicy, ledger_row_policy
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     line_digest,
     read_ledger_content,
     split_ledger_lines,
 )
-from eawf.kernel.store.paths import ledger_path
-from eawf.kernel.store.tiers import Epoch2Collection, StorageTier, tier_for
+from eawf.kernel.store.paths import LEDGER_DIRNAME, LOCAL_DIRNAME, seed_ledger_path
+from eawf.kernel.store.tiers import (
+    STATUS_PROJECTION_COLLECTIONS,
+    Epoch2Collection,
+    StorageTier,
+    tier_for,
+)
 from eawf.workflow.integration.squash import SquashMap
 
 #: A full commit SHA, delimited so a 64-hex digest never yields a match.
@@ -53,6 +68,275 @@ DROPPED_LINE: Final = "this line named a commit no published branch carries and 
 #: The member every exact revision binding carries beside the head it binds,
 #: a Task's integrated binding included, which may omit its digests.
 _EXACT_BINDING_MARK: Final = "policy_revision"
+
+#: Refusal: a commit-map file is not a git filter-repo commit map.
+REWRITE_MAP_INVALID: Final = "rewrite_map_invalid"
+
+#: What git filter-repo writes for a commit it pruned; no commit has this hash.
+_ZERO_SHA: Final = "0" * 40
+
+_FULL_SHA_RE: Final = re.compile(r"[0-9a-f]{40}")
+
+
+class RewriteMapError(ValueError):
+    """A commit-map file is not a git filter-repo commit map.
+
+    Attributes:
+        line: The 1-based line the file goes wrong on.
+    """
+
+    def __init__(self, line: int, reason: str) -> None:
+        """Name the line and why it is refused.
+
+        Args:
+            line: The 1-based line the file goes wrong on.
+            reason: What is wrong with it.
+        """
+        super().__init__(f"{REWRITE_MAP_INVALID}: line {line}: {reason}")
+        self.line = line
+
+
+class RewriteMap(BaseModel):
+    """Which commit each commit became when a history was rewritten in place.
+
+    Several old commits may name one new commit, where the rewrite made them
+    identical, and a commit the rewrite left alone names itself.
+
+    Attributes:
+        commits: Each old full commit hash mapped to its new full commit hash.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    commits: dict[ShaStr, ShaStr]
+
+    @field_validator("commits")
+    @classmethod
+    def _no_pruned_commit(cls, commits: dict[str, str]) -> dict[str, str]:
+        """Refuse an old commit mapped to the zero hash.
+
+        Args:
+            commits: Each old commit mapped to its new commit.
+
+        Returns:
+            *commits* unchanged.
+
+        Raises:
+            ValueError: A commit maps to the zero hash, so no commit stands for it.
+        """
+        pruned = sorted(old for old, new in commits.items() if new == _ZERO_SHA)
+        if pruned:
+            raise ValueError(f"{pruned[0]} maps to the zero hash; no commit stands for it")
+        return commits
+
+
+def load_rewrite_map(path: Path) -> RewriteMap:
+    """Read a git filter-repo commit map.
+
+    Args:
+        path: The file: a header line ``old`` and ``new`` separated by
+            whitespace, then one ``<old> <new>`` pair of full lowercase
+            commit hashes per line.
+
+    Returns:
+        The map.
+
+    Raises:
+        OSError: The file cannot be read.
+        RewriteMapError: The header is missing, a line is not two full hashes,
+            an old hash repeats, or a new hash is the zero hash.
+    """
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].split() != ["old", "new"]:
+        raise RewriteMapError(1, "the header is not 'old new'")
+    commits: dict[str, str] = {}
+    for number, line in enumerate(lines[1:], start=2):
+        pair = line.split()
+        if len(pair) != 2 or not all(_FULL_SHA_RE.fullmatch(sha) for sha in pair):
+            raise RewriteMapError(number, "the line is not two full lowercase commit hashes")
+        old, new = pair
+        if old in commits:
+            raise RewriteMapError(number, f"old commit {old} repeats an earlier line")
+        if new == _ZERO_SHA:
+            raise RewriteMapError(number, f"{old} maps to the zero hash of a pruned commit")
+        commits[old] = new
+    return RewriteMap(commits=commits)
+
+
+class RewritePair(BaseModel):
+    """One line of the committed record of applied rewrite pairs.
+
+    Attributes:
+        old: The commit the rewrite replaced.
+        new: The commit that replaced it.
+        applied_at: When the rebind that applied the pair ran.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    old: ShaStr
+    new: ShaStr
+    applied_at: AwareDatetime
+
+
+def rewrite_map_path(tree_root: Path) -> Path:
+    """Return the committed record of applied rewrite pairs of the ``.ea`` tree *tree_root*."""
+    return tree_root / "store" / "rewrite_map.jsonl"
+
+
+def parse_rewrite_pairs(content: bytes) -> tuple[RewritePair, ...]:
+    """Return every pair the record's bytes *content* hold, in file order.
+
+    Args:
+        content: The record's bytes; empty bytes hold no pair.
+
+    Returns:
+        The pairs.
+
+    Raises:
+        RewriteMapError: A line is not a rewrite pair: torn, not JSON, not
+            UTF-8, or missing, adding or mistyping a field.
+    """
+    pairs: list[RewritePair] = []
+    for number, line in enumerate(content.splitlines(), start=1):
+        try:
+            pairs.append(RewritePair.model_validate_json(line))
+        except ValidationError as exc:
+            raise RewriteMapError(
+                number, f"the line is not a rewrite pair ({exc.error_count()} error(s))"
+            ) from exc
+    return tuple(pairs)
+
+
+def read_rewrite_pairs(path: Path) -> tuple[RewritePair, ...]:
+    """Return every pair the record at *path* holds, in file order.
+
+    Args:
+        path: The record; a missing file reads as empty.
+
+    Returns:
+        The pairs.
+
+    Raises:
+        OSError: The record exists but cannot be read.
+        RewriteMapError: A line is not a rewrite pair.
+    """
+    if not path.is_file():
+        return ()
+    return parse_rewrite_pairs(path.read_bytes())
+
+
+def resolve_rewrite_pairs(pairs: Sequence[RewritePair]) -> dict[str, str]:
+    """Return each old commit of *pairs* mapped to the commit it finally became.
+
+    A commit rewritten twice is recorded twice, the second pair's old
+    commit being the first pair's new one, so each chain is followed to its
+    end. Where one old commit is recorded with two new commits, the later
+    pair wins, as the later rebind applied it.
+
+    Args:
+        pairs: The pairs in record order.
+
+    Returns:
+        The resolved map; empty for no pairs.
+
+    Raises:
+        RewriteMapError: The pairs form a cycle, so a commit has no end;
+            the line named is the 1-based position of the last pair whose
+            old commit is on the cycle.
+    """
+    direct = {pair.old: pair.new for pair in pairs}
+    line_of = {pair.old: number for number, pair in enumerate(pairs, start=1)}
+    resolved: dict[str, str] = {}
+    for old in direct:
+        chain, current = [old], direct[old]
+        while current in direct and current not in resolved:
+            if current in chain:
+                raise RewriteMapError(
+                    line_of[current], f"commit {current} is rewritten back into itself"
+                )
+            chain.append(current)
+            current = direct[current]
+        end = resolved.get(current, current)
+        resolved.update(dict.fromkeys(chain, end))
+    return resolved
+
+
+def rewritten_commits(tree_root: Path) -> dict[str, str]:
+    """Return each recorded old commit mapped to the commit it finally became.
+
+    Args:
+        tree_root: The repository's ``.ea`` directory.
+
+    Returns:
+        The map :func:`resolve_rewrite_pairs` resolves from the record;
+        empty when no record exists.
+
+    Raises:
+        OSError: The record exists but cannot be read.
+        RewriteMapError: A line is not a rewrite pair, or the pairs form a cycle.
+    """
+    return resolve_rewrite_pairs(read_rewrite_pairs(rewrite_map_path(tree_root)))
+
+
+def resolve_rewritten(tree_root: Path, sha: str) -> str:
+    """Return the commit *sha* finally became, or *sha* when no pair records it.
+
+    Args:
+        tree_root: The repository's ``.ea`` directory.
+        sha: A full commit hash.
+
+    Returns:
+        The end of *sha*'s chain of recorded pairs, or *sha* unchanged.
+
+    Raises:
+        OSError: The record exists but cannot be read.
+        RewriteMapError: A line is not a rewrite pair, or the pairs form a cycle.
+    """
+    return rewritten_commits(tree_root).get(sha, sha)
+
+
+def pairs_to_record(
+    rewrite_map: RewriteMap, recorded: Iterable[RewritePair], *, at: datetime
+) -> tuple[RewritePair, ...]:
+    """Return the pairs of *rewrite_map* the record does not hold yet.
+
+    A commit mapped to itself was not rewritten, so it is no pair to record.
+
+    Args:
+        rewrite_map: The map a rebind applied.
+        recorded: The pairs already recorded.
+        at: The instant each new pair records.
+
+    Returns:
+        The new pairs, ordered by old commit.
+    """
+    held = {(pair.old, pair.new) for pair in recorded}
+    return tuple(
+        RewritePair(old=old, new=new, applied_at=at)
+        for old, new in sorted(rewrite_map.commits.items())
+        if old != new and (old, new) not in held
+    )
+
+
+def append_rewrite_pairs(path: Path, pairs: Iterable[RewritePair]) -> None:
+    """Append one JSON line per pair to the record at *path* and flush it to disk.
+
+    Args:
+        path: The record; it and its directory are created when missing.
+        pairs: The pairs to append.
+
+    Raises:
+        OSError: The record cannot be written.
+    """
+    text = "".join(f"{pair.model_dump_json()}\n" for pair in pairs)
+    if not text:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(text)
+        handle.flush()
+        os.fsync(handle.fileno())
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,14 +508,20 @@ def _effective_lines(path: Path) -> list[tuple[str, LedgerRecord]]:
 
 def _ledger_rows(
     path: Path,
-    squash_map: SquashMap,
+    commits: Mapping[str, str | None],
+    batches: Mapping[str, str],
+    dropped: Mapping[str, str],
     task_batches: Mapping[str, str],
     *,
     trees: Mapping[str, str],
     parents: Mapping[str, str],
     recorded_at: datetime,
+    keep_exhaust: bool,
 ) -> list[RebindRow]:
     """Plan the superseding rows of one ledger.
+
+    With *keep_exhaust*, a Run exhaust line the commit policy keeps local is
+    left as it is.
 
     Every effective line naming a source commit is superseded. When a key's
     earlier line is, and its last effective line is not, the last line is
@@ -241,26 +531,29 @@ def _ledger_rows(
     rows: list[RebindRow] = []
     rebound_keys: set[str] = set()
     for digest, record in effective:
+        if (
+            keep_exhaust
+            and ledger_row_policy(record.collection, record.payload) is CommitPolicy.NOT_COMMITTED
+        ):
+            # Run exhaust, such as a content-addressed capture of tool output,
+            # keeps a rewritten hash: its key is the digest of its text, and a
+            # line superseding it would land in the local ledger, not beside it.
+            continue
         # A squash that writes a commit again byte for byte maps it onto itself;
         # such a commit is still on the branch and needs no rebinding.
         named = {
-            sha
-            for sha in _SHA_RE.findall(record.model_dump_json())
-            if squash_map.commits.get(sha, sha) != sha
+            sha for sha in _SHA_RE.findall(record.model_dump_json()) if commits.get(sha, sha) != sha
         }
         if not named and not _stale_parent(record.payload, parents):
             continue
         batch = row_batch(record, task_batches)
-        target = squash_map.batches.get(batch) if batch is not None else None
+        target = batches.get(batch) if batch is not None else None
         shas = {
-            sha: None if squash_map.commits[sha] is None else target or squash_map.commits[sha]
-            for sha in sorted(named)
+            sha: None if commits[sha] is None else target or commits[sha] for sha in sorted(named)
         }
         rows.append(
             RebindRow(
-                record=_superseding(
-                    record, digest, recorded_at, shas, squash_map.dropped, trees, parents
-                ),
+                record=_superseding(record, digest, recorded_at, shas, dropped, trees, parents),
                 batch_key=batch if target is not None and named else None,
                 task_key=record.record_key if record.collection is Epoch2Collection.TASK else None,
                 rebinds=shas,
@@ -307,7 +600,7 @@ def _superseding(
 
 def plan_rebind(
     state_path: Path,
-    squash_map: SquashMap,
+    commit_map: SquashMap | RewriteMap,
     task_batches: Mapping[str, str],
     *,
     trees: Mapping[str, str],
@@ -318,7 +611,12 @@ def plan_rebind(
 
     Args:
         state_path: The generation's ``state.json``; its ledgers are read.
-        squash_map: The map the squash answered.
+        commit_map: The map the squash answered, or a history-rewrite map,
+            which names no Batch commit and drops no commit, so its rows are
+            rebound commit by commit.
+            For a history-rewrite map, a Run exhaust line the commit policy
+            keeps local, such as a content-addressed capture of tool output,
+            is left as it is; a squash still withholds a dropped commit there.
         task_batches: Each Task key mapped to its Batch key.
         trees: Each rewritten commit mapped to its tree.
         parents: Each rewritten commit mapped to its parent.
@@ -333,20 +631,72 @@ def plan_rebind(
         LedgerSnapshotError: A ledger's sealed snapshot does not match its digest.
         ValidationError: A ledger line is not a ledger record.
     """
+    batches, dropped = (
+        (commit_map.batches, commit_map.dropped) if isinstance(commit_map, SquashMap) else ({}, {})
+    )
     rows: list[RebindRow] = []
-    for collection in Epoch2Collection:
-        if tier_for(collection) is StorageTier.LEDGER:
-            rows.extend(
-                _ledger_rows(
-                    ledger_path(state_path, collection),
-                    squash_map,
-                    task_batches,
-                    trees=trees,
-                    parents=parents,
-                    recorded_at=recorded_at,
-                )
+    for path in _ledger_paths(state_path):
+        rows.extend(
+            _ledger_rows(
+                path,
+                commit_map.commits,
+                batches,
+                dropped,
+                task_batches,
+                trees=trees,
+                parents=parents,
+                recorded_at=recorded_at,
+                keep_exhaust=isinstance(commit_map, RewriteMap),
             )
+        )
     return tuple(rows)
+
+
+def _ledger_paths(state_path: Path) -> Iterator[Path]:
+    """Yield the ledger of every ledger-tier collection, in collection order.
+
+    Each is the file whose lines are in effect even before
+    ``settle_status_ledgers`` has run, so a plan that must not write reads
+    what a settled tree would: an unseeded local status ledger reads as its
+    committed seed, and a Task ledger stranded under ``local/`` stands in
+    for the committed one it extends.
+
+    Args:
+        state_path: The generation's ``state.json``.
+
+    Yields:
+        One ledger path per ledger-tier collection.
+    """
+    held = state_path.parent / LOCAL_DIRNAME / LEDGER_DIRNAME
+    for collection in Epoch2Collection:
+        if tier_for(collection) is not StorageTier.LEDGER:
+            continue
+        seed = seed_ledger_path(state_path, collection)
+        settles = collection in STATUS_PROJECTION_COLLECTIONS or collection is Epoch2Collection.TASK
+        local = held / seed.name
+        yield local if settles and local.is_file() else seed
+
+
+def recorded_hashes(state_path: Path) -> frozenset[str]:
+    """Return every full hash an effective line of the generation's ledgers names.
+
+    Args:
+        state_path: The generation's ``state.json``; its ledgers are read.
+
+    Returns:
+        The distinct 40-hex strings, commits and trees alike.
+
+    Raises:
+        LedgerTornTailError: A ledger ends mid-line.
+        LedgerSnapshotError: A ledger's sealed snapshot does not match its digest.
+        ValidationError: A ledger line is not a ledger record.
+    """
+    return frozenset(
+        sha
+        for path in _ledger_paths(state_path)
+        for _, record in _effective_lines(path)
+        for sha in _SHA_RE.findall(record.model_dump_json())
+    )
 
 
 def only_commits_rebound(before: Mapping[str, Any], after: Mapping[str, Any]) -> bool:
@@ -396,10 +746,24 @@ def document_mentions(document: Mapping[str, Any], squash_map: SquashMap) -> tup
 
 __all__ = [
     "DROPPED_LINE",
+    "REWRITE_MAP_INVALID",
     "RebindDropError",
     "RebindRow",
+    "RewriteMap",
+    "RewriteMapError",
+    "RewritePair",
+    "append_rewrite_pairs",
     "document_mentions",
+    "load_rewrite_map",
     "only_commits_rebound",
+    "pairs_to_record",
+    "parse_rewrite_pairs",
     "plan_rebind",
+    "read_rewrite_pairs",
+    "recorded_hashes",
+    "resolve_rewrite_pairs",
+    "resolve_rewritten",
+    "rewrite_map_path",
+    "rewritten_commits",
     "row_batch",
 ]

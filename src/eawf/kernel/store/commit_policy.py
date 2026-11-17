@@ -341,6 +341,12 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
         )
     ),
     _row(
+        ".ea/store/rewrite_map.jsonl",
+        _YES,
+        "each old to new commit pair a history rewrite rebind applied; append-only",
+        tier=StorageTier.LEDGER,
+    ),
+    _row(
         ".ea/ledger/*.jsonl",
         _YES,
         "epoch-2 append-only history; a line is never rewritten",

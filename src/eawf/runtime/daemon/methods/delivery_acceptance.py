@@ -83,6 +83,7 @@ from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.delivery import keyed_call
 from eawf.runtime.daemon.methods.delivery_anchor import require_anchor
+from eawf.runtime.daemon.methods.delivery_rebind import recorded_rewrites
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.workflow.delivery.acceptance import (
     AcceptanceRefusal,
@@ -319,13 +320,17 @@ def reconcile_batch_merge(
     Raises:
         DaemonValidationError: The tree holds no readable Batch, the Batch
             is not merging, the observation is of another Batch or
-            branch, the Batch pinned no exact head, or a refusal names no
-            cause.
+            branch, the Batch pinned no exact head, a refusal names no
+            cause, or the record of history-rewrite pairs is malformed or
+            cyclic (``rewrite_map_invalid``).
     """
+
     with context.session([str(args.urn)]) as session:
         batch = _batch_of(session, args.urn)
     try:
-        decision = reconcile_merge(batch, args.observation)
+        decision = reconcile_merge(
+            batch, args.observation, rewritten=recorded_rewrites(context.identity.tree_root)
+        )
     except ReconciliationRefusedError as error:
         raise DaemonValidationError(f"validation_failed: {error}") from error
     with context.session([str(args.urn)]) as session:

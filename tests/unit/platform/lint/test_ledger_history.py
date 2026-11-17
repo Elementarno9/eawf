@@ -43,6 +43,11 @@ from eawf.platform.lint.ledger_history import (
     unreachable_findings,
 )
 from eawf.surfaces.cli.app import app
+from eawf.workflow.integration.rebind import (
+    RewritePair,
+    append_rewrite_pairs,
+    rewrite_map_path,
+)
 
 _FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "ledger_history"
 _LEDGER = ".ea/generations/gen-ca819f3245bf71a8/ledger/batch.jsonl"
@@ -469,3 +474,222 @@ def test_hook_requires_a_range(
     code, output = _run_hook(monkeypatch, capsys, _report())
     assert code == 2
     assert "--range" in output
+
+
+# --- the scan honours a recorded history rewrite -----------------------------
+
+_HISTORY = ".ea/generations/gen-x/history/change.jsonl"
+_MAP = ".ea/store/rewrite_map.jsonl"
+_BASE, _TIP = "a" * 40, "b" * 40
+_LIVE_NEW, _REF_NEW, _GONE_NEW = "5" * 40, "6" * 40, "7" * 40
+_SCAN_BLOB = ledger_history._blob
+
+
+class _FakeRepo:
+    """The git answers one scan needs, served from memory instead of a repository.
+
+    The record of rewrite pairs at the tip is ``tip[_MAP]``; the working
+    tree's record is read from disk, as the scan reads it without a tip.
+    """
+
+    def __init__(self, *, tip: dict[str, bytes], base: dict[str, bytes], on_refs: set[str]):
+        self.tip, self.base, self.on_refs = tip, base, on_refs
+        self.reachable = {_BASE, _TIP, _LIVE_NEW}
+        self.commits = {sha for _key, sha in _STRAYS} | {_LIVE_NEW, _REF_NEW, _GONE_NEW}
+        self.ref_walks = 0
+
+    def git(self, _repo: Path, *args: str, stdin: bytes | None = None) -> bytes:
+        del stdin
+        if args[0] == "rev-parse":
+            return (_BASE if args[-1].startswith("base") else _TIP).encode()
+        if args[0] == "merge-base":
+            return _BASE.encode()
+        if args[:2] == ("rev-list", "--branches"):
+            self.ref_walks += 1
+            return "\n".join(sorted(self.on_refs - self.reachable)).encode()
+        assert args[0] == "rev-list"
+        return "\n".join(sorted(self.reachable)).encode()
+
+    def blob(self, repo: Path, rev: str | None, path: str) -> bytes:
+        if rev is None and path == _MAP:
+            return _SCAN_BLOB(repo, None, path)
+        return (self.base if rev == _BASE else self.tip).get(path, b"")
+
+    def ledgers(self) -> list[str]:
+        return sorted(p for p in self.tip if p != _MAP)
+
+    def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(ledger_history, "_git", self.git)
+        monkeypatch.setattr(ledger_history, "_blob", self.blob)
+        monkeypatch.setattr(ledger_history, "_snapshots_at", lambda *_a: {})
+        monkeypatch.setattr(ledger_history, "_ledger_paths_at", lambda *_a: self.ledgers())
+        monkeypatch.setattr(
+            ledger_history,
+            "_changed_ledger_paths",
+            lambda *_a: [p for p in self.ledgers() if self.tip[p] != self.base.get(p)],
+        )
+        monkeypatch.setattr(
+            ledger_history, "_resolve_commits", lambda _r, shas: frozenset(shas) & self.commits
+        )
+
+
+def _fixture_repo(*, on_refs: set[str] | None = None) -> _FakeRepo:
+    """Serve the fixtures: the remapped batch ledger, and the strays quoted by the history."""
+    strays = _content(_stray_lines())
+    return _FakeRepo(
+        tip={_LEDGER: (_FIXTURES / "batch_remapped.jsonl").read_bytes(), _HISTORY: strays},
+        base={_LEDGER: (_FIXTURES / "batch_before.jsonl").read_bytes(), _HISTORY: strays},
+        on_refs=on_refs or set(),
+    )
+
+
+def _pairs_text(*pairs: tuple[str, str]) -> bytes:
+    at = datetime(2026, 11, 1, tzinfo=UTC)
+    return b"".join(
+        RewritePair(old=old, new=new, applied_at=at).model_dump_json().encode() + b"\n"
+        for old, new in pairs
+    )
+
+
+def _record(repo: _FakeRepo, *pairs: tuple[str, str]) -> None:
+    """Commit *pairs* to the record of rewrite pairs at the tip."""
+    repo.tip[_MAP] = _pairs_text(*pairs)
+
+
+def _record_in_worktree(tmp_path: Path, *pairs: tuple[str, str]) -> None:
+    append_rewrite_pairs(
+        rewrite_map_path(tmp_path / ".ea"),
+        (
+            RewritePair(old=old, new=new, applied_at=datetime(2026, 11, 1, tzinfo=UTC))
+            for old, new in pairs
+        ),
+    )
+
+
+def _unreachable(report: LedgerHistoryReport) -> list[str]:
+    return [finding.sha for finding in report.unreachable]
+
+
+def test_rewrite_absent_map_leaves_the_fixture_findings_as_before(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _fixture_repo()
+    repo.install(monkeypatch)
+
+    report = ledger_history.scan_ledger_history(tmp_path, "base..tip")
+
+    mentions, _ = sha_mentions(_HISTORY, repo.tip[_HISTORY])
+    expected = unreachable_findings(
+        mentions, commits=frozenset(repo.commits), reachable=frozenset(repo.reachable)
+    )
+    assert report.unreachable == expected
+    assert _unreachable(report) == [sha for _key, sha in _STRAYS]
+    assert report.append_only == (_remap_finding(),)
+    assert repo.ref_walks == 0
+
+
+def test_rewrite_empty_map_file_changes_no_finding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _fixture_repo()
+    repo.install(monkeypatch)
+    without = ledger_history.scan_ledger_history(tmp_path, "base..tip")
+    repo.tip[_MAP] = b""
+
+    assert ledger_history.scan_ledger_history(tmp_path, "base..tip") == without
+
+
+def test_rewrite_mapped_history_mention_with_a_live_new_commit_is_not_a_finding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _fixture_repo()
+    repo.install(monkeypatch)
+    _record(repo, (_STRAYS[0][1], _LIVE_NEW))
+
+    report = ledger_history.scan_ledger_history(tmp_path, "base..tip")
+
+    assert _unreachable(report) == [sha for _key, sha in _STRAYS[1:]]
+
+
+def test_rewrite_record_is_read_at_the_tip_not_from_the_working_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The working tree records a pair the checked tip does not carry.
+    _fixture_repo().install(monkeypatch)
+    _record_in_worktree(tmp_path, (_STRAYS[0][1], _LIVE_NEW))
+
+    report = ledger_history.scan_ledger_history(tmp_path, "base..tip")
+
+    assert _unreachable(report) == [sha for _key, sha in _STRAYS]
+
+
+def test_rewrite_record_is_read_from_the_working_tree_without_a_tip(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fixture_repo().install(monkeypatch)
+    _record_in_worktree(tmp_path, (_STRAYS[0][1], _LIVE_NEW))
+
+    report = ledger_history.scan_ledger_history(tmp_path, "base")
+
+    assert _unreachable(report) == [sha for _key, sha in _STRAYS[1:]]
+
+
+def test_rewrite_follows_a_chain_to_a_new_commit_only_a_ref_reaches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _fixture_repo(on_refs={_REF_NEW})
+    repo.install(monkeypatch)
+    _record(repo, (_STRAYS[1][1], _GONE_NEW), (_GONE_NEW, _REF_NEW))
+
+    report = ledger_history.scan_ledger_history(tmp_path, "base..tip")
+
+    assert _unreachable(report) == [_STRAYS[0][1], _STRAYS[2][1]]
+    assert repo.ref_walks == 1
+
+
+def test_rewrite_unmapped_or_dead_new_commit_is_still_a_finding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _fixture_repo()
+    repo.install(monkeypatch)
+    # Only the first stray is mapped, and its new commit nothing reaches.
+    _record(repo, (_STRAYS[0][1], _GONE_NEW))
+
+    report = ledger_history.scan_ledger_history(tmp_path, "base..tip")
+
+    assert _unreachable(report) == [sha for _key, sha in _STRAYS]
+
+
+def test_rewrite_mapped_record_ledger_mention_is_still_a_finding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A ledger line is fixed by a superseding rebind row, not exempted by the map.
+    strays = _content(_stray_lines())
+    repo = _FakeRepo(tip={_TASK_LEDGER: strays}, base={_TASK_LEDGER: strays}, on_refs=set())
+    repo.install(monkeypatch)
+    _record(repo, (_STRAYS[0][1], _LIVE_NEW))
+
+    report = ledger_history.scan_ledger_history(tmp_path, "base..tip")
+
+    assert _unreachable(report) == [sha for _key, sha in _STRAYS]
+
+
+@pytest.mark.parametrize(
+    ("text", "line"),
+    [
+        (b'{"old": "' + b"1" * 40 + b'"}\n', 1),
+        (_pairs_text(("1" * 40, "2" * 40)) + b'{"old": "torn', 2),
+        (_pairs_text(("1" * 40, "2" * 40), ("2" * 40, "1" * 40)), 1),
+    ],
+    ids=["missing-field", "torn", "cycle"],
+)
+def test_rewrite_refuses_a_malformed_torn_or_cyclic_map(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: bytes, line: int
+) -> None:
+    repo = _fixture_repo()
+    repo.install(monkeypatch)
+    repo.tip[_MAP] = text
+
+    with pytest.raises(LedgerHistoryError, match=f"rewrite_map_invalid: line {line}") as caught:
+        ledger_history.scan_ledger_history(tmp_path, "base..tip")
+    assert _MAP in str(caught.value)

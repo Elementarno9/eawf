@@ -94,6 +94,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
 )
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.methods.delivery_landed import ReadBackParams, read_back_merge
+from eawf.runtime.daemon.methods.delivery_rebind import recorded_rewrites
 from eawf.runtime.daemon.methods.domain_guards import GUARD_COMPUTERS, GuardInputs
 from eawf.runtime.integration.git_workspace import COMMIT_ARTIFACT_PREFIX
 from eawf.runtime.workspace.lease import lease_residue, root_leases
@@ -492,9 +493,21 @@ def _complete_tasks(
     actor: PrincipalKey,
     now: datetime,
 ) -> None:
-    """Complete each ready Task of the Batch on the head the Batch pinned, citing its receipts."""
-    binding = batch.current_head_binding
-    assert binding is not None, "a merged Batch always carries its head binding"
+    """Complete each ready Task of the Batch on the head the Batch pinned, citing its receipts.
+
+    A pinned head a recorded history rewrite replaced is bound as its
+    replacement, the head a completion assessment binds.
+
+    Raises:
+        DaemonValidationError: ``rewrite_map_invalid``: the record of
+            history-rewrite pairs is malformed or cyclic.
+    """
+    pinned = batch.current_head_binding
+    assert pinned is not None, "a merged Batch always carries its head binding"
+    rewritten = recorded_rewrites(context.identity.tree_root)
+    binding = pinned.model_copy(
+        update={"head_sha": rewritten.get(pinned.head_sha, pinned.head_sha)}
+    )
     with context.session([batch.urn]) as session:
         rows = document_rows(session.read_document(), Epoch2Collection.TASK)
     for key in sorted(landed):

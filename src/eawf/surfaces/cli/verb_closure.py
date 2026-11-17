@@ -228,6 +228,12 @@ ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
         "anchors the rewrite",
     ),
     _exempt(
+        "batch rebind-rewritten",
+        "create_keyed",
+        "appends superseding ledger rows and rewrite pairs, which keep no revision; a second "
+        "run finds every line rebound and every pair recorded",
+    ),
+    _exempt(
         "release adopt",
         "revision_only",
         "the release record keeps no replay ledger; its revision guards a retry",

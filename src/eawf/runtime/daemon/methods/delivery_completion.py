@@ -449,12 +449,21 @@ def completion_binding(
 
     Raises:
         DaemonValidationError: The assessment refused, or the named commit
-            is not the head the Batch's selected generation delivers.
+            is not the head the Batch's selected generation delivers, or
+            ``rewrite_map_invalid``: the record of history-rewrite pairs is
+            malformed or cyclic.
     """
     judgment = _judge_completion(context, args)
     answer = _completion_answer(judgment)
     revision = judgment.head.integrated_revision
-    if revision.head_sha != integrated_commit:
+    # A history rewrite moves both names without moving the work: compare and
+    # bind the commits they became, which the rewrite rebind found tree-equal.
+    # Imported here: the rebind verb's module reaches this one through the doctor.
+    from eawf.runtime.daemon.methods.delivery_rebind import recorded_rewrites
+
+    rewritten = recorded_rewrites(context.identity.tree_root)
+    head = rewritten.get(revision.head_sha, revision.head_sha)
+    if head != rewritten.get(integrated_commit, integrated_commit):
         raise DaemonValidationError(
             f"validation_failed: {COMPLETION_COMMIT_MISMATCH}: batch "
             f"{judgment.head.batch_ref.entity_key} stands on generation "
@@ -489,7 +498,7 @@ def completion_binding(
         key=lambda row: str(row["gate_id"]),
     )
     binding = ExactRevisionBinding(
-        head_sha=revision.head_sha,
+        head_sha=head,
         tree_sha=revision.tree_sha,
         contract_digest=canonical_digest(judgment.contracts.model_dump(mode="json")),
         policy_revision=judgment.task.contract_revision,

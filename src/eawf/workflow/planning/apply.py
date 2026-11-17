@@ -96,6 +96,11 @@ from eawf.runtime.daemon.wal import WalRecord, mark_applied, mark_fsynced, write
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence._io import generation_contract_view
 from eawf.workflow.evidence.measured_contract import resolve_contract_citation
+from eawf.workflow.integration.rebind import (
+    REWRITE_MAP_INVALID,
+    RewriteMapError,
+    rewritten_commits,
+)
 from eawf.workflow.planning.lenses import blocking_findings, run_plan_lenses
 from eawf.workflow.planning.materialise import (
     PLAN_REVISION_COLLECTION,
@@ -887,8 +892,22 @@ def apply_plan_revision(
         if isinstance(parent, PlanRefusal):
             logger.info(f"apply_plan_revision refused guard={parent.guard} key={key!r}")
             return parent
+        # Read once: every head binding of the plan is compared through it.
+        try:
+            rewritten = rewritten_commits(context.identity.tree_root)
+        except RewriteMapError as error:
+            logger.info(f"apply_plan_revision refused guard={REWRITE_MAP_INVALID} key={key!r}")
+            return PlanRefusal(
+                code=PlanRefusalCode.SCHEMA_VALIDATION_FAILED,
+                guard=REWRITE_MAP_INVALID,
+                detail=f"the record of history-rewrite pairs is unreadable: {error}",
+                remediation="Repair .ea/store/rewrite_map.jsonl from its history, then retry.",
+                revision=record.revision,
+            )
         drifted = detect_plan_drift(
-            outcome.record, world=observe_plan_world(placed, body=record.body, parent=parent)
+            outcome.record,
+            world=observe_plan_world(placed, body=record.body, parent=parent),
+            resolve_head=lambda sha: rewritten.get(sha, sha),
         )
         if drifted is not None:
             logger.info(f"apply_plan_revision refused guard={drifted.guard} key={key!r}")

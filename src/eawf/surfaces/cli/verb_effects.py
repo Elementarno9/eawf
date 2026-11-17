@@ -79,6 +79,7 @@ CLI_VERB_EFFECTS: Final[dict[str, VerbEffect]] = {
     "batch close-landed": _mutate("runtime.delivery.close_landed"),
     "batch squash": _read(),
     "batch rebind": _mutate("runtime.delivery.rebind_squashed"),
+    "batch rebind-rewritten": _mutate("runtime.delivery.rebind_rewritten"),
     "task promote": _mutate("domain.task.promote"),
     "task demote": _mutate("domain.task.demote"),
     "task drop": _mutate("domain.task.drop"),

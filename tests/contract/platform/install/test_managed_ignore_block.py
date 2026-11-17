@@ -203,6 +203,7 @@ def test_block_negates_nothing_but_artifact_directories_and_promoted_paths() -> 
             "release_checkpoint_receipt",
             "release_train_advance",
             "conformance_stage",
+            "rewrite_map",
         )
     }
     assert negations == {"!.ea/artifacts/**/", *(f"!{path}" for path in _PROMOTED), *kept_stores}

@@ -81,9 +81,11 @@ from eawf.runtime.daemon.methods.delivery_acceptance import (
     reconcile_batch_merge,
 )
 from eawf.runtime.daemon.methods.delivery_anchor import require_anchor
+from eawf.runtime.daemon.methods.delivery_rebind import recorded_rewrites
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.integration.recovery import generation_record_key, integration_generation_id
 from eawf.workflow.integration.publish_binding import StagedBinding, stage_binding
+from eawf.workflow.integration.rebind import RewriteMapError, resolve_rewritten
 from eawf.workflow.integration.reconcile import HostMergeObservation
 
 logger = logging.getLogger(__name__)
@@ -423,8 +425,10 @@ def adopt_landed(
         DaemonValidationError: The key already answered other parameters,
             the Batch is not active, a Task cannot be adopted, evidence
             does not resolve, the repository does not show the change
-            landed on the Batch's target branch, or another generation was
-            selected while the repository was being read.
+            landed on the Batch's target branch, another generation was
+            selected while the repository was being read, or the record of
+            history-rewrite pairs is malformed or cyclic
+            (``rewrite_map_invalid``).
     """
     params = args.model_dump(mode="json")
     replayed = keyed_answer(
@@ -452,11 +456,15 @@ def adopt_landed(
     branch = batch.target_branch
     assert branch is not None, "an ACTIVE Batch always carries its target branch"
     repository = context.identity.tree_root.parent
+    # The head a recorded history rewrite replaced stands as its replacement.
+    rewritten = recorded_rewrites(context.identity.tree_root)
+    head_of = (
+        None
+        if head is None
+        else rewritten.get(head.integrated_revision.head_sha, head.integrated_revision.head_sha)
+    )
     tree, parent, target_head, base_tree, base_parent, paths, diff_digest = _read_repository(
-        repository,
-        batch=batch,
-        args=args,
-        head_of=None if head is None else head.integrated_revision.head_sha,
+        repository, batch=batch, args=args, head_of=head_of
     )
     affected = args.affected_criterion_ids or tuple(
         sorted({criterion.id for task in tasks for criterion in task.criteria})
@@ -476,7 +484,7 @@ def adopt_landed(
         adopted_by=args.actor,
         adopted_at=now,
     )
-    if head is not None and head.integrated_revision.head_sha == args.head_sha:
+    if head is not None and head_of == args.head_sha:
         return _answer(adoption, head, target_head=target_head, replayed=True)
     published = _published_head(repository)
     if published is not None and not _ancestor(repository, args.head_sha, published):
@@ -668,7 +676,9 @@ def read_back_merge(
 
     Raises:
         DaemonValidationError: The Batch is not a readable live Batch
-            pinning a head, or the reconciliation refused.
+            pinning a head, or the reconciliation refused;
+            ``rewrite_map_invalid`` names a malformed or cyclic record of
+            history-rewrite pairs.
     """
     with context.session([str(args.urn)]) as session:
         batch = _batch_row(session, args.urn)
@@ -680,12 +690,16 @@ def read_back_merge(
         )
     repository = context.identity.tree_root.parent
     target_head = _branch_head(repository, branch)
-    carried = target_head is not None and _ancestor(repository, binding.head_sha, target_head)
+    # A pinned head a recorded history rewrite replaced is carried, and
+    # observed, as its replacement, so no new row names the replaced commit.
+    try:
+        pinned = resolve_rewritten(context.identity.tree_root, binding.head_sha)
+    except RewriteMapError as error:
+        raise DaemonValidationError(f"validation_failed: {error}") from error
+    carried = target_head is not None and _ancestor(repository, pinned, target_head)
     contained: tuple[str, ...] = ()
     if target_head is not None:
-        contained = (target_head,) + (
-            (binding.head_sha,) if carried and binding.head_sha != target_head else ()
-        )
+        contained = (target_head,) + ((pinned,) if carried and pinned != target_head else ())
     observation = HostMergeObservation(
         batch_ref=args.urn,
         target_branch=branch,

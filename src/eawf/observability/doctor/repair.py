@@ -6,7 +6,7 @@ import hashlib
 import shlex
 import subprocess
 import tempfile
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Final, Literal
@@ -62,6 +62,11 @@ from eawf.platform.lint.ledger_history import (
 )
 from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.vcs.diff_base import commit_identity_digest
+from eawf.workflow.integration.rebind import (
+    RewriteMapError,
+    rewrite_map_path,
+    rewritten_commits,
+)
 
 DoctorRepairMutationClass = Literal[
     "local_diagnostics",
@@ -254,6 +259,15 @@ LEDGER_SUPERSEDE_ACTION: Final = "ledger.supersede-unreachable"
 #: The branch a ledger binding must descend from; the history gate's CI range starts here.
 LEDGER_BASE_REF: Final = "origin/main"
 
+#: The unresolved finding counting ledger commits a recorded history rewrite replaced.
+LEDGER_REWRITTEN_FINDING: Final = "ledger.rewritten"
+
+#: The unresolved finding of a record of rewrite pairs no reader can resolve.
+LEDGER_REWRITE_MAP_INVALID_FINDING: Final = "ledger.rewrite_map_invalid"
+
+#: What resolves a rewritten finding; the repair never freezes such a commit.
+LEDGER_REWRITTEN_HINT: Final = "run eawf batch rebind-rewritten"
+
 #: Where the repair preserves a commit that no tag keeps alive.
 ARCHIVE_REF_PREFIX: Final = "refs/eawf/archive/"
 
@@ -387,25 +401,42 @@ def _archive_ref(repo: Path, sha: str) -> str:
 
 
 def _grouped(
-    findings: Iterable[UnreachableFinding],
-) -> tuple[dict[tuple[str, int], list[str]], int]:
-    """Group repairable findings by ledger line; count those in non-record files."""
+    findings: Iterable[UnreachableFinding], rewritten: Mapping[str, str]
+) -> tuple[dict[tuple[str, int], list[str]], int, int]:
+    """Group repairable findings by ledger line.
+
+    Args:
+        findings: The unreachable findings of the ledger history scan.
+        rewritten: Each commit a recorded history rewrite replaced, mapped
+            to its replacement.
+
+    Returns:
+        The grouped findings, how many sit in non-record files, and how many
+        distinct commits a recorded history rewrite replaced, which are left
+        to its rebind rather than frozen here.
+    """
     grouped: dict[tuple[str, int], list[str]] = {}
     unrepairable = 0
+    replaced: set[str] = set()
     for finding in findings:
+        if finding.sha in rewritten:
+            replaced.add(finding.sha)
+            continue
         # Only the ledger/ files hold LedgerRecord lines a row can supersede.
         if Path(finding.path).parent.name != "ledger":
             unrepairable += 1
             continue
         grouped.setdefault((finding.path, finding.line), []).append(finding.sha)
-    return grouped, unrepairable
+    return grouped, unrepairable, len(replaced)
 
 
 def plan_ledger_supersessions(repo: Path) -> tuple[tuple[LedgerSupersession, ...], int]:
     """Plan one superseding row per effective ledger line binding an unreachable commit.
 
     The working tree's ledgers are scanned against :data:`LEDGER_BASE_REF`
-    and ``HEAD``, the same reachability the ledger history gate applies.
+    and ``HEAD``, the same reachability the ledger history gate applies. A
+    commit ``.ea/store/rewrite_map.jsonl`` records as rewritten gets no row:
+    ``eawf batch rebind-rewritten`` rebinds it to its new commit.
 
     Args:
         repo: The repository's working directory.
@@ -415,10 +446,30 @@ def plan_ledger_supersessions(repo: Path) -> tuple[tuple[LedgerSupersession, ...
         whose lines are not ledger records and so cannot be superseded here.
 
     Raises:
+        RewriteMapError: The record of rewrite pairs is malformed or cyclic.
+        LedgerHistoryError: The base ref does not resolve or git failed.
+    """
+    rows, unrepairable, _rewritten = _ledger_plan(repo, rewritten_commits(repo / ".ea"))
+    return rows, unrepairable
+
+
+def _ledger_plan(
+    repo: Path, rewritten: Mapping[str, str]
+) -> tuple[tuple[LedgerSupersession, ...], int, int]:
+    """Plan the rows of :func:`plan_ledger_supersessions`, and count the rewritten commits.
+
+    Args:
+        repo: The repository's working directory.
+        rewritten: The recorded history-rewrite map, already read.
+
+    Returns:
+        The planned rows, the unrepairable count and the rewritten count.
+
+    Raises:
         LedgerHistoryError: The base ref does not resolve or git failed.
     """
     report = scan_ledger_history(repo, LEDGER_BASE_REF)
-    grouped, unrepairable = _grouped(report.unreachable)
+    grouped, unrepairable, replaced = _grouped(report.unreachable, rewritten)
     trees: dict[str, list[str]] = {}
     if grouped:
         for row in _git_text(repo, "log", "--format=%H %T", report.base).splitlines():
@@ -448,7 +499,7 @@ def plan_ledger_supersessions(repo: Path) -> tuple[tuple[LedgerSupersession, ...
                 unreachable=tuple(unreachable),
             )
         )
-    return tuple(rows), unrepairable
+    return tuple(rows), unrepairable, replaced
 
 
 def ledger_supersession_digest(repo: Path, rows: Iterable[LedgerSupersession]) -> str:
@@ -524,18 +575,36 @@ def superseding_record(
     )
 
 
-def _ledger_action(root: Path) -> tuple[DoctorRepairAction | None, int]:
-    """Preview the ledger supersession, and count the findings it cannot repair."""
+def _ledger_action(root: Path) -> tuple[DoctorRepairAction | None, list[str]]:
+    """Preview the ledger supersession.
+
+    Args:
+        root: The repository's working directory.
+
+    Returns:
+        The action, or ``None`` when no row is planned, and the findings it
+        leaves unresolved: those it cannot repair, the rewritten commits it
+        leaves to ``eawf batch rebind-rewritten``, or a malformed record of
+        rewrite pairs, which plans nothing.
+    """
     if not (root / ".ea" / "generations").is_dir():
-        return None, 0
+        return None, []
     try:
-        rows, unrepairable = plan_ledger_supersessions(root)
+        rewritten = rewritten_commits(root / ".ea")
+    except RewriteMapError as error:
+        record = rewrite_map_path(Path(".ea")).as_posix()
+        return None, [f"{LEDGER_REWRITE_MAP_INVALID_FINDING}=1: {record}: {error}"]
+    try:
+        rows, unrepairable, replaced = _ledger_plan(root, rewritten)
     except LedgerHistoryError:
         # No base branch to measure reachability against (a fresh or
         # remote-less clone): the gate cannot judge, so nothing is planned.
-        return None, 0
+        return None, []
+    unresolved = [f"ledger.unreachable_unrepairable={unrepairable}"] if unrepairable else []
+    if replaced:
+        unresolved.append(f"{LEDGER_REWRITTEN_FINDING}={replaced}: {LEDGER_REWRITTEN_HINT}")
     if not rows:
-        return None, unrepairable
+        return None, unresolved
     rebound = sum(bool(row.rebinds) for row in rows)
     declared = sum(bool(row.unreachable) for row in rows)
     return (
@@ -551,7 +620,7 @@ def _ledger_action(root: Path) -> tuple[DoctorRepairAction | None, int]:
             ),
             target=str(root),
         ),
-        unrepairable,
+        unresolved,
     )
 
 
@@ -637,14 +706,14 @@ def _ledger_actions(root: Path) -> tuple[list[DoctorRepairAction], list[str]]:
     """Return the ledger repair actions and the findings they leave unresolved."""
     actions: list[DoctorRepairAction] = []
     unresolved: list[str] = []
-    for (action, count), finding in (
-        (_ledger_action(root), "ledger.unreachable_unrepairable"),
-        (_artifact_digest_action(root), "ledger.artifact_file_absent"),
-    ):
-        if action is not None:
-            actions.append(action)
-        if count:
-            unresolved.append(f"{finding}={count}")
+    ledger, unresolved = _ledger_action(root)
+    if ledger is not None:
+        actions.append(ledger)
+    artifact, absent = _artifact_digest_action(root)
+    if artifact is not None:
+        actions.append(artifact)
+    if absent:
+        unresolved.append(f"ledger.artifact_file_absent={absent}")
     rekey = _receipt_rekey_action(root)
     if rekey is not None:
         actions.append(rekey)
@@ -843,6 +912,9 @@ def render_repair_plan(plan: DoctorRepairPlan) -> str:
 __all__ = [
     "ARCHIVE_REF_PREFIX",
     "LEDGER_BASE_REF",
+    "LEDGER_REWRITE_MAP_INVALID_FINDING",
+    "LEDGER_REWRITTEN_FINDING",
+    "LEDGER_REWRITTEN_HINT",
     "LEDGER_SUPERSEDE_ACTION",
     "LEGACY_SEAL_ACTION",
     "DoctorRepairAction",

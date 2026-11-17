@@ -63,6 +63,7 @@ Delivery-batch lifecycle (activate, integrate, adopt-landed, ready, merge, recon
 | `observe-merge` | Record that the host landed a MERGING Batch, on a filed landed read-back. |
 | `ready` | Declare an ACTIVE Batch ready to merge. |
 | `rebind` | Supersede every ledger row naming a commit the squash replaced. |
+| `rebind-rewritten` | Supersede every ledger row naming a commit a history rewrite replaced. |
 | `reconcile` | File what a read-back of a MERGING Batch's target branch found. |
 | `set-title` | Give a Batch, open or finished, the title shown beside its key; its status does not move. |
 | `squash` | Write the branch again as one commit per Batch and a trailing state commit. |

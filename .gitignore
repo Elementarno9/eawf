@@ -102,6 +102,7 @@ AGENTS.override.md
 !.ea/store/release_checkpoint_receipt.jsonl
 !.ea/store/release_train_advance.jsonl
 !.ea/store/conformance_stage.jsonl
+!.ea/store/rewrite_map.jsonl
 .ea/generations/.staging-*/
 .ea/generations/restore/
 .ea/generations/journal.jsonl

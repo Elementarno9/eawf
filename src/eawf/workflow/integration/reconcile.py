@@ -36,6 +36,7 @@ Nothing here writes a record. Filing the decision is the daemon's job.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from enum import StrEnum
 from itertools import pairwise
 from typing import Final, Self
@@ -407,7 +408,12 @@ def _unknown(
     )
 
 
-def reconcile_merge(batch: DeliveryBatch, observation: HostMergeObservation) -> MergeReconciliation:
+def reconcile_merge(
+    batch: DeliveryBatch,
+    observation: HostMergeObservation,
+    *,
+    rewritten: Mapping[str, str] | None = None,
+) -> MergeReconciliation:
     """Decide what one read-back of the target branch says about a merging Batch.
 
     The decision is a pure function of the Batch's pinned head and what
@@ -417,6 +423,11 @@ def reconcile_merge(batch: DeliveryBatch, observation: HostMergeObservation) -> 
     Args:
         batch: The Batch whose merge is in flight.
         observation: What reading the target branch back found.
+        rewritten: Each commit a recorded history rewrite replaced, mapped
+            to its replacement. A pinned head it names is looked for, and
+            recorded, as its replacement, so the decision names no commit
+            the rewrite left unreachable. ``None`` takes the pinned head as
+            recorded.
 
     Returns:
         The outcome, the registered path it takes, and the sentence an
@@ -429,6 +440,8 @@ def reconcile_merge(batch: DeliveryBatch, observation: HostMergeObservation) -> 
             decision would take is not in the registry.
     """
     head_sha = _require_merging(batch, observation)
+    if rewritten is not None:
+        head_sha = rewritten.get(head_sha, head_sha)
     if observation.carries(head_sha):
         if observation.refusal is not None:
             raise ReconciliationRefusedError(

@@ -56,7 +56,10 @@ import typer
 
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
-from eawf.surfaces.cli.commands.batch_squash import DELIVERY_REBIND_SQUASHED
+from eawf.surfaces.cli.commands.batch_squash import (
+    DELIVERY_REBIND_REWRITTEN,
+    DELIVERY_REBIND_SQUASHED,
+)
 from eawf.surfaces.cli.commands.domain import (
     CANDIDATE_SUBMIT,
     DELIVERY_SEAL_APPROVAL,
@@ -105,6 +108,7 @@ INTEGRATION_CLI_METHODS: Final[tuple[str, ...]] = (
     DELIVERY_READ_BACK_MERGE,
     DELIVERY_CLOSE_LANDED,
     DELIVERY_REBIND_SQUASHED,
+    DELIVERY_REBIND_REWRITTEN,
     DELIVERY_OPEN_APPROVAL,
     DELIVERY_SEAL_APPROVAL,
     DELIVERY_RECORD_EVIDENCE,

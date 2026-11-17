@@ -646,7 +646,12 @@ def advance_plan_revision(
     )
 
 
-def detect_plan_drift(revision: PlanRevision, *, world: ObservedPlanWorld) -> PlanRefusal | None:
+def detect_plan_drift(
+    revision: PlanRevision,
+    *,
+    world: ObservedPlanWorld,
+    resolve_head: Callable[[str], str] | None = None,
+) -> PlanRefusal | None:
     """Return the first bound input that no longer matches the world.
 
     The order is fixed so one drifted tree always produces one answer:
@@ -657,6 +662,11 @@ def detect_plan_drift(revision: PlanRevision, *, world: ObservedPlanWorld) -> Pl
     Args:
         revision: The approved revision about to be applied.
         world: What the locked document says about the bound inputs.
+        resolve_head: Returns the commit a recorded commit became when a
+            history rewrite replaced it, else the commit itself; both a
+            pinned and an observed head are compared through it, since a
+            rewrite moves every head without moving any work. ``None``
+            compares the heads as recorded.
 
     Returns:
         The refusal, or ``None`` when every binding still holds.
@@ -702,10 +712,12 @@ def detect_plan_drift(revision: PlanRevision, *, world: ObservedPlanWorld) -> Pl
             remediation="Re-submit the plan under the current policy and approve it.",
             revision=revision.revision,
         )
+    resolve = resolve_head or (lambda sha: sha)
     moved = sorted(
         str(binding.repository_ref)
         for binding in revision.head_bindings
-        if world.heads.get(str(binding.repository_ref)) != binding.head_sha
+        if (observed := world.heads.get(str(binding.repository_ref))) is None
+        or resolve(observed) != resolve(binding.head_sha)
     )
     if moved:
         return PlanRefusal(
