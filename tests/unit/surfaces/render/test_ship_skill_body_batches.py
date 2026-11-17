@@ -1,7 +1,7 @@
-"""The commit rules describe batched pushes and a squashed state tail.
+"""The commit rules describe per-Batch commits and one seal commit per pull request.
 
-Every push restarts the full CI matrix, so the trailing run of ``state:``
-commits is squashed before each push. The squash rewrites commit hashes, so the
+State is committed once per pull request, as one ``state: seal`` commit when it
+opens. The Batch squash rewrites commit hashes, so the
 bindings a landed Batch made are rebound after, and every new commit carries its
 ``Batch:`` and ``Task:`` trailers while the older carriers stay readable for old
 history only. The commit-granularity and commit-prefix rules state that

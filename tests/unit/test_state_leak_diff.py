@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from eawf.observability.logging import state_leak
+from eawf.observability.logging import scrub, state_leak
 from eawf.observability.logging.state_leak import (
     StateLeakHit,
     StateLeakKind,
@@ -276,3 +276,44 @@ def test_state_leak_refusal_applies_default_allowlist() -> None:
     assert state_leak_refusal({}, {"outcome": f"mail {LEAKED_EMAIL}"}) == (
         "state_leak_refused: outcome (email)"
     )
+
+
+# A mailbox at a consumer mail provider, assembled so no address literal lands here.
+CONSUMER_EMAIL = "someone" + "." + "else" + "@" + "gm" + "ail" + "." + "com"
+
+
+def test_default_allowed_emails_holds_no_package_metadata_address() -> None:
+    allowed = default_allowed_emails()
+
+    assert allowed == frozenset(email.casefold() for email in scrub._DEFAULT_ALLOWED_EMAILS)
+    assert not hasattr(scrub, "_eawf_author_emails")
+    assert not hasattr(state_leak, "_eawf_author_emails")
+
+
+def test_default_scrubber_allowlist_holds_no_package_metadata_address() -> None:
+    scrubber = scrub.SensitiveScrubber()
+
+    assert scrubber._allowed_emails == default_allowed_emails()
+    assert scrub.REDACTION in scrubber.scrub(f"mail {CONSUMER_EMAIL}")
+
+
+def test_diff_state_leaks_passes_untouched_line_with_mailbox_address() -> None:
+    old = _state(outcome=f"reach {CONSUMER_EMAIL} for review")
+    new = copy.deepcopy(old)
+    new["waves"]["P01-I01-W02"]["title"] = "retitled sibling"
+
+    assert _diff(old, new) == []
+    assert state_leak_refusal(old, new) is None
+
+
+def test_diff_state_leaks_fails_added_consumer_provider_address() -> None:
+    old = _state(outcome="clean")
+    new = _state(outcome="clean", notes=[f"mail {CONSUMER_EMAIL}"])
+
+    assert _diff(old, new) == [
+        StateStringLeak(
+            field_path=f"waves.{_WAVE}.notes[0]",
+            hit=StateLeakHit(kind=StateLeakKind.EMAIL, snippet=CONSUMER_EMAIL),
+        )
+    ]
+    assert state_leak_refusal(old, new) == f"state_leak_refused: waves.{_WAVE}.notes[0] (email)"

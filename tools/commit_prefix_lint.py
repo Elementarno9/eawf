@@ -1079,7 +1079,8 @@ def check_pushed_commits(
             *refused,
             "Squash each Batch's scratch work into one '<type>: <summary>' commit with "
             "one 'Batch: BAT-<NNNN>' trailer and a 'Task: <KEY>' trailer per Task it "
-            "delivers, ending with one 'state: <summary>' commit, then push again.",
+            "delivers; a 'state:' commit carries only committed state paths. Then push "
+            "again.",
         ]
     )
 

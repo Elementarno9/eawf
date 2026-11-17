@@ -47,13 +47,13 @@ rules:
       method: review
   - rule_id: eawf.core.vcs.commit-scope-carrier
     obligation_id: vcs.commit-scope-carrier
-    revision: 5
+    revision: 6
     title: Name the Batch and its Tasks in every commit
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Write a Batch commit as "<type>: <summary>" with one `Batch: BAT-<NNNN>` trailer and a `Task: <KEY>` trailer per Task it delivers, each of that Batch; a single-Task commit may carry its `Task:` trailer alone; write the trailing state commit as "state: <summary>" touching only committed state paths.
+      Give a Batch commit "<type>: <summary>", one `Batch: BAT-<NNNN>` trailer and a `Task: <KEY>` trailer per Task it delivers; commit state once per pull request, as one `state: seal` commit when the pull request opens; review fixes are code-only; the acceptance and release records are the only later `state:` commits.
     rationale: >-
       The trailers tie every commit to the Batch and Tasks it delivers, so the pre-push commit lint, the release check and the rebind after a squash find the work without reading prose.
     verification:
@@ -74,13 +74,13 @@ rules:
       method: review
   - rule_id: eawf.core.vcs.commit-granularity
     obligation_id: vcs.commit-granularity
-    revision: 7
-    title: Land one commit per Batch and one state commit per push
+    revision: 8
+    title: Land one commit per Batch and one seal commit per pull request
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Before review opens, squash the branch to one buildable commit per Batch, or a few for a large Batch, code with its tests; after review opens, only append fix Batches; end each push with one `state:` commit; rebind each binding a squash replaced with `eawf batch rebind`, never by editing a row.
+      Squash to one buildable commit per Batch, code with its tests, before review opens and rebind with `eawf batch rebind`; commit state once per pull request, as one `state: seal` commit when the pull request opens; review fixes are code-only; the acceptance and release records are the only later `state:` commits.
     rationale: >-
       A deliverable split across commits cannot be reviewed or reverted as a unit and bisect lands on trees that never worked; a Batch binds the Milestone branch head when it lands, so the squash leaves that binding naming a commit no branch reaches until a superseding row rebinds it.
     verification:

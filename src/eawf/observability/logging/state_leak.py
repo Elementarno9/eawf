@@ -34,11 +34,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
-from eawf.observability.logging.scrub import (
-    _DEFAULT_ALLOWED_EMAILS,
-    SensitiveScrubber,
-    _eawf_author_emails,
-)
+from eawf.observability.logging.scrub import _DEFAULT_ALLOWED_EMAILS, SensitiveScrubber
 
 logger = logging.getLogger(__name__)
 
@@ -144,10 +140,10 @@ def default_allowed_emails() -> frozenset[str]:
     """Return the casefolded addresses a leak scan lets through.
 
     Returns:
-        The no-reply co-author addresses plus eawf's ``pyproject.toml`` author
-        rows: exactly the addresses the emit-time scrubber preserves.
+        The no-reply co-author addresses: exactly the addresses the emit-time
+        scrubber preserves.
     """
-    return frozenset(email.casefold() for email in _DEFAULT_ALLOWED_EMAILS | _eawf_author_emails())
+    return frozenset(email.casefold() for email in _DEFAULT_ALLOWED_EMAILS)
 
 
 def scan_state_leaks(text: str, *, allowed_emails: frozenset[str]) -> list[StateLeakHit]:

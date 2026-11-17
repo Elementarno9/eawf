@@ -236,3 +236,44 @@ def test_v073_admission(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None
     shown = asyncio.run(show(ctx, {}))
     assert shown["train_id"] == "TRAIN-0.7.3"
     assert shown["record"]["key"] == THIRD_KEY
+
+
+FOURTH_PATCH = "0.7.4"
+FOURTH_KEY = "REL-0.7.4"
+FOURTH_REF = "milestone://eawf/MLS-0110"
+
+
+def test_v074_admission(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    assert required_contract_ids(FOURTH_PATCH) == required_contract_ids(THIRD_PATCH)
+    for key, directory in (
+        (THIRD_KEY, "patch-0.7.3-stable"),
+        (FOURTH_KEY, "patch-0.7.4-stable"),
+    ):
+        monkeypatch.setitem(
+            provider_certification.CANARY_EVIDENCE_DIRS,
+            key,
+            (".ea", "artifacts", "evidence", directory),
+        )
+    ctx = context(tmp_path)
+    state_path = Path(str(ctx.state_path))
+    _commit_export(tmp_path, THIRD_KEY, THIRD_REF)
+    asyncio.run(create(ctx, {"version": THIRD_PATCH, "membership_refs": [THIRD_REF]}))
+    before = read_release_records(state_path)[THIRD_KEY]
+
+    with pytest.raises(ReleaseConfigError, match=r"'REL-0\.7\.4' requires non-empty"):
+        checkpoint_release_config(FOURTH_PATCH, repo_root=tmp_path)
+    _commit_export(tmp_path, FOURTH_KEY, FOURTH_REF)
+    config = checkpoint_release_config(FOURTH_PATCH, repo_root=tmp_path)
+    assert config.release_key == FOURTH_KEY
+    assert config.membership_refs == (FOURTH_REF,)
+
+    result = asyncio.run(create(ctx, {"version": FOURTH_PATCH, "membership_refs": [FOURTH_REF]}))
+
+    assert result["release"]["key"] == FOURTH_KEY
+    assert result["release"]["status"] == ReleaseStatus.DRAFT.value
+    assert result["supersedes_release_ref"] is None
+    assert read_release_records(state_path)[THIRD_KEY] == before
+    assert asyncio.run(show(ctx, {"version": THIRD_PATCH}))["train_id"] == "TRAIN-0.7.3"
+    shown = asyncio.run(show(ctx, {}))
+    assert shown["train_id"] == "TRAIN-0.7.4"
+    assert shown["record"]["key"] == FOURTH_KEY

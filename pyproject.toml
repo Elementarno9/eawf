@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 license = { text = "MIT" }
 authors = [
-    { name = "Elementarno9", email = "edwardpro9@gmail.com" },
+    { name = "Elementarno9" },
 ]
 # Platform + interpreter support, kept in lockstep with the CI matrix in
 # .github/workflows/ci.yaml and the README support table. Linux and macOS

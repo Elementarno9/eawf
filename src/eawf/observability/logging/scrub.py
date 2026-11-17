@@ -8,21 +8,14 @@ the daemon's logging branches (the foreground stderr stream and the
 non-foreground ``eawfd.log`` file handler) so no sink ever serialises
 raw secrets.
 
-The email allowlist preserves the canonical ``pyproject.toml``
-``[project].authors`` address (the project's own author block, which
-is allowed to appear verbatim per the secrets-hygiene policy) plus the
-canonical no-reply co-author addresses. The author email is read from
-``pyproject.toml`` at construction time rather than hard-coded, so the
-literal address never lands in committed source.
+The email allowlist preserves only the canonical no-reply co-author
+addresses; every other address is redacted.
 """
 
 from __future__ import annotations
 
 import logging
 import re
-import tomllib
-from importlib.resources import files
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +31,6 @@ _DEFAULT_ALLOWED_EMAILS: frozenset[str] = frozenset(
     }
 )
 
-# Walk at most this many parents looking for eawf's own pyproject.toml.
-_MAX_PYPROJECT_WALK_LEVELS = 6
-
 
 def _email_pattern_index(patterns: tuple[re.Pattern[str], ...]) -> int:
     """Return the index of the email pattern within ``patterns``.
@@ -54,41 +44,6 @@ def _email_pattern_index(patterns: tuple[re.Pattern[str], ...]) -> int:
         if "@" in pattern.pattern:
             return index
     raise ValueError("no email pattern in scrubber PATTERNS")
-
-
-def _eawf_author_emails() -> frozenset[str]:
-    """Return the canonical author emails from eawf's ``pyproject.toml``.
-
-    Anchors on the :mod:`eawf` package directory and walks up at most
-    :data:`_MAX_PYPROJECT_WALK_LEVELS` levels, accepting only a
-    ``pyproject.toml`` whose ``[project].name`` is ``"eawf"`` so a host
-    project's metadata is never picked up for a wheel install. Returns
-    an empty set (no extra allowlist entries) when the file cannot be
-    located or parsed — the default no-reply allowlist still applies.
-    """
-    package_root = Path(str(files("eawf"))).resolve()
-    candidates = [package_root, *package_root.parents][: _MAX_PYPROJECT_WALK_LEVELS + 1]
-    for candidate in candidates:
-        pyproject_path = candidate / "pyproject.toml"
-        if not pyproject_path.is_file():
-            continue
-        try:
-            with pyproject_path.open("rb") as handle:
-                data = tomllib.load(handle)
-        except (OSError, tomllib.TOMLDecodeError) as exc:
-            logger.debug(f"_eawf_author_emails skipping path={pyproject_path} reason={exc!r}")
-            continue
-        project = data.get("project", {})
-        if project.get("name") != "eawf":
-            return frozenset()
-        emails: set[str] = set()
-        for author in project.get("authors", []) or []:
-            if isinstance(author, dict):
-                email = author.get("email")
-                if isinstance(email, str) and email:
-                    emails.add(email)
-        return frozenset(emails)
-    return frozenset()
 
 
 # A machine-path anchor counts only where it starts a path, so a letter or
@@ -121,7 +76,7 @@ class SensitiveScrubber(logging.Filter):
     Each compiled pattern in :data:`PATTERNS` is substituted with
     :data:`REDACTION` over the fully formatted message. Email addresses
     on the allowlist are restored after substitution so the canonical
-    author and no-reply addresses survive.
+    no-reply addresses survive.
     """
 
     PATTERNS: tuple[re.Pattern[str], ...] = (
@@ -190,13 +145,12 @@ class SensitiveScrubber(logging.Filter):
                 which logger sub-tree the filter applies to (``""`` =
                 all records).
             allowed_emails: explicit allowlist of email addresses to
-                preserve. When ``None`` the allowlist is the union of
-                the default no-reply addresses and the author emails
-                read from eawf's ``pyproject.toml``.
+                preserve. When ``None`` the allowlist is the default
+                no-reply addresses.
         """
         super().__init__(name)
         if allowed_emails is None:
-            allowed_emails = _DEFAULT_ALLOWED_EMAILS | _eawf_author_emails()
+            allowed_emails = _DEFAULT_ALLOWED_EMAILS
         self._allowed_emails: frozenset[str] = frozenset(
             email.casefold() for email in allowed_emails
         )

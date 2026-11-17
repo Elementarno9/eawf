@@ -60,13 +60,13 @@ rules:
       method: review
   - rule_id: eawf.core.lifecycle.close-timing
     obligation_id: lifecycle.close-timing
-    revision: 2
+    revision: 3
     title: Accept a Milestone only after review and CI pass
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Accept a Milestone only after its verification, ship CI and pull request review pass; append follow-up Batches or Tasks to the active Milestone instead of opening another; record the acceptance in the last state commit before merge, once CI is green on the pushed branch.
+      Accept a Milestone once verification, ship CI and review pass, appending follow-ups to it. State is committed once per pull request, as one `state: seal` commit when the pull request opens; review fixes are code-only; the acceptance and release records are the only later `state:` commits.
     rationale: >-
       Accepting before review lets state claim work that reviewers have not approved, and a pre-merge acceptance keeps state in step with what was approved.
     verification:

@@ -52,8 +52,8 @@ def test_rules_text(tmp_path: Path) -> None:
 
     cadence, cadence_source = rules["release.milestone-cadence"]
     assert cadence_source == _RULES_SOURCE
-    assert "pull request targets `dev`" in cadence
-    assert "pre-release tags `{version}-dev.{n}` are cut" in cadence
+    assert "pull requests target `dev`" in cadence
+    assert "`{version}-dev.{n}` pre-release cut on `dev`" in cadence
     assert "fast-forwards `main` to a reviewed `dev` head" in cadence
 
     ship, _ = rules["lifecycle.ship-process"]
@@ -66,18 +66,125 @@ def test_rules_text(tmp_path: Path) -> None:
 
     pointer, pointer_source = rules["delivery.cadence-provenance"]
     assert pointer_source == _RULES_SOURCE
-    assert "cite decision D94" in pointer
-    assert "superseded D92" in pointer
-    assert "superseding D94" in pointer
+    assert "cite decision D101" in pointer
+    assert "superseded D94" in pointer
+    assert "superseding D101" in pointer
+    assert "D92" not in pointer
+
+    release, _ = rules["release.milestone-cadence"]
+    assert "at least a minor release" in release
+    assert "a Milestone of a declared multi-Milestone release" in release
 
 
-def test_rules_text_procedures_cite_d94() -> None:
+def test_rules_text_procedures_cite_d101() -> None:
     pointer = (_REPO_ROOT / "docs/rules/agent-driven-cadence-adr-pointer.md").read_text("utf-8")
-    assert "Decision D94, which superseded D92" in pointer
-    assert "superseding D94 with a new Decision row" in pointer
+    assert "Decision D101, which superseded D94" in pointer
+    assert "superseding D101 with a new Decision row" in pointer
     ship = (_REPO_ROOT / "docs/rules/ship-process.md").read_text("utf-8")
-    assert "under decision D94" in ship
+    assert "under decision D101" in ship
     assert "Fast-forward ``main`` to the reviewed" not in ship
+
+
+#: Obligations whose packaged rule states the seal-commit regime.
+_SEAL_RULES = ("vcs.commit-granularity", "vcs.commit-scope-carrier", "lifecycle.close-timing")
+
+#: Phrases of the retired one-state-commit-per-push regime.
+_RETIRED_STATE_PHRASES = (
+    "one `state:` commit per push",
+    "end each push with one",
+    "trailing state commit",
+    "each push ends with",
+    "before a push, the branch is squashed",
+    "no commit lands on the branch after it",
+)
+
+
+def _retired_state_phrases(text: str) -> list[str]:
+    """Return each retired regime phrase *text* carries, case-insensitively."""
+    lowered = text.lower()
+    return [phrase for phrase in _RETIRED_STATE_PHRASES if phrase.lower() in lowered]
+
+
+def test_seal_commit_packaged_rules(tmp_path: Path) -> None:
+    rules = _instructions(tmp_path)
+
+    for obligation in _SEAL_RULES:
+        text, source = rules[obligation]
+        assert not source.startswith(".ea/"), obligation
+        assert "`state: seal`" in text, obligation
+        assert "once per pull request" in text, obligation
+        assert "when the pull request opens" in text, obligation
+        assert "code-only" in text, obligation
+        assert "the acceptance and release records are the only later `state:` commits" in text, (
+            obligation
+        )
+        assert _retired_state_phrases(text) == [], obligation
+
+
+def test_seal_commit_rule_revisions() -> None:
+    import yaml
+
+    modules = _REPO_ROOT / "src/eawf/platform/rules/data/modules"
+    revisions = {
+        rule["obligation_id"]: rule["revision"]
+        for name in ("eawf.core.vcs.yaml", "eawf.core.lifecycle.yaml")
+        for rule in yaml.safe_load((modules / name).read_text("utf-8"))["rules"]
+    }
+    assert {key: revisions[key] for key in _SEAL_RULES} == {
+        "vcs.commit-granularity": 8,
+        "vcs.commit-scope-carrier": 6,
+        "lifecycle.close-timing": 3,
+    }
+
+
+def test_seal_commit_profile_blocks_and_rendered_text() -> None:
+    import yaml
+
+    core = yaml.safe_load(
+        (_REPO_ROOT / "src/eawf/platform/profiles/data/core.yaml").read_text("utf-8")
+    )
+    blocks = {block["id"]: block for block in core["render_blocks"]}
+    for block_id in ("commit-prefix", "ship-process", "commit-granularity"):
+        block = blocks[block_id]
+        text = "\n".join(
+            str(block.get(field) or "")
+            for field in ("summary", "body_template", "rationale", "mechanism", "verification")
+        )
+        assert "``state: seal``" in text, block_id
+        assert "code-only" in text, block_id
+
+    rendered = [
+        _REPO_ROOT / "AGENTS.md",
+        _REPO_ROOT / ".ea/rules.yaml",
+        *sorted((_REPO_ROOT / "src/eawf/platform/profiles/data").glob("*.yaml")),
+        *sorted((_REPO_ROOT / "src/eawf/platform/rules/data/modules").glob("*.yaml")),
+        *sorted((_REPO_ROOT / "docs/rules").glob("*.md")),
+        _REPO_ROOT / "docs/architecture/workflow.md",
+    ]
+    found = {
+        str(path.relative_to(_REPO_ROOT)): _retired_state_phrases(path.read_text("utf-8"))
+        for path in rendered
+    }
+    assert {path: phrases for path, phrases in found.items() if phrases} == {}
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("", []),
+        ("Write the Trailing State Commit last.", ["trailing state commit"]),
+        ("end each push with one `state:` commit", ["end each push with one"]),
+        ("commit state once per pull request as one `state: seal` commit", []),
+        ("Each push ends with one `state: <summary>` commit.", ["each push ends with"]),
+        (
+            "The acceptance is the last state commit; no commit lands on the branch after it.",
+            ["no commit lands on the branch after it"],
+        ),
+    ],
+    ids=["empty", "case-folded", "push-tail", "seal", "push-ends", "after-acceptance"],
+)
+def test_retired_state_phrases(text: str, expected: list[str]) -> None:
+    assert _retired_state_phrases(text) == expected
 
 
 def test_version_and_changelog() -> None:

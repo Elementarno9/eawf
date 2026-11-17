@@ -144,8 +144,8 @@ Default `cherry_pick` is correct for most Eä Tasks: the worktree branch is ephe
 ## VCS, commit, PR, and merge policy
 
 - A Batch commit reads `<type>: <summary>` with one `Batch: BAT-<NNNN>` trailer and one `Task: <KEY>` trailer per Task it delivers; a single-Task commit may carry its `Task:` trailer alone.
-- Each push ends with one `state: <summary>` commit touching only committed state paths.
-- Before a push, the branch is squashed to one buildable commit per Batch (`eawf batch squash`), code with its tests.
+- Before review opens, the branch is squashed to one buildable commit per Batch (`eawf batch squash`), code with its tests.
+- State is committed once per pull request: one `state: seal` commit, touching only committed state paths, is written when the pull request opens. Review fixes are code-only; the acceptance record and the release record are the only later `state:` commits.
 - A Milestone pull request carries a Summary of three to six bullets and a Test plan checklist; review is addressed by appending Batches, and the merge keeps each Batch commit.
 
 Merge / rebase rules live in `.ea/config.yaml` under `vcs:` and `worktrees:`. Force push is forbidden on protected branches, and main and tags are never rewritten.

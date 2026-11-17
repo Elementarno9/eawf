@@ -53,13 +53,13 @@ rules:
     procedure_ref: docs/rules/naming-conventions.md
   - rule_id: repo.milestone-equals-release
     obligation_id: release.milestone-cadence
-    revision: 4
-    title: Ship every accepted Milestone as at least a minor release
+    revision: 5
+    title: Ship each Milestone as a minor release or a declared pre-release
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Ship every accepted Milestone as at least a minor release: its acceptance commit bumps src/eawf/_version.py; its pull request targets `dev`, where pre-release tags `{version}-dev.{n}` are cut, and a stable release fast-forwards `main` to a reviewed `dev` head and is tagged there.
+      Ship a single-Milestone release as at least a minor release whose acceptance commit bumps src/eawf/_version.py, and a Milestone of a declared multi-Milestone release as a `{version}-dev.{n}` pre-release cut on `dev`; pull requests target `dev`, and a stable release fast-forwards `main` to a reviewed `dev` head.
     rationale: >-
       A Milestone is this repository's unit of shipped value, so a tag per Milestone keeps the published version honest about what landed.
     verification:
@@ -81,13 +81,13 @@ rules:
     procedure_ref: docs/rules/agent-driven-large-milestone-pr.md
   - rule_id: repo.cadence-decisions
     obligation_id: delivery.cadence-provenance
-    revision: 9
+    revision: 10
     title: Cite the ratifying decision when the cadence is questioned
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      When a review questions the one-pull-request-per-Milestone cadence, the `dev` integration branch or the commit-history regime, cite decision D94 in the decision ledger, which superseded D92; reverse it only by superseding D94 with a new one.
+      When a review questions the one-pull-request-per-Milestone cadence, the `dev` integration branch or the commit-history regime, cite decision D101 in the decision ledger, which superseded D94; reverse it only by superseding D101 with a new one.
     rationale: >-
       The cadence departs from small-change practice on purpose; without the decision trail it reads as an oversight and gets reverted.
     verification:

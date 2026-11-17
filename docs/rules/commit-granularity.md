@@ -1,9 +1,9 @@
 <!-- Generated from the eawf profile render block `commit-granularity`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=commit-granularity version=1.9 hash=4717513f440ead7d -->
+<!-- BEGIN EAWF:managed id=commit-granularity version=2.0 hash=2157280e501c71fe -->
 # `commit-granularity`
 
-One commit per Batch, squashed before review opens; after review each fix lands as an appended Batch; each push ends with one ``state:`` commit; a squash rebinds by superseding rows.
+One commit per Batch, squashed before review; one ``state: seal`` commit per pull request when it opens; review fixes are appended code-only Batches; a squash rebinds by superseding rows.
 
 ### Rationale
 
@@ -12,11 +12,11 @@ Commit count is not progress. A deliverable split across a dozen commits — cod
 
 ### Mechanism
 
-Decision D94, which superseded D92, sets the regime. Scratch and per-Task commits are free while a Batch is in flight; before review opens, ``eawf batch squash`` writes the branch again as one commit per Batch holding its code and tests, ordered by each Batch's last commit, carrying one ``Batch:`` trailer and a ``Task:`` trailer per Task, and checks every rewritten commit builds. A large Batch may land as a few buildable commits; two Batches whose work cannot be separated share one commit, and the squash says so.
+Decision D101, which superseded D94, sets the regime. Scratch and per-Task commits are free while a Batch is in flight; before review opens, ``eawf batch squash`` writes the branch again as one commit per Batch holding its code and tests, ordered by each Batch's last commit, carrying one ``Batch:`` trailer and a ``Task:`` trailer per Task, and checks every rewritten commit builds. A large Batch may land as a few buildable commits; two Batches whose work cannot be separated share one commit, and the squash says so.
 
-**No squash after review.** Once the Milestone PR is open for review, its commits are fixed. Fix a review finding with a new Batch appended on top, with its own commit and the push's trailing ``state:`` commit. After review opens, never squash, amend, rebase or force-push the branch. ``main`` then fast-forwards to the reviewed head, so each commit a reviewer read lands with the same SHA.
+**No squash after review.** Once the Milestone PR is open for review, its commits are fixed. Fix a review finding with a new Batch appended on top, as a code-only commit. After review opens, never squash, amend, rebase or force-push the branch. ``main`` then fast-forwards to the reviewed head, so each commit a reviewer read lands with the same SHA.
 
-**One state commit per push.** State changes made while the Tasks ran ride a single trailing ``state:`` commit at the end of the push, touching only committed state paths. Never interleave state commits between the Batch commits of one push.
+**One seal commit per pull request.** State is committed once per pull request: the state changes made while the Tasks ran ride one ``state: seal`` commit, written when the pull request opens and touching only committed state paths. Review fixes are code-only commits; the acceptance record and the release record are the only later ``state:`` commits. Never interleave state commits between Batch commits.
 
 **A Batch binds when it lands.** A Batch closes as soon as every Task in it is ready and its commits are on the Milestone branch: the daemon binds the Milestone branch head and walks the Batch and its Tasks to COMPLETED. The squash replaces the commits those bindings name, so once the branch points at the squashed tip, ``eawf batch rebind`` appends a superseding row for every ledger line naming a replaced commit, bound to the commit now carrying its Batch; no row is edited. A branch the remote already has is rewritten only before review opens, only with ``--force-with-lease``, and only after an archive ref.
 
@@ -25,5 +25,5 @@ The one exception is a golden-only ``test:`` commit: every path it stages is a n
 
 ### Verification
 
-Read the commit list of the Milestone PR: up to the start of review, each Batch appears as one commit, or a few, containing its tests and carrying its ``Batch:`` and ``Task:`` trailers, followed by one ``state:`` commit; after it, each review fix appears as an appended Batch commit followed by its push's ``state:`` commit, and no reviewed commit was rewritten. A ``test:`` golden refresh names the change it follows. Every commit in the range builds, so ``git bisect`` never lands on a broken intermediate, and every head a landed Batch bound is an ancestor of the pushed head.
+Read the commit list of the Milestone PR: up to the start of review, each Batch appears as one commit, or a few, containing its tests and carrying its ``Batch:`` and ``Task:`` trailers, followed by one ``state: seal`` commit; after it, each review fix appears as an appended code-only Batch commit, the only later ``state:`` commits are the acceptance record and the release record, and no reviewed commit was rewritten. A ``test:`` golden refresh names the change it follows. Every commit in the range builds, so ``git bisect`` never lands on a broken intermediate, and every head a landed Batch bound is an ancestor of the pushed head.
 <!-- END EAWF:managed id=commit-granularity -->

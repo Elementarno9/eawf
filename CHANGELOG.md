@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.7.4] - 2026-11-17
+
+This patch release makes a tree in the eawf 0.8 layout stand down cleanly on every entry path, adds a verb that rebinds recorded commits after a history rewrite in place, rewords the commit regime to one seal commit per pull request, removes the author email from the package metadata, and declares the 0.7.4 release train. No state migration is required from 0.7.3.
+
+### Upgrade notes
+
+- **A tree in the eawf 0.8 layout stands down.** A repository whose `.ea` holds `state` and no `generations` uses the eawf 0.8 layout, which this release cannot read. The hook wrapper prints `eawf: this repository uses the eawf 0.8 layout; install eawf 0.8 or later` once at session start and does nothing on every other event. Every verb except hook, status line, doctor, help and version is refused on such a tree with the same line and the migration-required exit code; doctor answers and fails its authority row.
+- **`eawf batch rebind-rewritten` after a history rewrite.** `eawf batch rebind-rewritten --map-file <git filter-repo commit map> [--dry-run]` (with the usual `--idempotency-key` and `--actor`) supersedes every ledger row naming a commit that a rewrite in place replaced, and records each applied pair in the committed file `.ea/store/rewrite_map.jsonl`. The history checks read old hashes through that file. In a rewritten repository, run `eawf sync` first (it adds the ignore exception that lets the map file be committed), then run the verb, then commit the changed ledgers, the map file and `.gitignore`. Do not run `eawf doctor --fix` or a pruning `git gc` before that. Hashes that were already unreachable before the rewrite stay reported.
+- **One seal commit per pull request.** State is committed once per pull request, as one `state: seal` commit when the pull request opens. Review fixes are code-only, and the acceptance and release records are the only later `state:` commits.
+- **Author email removed.** The author email is removed from the package metadata, so no wheel or sdist publishes an author email field, and the leak scanners no longer allow that address anywhere: the log scrubber and every capture that scrubs through it redact it, and `eawf hook email-leak-lint` reports it.
+- **Existing lines with the old address.** In a commit, the pre-commit run judges the state file and the generation ledgers by the lines the staged diff adds, so rows already committed do not block a commit. A full-file run of `eawf hook email-leak-lint` on an existing ledger file, or a staged run whose diff cannot be read, scans whole files and reports the address in old lines too.
+- **No state migration.** No state migration is required from 0.7.3.
+- **Version test and goldens.** The test that pinned version 0.7.3 and its changelog section is replaced by one for 0.7.4, and the plugin_install goldens are regenerated for the new version and carry the wrapper's 0.8-layout stand-down.
+
+### 0.8 layout
+
+- **Every entry path recognises the layout.** The hook wrappers for Claude and Codex, the command line and the workspace walk that finds `.ea` all recognise the eawf 0.8 layout, as described in the upgrade notes. The refusal keeps the migration-required error code, and its next step names the newer client instead of the 0.6 upgrade path.
+
+### History rewrite
+
+- **Rebind from a commit map.** `eawf batch rebind-rewritten` reads a git filter-repo commit map, checks that each new commit exists and keeps its tree, accepts several old commits mapped to one new commit, and is idempotent; `--dry-run` prints the counts a real run would and writes nothing.
+- **Old hashes read through the map.** The ledger history check, the `eawf doctor --fix` repair, plan freshness, completion, read-back, adoption and Batch close read old hashes through `.ea/store/rewrite_map.jsonl`. Without the file nothing changes.
+
+### Commit regime
+
+- **Rules and pages reworded.** The rules, profile blocks and rendered rule pages describe the one seal commit per pull request regime, and a Milestone of a declared multi-Milestone release may ship as a dev pre-release. The pre-push lint hint no longer asks for a trailing state commit.
+
+### Package metadata
+
+- **Name-only author.** The package's authors entry keeps the name only. The log scrubber and the state leak check no longer derive an allowed address from the package metadata; they allow the no-reply co-author addresses only.
+
+### Release
+
+- **0.7.4 train.** The release verbs now resolve 0.7.4: its train has one stable checkpoint that requires canary membership, with the same targets and claims as 0.7.3, and a 0.7.4 canary export without evidence of its own carries the 0.7.3 runtimes forward.
+
 ## [0.7.3] - 2026-11-12
 
 This patch release makes `eawf daemon stop` wait until the daemon is gone, guards agent commits and pushes in a managed main checkout with the state document lock, answers host tool observations at once and writes them in batches, lets an approval seal cut short by a lock timeout finish on the next identical answer, leaves one winner when several hooks race to start the daemon, lets a squash after a Batch closed pass the ledger history check, and declares the 0.7.3 release train. No state migration is required from 0.7.2.

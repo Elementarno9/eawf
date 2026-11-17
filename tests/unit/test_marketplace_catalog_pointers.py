@@ -16,13 +16,16 @@ drift the committed catalog).
 from __future__ import annotations
 
 import json
+import tomllib
 from pathlib import Path
+from typing import Any
 
 from eawf.runtime.runtimes.claude.plugin_package import (
     PublishSource as ClaudePublishSource,
 )
 from eawf.runtime.runtimes.claude.plugin_package import (
     _read_pyproject_metadata,
+    render_plugin_manifest,
 )
 from eawf.runtime.runtimes.claude.plugin_package import (
     _render_marketplace as _claude_render_marketplace,
@@ -102,3 +105,52 @@ def test_codex_pointer_matches_packager_published_output() -> None:
     git-subdir published-mode render."""
     expected = _codex_render_marketplace(CodexPublishSource.GIT_SUBDIR).decode("utf-8")
     assert _CODEX_POINTER.read_text(encoding="utf-8") == expected
+
+
+def _pyproject_project_table() -> dict[str, Any]:
+    with (_REPO_ROOT / "pyproject.toml").open("rb") as handle:
+        project: dict[str, Any] = tomllib.load(handle)["project"]
+    return project
+
+
+def test_pyproject_authors_carry_name_only() -> None:
+    """Every authors entry holds the name key alone, so no wheel or sdist
+    publishes an author address."""
+    project = _pyproject_project_table()
+    authors = project["authors"]
+
+    assert len(authors) >= 1
+    assert all(set(author) == {"name"} for author in authors)
+    assert all(author["name"] for author in authors)
+
+
+def test_pyproject_maintainers_carry_no_email() -> None:
+    """A maintainers entry, if one is ever added, carries no address either."""
+    maintainers = _pyproject_project_table().get("maintainers", [])
+
+    assert all("email" not in maintainer for maintainer in maintainers)
+
+
+def test_rendered_manifests_carry_author_name_and_no_address() -> None:
+    """The plugin and marketplace manifests built from pyproject keep the
+    author name and carry no '@' anywhere."""
+    meta = _read_pyproject_metadata()
+    author_name = _pyproject_project_table()["authors"][0]["name"]
+    plugin = render_plugin_manifest(
+        version="0.0.0",
+        author_name=meta["author_name"],
+        author_email=meta["author_email"],
+        homepage=meta["homepage"],
+        repository=meta["repository"],
+    )
+    marketplace = _claude_render_marketplace(
+        author_name=meta["author_name"],
+        publish_source=ClaudePublishSource.NPM,
+    )
+
+    assert meta["author_name"] == author_name
+    assert meta["author_email"] is None
+    assert json.loads(plugin)["author"] == {"name": author_name}
+    assert "@" not in plugin
+    assert author_name in marketplace
+    assert "@" not in marketplace.replace("@elementarno/eawf", "")

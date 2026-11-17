@@ -1,4 +1,4 @@
-"""The 0.7.3 cut: the package version and the changelog section naming its six areas."""
+"""The 0.7.4 cut: the package version and the changelog section naming its five areas."""
 
 from __future__ import annotations
 
@@ -13,30 +13,33 @@ from eawf.surfaces.cli._version_display import compose_display_version
 
 _CHANGELOG = Path(__file__).resolve().parents[4] / "CHANGELOG.md"
 
-#: The six areas of the 0.7.3 patch, each a third-level heading of its section.
+#: The five areas of the 0.7.4 patch, each a third-level heading of its section.
 _AREAS = (
-    "Daemon",
-    "Data-loss guard",
-    "Host tool observations",
-    "Approval seals",
-    "Test suite",
+    "0.8 layout",
+    "History rewrite",
+    "Commit regime",
+    "Package metadata",
     "Release",
 )
 
 #: What the upgrade notes must tell a user before the areas begin.
 _UPGRADE_PHRASES = (
-    "`eawf daemon stop`",
-    "only once the daemon process has exited",
-    "`daemon stop failed`",
-    "`unlocked_state_commit`",
-    "`git commit`",
-    "`git cherry-pick`",
-    "`eawf git commit -- <git args>`",
-    "`eawf git cherry-pick -- <git args>`",
-    "`git push`",
-    "`eawf git push -- <git args>`",
-    "No state migration is required from 0.7.2",
-    "replaced by one for 0.7.3",
+    "`eawf: this repository uses the eawf 0.8 layout; install eawf 0.8 or later`",
+    "once at session start",
+    "Every verb except hook, status line, doctor, help and version is refused",
+    "`eawf batch rebind-rewritten --map-file <git filter-repo commit map> [--dry-run]`",
+    "`.ea/store/rewrite_map.jsonl`",
+    "run `eawf sync` first",
+    "Do not run `eawf doctor --fix` or a pruning `git gc` before that",
+    "already unreachable before the rewrite stay reported",
+    "one `state: seal` commit when the pull request opens",
+    "Review fixes are code-only",
+    "The author email is removed from the package metadata",
+    "the leak scanners no longer allow that address anywhere",
+    "rows already committed do not block a commit",
+    "reports the address in old lines too",
+    "No state migration is required from 0.7.3",
+    "replaced by one for 0.7.4",
     "plugin_install goldens are regenerated",
 )
 
@@ -58,19 +61,19 @@ def _section(text: str, version: str) -> list[str]:
 
 
 def test_version_and_changelog() -> None:
-    assert __version__ == "0.7.3"
-    assert eawf.__version__ == "0.7.3"
-    assert compose_display_version().split("+")[0] == "0.7.3"
+    assert __version__ == "0.7.4"
+    assert eawf.__version__ == "0.7.4"
+    assert compose_display_version().split("+")[0] == "0.7.4"
 
     text = _CHANGELOG.read_text(encoding="utf-8")
     first = next(line for line in text.splitlines() if line.startswith("## "))
-    assert first == "## [0.7.3] - 2026-11-12"
-    section = _section(text, "0.7.3")
+    assert first == "## [0.7.4] - 2026-11-17"
+    section = _section(text, "0.7.4")
     headings = [line.removeprefix("### ") for line in section if line.startswith("### ")]
     assert headings == ["Upgrade notes", *_AREAS]
     body = "\n".join(section)
     # The release probe needs one line naming the migration outcome.
-    assert "No state migration is required from 0.7.2" in body
+    assert "No state migration is required from 0.7.3" in body
     upgrade = "\n".join(section[: section.index(f"### {_AREAS[0]}")])
     for phrase in _UPGRADE_PHRASES:
         assert phrase in upgrade, phrase
@@ -88,10 +91,9 @@ def test_version_and_changelog() -> None:
         )
         assert any(line.startswith("- **") for line in following[:stop]), area
     release = "\n".join(section[section.index("### Release") :])
-    assert "ledger history check" in release
-    assert "`eawf git push`" in "\n".join(
-        section[section.index("### Data-loss guard") : section.index("### Host tool observations")]
-    )
+    assert "same targets and claims as 0.7.3" in release
+    # The section must not spell out an address the release stopped publishing.
+    assert "@" not in body
 
 
 def test_section_lookup_boundaries() -> None:
@@ -101,4 +103,4 @@ def test_section_lookup_boundaries() -> None:
     with pytest.raises(LookupError):
         _section(sample, "9.9")
     with pytest.raises(LookupError):
-        _section("", "0.7.3")
+        _section("", "0.7.4")

@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import logging
-import tomllib
-from importlib.resources import files
-from pathlib import Path
 
 import pytest
 
@@ -13,32 +10,8 @@ from eawf.observability.logging.scrub import REDACTION, SensitiveScrubber
 
 
 def _scrubber() -> SensitiveScrubber:
-    """Return a scrubber with the default (pyproject-derived) allowlist."""
+    """Return a scrubber with the default no-reply allowlist."""
     return SensitiveScrubber()
-
-
-def _canonical_author_email() -> str:
-    """Read the canonical author email from eawf's pyproject.toml.
-
-    Kept out of the test as a literal so no PII lands in committed
-    source; the value is sourced from the same file the scrubber
-    allowlists at runtime.
-    """
-    package_root = Path(str(files("eawf"))).resolve()
-    for candidate in [package_root, *package_root.parents]:
-        pyproject = candidate / "pyproject.toml"
-        if not pyproject.is_file():
-            continue
-        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-        project = data.get("project", {})
-        if project.get("name") != "eawf":
-            continue
-        authors = project.get("authors") or []
-        if authors and isinstance(authors[0], dict):
-            email = authors[0].get("email")
-            if isinstance(email, str) and email:
-                return email
-    pytest.skip("canonical author email not resolvable from pyproject.toml")
 
 
 # --- one test per PATTERN -------------------------------------------------
@@ -200,14 +173,6 @@ def test_scrub_dotted_version_string_not_clobbered_by_ipv4() -> None:
 
 
 # --- allowlist ------------------------------------------------------------
-
-
-def test_canonical_author_email_preserved_by_allowlist() -> None:
-    email = _canonical_author_email()
-    scrubber = _scrubber()
-    out = scrubber.scrub(f"author email={email} ok")
-    assert email in out
-    assert REDACTION not in out
 
 
 def test_non_canonical_email_scrubbed_even_with_default_allowlist() -> None:

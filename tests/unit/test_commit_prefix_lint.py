@@ -406,3 +406,112 @@ def test_no_wave_check_remains(mod) -> None:
     assert mod.pushed_commit_error(message, ["tools/commit_prefix_lint.py"], records) is None
     source = _LINT_PATH.read_text(encoding="utf-8")
     assert [token for token in ("Eawf-Wave", "P##", r"P\d", r"W\d") if token in source] == []
+
+
+# --- seal regime: pushed ranges -------------------------------------------------------
+
+_SEAL_BASE = "a" * 40
+_SEAL_TIP = "f" * 40
+
+
+def _code_commit(task: str) -> tuple[str, list[str]]:
+    message = f"feat: land {task}\n\nWhy it lands.\n\nBatch: BAT-0007\nTask: {task}\n"
+    return message, [f"src/eawf/{task.lower()}.py", f"tests/unit/test_{task.lower()}.py"]
+
+
+def _check_range(
+    mod, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, commits: list[tuple[str, list[str]]]
+) -> tuple[int, str]:
+    """Run ``check_pushed_commits`` over *commits*, oldest first, on a marked root."""
+    by_sha = {f"{index:040x}": commit for index, commit in enumerate(commits, start=1)}
+
+    def _fake_git(args: list[str], *, repo_root: Path | None) -> SimpleNamespace:
+        if args[0] == "log":
+            stdout = "".join(
+                f"{sha}{mod._REC_SEP}{message}{mod._COMMIT_SEP}"
+                for sha, (message, _paths) in reversed(by_sha.items())
+            )
+            return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+        _message, paths = by_sha[args[-1]]
+        return SimpleNamespace(returncode=0, stdout="\n".join(paths) + "\n", stderr="")
+
+    records = mod.NativeRecords(
+        batch_keys=frozenset({"BAT-0007"}),
+        task_batches={"EAWF-0001": "BAT-0007", "EAWF-0002": "BAT-0007", "EAWF-0003": "BAT-0007"},
+    )
+    monkeypatch.setattr(mod, "_git", _fake_git)
+    monkeypatch.setattr(mod, "_canonical_state_path", lambda _root: tmp_path / ".ea" / "state.json")
+    monkeypatch.setattr(mod, "epoch2_generation", lambda _ea: tmp_path / "generation")
+    monkeypatch.setattr(mod, "load_native_records", lambda _generation: records)
+    env = {"PRE_COMMIT_FROM_REF": _SEAL_BASE, "PRE_COMMIT_TO_REF": _SEAL_TIP}
+    return mod.check_pushed_commits(env, repo_root=tmp_path)
+
+
+_SEAL_PATHS = [
+    ".ea/generations/gen-0123456789abcdef/state.json",
+    ".ea/generations/gen-0123456789abcdef/ledger/decision.jsonl",
+]
+
+
+def test_seal_regime_accepts_a_code_only_range(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commits = [_code_commit(task) for task in ("EAWF-0001", "EAWF-0002", "EAWF-0003")]
+
+    assert _check_range(mod, monkeypatch, tmp_path, commits) == (0, "")
+
+
+@pytest.mark.parametrize("code_commits", [0, 1, 3], ids=["seal-only", "one-code", "three-code"])
+def test_seal_regime_accepts_a_range_ending_in_one_seal(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch, code_commits: int
+) -> None:
+    tasks = ("EAWF-0001", "EAWF-0002", "EAWF-0003")[:code_commits]
+    commits = [_code_commit(task) for task in tasks]
+    commits.append(("state: seal the pull request state\n", _SEAL_PATHS))
+
+    assert _check_range(mod, monkeypatch, tmp_path, commits) == (0, "")
+
+
+def test_seal_regime_refuses_a_seal_carrying_source_without_asking_for_a_trailing_state_commit(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commits = [
+        _code_commit("EAWF-0001"),
+        ("state: seal the pull request state\n", [*_SEAL_PATHS, "src/eawf/x.py"]),
+    ]
+
+    code, diag = _check_range(mod, monkeypatch, tmp_path, commits)
+
+    assert code == 1
+    assert "state commit touches non-state paths: ['src/eawf/x.py']" in diag
+    assert "ending with one 'state:" not in diag
+    assert "trailing" not in diag
+    assert "a 'state:' commit carries only committed state paths" in diag
+
+
+def test_seal_regime_hint_covers_every_state_commit_carrying_source(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commits = [
+        _code_commit("EAWF-0001"),
+        ("state: seal the pull request state\n", _SEAL_PATHS),
+        ("state: accept the Milestone\n", [*_SEAL_PATHS, "src/eawf/x.py"]),
+    ]
+
+    code, diag = _check_range(mod, monkeypatch, tmp_path, commits)
+
+    assert code == 1
+    assert "state commit touches non-state paths: ['src/eawf/x.py']" in diag
+    assert "a 'state:' commit carries only committed state paths" in diag
+    assert "'state: seal' commit carries" not in diag
+
+
+def test_seal_regime_refuses_a_code_commit_without_a_task(
+    tmp_path: Path, mod, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commits = [_code_commit("EAWF-0001"), ("feat: no trailers\n", ["src/eawf/y.py"])]
+
+    code, diag = _check_range(mod, monkeypatch, tmp_path, commits)
+
+    assert code == 1
+    assert "carries no Task trailers" in diag

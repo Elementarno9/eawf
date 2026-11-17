@@ -33,6 +33,7 @@ the structured-shape contract end to end.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from eawf.platform.profiles import compose, load_profile
@@ -137,8 +138,19 @@ def test_agent_driven_profile_renders_divergence_rules(tmp_path: Path) -> None:
     assert "+10k lines" in rendered
     # ADR pointer: the ratifying decision + canonical workflow reference.
     assert "D-GIT-HISTORY (D76)" in rendered
-    assert "D10" not in rendered
+    assert re.search(r"\bD10\b", rendered) is None
     assert "D07" not in rendered
+    # Pre-release Milestones and the ruling that allows them.
+    assert "The accepted Milestone of a single-Milestone release ships as at least a minor" in (
+        rendered
+    )
+    assert (
+        "Each Milestone of a declared multi-Milestone release instead ships as a "
+        "``{version}-dev.{n}`` pre-release cut on ``dev``"
+    ) in rendered
+    assert "set by Decision D101, which superseded D94" in rendered
+    assert "superseding D101 with a new Decision row" in rendered
+    assert "set by Decision D94" not in rendered
     assert "docs/architecture/workflow.md" in rendered
     assert "src/eawf/_version.py" in rendered
     assert "declares the version dynamically" in rendered
