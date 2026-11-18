@@ -1,9 +1,9 @@
 {
-  "bundle": "sha256:b8c54c2ddd3e847a410eb807ac1323cf43edf258e56e7b271c5d7f6d46338638",
+  "bundle": "sha256:2b92fdda9ad59aa2af6e80649c36faf71406a2b479deba331f88c8d565d6b1f6",
   "catalog": "sha256:06eaca657b65a31fb64e9dfae181a4bcf229c0c593b5282e3dbc3fd0be68e95b",
   "files": [
     {
-      "digest": "sha256:a7081bd4ee4039e26a57f3921453761478d3d3c638d66d23050ee6ca8b2f4a31",
+      "digest": "sha256:779ab25b13ed1bda0ad270ed8c7d8b0ac6c366b80955f033cb19c4d939f582a4",
       "kind": "manifest",
       "path": ".codex-plugin/plugin.json"
     },
@@ -13,27 +13,27 @@
       "path": "hooks/hooks.json"
     },
     {
-      "digest": "sha256:30b2c544550a0bd98c10c667b020fd9ca934e140d865b22b1f3ce227576b9232",
+      "digest": "sha256:8b6e54c6f522e7c0c98a8f04cb44b17e6f15263b827bd6ca67f98628664c8c26",
       "kind": "hook",
       "path": "hooks/pre_tool_use.sh"
     },
     {
-      "digest": "sha256:c77572d466eebcc9b645b1a4959e38d7361534a583be7c933ffac34fc49308d3",
+      "digest": "sha256:c6df4cfa6c4ccfad74d2645be332a5cb73097e5228321e5a477bd0abec8d3805",
       "kind": "hook",
       "path": "hooks/session_end.sh"
     },
     {
-      "digest": "sha256:788998435b6c1b124d22d13499226fc14717811ab6088571565686541870685c",
+      "digest": "sha256:898de7909a7b0a387451f8058f6191cbb917f709375f7313117be38cb44393a9",
       "kind": "hook",
       "path": "hooks/session_start.sh"
     },
     {
-      "digest": "sha256:c0eeeccec959f459dcd80b07da0bb62a621156c731f8c267330ee44f1a2fc32f",
+      "digest": "sha256:8cc368165df9744408e90829c2446a806256af4eab37f08b1a699b564d7a895f",
       "kind": "hook",
       "path": "hooks/subagent_start.sh"
     },
     {
-      "digest": "sha256:d2773a5ddf16767b0d9b4c20fa9b989709a050af4d5ebc8ea62bcae122311951",
+      "digest": "sha256:d45261331f70be0991bf0cb63f267abecacdca8280bdeec232816b9b97f8ef0c",
       "kind": "hook",
       "path": "hooks/subagent_stop.sh"
     },
@@ -281,5 +281,5 @@
     }
   ],
   "target_epoch": 2,
-  "verb_catalog": "sha256:6131f25fd5e39bbd81849618187f11644c8bf861cc77ece898ed0c149163d3d3"
+  "verb_catalog": "sha256:873d289fbbd4435df5eb3eb6ec2437b7bb7c9f6602ddc08f87307ed1cc990c63"
 }

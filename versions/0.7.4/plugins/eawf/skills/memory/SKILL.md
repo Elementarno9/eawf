@@ -1,0 +1,68 @@
+---
+name: memory
+description: "List, view, add or promote memory entries."
+argument-hint: "<list|view|add|promote> [<query-or-memory-ref>...] [--scope <urn>] [--title <text>] [--body <text>] [--confidence <low|medium|high>] [--limit <N>] [--dry-run]"
+user-invocable: true
+disable-model-invocation: false
+---
+
+# /memory
+
+List, view, add or promote memory entries.
+
+## 1. Authority
+
+- Needs an eawf-managed repository; outside one the hook refuses it with `not an eawf-managed repository; run eawf init to manage it`.
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: inside a native Run, the Run's compiled capsule bounds every read, write, RPC, budget and external effect below; in a host session, the operator's own permissions do.
+- Operates on: memory entry, through `eawf memory list`, `eawf memory view`, `eawf memory add`, `eawf memory promote`.
+- Operator-only actions: `promote`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`) and never chooses the recommended option itself. In Claude Code, present the bound question the answer carries with AskUserQuestion verbatim, the action marker on its first line included: the operator's answer to that marked question is the approval, or the choice, and that answer seals it. Then complete the act under your own principal, citing the sealed action; an agent still cannot name an `OP-` key. Codex sessions have no AskUserQuestion, so their operator acts stay terminal-only: print the answer's `numbered_prompt` verbatim and stop; the operator relays the reply with `eawf question answer` (`runtime.question.answer_numbered`) from their own terminal, the console answers the same record, and the first answer wins.
+- Effects: The memory list, view, add and promote verbs.
+- Allowed RPCs: `eawf question answer` (`runtime.question.answer_numbered`), `eawf question open-decision` (`runtime.question.open_decision`). Any other RPC is denied before it reaches a handler. A host session drives a route through the `eawf` command named beside it; a route with no command beside it is driven by the daemon or a native Run.
+- Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
+- Local write root: none.
+- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
+
+## 2. Context
+
+The memory rows of the scope named by `--scope`, or the row named by its reference, with the retention policy and injection budget that govern them.
+
+Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
+
+## 3. Task
+
+Perform one explicit memory operation. Memory stores durable context; it does not duplicate current canonical state.
+
+```text
+/memory <list|view|add|promote> [<query-or-memory-ref>...] [--scope <urn>] [--title <text>] [--body <text>] [--confidence <low|medium|high>] [--limit <N>] [--dry-run]
+```
+
+Select exactly one action: `list`, `view`, `add`, `promote`. An option the selected action does not declare is refused before you start.
+
+## 4. Method
+
+1. Resolve action, scope, existing rows, evidence, retention policy, and injection budget.
+2. List returns compatible active rows ranked by relevance and freshness, labels stale entries, and discloses omitted count.
+3. Add admits only context likely useful next session and not cheaply derivable from canonical state. Reject secrets, machine-local identifiers, transcripts, current blockers, and duplicated lifecycle facts.
+4. Promote requires resolving evidence, deduplication, review date, and protected authority.
+5. Run the selected memory verb and return what it recorded. Never let memory content override a newer canonical fact.
+
+## 4b. Applicable rules
+
+No rule in the effective rule graph is scoped to this skill, which selects no activity or role; the repository policy still binds every session.
+
+## 5. Constraints
+
+- Stop on forbidden content, duplicate/conflict, stale revision, missing promotion evidence, or injection-budget overflow.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
+
+## 6. Output
+
+Output one MemorySkillReport. Its `summary` states the results or changed row, freshness, evidence, dedup disposition, receipt, and blockers. Show the operator the outcome and summary as prose, not the JSON. Print the JSON only with `--output json`.
+
+The report validates against `MemorySkillReport`, and its terminal outcome is exactly one of `listed`, `shown`, `written`, `promoted`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /memory` before returning it. It carries these fields and no other; a nested field is written under its parent.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `skill_id` | `"memory"` | yes | The id of the skill that produced the report. |
+| `outcome` | one of `"listed"`, `"shown"`, `"written"`, `"promoted"`, `"blocked"` | yes | How the invocation ended; the result. |
+| `summary` | string | no | Explanation of the outcome and what supports it; never the result. |

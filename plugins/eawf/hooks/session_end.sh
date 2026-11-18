@@ -247,6 +247,18 @@ if [ "${_eawf_event}" = "user_prompt_submit" ] && [ "${_eawf_kind}" = "unmanaged
     fi
 fi
 
+# A main checkout holding .ea/state beside no .ea/generations is in the eawf
+# 0.8 layout, which this build cannot read: running eawf or its data-loss
+# guard there would judge a tree it misreads. Every event stands down, the
+# cwd's own checkout and one the guard walk found alike. Session start takes
+# no walk, so it names the newer client only for the cwd's own checkout.
+if [ -n "${_eawf_main}" ] && [ -d "${_eawf_main}/.ea/state" ] && [ ! -e "${_eawf_main}/.ea/generations" ]; then
+    if [ "${_eawf_event}" = "session_start" ]; then
+        printf '%s\n' 'eawf: this repository uses the eawf 0.8 layout; install eawf 0.8 or later'
+    fi
+    exit 0
+fi
+
 # Outside a managed repository the hook does nothing and says nothing, except
 # that a skill which needs a managed repository is refused before it starts.
 if [ "${_eawf_kind}" != "managed" ] && [ "${_eawf_kind}" != "guarded" ]; then
