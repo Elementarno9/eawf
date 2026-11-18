@@ -331,7 +331,7 @@ def test_the_v072_export_is_its_own_prior() -> None:
     }
 
 
-#: The 0.7.3 patch rung, the newest release with an export of its own.
+#: The 0.7.3 patch rung.
 V073_KEY: Final = "REL-0.7.3"
 
 
@@ -342,6 +342,23 @@ def test_the_v073_export_is_its_own_prior() -> None:
     assert loaded is not None
     assert loaded.release_key == V073_KEY
     assert prior.release_key == V073_KEY
+    assert {item.runtime_id: tuple(item.os_classes) for item in prior.advertised} == {
+        "claude-code": ("linux",),
+        "codex": ("linux",),
+    }
+
+
+#: The 0.7.4 patch rung, the newest release with an export of its own.
+V074_KEY: Final = "REL-0.7.4"
+
+
+def test_the_v074_export_is_its_own_prior() -> None:
+    loaded = load_canary_evidence(REPO_ROOT, V074_KEY)
+    prior = prior_canary_evidence(REPO_ROOT, V074_KEY)
+
+    assert loaded is not None
+    assert loaded.release_key == V074_KEY
+    assert prior.release_key == V074_KEY
     assert {item.runtime_id: tuple(item.os_classes) for item in prior.advertised} == {
         "claude-code": ("linux",),
         "codex": ("linux",),
