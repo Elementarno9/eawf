@@ -39,6 +39,7 @@ This patch release makes a tree in the eawf 0.8 layout stand down cleanly on eve
 ### Release
 
 - **0.7.4 train.** The release verbs now resolve 0.7.4: its train has one stable checkpoint that requires canary membership, with the same targets and claims as 0.7.3, and a 0.7.4 canary export without evidence of its own carries the 0.7.3 runtimes forward.
+- **Dependency advisory.** The lock moves `opentelemetry-api` from 1.45.1 to 1.45.2, which fixes advisory CVE-2026-126360; no other locked version changes.
 
 ## [0.7.3] - 2026-11-12
 

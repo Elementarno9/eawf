@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,10 @@ from eawf._version import __version__
 from eawf.surfaces.cli._version_display import compose_display_version
 
 _CHANGELOG = Path(__file__).resolve().parents[4] / "CHANGELOG.md"
+_LOCK = Path(__file__).resolve().parents[4] / "uv.lock"
+
+#: The first opentelemetry-api release without the advisory that blocked the 0.7.4 release.
+_OTEL_API_FIXED = (1, 45, 2)
 
 #: The five areas of the 0.7.4 patch, each a third-level heading of its section.
 _AREAS = (
@@ -104,3 +109,11 @@ def test_section_lookup_boundaries() -> None:
         _section(sample, "9.9")
     with pytest.raises(LookupError):
         _section("", "0.7.4")
+
+
+def test_advisory_fixed_lock_pins_opentelemetry_api_at_or_past_the_fix() -> None:
+    packages = tomllib.loads(_LOCK.read_text(encoding="utf-8"))["package"]
+    versions = [row["version"] for row in packages if row["name"] == "opentelemetry-api"]
+
+    assert len(versions) == 1
+    assert tuple(int(part) for part in versions[0].split(".")[:3]) >= _OTEL_API_FIXED
