@@ -26,6 +26,7 @@ This patch release makes a tree in the eawf 0.8 layout stand down cleanly on eve
 
 - **Rebind from a commit map.** `eawf batch rebind-rewritten` reads a git filter-repo commit map, checks that each new commit exists and keeps its tree, accepts several old commits mapped to one new commit, and is idempotent; `--dry-run` prints the counts a real run would and writes nothing.
 - **Old hashes read through the map.** The ledger history check, the `eawf doctor --fix` repair, plan freshness, completion, read-back, adoption and Batch close read old hashes through `.ea/store/rewrite_map.jsonl`. Without the file nothing changes.
+- **Captures read through the map.** The rebind leaves a ledger row the commit policy keeps machine-local, such as a capture of tool output, as it is. The ledger history check now reads an old hash in such a row through the map too, so a repository that committed such rows passes after a rewrite. A hash with no pair is still reported.
 
 ### Commit regime
 

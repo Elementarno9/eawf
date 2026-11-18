@@ -26,7 +26,9 @@ Two checks hold those lines, over every committed ledger file (the LEDGER tier o
   exempt when the ledgers record that rebind (:func:`rebound_commits`) and every
   replacement is live. So is its mention of a commit a history rewrite replaced,
   when ``.ea/store/rewrite_map.jsonl`` records the pair and a range end or a
-  branch, remote-tracking or ``refs/eawf`` ref reaches the replacement.
+  branch, remote-tracking or ``refs/eawf`` ref reaches the replacement. A ledger
+  row the rebind from a rewrite map leaves as it is, such as a capture of tool
+  output, is read through that record the same way.
 
 The tip counts as live alongside the base because the branch lands by fast-forward,
 so an ancestor of the tip becomes an ancestor of the default branch on landing.
@@ -55,6 +57,7 @@ from eawf.kernel.store.commit_policy import (
 )
 from eawf.kernel.store.ledger import (
     SNAPSHOT_DIRNAME,
+    LedgerRecord,
     compose_ledger_content,
     line_digest,
     snapshot_digest_mismatch,
@@ -559,10 +562,11 @@ def _rewrite_covered(
     mentions: Iterable[ShaMention],
     reachable: frozenset[str],
     *,
+    blobs: dict[str, bytes],
     ends: tuple[str, str],
     tip: str | None,
-) -> set[str]:
-    """Return the history-mentioned commits a recorded history rewrite replaced with a live one.
+) -> set[ShaMention]:
+    """Return the mentions of a commit a recorded history rewrite replaced with a live one.
 
     The record is read once: at *tip* when the range names one, so a pushed
     range is judged by the record it carries, else from the working tree. A
@@ -572,23 +576,28 @@ def _rewrite_covered(
 
     Args:
         repo: The repository's working directory.
-        mentions: The candidate mentions; only those outside ``ledger/``
-            files are considered, as a ledger line is rebound by a row.
+        mentions: The candidate mentions. One outside ``ledger/`` files is
+            considered, and so is one in a ledger row the rebind from a
+            rewrite map leaves as it is; any other ledger line is rebound
+            by a row.
         reachable: Every commit an end of the range reaches.
+        blobs: The bytes of each scanned ledger file, by path.
         ends: The range's base and tip commits.
         tip: The tip commit to read the record at, or ``None`` for the
             working tree.
 
     Returns:
-        The old commits whose mention is covered by a live replacement.
+        The mentions whose old commit is covered by a live replacement.
 
     Raises:
         LedgerHistoryError: The record of applied rewrite pairs is malformed
-            or cyclic, or git failed.
+            or cyclic, a ledger line naming a replaced commit is not a ledger
+            record, or git failed.
     """
     # Imported here: the rebind module imports a module that imports this one.
     from eawf.workflow.integration.rebind import (
         RewriteMapError,
+        keeps_rewritten_hash,
         parse_rewrite_pairs,
         resolve_rewrite_pairs,
         rewrite_map_path,
@@ -599,16 +608,31 @@ def _rewrite_covered(
         rewritten = resolve_rewrite_pairs(parse_rewrite_pairs(_blob(repo, tip, record)))
     except RewriteMapError as exc:
         raise LedgerHistoryError(f"{record}: {exc}") from exc
-    mapped = {
-        m.sha: rewritten[m.sha]
+    lines: dict[str, tuple[str, ...]] = {}
+
+    def left_by_rebind(mention: ShaMention) -> bool:
+        if mention.path not in lines:
+            lines[mention.path] = split_ledger_lines(blobs[mention.path])
+        line = lines[mention.path][mention.line - 1]
+        try:
+            record = LedgerRecord.model_validate_json(line)
+        except ValidationError as exc:
+            raise LedgerHistoryError(
+                f"{mention.path}:{mention.line}: not a ledger record "
+                f"({exc.error_count()} invalid field(s))"
+            ) from exc
+        return keeps_rewritten_hash(record)
+
+    mapped = [
+        m
         for m in mentions
-        if not _is_record_ledger(m.path) and m.sha in rewritten
-    }
-    if set(mapped.values()) - reachable:
+        if m.sha in rewritten and (not _is_record_ledger(m.path) or left_by_rebind(m))
+    ]
+    if {rewritten[m.sha] for m in mapped} - reachable:
         exclusions = [f"^{end}" for end in ends]
         walked = _git(repo, "rev-list", "--branches", "--remotes", "--glob=refs/eawf", *exclusions)
         reachable = reachable | frozenset(walked.decode("ascii").split())
-    return {old for old, new in mapped.items() if new in reachable}
+    return {m for m in mapped if rewritten[m.sha] in reachable}
 
 
 def scan_ledger_history(repo: Path, spec: str) -> LedgerHistoryReport:
@@ -627,7 +651,9 @@ def scan_ledger_history(repo: Path, spec: str) -> LedgerHistoryReport:
         The findings of both checks.
 
     Raises:
-        LedgerHistoryError: The range is malformed or names an unknown rev.
+        LedgerHistoryError: The range is malformed or names an unknown rev,
+            the record of rewrite pairs is malformed, or a ledger line naming
+            a commit that record replaces is not a ledger record.
     """
     base, tip = parse_range(spec)
     base_sha = _git(repo, "rev-parse", "--verify", f"{base}^{{commit}}").decode().strip()
@@ -666,8 +692,14 @@ def scan_ledger_history(repo: Path, spec: str) -> LedgerHistoryReport:
     reachable = frozenset(_git(repo, "rev-list", base_sha, tip_sha).decode("ascii").split())
     # A history line cannot be superseded; a rebind recorded in the ledgers stands for it.
     covered = {sha for sha, targets in rebound.items() if targets <= reachable}
-    covered |= _rewrite_covered(repo, mentions, reachable, ends=(base_sha, tip_sha), tip=tip_ref)
-    mentions = [m for m in mentions if _is_record_ledger(m.path) or m.sha not in covered]
+    through_record = _rewrite_covered(
+        repo, mentions, reachable, blobs=blobs, ends=(base_sha, tip_sha), tip=tip_ref
+    )
+    mentions = [
+        m
+        for m in mentions
+        if m not in through_record and (_is_record_ledger(m.path) or m.sha not in covered)
+    ]
     return LedgerHistoryReport(
         range=spec,
         base=base_sha,

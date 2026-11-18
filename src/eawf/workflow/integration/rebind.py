@@ -494,6 +494,23 @@ def _stale_parent(value: Any, parents: Mapping[str, str]) -> bool:
     return any(_stale_parent(item, parents) for item in value.values())
 
 
+def keeps_rewritten_hash(record: LedgerRecord) -> bool:
+    """Whether a rebind from a history-rewrite map leaves *record*'s line as it is.
+
+    Run exhaust the commit policy keeps local, such as a content-addressed
+    capture of tool output, keeps a rewritten hash: its key is the digest of
+    its text, and a line superseding it would land in the local ledger, not
+    beside it. A reader resolves such a hash through the recorded pairs.
+
+    Args:
+        record: One ledger line.
+
+    Returns:
+        ``True`` for a line the commit policy does not commit.
+    """
+    return ledger_row_policy(record.collection, record.payload) is CommitPolicy.NOT_COMMITTED
+
+
 def _effective_lines(path: Path) -> list[tuple[str, LedgerRecord]]:
     """Return each line no later line supersedes, with its digest, in file order."""
     lines = split_ledger_lines(read_ledger_content(path))
@@ -531,13 +548,7 @@ def _ledger_rows(
     rows: list[RebindRow] = []
     rebound_keys: set[str] = set()
     for digest, record in effective:
-        if (
-            keep_exhaust
-            and ledger_row_policy(record.collection, record.payload) is CommitPolicy.NOT_COMMITTED
-        ):
-            # Run exhaust, such as a content-addressed capture of tool output,
-            # keeps a rewritten hash: its key is the digest of its text, and a
-            # line superseding it would land in the local ledger, not beside it.
+        if keep_exhaust and keeps_rewritten_hash(record):
             continue
         # A squash that writes a commit again byte for byte maps it onto itself;
         # such a commit is still on the branch and needs no rebinding.
@@ -754,6 +765,7 @@ __all__ = [
     "RewritePair",
     "append_rewrite_pairs",
     "document_mentions",
+    "keeps_rewritten_hash",
     "load_rewrite_map",
     "only_commits_rebound",
     "pairs_to_record",

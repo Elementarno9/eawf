@@ -26,6 +26,7 @@ from eawf.workflow.integration.rebind import (
     RewriteMapError,
     append_rewrite_pairs,
     document_mentions,
+    keeps_rewritten_hash,
     load_rewrite_map,
     only_commits_rebound,
     pairs_to_record,
@@ -388,3 +389,42 @@ def test_a_rewrite_pair_line_is_closed(tmp_path: Path) -> None:
     with pytest.raises(RewriteMapError, match="rewrite_map_invalid: line 1") as caught:
         read_rewrite_pairs(path)
     assert isinstance(caught.value.__cause__, ValidationError)
+
+
+@pytest.mark.parametrize(
+    ("collection", "payload", "kept"),
+    [
+        (Epoch2Collection.ARTIFACT, {"payload_kind": "content_artifact"}, True),
+        (Epoch2Collection.RECEIPT, {"payload_kind": "host_call_receipt"}, True),
+        (Epoch2Collection.RECEIPT, {"payload_kind": "semantic_receipt"}, True),
+        (Epoch2Collection.ARTIFACT, {"payload_kind": "host_call_receipt"}, False),
+        (Epoch2Collection.ARTIFACT, {"head_sha": OLD}, False),
+        (Epoch2Collection.BATCH, {}, False),
+    ],
+    ids=["capture", "host-call", "semantic", "kind-of-another-ledger", "no-kind", "empty"],
+)
+def test_keeps_rewritten_hash_only_for_rows_the_commit_policy_keeps_local(
+    collection: Epoch2Collection, payload: dict[str, Any], kept: bool
+) -> None:
+    assert keeps_rewritten_hash(_record(collection, "K-1", payload)) is kept
+
+
+def test_rewrite_map_leaves_a_capture_and_rebinds_the_row_beside_it(tmp_path: Path) -> None:
+    state = tmp_path / "state.json"
+    path = ledger_path(state, Epoch2Collection.ARTIFACT)
+    capture = {"payload_kind": "content_artifact", "lines": [f"commit {OLD}"]}
+    append_ledger_record(path, _record(Epoch2Collection.ARTIFACT, "ART-1", capture))
+    append_ledger_record(path, _record(Epoch2Collection.ARTIFACT, "ART-2", {"head_sha": OLD}))
+
+    rows = plan_rebind(
+        state,
+        RewriteMap(commits={OLD: NEW}),
+        TASKS,
+        trees={NEW: NEW_TREE},
+        parents={},
+        recorded_at=datetime(2026, 11, 17, tzinfo=UTC),
+    )
+
+    assert [(row.record.record_key, row.record.payload) for row in rows] == [
+        ("ART-2", {"head_sha": NEW})
+    ]

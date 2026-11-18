@@ -693,3 +693,148 @@ def test_rewrite_refuses_a_malformed_torn_or_cyclic_map(
     with pytest.raises(LedgerHistoryError, match=f"rewrite_map_invalid: line {line}") as caught:
         ledger_history.scan_ledger_history(tmp_path, "base..tip")
     assert _MAP in str(caught.value)
+
+
+# --- a capture the rebind leaves is read through the recorded rewrite --------
+
+_ARTIFACT_LEDGER = ".ea/generations/gen-x/ledger/artifact.jsonl"
+
+
+def _capture(key: str, sha: str) -> str:
+    """Return a content capture quoting *sha*, a line a rebind from a rewrite map leaves."""
+    return render_ledger_line(
+        LedgerRecord.model_validate(
+            {
+                "collection": "artifact",
+                "record_key": key,
+                "status": "recorded",
+                "recorded_at": "2026-11-01T00:00:00Z",
+                "payload": {"payload_kind": "content_artifact", "lines": [f"commit {sha}"]},
+            }
+        )
+    )
+
+
+def _bound_artifact(key: str, sha: str) -> str:
+    """Return an artifact row a rebind supersedes: it binds *sha* and is committed."""
+    record = LedgerRecord.model_validate_json(_capture(key, sha))
+    return render_ledger_line(record.model_copy(update={"payload": {"head_sha": sha}}))
+
+
+def _capture_repo(*lines: str, on_refs: set[str] | None = None) -> _FakeRepo:
+    content = _content(list(lines))
+    return _FakeRepo(
+        tip={_ARTIFACT_LEDGER: content}, base={_ARTIFACT_LEDGER: content}, on_refs=on_refs or set()
+    )
+
+
+def _stray_captures() -> list[str]:
+    return [_capture(f"ART-{index}", sha) for index, (_key, sha) in enumerate(_STRAYS)]
+
+
+def test_capture_naming_a_mapped_hash_with_a_live_new_commit_is_not_a_finding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _capture_repo(*_stray_captures())
+    repo.install(monkeypatch)
+    _record(repo, (_STRAYS[0][1], _LIVE_NEW))
+
+    report = ledger_history.scan_ledger_history(tmp_path, "base..tip")
+
+    assert _unreachable(report) == [sha for _key, sha in _STRAYS[1:]]
+    assert repo.ref_walks == 0
+
+
+def test_capture_is_read_through_a_chain_to_a_new_commit_only_a_ref_reaches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _capture_repo(*_stray_captures(), on_refs={_REF_NEW})
+    repo.install(monkeypatch)
+    _record(repo, (_STRAYS[1][1], _GONE_NEW), (_GONE_NEW, _REF_NEW))
+
+    report = ledger_history.scan_ledger_history(tmp_path, "base..tip")
+
+    assert _unreachable(report) == [_STRAYS[0][1], _STRAYS[2][1]]
+    assert repo.ref_walks == 1
+
+
+def test_capture_naming_an_unmapped_hash_or_a_dead_new_commit_is_still_a_finding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _capture_repo(*_stray_captures())
+    repo.install(monkeypatch)
+    # Only the first stray is mapped, and its new commit nothing reaches.
+    _record(repo, (_STRAYS[0][1], _GONE_NEW))
+
+    report = ledger_history.scan_ledger_history(tmp_path, "base..tip")
+
+    assert _unreachable(report) == [sha for _key, sha in _STRAYS]
+
+
+def test_capture_does_not_cover_an_ordinary_row_naming_the_same_mapped_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sha = _STRAYS[0][1]
+    repo = _capture_repo(_capture("ART-0", sha), _bound_artifact("ART-1", sha))
+    repo.install(monkeypatch)
+    _record(repo, (sha, _LIVE_NEW))
+
+    report = ledger_history.scan_ledger_history(tmp_path, "base..tip")
+
+    assert [(finding.line, finding.record_key) for finding in report.unreachable] == [(2, "ART-1")]
+
+
+def test_capture_superseded_by_a_later_line_is_not_read_at_all(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = _capture("ART-0", _STRAYS[0][1])
+    repo = _capture_repo(first, _replaced(first, payload_kind="content_artifact", lines=[]))
+    repo.install(monkeypatch)
+
+    assert ledger_history.scan_ledger_history(tmp_path, "base..tip").unreachable == ()
+
+
+@pytest.mark.parametrize("record", [None, b""], ids=["no-map-file", "empty-map-file"])
+def test_capture_without_recorded_pairs_is_reported_as_before(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, record: bytes | None
+) -> None:
+    repo = _capture_repo(*_stray_captures())
+    repo.install(monkeypatch)
+    if record is not None:
+        repo.tip[_MAP] = record
+
+    report = ledger_history.scan_ledger_history(tmp_path, "base..tip")
+
+    mentions, _ = sha_mentions(_ARTIFACT_LEDGER, repo.tip[_ARTIFACT_LEDGER])
+    assert report.unreachable == unreachable_findings(
+        mentions, commits=frozenset(repo.commits), reachable=frozenset(repo.reachable)
+    )
+    assert _unreachable(report) == [sha for _key, sha in _STRAYS]
+
+
+def test_capture_fixtures_keep_their_findings_once_a_pair_is_recorded_for_a_ledger_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The fixture's Task rows are committed rows, which a rebind supersedes.
+    strays = _content(_stray_lines())
+    repo = _FakeRepo(tip={_TASK_LEDGER: strays}, base={_TASK_LEDGER: strays}, on_refs=set())
+    repo.install(monkeypatch)
+    without = ledger_history.scan_ledger_history(tmp_path, "base..tip")
+    _record(repo, *((sha, _LIVE_NEW) for _key, sha in _STRAYS))
+
+    assert ledger_history.scan_ledger_history(tmp_path, "base..tip") == without
+
+
+def test_capture_scan_refuses_a_ledger_line_that_is_not_a_record_and_names_a_mapped_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sha = _STRAYS[0][1]
+    stray = orjson.dumps({"record_key": "ART-9", "note": sha}).decode()
+    repo = _capture_repo(_capture("ART-0", sha), stray)
+    repo.install(monkeypatch)
+    # Without a pair the line is only a mention, as before.
+    assert len(ledger_history.scan_ledger_history(tmp_path, "base..tip").unreachable) == 2
+    _record(repo, (sha, _LIVE_NEW))
+
+    with pytest.raises(LedgerHistoryError, match=r"artifact\.jsonl:2: not a ledger record"):
+        ledger_history.scan_ledger_history(tmp_path, "base..tip")
