@@ -24,6 +24,7 @@ from eawf.workflow.integration.rebind import (
     RebindDropError,
     RewriteMap,
     RewriteMapError,
+    RewritePair,
     append_rewrite_pairs,
     document_mentions,
     keeps_rewritten_hash,
@@ -428,3 +429,147 @@ def test_rewrite_map_leaves_a_capture_and_rebinds_the_row_beside_it(tmp_path: Pa
     assert [(row.record.record_key, row.record.payload) for row in rows] == [
         ("ART-2", {"head_sha": NEW})
     ]
+
+
+# ---- the record of applied pairs is replaced whole ------------------------------
+
+MIDDLE, LAST = "e" * 40, "f" * 40
+
+
+@pytest.mark.parametrize("failing", ["fsync", "replace"])
+def test_rewrite_pairs_append_interrupted_keeps_the_earlier_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failing: str
+) -> None:
+    path = rewrite_map_path(tmp_path / ".ea")
+    earlier = (RewritePair(old=OLD, new=NEW, applied_at=AT_PAIR),)
+    append_rewrite_pairs(path, earlier)
+    before = path.read_bytes()
+
+    def broken(*_args: object) -> None:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(f"os.{failing}", broken)
+    with pytest.raises(OSError, match="No space"):
+        append_rewrite_pairs(path, [RewritePair(old=TWIN, new=KEPT, applied_at=AT_PAIR)])
+    monkeypatch.undo()
+
+    assert path.read_bytes() == before
+    assert read_rewrite_pairs(path) == earlier
+    assert sorted(p.name for p in path.parent.iterdir()) == [path.name]
+
+
+def test_rewrite_pairs_append_not_interrupted_keeps_earlier_pairs_first(tmp_path: Path) -> None:
+    path = rewrite_map_path(tmp_path / ".ea")
+    first = RewritePair(old=OLD, new=NEW, applied_at=AT_PAIR)
+    second = RewritePair(old=TWIN, new=KEPT, applied_at=AT_PAIR)
+    third = RewritePair(old=NEW, new=MIDDLE, applied_at=AT_PAIR)
+
+    append_rewrite_pairs(path, [first])
+    append_rewrite_pairs(path, [second, third])
+
+    assert read_rewrite_pairs(path) == (first, second, third)
+    assert sorted(p.name for p in path.parent.iterdir()) == [path.name]
+
+
+def test_rewrite_pairs_append_interrupted_never_when_no_pair_touches_no_file(
+    tmp_path: Path,
+) -> None:
+    path = rewrite_map_path(tmp_path / ".ea")
+    append_rewrite_pairs(path, [])
+    assert not (tmp_path / ".ea").exists()
+    append_rewrite_pairs(path, [RewritePair(old=OLD, new=NEW, applied_at=AT_PAIR)])
+    before = (path.read_bytes(), path.stat().st_mtime_ns)
+    append_rewrite_pairs(path, ())
+    assert (path.read_bytes(), path.stat().st_mtime_ns) == before
+
+
+# ---- a map joined from two rewrites is followed to its end ----------------------
+
+
+def _plan_map(state: Path, commits: dict[str, str]) -> tuple[Any, ...]:
+    return plan_rebind(
+        state,
+        RewriteMap(commits=commits),
+        {},
+        trees={NEW: NEW_TREE, MIDDLE: NEW_TREE, LAST: NEW_TREE},
+        parents={},
+        recorded_at=datetime(2026, 11, 18, tzinfo=UTC),
+    )
+
+
+@pytest.mark.parametrize(
+    "commits",
+    [
+        {OLD: MIDDLE, MIDDLE: LAST},
+        {MIDDLE: LAST, OLD: MIDDLE},
+        {OLD: MIDDLE, MIDDLE: LAST, LAST: LAST},
+    ],
+    ids=["in-order", "reversed", "end-names-itself"],
+)
+def test_rewrite_map_chain_lands_on_its_last_commit_in_one_run(
+    tmp_path: Path, commits: dict[str, str]
+) -> None:
+    state = tmp_path / "state.json"
+    path = ledger_path(state, Epoch2Collection.EVIDENCE)
+    append_ledger_record(path, _record(Epoch2Collection.EVIDENCE, "EV-1", {"head_sha": OLD}))
+    append_ledger_record(path, _record(Epoch2Collection.EVIDENCE, "EV-2", {"head_sha": MIDDLE}))
+
+    rows = _plan_map(state, commits)
+
+    assert [row.record.payload for row in rows] == [{"head_sha": LAST}, {"head_sha": LAST}]
+    assert [row.rebinds for row in rows] == [{OLD: LAST}, {MIDDLE: LAST}]
+    for row in rows:
+        append_ledger_record(path, row.record)
+    assert _plan_map(state, commits) == ()
+
+
+def test_rewrite_map_without_a_chain_plans_one_step(tmp_path: Path) -> None:
+    state = tmp_path / "state.json"
+    path = ledger_path(state, Epoch2Collection.EVIDENCE)
+    append_ledger_record(path, _record(Epoch2Collection.EVIDENCE, "EV-1", {"a": OLD, "b": TWIN}))
+    append_ledger_record(path, _record(Epoch2Collection.EVIDENCE, "EV-2", {"head_sha": KEPT}))
+
+    (row,) = _plan_map(state, {OLD: NEW, TWIN: NEW, KEPT: KEPT})
+
+    assert row.record.payload == {"a": NEW, "b": NEW}
+    assert row.rebinds == {OLD: NEW, TWIN: NEW}
+
+
+@pytest.mark.parametrize(
+    "commits",
+    [{OLD: MIDDLE, MIDDLE: OLD}, {OLD: MIDDLE, MIDDLE: LAST, LAST: MIDDLE}],
+    ids=["two-cycle", "cycle-after-a-step"],
+)
+def test_rewrite_map_chain_into_a_cycle_is_refused(tmp_path: Path, commits: dict[str, str]) -> None:
+    state = tmp_path / "state.json"
+    path = ledger_path(state, Epoch2Collection.EVIDENCE)
+    append_ledger_record(path, _record(Epoch2Collection.EVIDENCE, "EV-1", {"head_sha": OLD}))
+
+    with pytest.raises(RewriteMapError, match=f"{REWRITE_MAP_INVALID}: line \\d+: .*into itself"):
+        _plan_map(state, commits)
+
+
+# ---- a commit map that is not UTF-8 ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "line"),
+    [
+        (b"\xff\xfe", 1),
+        (HEADER.encode() + b"\xc3\x28 " + NEW.encode() + b"\n", 2),
+        (HEADER.encode() + f"{OLD} {NEW}\n".encode() + b"\x80\n", 3),
+    ],
+    ids=["header", "first-pair", "third-line"],
+)
+def test_rewrite_map_undecodable_is_refused_naming_the_line(
+    tmp_path: Path, raw: bytes, line: int
+) -> None:
+    path = tmp_path / "commit-map"
+    path.write_bytes(raw)
+
+    with pytest.raises(
+        RewriteMapError, match=f"{REWRITE_MAP_INVALID}: line {line}: .*UTF-8"
+    ) as caught:
+        load_rewrite_map(path)
+    assert caught.value.line == line
+    assert isinstance(caught.value.__cause__, UnicodeDecodeError)

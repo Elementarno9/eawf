@@ -352,6 +352,72 @@ def test_rel_021_v08_doctor_fails_the_authority_row(
     assert result.exit_code == 1
 
 
+def _snapshot(root: Path) -> dict[str, bytes | None]:
+    """Map every path under ``root`` to its bytes, ``None`` for a directory."""
+    return {
+        str(p.relative_to(root)): (p.read_bytes() if p.is_file() else None) for p in root.rglob("*")
+    }
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["doctor", "--fix"],
+        ["doctor", "--fix", "--yes"],
+        ["doctor", "--yes", "--fix"],
+        ["doctor", "--json", "--fix"],
+    ],
+)
+def test_rel_021_v08_doctor_fix_is_refused_before_a_plan_is_built(
+    v08_tree: Path, monkeypatch: pytest.MonkeyPatch, argv: list[str]
+) -> None:
+    (v08_tree / ".ea" / "config.yaml").write_text("project: {}\n")
+    (v08_tree / "AGENTS.md").write_text("# rendered\n")
+    planned: list[object] = []
+    monkeypatch.setattr(
+        "eawf.observability.doctor.repair.build_repair_plan",
+        lambda *args, **_kwargs: planned.append(args),
+    )
+    before = _snapshot(v08_tree)
+    result = runner.invoke(app, ["--json", *argv])
+    assert result.exit_code == exit_codes.ATTACH_FAILURE, result.output
+    envelope = json.loads(result.output)
+    assert envelope["message"] == V08_LAYOUT_MESSAGE
+    assert envelope["data"]["kind"] == upgrade_refusal.MIGRATION_REQUIRED_KIND
+    assert envelope["error_code"] == ErrorCode.MIGRATION_REQUIRED.value
+    assert planned == []
+    assert _snapshot(v08_tree) == before
+
+
+def test_rel_021_v08_doctor_fix_refusal_prints_the_line_as_text(v08_tree: Path) -> None:
+    before = _snapshot(v08_tree)
+    result = runner.invoke(app, ["doctor", "--fix", "--yes"])
+    assert result.exit_code == exit_codes.ATTACH_FAILURE, result.output
+    assert V08_LAYOUT_MESSAGE in result.output
+    assert _snapshot(v08_tree) == before
+
+
+def test_rel_021_v08_doctor_fix_refusal_spares_a_07_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("EA_STATE", raising=False)
+    native = tmp_path / "native"
+    lay_epoch2_tree(native)
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    monkeypatch.chdir(native)
+    planned: list[object] = []
+
+    def no_plan(*args: object, **_kwargs: object) -> None:
+        planned.append(args)
+        raise SystemExit(0)
+
+    monkeypatch.setattr("eawf.observability.doctor.repair.build_repair_plan", no_plan)
+    result = runner.invoke(app, ["--json", "doctor", "--fix", "--yes"])
+    assert result.exit_code != exit_codes.ATTACH_FAILURE, result.output
+    assert V08_LAYOUT_MESSAGE not in result.output
+    assert len(planned) == 1
+
+
 def test_rel_021_v08_doctor_row_boundaries(tmp_path: Path) -> None:
     assert check_authority_epoch(workspace=None).status == "ok"
     (tmp_path / ".ea").mkdir()

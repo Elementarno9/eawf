@@ -401,6 +401,29 @@ def test_an_old_commit_the_repository_no_longer_holds_is_rebound_unchecked(
     assert evidence["EVD-0002"]["summary"] == f"saw {tree.new['first']}"
 
 
+def test_a_map_joined_from_two_rewrites_rebinds_along_the_chain_in_one_run(
+    tmp_path: Path,
+) -> None:
+    tree = make_tree(tmp_path)
+    old, new = tree.old["first"], tree.new["first"]
+    newer = _write_commit(tree.repo, _tree(tree.repo, old), tree.old["base"], "feat: a", "again")
+    joined = RewriteMap(commits={old: new, new: newer})
+
+    answer = rebind(tmp_path, tree, "rewrite-1", rewrite_map=joined)
+    summary = {
+        record.record_key: record.payload
+        for record in effective_records(
+            read_ledger_records(_ledger(tree.canary, Epoch2Collection.EVIDENCE))
+        )
+    }["EVD-0001"]["summary"]
+    again = rebind(tmp_path, tree, "rewrite-2", rewrite_map=joined)
+
+    assert summary == f"verified {newer} on {tree.old['side']}; quoted {UNKNOWN}"
+    assert answer["pairs_recorded"] == 2 and again["rebound"] == 0
+    lines = [json.loads(line) for line in _record_file(tree).read_text().splitlines()]
+    assert sorted((line["old"], line["new"]) for line in lines) == sorted(joined.commits.items())
+
+
 def test_an_empty_map_rebinds_nothing_and_counts_every_recorded_commit(tmp_path: Path) -> None:
     tree = make_tree(tmp_path)
     effective = _effective_text(tree)

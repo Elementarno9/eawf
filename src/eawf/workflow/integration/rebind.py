@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -143,10 +144,16 @@ def load_rewrite_map(path: Path) -> RewriteMap:
 
     Raises:
         OSError: The file cannot be read.
-        RewriteMapError: The header is missing, a line is not two full hashes,
-            an old hash repeats, or a new hash is the zero hash.
+        RewriteMapError: The file is not UTF-8, the header is missing, a line
+            is not two full hashes, an old hash repeats, or a new hash is the
+            zero hash.
     """
-    lines = path.read_text(encoding="utf-8").splitlines()
+    raw = path.read_bytes()
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RewriteMapError(raw.count(b"\n", 0, exc.start) + 1, "the line is not UTF-8") from exc
+    lines = text.splitlines()
     if not lines or lines[0].split() != ["old", "new"]:
         raise RewriteMapError(1, "the header is not 'old new'")
     commits: dict[str, str] = {}
@@ -247,6 +254,24 @@ def resolve_rewrite_pairs(pairs: Sequence[RewritePair]) -> dict[str, str]:
     """
     direct = {pair.old: pair.new for pair in pairs}
     line_of = {pair.old: number for number, pair in enumerate(pairs, start=1)}
+    return _chain_ends(direct, line_of)
+
+
+def _chain_ends(direct: Mapping[str, str], line_of: Mapping[str, int]) -> dict[str, str]:
+    """Return each old commit of *direct* mapped to the end of its chain.
+
+    Args:
+        direct: Each old commit mapped to the commit one rewrite made of it.
+        line_of: Each old commit mapped to the 1-based line naming it.
+
+    Returns:
+        The resolved map.
+
+    Raises:
+        RewriteMapError: The commits form a cycle, a commit mapped to itself
+            included; the line named is that of the old commit on the cycle
+            the walk meets again.
+    """
     resolved: dict[str, str] = {}
     for old in direct:
         chain, current = [old], direct[old]
@@ -320,23 +345,35 @@ def pairs_to_record(
 
 
 def append_rewrite_pairs(path: Path, pairs: Iterable[RewritePair]) -> None:
-    """Append one JSON line per pair to the record at *path* and flush it to disk.
+    """Append one JSON line per pair to the record at *path*, replacing it whole.
+
+    The earlier lines and the new ones are written to a sibling temporary
+    file, flushed to disk and renamed onto the record, so an interrupted
+    write leaves the earlier record intact: a torn last line would refuse
+    the whole record to every reader. No pair touches no file.
 
     Args:
         path: The record; it and its directory are created when missing.
         pairs: The pairs to append.
 
     Raises:
-        OSError: The record cannot be written.
+        OSError: The record cannot be written; the record is left as it was
+            and the temporary file is removed.
     """
     text = "".join(f"{pair.model_dump_json()}\n" for pair in pairs)
     if not text:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(text)
-        handle.flush()
-        os.fsync(handle.fileno())
+    earlier = path.read_bytes() if path.is_file() else b""
+    tmp = path.with_name(f"{path.name}.tmp.{secrets.token_hex(4)}")
+    try:
+        with tmp.open("wb") as handle:
+            handle.write(earlier + text.encode("utf-8"))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -624,7 +661,8 @@ def plan_rebind(
         state_path: The generation's ``state.json``; its ledgers are read.
         commit_map: The map the squash answered, or a history-rewrite map,
             which names no Batch commit and drops no commit, so its rows are
-            rebound commit by commit.
+            rebound commit by commit, each to the end of its chain where the
+            map was joined from several rewrites.
             For a history-rewrite map, a Run exhaust line the commit policy
             keeps local, such as a content-addressed capture of tool output,
             is left as it is; a squash still withholds a dropped commit there.
@@ -641,16 +679,24 @@ def plan_rebind(
         LedgerTornTailError: A ledger ends mid-line.
         LedgerSnapshotError: A ledger's sealed snapshot does not match its digest.
         ValidationError: A ledger line is not a ledger record.
+        RewriteMapError: The history-rewrite map's commits form a cycle; the
+            line named is the map file's, its header being line 1.
     """
-    batches, dropped = (
-        (commit_map.batches, commit_map.dropped) if isinstance(commit_map, SquashMap) else ({}, {})
-    )
+    commits: Mapping[str, str | None]
+    if isinstance(commit_map, SquashMap):
+        batches, dropped, commits = commit_map.batches, commit_map.dropped, commit_map.commits
+    else:
+        # A commit the rewrite left alone names itself and stays out of the walk,
+        # which would take it for a cycle; absent from the map it is left alone too.
+        moved = {old: new for old, new in commit_map.commits.items() if old != new}
+        line_of = {old: number for number, old in enumerate(commit_map.commits, start=2)}
+        batches, dropped, commits = {}, {}, _chain_ends(moved, line_of)
     rows: list[RebindRow] = []
     for path in _ledger_paths(state_path):
         rows.extend(
             _ledger_rows(
                 path,
-                commit_map.commits,
+                commits,
                 batches,
                 dropped,
                 task_batches,

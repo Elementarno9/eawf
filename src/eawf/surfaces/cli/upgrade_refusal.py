@@ -10,7 +10,7 @@ still answers there and reports the tree as epoch 1.
 
 A tree in the eawf 0.8 layout is refused outright, read verbs included, with
 the line that names the newer client; only help, the version, the hooks, the
-status lines and doctor still answer there.
+status lines and the read-only doctor still answer there; its repair is refused.
 """
 
 from __future__ import annotations
@@ -120,6 +120,10 @@ def refuses(verb: str, *, bare: bool) -> bool:
 #: equal to it or nested under it.
 _V08_EXEMPT_VERBS: Final = ("help", "version", "hook", "cc statusline", "statusline", "doctor")
 
+#: The doctor flag that rewrites config and rendered files; the exemption
+#: covers only the read-only doctor, so a 0.8 tree refuses the repair.
+_DOCTOR_REPAIR_FLAG: Final = "--fix"
+
 #: The next step a refused 0.8 tree is given in place of the 0.6 upgrade path.
 _V08_NEXT_STEP: Final = "install eawf 0.8 or later, then run the command again"
 
@@ -227,7 +231,9 @@ def enforce(root: click.Group, ctx: click.Context, args: list[str]) -> None:
     """Refuse a verb a tree cannot serve, else return.
 
     A tree in the eawf 0.8 layout refuses every verb outside the exempt
-    paths, read verbs included: this release cannot read it at all. A 0.6
+    paths, read verbs included: this release cannot read it at all. The
+    doctor repair is refused there too, though the read-only doctor answers.
+    A 0.6
     tree refuses the console and every writing verb.
 
     Args:
@@ -244,7 +250,7 @@ def enforce(root: click.Group, ctx: click.Context, args: list[str]) -> None:
     if "--help" in args:
         return
     verb = command_path(root, ctx, args)
-    exempt = v08_exempt(verb)
+    exempt = v08_exempt(verb) and not (verb == "doctor" and _DOCTOR_REPAIR_FLAG in args)
     refused_on_06 = refuses(verb, bare=not args)
     if exempt and not refused_on_06:
         return
