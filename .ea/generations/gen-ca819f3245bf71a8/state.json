@@ -1091,7 +1091,7 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 94885,
+  "canonical_sequence": 95627,
   "milestone": {
     "MLS-0110": {
       "acceptance_bundle_revision": null,
@@ -1204,14 +1204,15 @@
         "eawf://EAWF/batch/BAT-0406",
         "eawf://EAWF/batch/BAT-0407",
         "eawf://EAWF/batch/BAT-0408",
-        "eawf://EAWF/batch/BAT-0409"
+        "eawf://EAWF/batch/BAT-0409",
+        "eawf://EAWF/batch/BAT-0410"
       ],
-      "revision": 4,
+      "revision": 5,
       "status": "ACTIVE",
       "target_date": null,
       "title": "Ship 0.7.4 to bridge to v0.8 and rebind rewritten histories",
       "uid": "8364509f-cb4f-5fad-b037-681549c08524",
-      "updated_at": "2026-11-18T01:43:46.897078Z",
+      "updated_at": "2026-11-18T04:04:25.645320Z",
       "urn": "eawf://EAWF/milestone/MLS-0110"
     }
   },
@@ -13547,6 +13548,136 @@
       ],
       "updated_at": "2026-11-18T01:43:36.386757Z",
       "urn": "eawf://EAWF/pending-action/ACT-0076"
+    },
+    "ACT-0077": {
+      "assignee_ref": null,
+      "bundle_digest": "sha256:9cce31a98881fec4eac2b69e89d553b5ae613b3ebaf054d86214a7bfffe6177f",
+      "created_at": "2026-11-18T04:03:23.250354Z",
+      "default_on_timeout": null,
+      "default_policy": null,
+      "dispositions": [
+        {
+          "acted_at": "2026-11-18T04:04:13.682747Z",
+          "option_id": "approve",
+          "outcome": "sealed",
+          "principal_id": "OP-0001",
+          "snoozed_until": null
+        }
+      ],
+      "harness_attestation": {
+        "harness": "claude-code",
+        "host_session_digest": "sha256:3f04c87ecef5908342f80df8477059a77593254081f7150fd74bb8e37763edfd",
+        "payload_digest": "sha256:72016e26a95a5c1f9138e24766797994cf17abb5c184ccce5e0131d78633e973",
+        "permission_mode": null,
+        "question_ref": "eawf://EAWF/question/QST-0124",
+        "raise_gap_ms": 38090,
+        "run_ref": null,
+        "tool_use_id": "toolu_01L8biTHv48XMXddcDK5yfEj",
+        "transcript_check": "matched"
+      },
+      "id": "ACT-0077",
+      "idempotency_key": "v074-prv0357-approval-question-20261118",
+      "kind": "operator_decision",
+      "options": [
+        {
+          "consequence": "Apply PRV-0357, deliver the two Tasks as one code-only commit with a full suite and an audit, and push it to pull request 58. Then I continue to acceptance and release as you instructed.",
+          "cost": "2 small Tasks, about 4 EU (1 EU is about 30 minutes of agent time), plus one more CI run. No new API spend: the packet runs stay valid because no commit is rewritten.",
+          "effect": "approve",
+          "label": "Fix before release",
+          "option_id": "approve",
+          "preview": "BAT-0410 review findings\n  EAWF-0776 doctor --fix refused on a 0.8-layout tree     small\n        |\n        v\n  EAWF-0777 rewrite map record written atomically         small\n            chained commit maps rebound in one run\n            non-UTF-8 map file refused with a typed error\n\nleft as follow-ups (minor):\n  doctor skips a mapped hash whose new commit is not live\n  a retried rebind answers zero counts"
+        },
+        {
+          "consequence": "Leave PRV-0357 unapplied. A further revision makes the changes you ask for and comes back for approval.",
+          "cost": "0.7.4 waits for the revised plan and another approval question.",
+          "effect": "request_repair",
+          "label": "Request plan changes",
+          "option_id": "repair",
+          "preview": "PRV-0357 stays VALIDATED; PRV-0358 is drafted from your notes."
+        },
+        {
+          "consequence": "Leave PRV-0357 unapplied. I record the findings as backlog Tasks and continue to acceptance and release on the pushed head.",
+          "cost": "0.7.4 ships with both defects. A person who runs eawf doctor --fix with 0.7.4 in a 0.8 repository gets files rewritten by the old client, which is what this release exists to prevent.",
+          "effect": "decline",
+          "label": "Release without the fixes",
+          "option_id": "decline",
+          "preview": "pull request 58 stays at efb9ba687\n  doctor --fix on a 0.8-layout tree: NOT refused\n  torn rewrite map record: no repair path\nboth filed as backlog for a later release"
+        }
+      ],
+      "override_until": null,
+      "question": "Approve PlanRevision PRV-0357 for Milestone MLS-0110, release 0.7.4? The review of pull request 58 found two major defects and no blocker. First, eawf doctor --fix is not refused on a 0.8-layout repository and rewrites its config and rendered files. Second, a crash while the rewrite map record is written leaves a torn last line, and then every reader and the rebind verb refuse with no repair path. PRV-0357 appends Batch BAT-0410 with two Tasks that fix both, plus two minor findings in the same code. CI on the pushed head has 12 jobs passed and 3 still running. Plan: .ea/local/research/plans/2026-11-17-v0.7.4/proposal-0357.json",
+      "receipt_ref": "eawf://EAWF/evidence/EVD-0454",
+      "recommendation_rationale": "The first defect breaks the main promise of 0.7.4, that an old client leaves a 0.8 repository alone, and both fixes are small.",
+      "recommended_option_id": "approve",
+      "requested_by": {
+        "principal_id": "EAWF-PLANNER",
+        "principal_kind": "agent",
+        "run_ref": "eawf://EAWF/run/RUN-00002414"
+      },
+      "resolution_actor": {
+        "principal_id": "OP-0001",
+        "principal_kind": "human"
+      },
+      "revision": 2,
+      "selected_option_id": "approve",
+      "status": "SEALED",
+      "subject_ref": "eawf://EAWF/milestone/MLS-0110",
+      "terms": [
+        {
+          "expansion": "the 0.7.4 patch-release Milestone",
+          "term": "MLS-0110"
+        },
+        {
+          "expansion": "the plan revision that appends one fix Batch for the review findings",
+          "term": "PRV-0357"
+        },
+        {
+          "expansion": "the next plan revision, drafted only if you request changes",
+          "term": "PRV-0358"
+        },
+        {
+          "expansion": "Batch 6 of 0.7.4: close the review findings on the stand-down and the rebind",
+          "term": "BAT-0410"
+        },
+        {
+          "expansion": "Task: refuse the doctor repair on a tree in the 0.8 layout",
+          "term": "EAWF-0776"
+        },
+        {
+          "expansion": "Task: keep the rewrite pair record whole and follow chained maps",
+          "term": "EAWF-0777"
+        },
+        {
+          "expansion": "the committed file .ea/store/rewrite_map.jsonl holding old and new commit hashes",
+          "term": "rewrite map record"
+        },
+        {
+          "expansion": "a repository whose .ea folder holds state and no generations, which 0.7.x cannot read",
+          "term": "0.8 layout"
+        },
+        {
+          "expansion": "the automated checks GitHub runs on the pull request",
+          "term": "CI"
+        },
+        {
+          "expansion": "effort unit, about 30 minutes of agent time",
+          "term": "EU"
+        },
+        {
+          "expansion": "the paid model interface of Claude and Codex",
+          "term": "API"
+        },
+        {
+          "expansion": "the text encoding the map file must use",
+          "term": "UTF-8"
+        },
+        {
+          "expansion": "submitted and checked, waiting for approval",
+          "term": "VALIDATED"
+        }
+      ],
+      "updated_at": "2026-11-18T04:04:13.682747Z",
+      "urn": "eawf://EAWF/pending-action/ACT-0077"
     }
   },
   "plan_revision": {
@@ -331797,6 +331928,1714 @@
       "revision": 4,
       "status": "APPLIED",
       "updated_at": "2026-11-18T01:43:46.897078Z"
+    },
+    "PRV-0357": {
+      "approval": {
+        "action_ref": "eawf://EAWF/pending-action/ACT-0077",
+        "approved_at": "2026-11-18T04:04:23.134035Z",
+        "approved_by": {
+          "principal_id": "OP-0001",
+          "principal_kind": "operator"
+        },
+        "base_state_revision": 1,
+        "content_digest": "sha256:9cce31a98881fec4eac2b69e89d553b5ae613b3ebaf054d86214a7bfffe6177f",
+        "head_bindings": [
+          {
+            "head_sha": "cacc5041956e0eba392a54d5af395e1b3ecc504c",
+            "repository_ref": "eawf://EAWF/repository/EAWF"
+          }
+        ],
+        "policy_revision": 1
+      },
+      "author": {
+        "principal_id": "EAWF-PLANNER",
+        "principal_kind": "service"
+      },
+      "base_state_revision": 1,
+      "body": {
+        "batches": [
+          {
+            "repository_ref": "eawf://EAWF/repository/EAWF",
+            "title": "Recognise the 0.8 layout on every entry path",
+            "urn": "eawf://EAWF/batch/BAT-0405"
+          },
+          {
+            "repository_ref": "eawf://EAWF/repository/EAWF",
+            "title": "Rebind recorded commits from a history-rewrite map",
+            "urn": "eawf://EAWF/batch/BAT-0406"
+          },
+          {
+            "repository_ref": "eawf://EAWF/repository/EAWF",
+            "title": "Seal state once per pull request and cut 0.7.4",
+            "urn": "eawf://EAWF/batch/BAT-0407"
+          },
+          {
+            "repository_ref": "eawf://EAWF/repository/EAWF",
+            "title": "Read content captures through the rewrite map",
+            "urn": "eawf://EAWF/batch/BAT-0408"
+          },
+          {
+            "repository_ref": "eawf://EAWF/repository/EAWF",
+            "title": "Record the 0.7.4 release evidence",
+            "urn": "eawf://EAWF/batch/BAT-0409"
+          },
+          {
+            "repository_ref": "eawf://EAWF/repository/EAWF",
+            "title": "Close the review findings on the stand-down and the rebind",
+            "urn": "eawf://EAWF/batch/BAT-0410"
+          }
+        ],
+        "citations": [],
+        "dropped_atoms": [
+          {
+            "atom_ref": "A-13",
+            "reason": "an owner action on each machine after the release, not repository work; listed in the roadmap as step S0.8"
+          },
+          {
+            "atom_ref": "A-14",
+            "reason": "an operation after the release with the kept commit maps; acceptance step AS-03 proves it on a copy"
+          },
+          {
+            "atom_ref": "A-15",
+            "reason": "the dev.N releases happen in the new repository; 0.7.x cuts none (Decision D101)"
+          },
+          {
+            "atom_ref": "A-16",
+            "reason": "v0.8 scope; 0.7.4 changes the commit rule only"
+          }
+        ],
+        "dropped_tasks": [],
+        "milestone": {
+          "acceptance_journey": [
+            {
+              "action": "in a throwaway git repository holding only an empty .ea/state directory, run the installed 0.7.4 hook wrapper for the Claude and the Codex runtime with a session_start event, then with a pre_tool_use event",
+              "actor": "operator",
+              "evidence_kinds": [
+                "artifact"
+              ],
+              "expected_observation": "session_start prints the 0.8-layout line once and exits 0 for both runtimes; pre_tool_use prints nothing and exits 0",
+              "required": true,
+              "step_id": "AS-01"
+            },
+            {
+              "action": "in the same repository run uv run eawf status and uv run eawf doctor",
+              "actor": "operator",
+              "evidence_kinds": [
+                "artifact"
+              ],
+              "expected_observation": "status refuses with the 0.8-layout line and a non-zero exit; doctor shows the authority row as fail with the same line",
+              "required": true,
+              "step_id": "AS-02"
+            },
+            {
+              "action": "copy one rewritten repository with its eawf state to a throwaway folder, run eawf batch rebind-rewritten there with its kept commit map, then eawf hook ledger-history over its unpushed range, then the rebind a second time",
+              "actor": "operator",
+              "evidence_kinds": [
+                "artifact"
+              ],
+              "expected_observation": "the first rebind reports rebound rows and no refusal; ledger-history exits 0 with no unreachable finding where 0.7.3 reported 403; the second rebind reports rebound 0",
+              "required": true,
+              "step_id": "AS-03"
+            },
+            {
+              "action": "repeat step 3 on a throwaway copy of the repository whose map holds four many-to-one pairs",
+              "actor": "operator",
+              "evidence_kinds": [
+                "artifact"
+              ],
+              "expected_observation": "the rebind succeeds and each of the four new commits is recorded for both of its old commits",
+              "required": true,
+              "step_id": "AS-04"
+            },
+            {
+              "action": "on a scratch branch make two code commits with Batch and Task trailers and no state commit and run the pre-push hooks; read the commit rule in the rendered AGENTS.override.md",
+              "actor": "operator",
+              "evidence_kinds": [
+                "artifact"
+              ],
+              "expected_observation": "the pre-push commit lint passes; the rule says state is committed once per pull request as one seal commit",
+              "required": true,
+              "step_id": "AS-05"
+            },
+            {
+              "action": "build the wheel with uv build and read its METADATA file",
+              "actor": "operator",
+              "evidence_kinds": [
+                "artifact"
+              ],
+              "expected_observation": "no Author-email and no Maintainer-email field",
+              "required": true,
+              "step_id": "AS-06"
+            },
+            {
+              "action": "run uv run eawf release preflight 0.7.4 --skip-ci-runs on the reviewed head",
+              "actor": "operator",
+              "evidence_kinds": [
+                "artifact"
+              ],
+              "expected_observation": "the membership and provider rows read pass; ancestry may stay red until the merge",
+              "required": true,
+              "step_id": "AS-07"
+            }
+          ],
+          "appetite": {
+            "amount": 20,
+            "budget_kind": "duration",
+            "unit": "hours"
+          },
+          "contributing_track_refs": [],
+          "description": "Last planned Python patch release before the v0.8 rewrite moves to a fresh repository (Decision D99). A 0.7.4 client recognises a repository in the 0.8 layout on every entry path; recorded commit hashes are rebound through a history-rewrite commit map; the rules accept one seal commit per pull request (Decision D101); the package metadata drops the author email.",
+          "exclusions": [
+            "no rewrite of the event log, of machine-local files or of the plan-revision head bindings in the state document: they keep old hashes and the checks translate them through the recorded map",
+            "no rebind run in the nine rewritten repositories as part of this Milestone; it is proven on throwaway copies and run by the operator after the release",
+            "no repository rename, visibility change, repository creation, registry or account change",
+            "no change of the status line on a 0.8-layout tree",
+            "no version-bumper or release-train support for dev.N pre-release tags",
+            "no tree-SHA bindings, settlement or any other part of the v0.8 seal regime beyond the commit rule",
+            "the acceptance record and the release record stay later state commits in the 0.7.x flow",
+            "no installation on other machines and no change of a plugin marketplace source"
+          ],
+          "key": "MLS-0110",
+          "outcome": "eawf 0.7.4 is released (uv run eawf --version prints 0.7.4) with: the 0.8-layout line printed once at session start by the hook wrapper of both runtimes and every verb refusing a 0.8 tree with it; eawf batch rebind-rewritten translating recorded commit hashes through a commit map, recording the map, and the history, repair, freshness and completion checks honouring it; rules and projections that commit state once per pull request; no author email in the package metadata.",
+          "primary_track_ref": "eawf://EAWF/track/TRK-EAWF-CORE",
+          "required_batch_refs": [
+            "eawf://EAWF/batch/BAT-0405",
+            "eawf://EAWF/batch/BAT-0406",
+            "eawf://EAWF/batch/BAT-0407",
+            "eawf://EAWF/batch/BAT-0408",
+            "eawf://EAWF/batch/BAT-0409",
+            "eawf://EAWF/batch/BAT-0410"
+          ],
+          "target_date": null,
+          "title": "Ship 0.7.4 to bridge to v0.8 and rebind rewritten histories"
+        },
+        "milestone_urn": "eawf://EAWF/milestone/MLS-0110",
+        "new_surfaces": [],
+        "source_atoms": [
+          {
+            "atom_id": "A-01",
+            "mapped_criterion_ids": [
+              "CR-1018"
+            ],
+            "text": "The hook wrapper prints the 0.8-layout line once at session start on a 0.8 tree"
+          },
+          {
+            "atom_id": "A-02",
+            "mapped_criterion_ids": [
+              "CR-1019",
+              "CR-1020"
+            ],
+            "text": "The hook wrapper stands down silently on other events and keeps the line's text in one place"
+          },
+          {
+            "atom_id": "A-03",
+            "mapped_criterion_ids": [
+              "CR-1021",
+              "CR-1022",
+              "CR-1024"
+            ],
+            "text": "Every eawf verb addressed at a 0.8 tree refuses with the same text"
+          },
+          {
+            "atom_id": "A-04",
+            "mapped_criterion_ids": [
+              "CR-1023"
+            ],
+            "text": "Doctor names a 0.8 tree instead of calling it epoch 1"
+          },
+          {
+            "atom_id": "A-05",
+            "mapped_criterion_ids": [
+              "CR-1025",
+              "CR-1026"
+            ],
+            "text": "A rebind step translates recorded commit hashes through a history-rewrite commit map"
+          },
+          {
+            "atom_id": "A-06",
+            "mapped_criterion_ids": [
+              "CR-1027",
+              "CR-1028",
+              "CR-1029",
+              "CR-1030"
+            ],
+            "text": "The applied map is recorded and the rebind is idempotent, with many-to-one pairs accepted"
+          },
+          {
+            "atom_id": "A-07",
+            "mapped_criterion_ids": [
+              "CR-1031",
+              "CR-1032",
+              "CR-1033",
+              "CR-1034",
+              "CR-1035"
+            ],
+            "text": "History, repair, freshness and completion checks pass on a rebound repository"
+          },
+          {
+            "atom_id": "A-08",
+            "mapped_criterion_ids": [
+              "CR-1036",
+              "CR-1037",
+              "CR-1040"
+            ],
+            "text": "The commit lint and the rules accept one seal commit per pull request"
+          },
+          {
+            "atom_id": "A-09",
+            "mapped_criterion_ids": [
+              "CR-1038"
+            ],
+            "text": "A Milestone of a multi-Milestone release may ship as a dev.N pre-release"
+          },
+          {
+            "atom_id": "A-10",
+            "mapped_criterion_ids": [
+              "CR-1039"
+            ],
+            "text": "Projections and goldens follow the reworded rules"
+          },
+          {
+            "atom_id": "A-11",
+            "mapped_criterion_ids": [
+              "CR-1041",
+              "CR-1042"
+            ],
+            "text": "The package metadata drops the author email"
+          },
+          {
+            "atom_id": "A-12",
+            "mapped_criterion_ids": [
+              "CR-1043",
+              "CR-1044",
+              "CR-1045"
+            ],
+            "text": "0.7.4 is releasable through the existing release verbs"
+          },
+          {
+            "atom_id": "A-13",
+            "mapped_criterion_ids": [],
+            "text": "Install 0.7.4 and a plugin marketplace that does not read the old repository on every machine"
+          },
+          {
+            "atom_id": "A-14",
+            "mapped_criterion_ids": [],
+            "text": "Run the rebind in the nine rewritten repositories"
+          },
+          {
+            "atom_id": "A-15",
+            "mapped_criterion_ids": [],
+            "text": "Version-bumper support for dev.N tags"
+          },
+          {
+            "atom_id": "A-16",
+            "mapped_criterion_ids": [],
+            "text": "Tree-SHA bindings and settlement of the v0.8 seal regime"
+          },
+          {
+            "atom_id": "A-17",
+            "mapped_criterion_ids": [
+              "CR-1048",
+              "CR-1049",
+              "CR-1050",
+              "CR-1051",
+              "CR-1052",
+              "CR-1053"
+            ],
+            "text": "Record the release evidence of 0.7.4: canary export and walk, live dispatch smokes, four packet runs"
+          },
+          {
+            "atom_id": "A-18",
+            "mapped_criterion_ids": [
+              "CR-1046",
+              "CR-1047"
+            ],
+            "text": "Ledger history passes on a committed capture ledger after a rebind from a rewrite map"
+          }
+        ],
+        "tasks": [
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0405",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1018",
+                "kind": "behavioral",
+                "measurable_signal": "0.8-layout line at session start for both runtimes; gate: `uv run pytest tests/integration/runtime/hooks/test_hook_wrapper_fail_open.py -k v08 -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "compatibility",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/runtime/hooks/test_hook_wrapper_fail_open.py -k v08",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The wrapper rendered from hook.sh.j2 for the runtimes claude and codex, run in a git repository whose main checkout has a directory .ea/state and no .ea/generations, on the event session_start prints exactly the line `eawf: this repository uses the eawf 0.8 layout; install eawf 0.8 or later` once on stdout, exits 0 and does not invoke eawf (a recording stub named eawf first on PATH sees zero calls).",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1019",
+                "kind": "behavioral",
+                "measurable_signal": "silent stand-down on tool and prompt events; no regression on 0.7 trees; gate: `uv run pytest tests/integration/runtime/hooks/test_hook_wrapper_fail_open.py -k v08 -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "safety",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/runtime/hooks/test_hook_wrapper_fail_open.py -k v08",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "On the same tree the rendered wrapper exits 0 and prints nothing on stdout for the events user_prompt_submit, pre_tool_use, post_tool_use and subagent_stop, and invokes neither eawf nor the data-loss guard (the recording stub sees zero calls). A tree that has both .ea/state and .ea/generations, and a 0.7 managed tree with .ea/state.json, behave exactly as before this change.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1020",
+                "kind": "behavioral",
+                "measurable_signal": "single owner of the 0.8-layout sentence; gate: `uv run pytest tests/integration/runtime/hooks/test_hook_wrapper_fail_open.py -k v08 -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "maintainability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/runtime/hooks/test_hook_wrapper_fail_open.py -k v08",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The line has one owner: the renderer passes V08_LAYOUT_MESSAGE from src/eawf/kernel/migration/epoch2/canary.py into the template, the template source holds no literal copy of the sentence, and the rendered wrapper contains the constant's value byte for byte.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [],
+            "effort": "S",
+            "intent": "Measured on 0.7.3 with a throwaway repository holding only an empty .ea/state directory: the installed hook wrapper classes the tree as unmanaged-git on session_start and exits before calling eawf, so no real session prints the 0.8-layout line; on user_prompt_submit and pre_tool_use it calls eawf and runs the 0.7 data-loss guard on a tree 0.7 cannot read. The template src/eawf/platform/templates/claude/hook.sh.j2 is rendered for both the Claude and the Codex runtime by src/eawf/surfaces/render/hooks.py. Add the 0.8 test to the wrapper's probe (the main checkout has a directory .ea/state and no .ea/generations, the same test as uses_v08_layout in src/eawf/kernel/migration/epoch2/canary.py) and stand down on every event, printing the line once at session start. Gives up running the 0.7 guard on 0.8 trees, which the v0.8 design asks for.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Print the 0.8-layout line from the hook wrapper",
+            "urn": "eawf://EAWF/task/EAWF-0767",
+            "write_claims": [
+              "src/eawf/platform/templates/claude/hook.sh.j2",
+              "src/eawf/surfaces/render/hooks.py",
+              "tests/integration/runtime/hooks/test_hook_wrapper_fail_open.py",
+              "tests/golden/plugin_install"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0405",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1021",
+                "kind": "behavioral",
+                "measurable_signal": "0.8-tree refusal for read and write verbs; gate: `uv run pytest tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py -k v08 -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "compatibility",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py -k v08",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "upgrade_refusal.enforce refuses every verb addressed at a tree for which uses_v08_layout is true, read verbs included (status, task list, decision list), printing `eawf: this repository uses the eawf 0.8 layout; install eawf 0.8 or later` and exiting with the exit code and error kind of the existing 0.6-tree refusal. A 0.7 tree and a directory without .ea are not refused by this rule.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1022",
+                "kind": "behavioral",
+                "measurable_signal": "exempt verbs on a 0.8 tree; gate: `uv run pytest tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py -k v08 -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "compatibility",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py -k v08",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "On a 0.8-layout tree these are exempt from the refusal and behave as in 0.7.3: --help, --version, every `eawf hook` verb, `eawf cc statusline`, `eawf statusline` and `eawf doctor`.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1023",
+                "kind": "behavioral",
+                "measurable_signal": "doctor names a 0.8 tree; gate: `uv run pytest tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py -k v08 -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "functional_suitability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py -k v08",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "On a 0.8-layout tree `eawf doctor` prints the authority_epoch row with status fail and the 0.8-layout line as its detail (src/eawf/observability/doctor/checks_authority.py), never 'epoch 1 (undeclared)', and its overall verdict is fail.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1024",
+                "kind": "behavioral",
+                "measurable_signal": "hook runner behaviour on a 0.8 tree unchanged; gate: `uv run pytest tests/unit/surfaces/cli/test_hook_managed_fence.py -k v08 -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "compatibility",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/surfaces/cli/test_hook_managed_fence.py -k v08",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "`eawf hook run session_start --runtime claude` and `--runtime codex` on a 0.8-layout tree still print the line once and exit 0, and `eawf hook run user_prompt_submit` prints nothing and exits 0, as tests/unit/surfaces/cli/test_hook_managed_fence.py pinned before this change.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [],
+            "effort": "S",
+            "intent": "Measured on 0.7.3 in the same throwaway 0.8-layout repository: eawf status prints 'authority: epoch 1 (undeclared)' and exits 0, eawf task list fails with an epoch-1 NotFound, and eawf doctor reports authority_epoch ok 'epoch 1 (undeclared)'. Only eawf hook run session_start prints the 0.8-layout line. The root-group refusal upgrade_refusal.enforce (src/eawf/surfaces/cli/upgrade_refusal.py) knows only 0.6 trees and skips read verbs. Refuse every verb addressed at a 0.8 tree with the line, keep the hook, status line and doctor verbs running, and make doctor say what the tree is. Gives up reading a 0.8 tree with any 0.7 verb.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Refuse commands and fail doctor on a 0.8-layout tree",
+            "urn": "eawf://EAWF/task/EAWF-0768",
+            "write_claims": [
+              "src/eawf/surfaces/cli/upgrade_refusal.py",
+              "src/eawf/observability/doctor/checks_authority.py",
+              "tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py",
+              "tests/unit/surfaces/cli/test_hook_managed_fence.py"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0406",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1025",
+                "kind": "behavioral",
+                "measurable_signal": "rewrite-map model and loader over valid and many-to-one maps; gate: `uv run pytest tests/unit/workflow/integration/test_rebind.py -k rewrite -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/integration/test_rebind.py -k rewrite",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "RewriteMap in src/eawf/workflow/integration/rebind.py is a closed model (extra='forbid') with one field commits: a mapping of old to new full 40-character lowercase hexadecimal commit hashes. Its loader reads a git filter-repo commit-map file: first the header line 'old' and 'new' separated by whitespace, then one pair per line. It accepts several old hashes mapped to one new hash and an entry mapped to itself.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1026",
+                "kind": "behavioral",
+                "measurable_signal": "rewrite-map loader refusals; gate: `uv run pytest tests/unit/workflow/integration/test_rebind.py -k rewrite -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/integration/test_rebind.py -k rewrite",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The RewriteMap loader refuses with the code rewrite_map_invalid, naming the line number: a line that is not two full hashes, a repeated old hash, and a new hash of forty zeros.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1027",
+                "kind": "behavioral",
+                "measurable_signal": "superseding rows per ledger line naming a mapped hash; gate: `uv run pytest tests/integration/runtime/daemon/methods/test_delivery_rebind_rewritten.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/runtime/daemon/methods/test_delivery_rebind_rewritten.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The daemon method runtime.delivery.rebind_rewritten, driven by `eawf batch rebind-rewritten --map-file <path> --idempotency-key <key> --actor <principal> [--dry-run]`, appends one superseding row for every effective line of every ledger-tier collection that names an old hash of the map, with each old hash replaced by its new hash, commit by commit through plan_rebind. An old hash that is recorded but absent from the map is left as it is and counted in the answer field unmapped.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1028",
+                "kind": "behavioral",
+                "measurable_signal": "rewrite guards replace squash guards; refusals write nothing; gate: `uv run pytest tests/integration/runtime/daemon/methods/test_delivery_rebind_rewritten.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "safety",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/runtime/daemon/methods/test_delivery_rebind_rewritten.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "rebind_rewritten applies none of the squash guards rebind_head_moved, rebind_commit_off_branch, rebind_trailer_missing and rebind_live_row. It refuses with rewrite_commit_missing when a new commit is not in the repository and with rewrite_tree_mismatch when an old commit object is still present and its tree differs from the new commit's tree; a refusal writes nothing.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1029",
+                "kind": "behavioral",
+                "measurable_signal": "persisted rewrite map and typed answer; gate: `uv run pytest tests/integration/runtime/daemon/methods/test_delivery_rebind_rewritten.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "functional_suitability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/runtime/daemon/methods/test_delivery_rebind_rewritten.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "A successful rebind-rewritten appends every applied pair to the committed file .ea/store/rewrite_map.jsonl, one JSON object per line with exactly the keys old, new and applied_at, under the state document lock; the file is append-only and a pair already present is not appended again. The answer carries rebound (rows appended), per_collection (collection name to count), unmapped and pairs_recorded.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1030",
+                "kind": "behavioral",
+                "measurable_signal": "idempotent replay, dry run, many-to-one and state-document mentions; gate: `uv run pytest tests/integration/runtime/daemon/methods/test_delivery_rebind_rewritten.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/runtime/daemon/methods/test_delivery_rebind_rewritten.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "A second rebind-rewritten with the same map and a new idempotency key appends no ledger row and no map line and answers rebound 0; the same idempotency key replays its receipt; --dry-run writes nothing and prints the same counts the real run would. The fixture covers a many-to-one pair, a hash inside a prose field (evidence summary) and a hash in a plan-revision head binding of the state document, which is not rewritten and does not refuse the run.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [],
+            "effort": "L",
+            "intent": "On 2026-11-17 the author fields of nine repositories that eawf manages were rewritten in place, so every commit hash changed while every tree stayed identical; the commit maps are kept in git filter-repo format (a header line, then one 'old new' pair of full hashes per line). Measured in one of them: 265 distinct old hashes are recorded, 57 of them in committed files (batch, task, receipt, evidence and milestone ledgers, the change history and the plan-revision head bindings of the state document), and none of the new hashes. The existing verb eawf batch rebind cannot take such a map: its guards in src/eawf/runtime/daemon/methods/delivery_rebind.py require the branch head to equal the map head, every new commit on one branch, Batch and Task trailers, and no mention in the state document, and 19 of the 57 targets are off the integration branch. Add a sibling daemon method that reuses plan_rebind (src/eawf/workflow/integration/rebind.py) commit by commit. One map has four pairs of old commits that became one new commit. Gives up rewriting the event log and machine-local files, which keep old hashes.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Rebind recorded commits from a history-rewrite map",
+            "urn": "eawf://EAWF/task/EAWF-0769",
+            "write_claims": [
+              "src/eawf/workflow/integration/rebind.py",
+              "src/eawf/runtime/daemon/methods/delivery_rebind.py",
+              "src/eawf/surfaces/cli/commands/batch.py",
+              "src/eawf/kernel/store/commit_policy.py",
+              "tests/integration/runtime/daemon/methods/test_delivery_rebind_rewritten.py",
+              "tests/unit/workflow/integration/test_rebind.py",
+              "tests/fixtures/rewrite_map"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0406",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1031",
+                "kind": "behavioral",
+                "measurable_signal": "ledger-history accepts mapped hashes; gate: `uv run pytest tests/unit/platform/lint/test_ledger_history.py -k rewrite -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/platform/lint/test_ledger_history.py -k rewrite",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "scan in src/eawf/platform/lint/ledger_history.py reads the pairs of .ea/store/rewrite_map.jsonl as rebound commits in addition to the pairs it infers from supersede rows: a change-history or state-document mention of an old hash whose new commit is reachable from the checked branch or from any ref under refs/heads, refs/remotes or refs/eawf is not a finding.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1032",
+                "kind": "behavioral",
+                "measurable_signal": "ledger-history still reports unmapped hashes; no map means no change; gate: `uv run pytest tests/unit/platform/lint/test_ledger_history.py -k rewrite -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/platform/lint/test_ledger_history.py -k rewrite",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "In ledger_history.scan an old hash with no pair in the rewrite map and no supersede row is still reported as unreachable, and with no map file the findings are identical to 0.7.3 on the existing fixtures in tests/fixtures/ledger_history.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1033",
+                "kind": "behavioral",
+                "measurable_signal": "doctor repair does not freeze rewritten hashes; gate: `uv run pytest tests/unit/test_doctor_repair.py -k rewrite -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "safety",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/test_doctor_repair.py -k rewrite",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The repair ledger.supersede-unreachable in src/eawf/observability/doctor/repair.py never lists a hash that has a pair in the rewrite map among unreachable_shas; its plan names such hashes under a separate count rewritten with the hint to run eawf batch rebind-rewritten, and applying the repair writes no row for them.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1034",
+                "kind": "behavioral",
+                "measurable_signal": "old-to-new resolution with chains and cycle refusal; gate: `uv run pytest tests/unit/workflow/planning/test_revision_rewrite_map.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/planning/test_revision_rewrite_map.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "A helper resolve_rewritten(root, sha) in src/eawf/workflow/integration/rebind.py returns the new hash for a recorded old hash and the input unchanged otherwise, following chains of pairs to their end and refusing a cycle with rewrite_map_invalid.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1035",
+                "kind": "behavioral",
+                "measurable_signal": "freshness, completion, matched-head and carried checks through the map; gate: `uv run pytest tests/unit/workflow/planning/test_revision_rewrite_map.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/planning/test_revision_rewrite_map.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The head-binding freshness check of plan approval (src/eawf/workflow/planning/revision.py), the completion commit check (delivery_completion.py), the matched-head guard (domain_guards.py) and the carried check (delivery_landed.py) compare through resolve_rewritten: a recorded old head whose pair equals the observed head passes, and a recorded head with no pair that differs still fails with its 0.7.3 code (PROOF_STALE, COMPLETION_COMMIT_MISMATCH).",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [
+              "eawf://EAWF/task/EAWF-0769"
+            ],
+            "effort": "L",
+            "intent": "Measured in a rewritten repository on 0.7.3: eawf hook ledger-history over the unpushed range exits 1 with 403 unreachable findings; the read-only plan of doctor --fix ledger.supersede-unreachable would declare 41 hashes unreachable and freeze them; plan approval compares recorded head bindings with the moved heads and reports PROOF_STALE; delivery completion and the landed check compare recorded heads with new ones. The superseding rows of the rebind fix the ledgers, but the change history and the state document keep old hashes by design. Make each of these checks read .ea/store/rewrite_map.jsonl and treat a recorded old hash as its new hash. Gives up nothing; without a map file every check behaves as before.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Make history checks honour a recorded rewrite map",
+            "urn": "eawf://EAWF/task/EAWF-0770",
+            "write_claims": [
+              "src/eawf/platform/lint/ledger_history.py",
+              "src/eawf/observability/doctor/repair.py",
+              "src/eawf/workflow/planning/revision.py",
+              "src/eawf/runtime/daemon/methods/delivery_completion.py",
+              "src/eawf/runtime/daemon/methods/domain_guards.py",
+              "src/eawf/runtime/daemon/methods/delivery_landed.py",
+              "tests/unit/platform/lint/test_ledger_history.py",
+              "tests/unit/test_doctor_repair.py",
+              "tests/unit/workflow/planning/test_revision_rewrite_map.py"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0407",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1036",
+                "kind": "behavioral",
+                "measurable_signal": "seal-commit wording in the packaged rules; gate: `uv run pytest tests/unit/workflow/release/test_dev_cadence_rules.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "maintainability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/release/test_dev_cadence_rules.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The packaged rules eawf.core.vcs.commit-granularity and eawf.core.vcs.commit-scope-carrier (src/eawf/platform/rules/data/modules/eawf.core.vcs.yaml) and eawf.core.lifecycle.close-timing (eawf.core.lifecycle.yaml), each one revision higher, say: state is committed once per pull request as one commit with the subject prefix `state: seal`, written when the pull request opens; review fixes are code-only commits; the acceptance record and the release record are the only later `state:` commits.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1037",
+                "kind": "behavioral",
+                "measurable_signal": "seal-commit wording in profile blocks and rendered docs; gate: `uv run pytest tests/unit/workflow/release/test_dev_cadence_rules.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "maintainability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/release/test_dev_cadence_rules.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The profile blocks commit-prefix, ship-process and commit-granularity (src/eawf/platform/profiles/data/core.yaml) carry the same regime, and no rendered rule, profile block or docs/rules page contains 'one `state:` commit per push', 'end each push with one' or 'trailing state commit'.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1038",
+                "kind": "behavioral",
+                "measurable_signal": "pre-release Milestones allowed; cadence pointer cites the current Decision; gate: `uv run pytest tests/unit/test_profile_agent_driven.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "maintainability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/test_profile_agent_driven.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The rule repo.milestone-equals-release (.ea/rules.yaml) and its profile block (src/eawf/platform/profiles/data/agent_driven.yaml) keep 'at least a minor release' for a single-Milestone release and add that a Milestone of a declared multi-Milestone release ships as a `{version}-dev.{n}` pre-release cut on dev; the cadence-pointer rule and block cite Decision D101, which superseded D94, in place of D94, which superseded D92.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1039",
+                "kind": "behavioral",
+                "measurable_signal": "projections and goldens current and under the Codex cap; gate: `uv run pytest tests/golden/test_golden_agents_md.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "compatibility",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/golden/test_golden_agents_md.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "`uv run eawf sync` leaves no diff after the change, the agents_md goldens are regenerated with `uv run eawf snapshot update --kind agents_md`, and the rendered AGENTS.override.md stays within 32,768 bytes.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1040",
+                "kind": "behavioral",
+                "measurable_signal": "pre-push lint accepts code-only and sealed ranges; gate: `uv run pytest tests/unit/test_commit_prefix_lint.py -k seal -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "functional_suitability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/test_commit_prefix_lint.py -k seal",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "A pushed range of three code commits that each carry a Batch and a Task trailer and no `state:` commit passes `tools/commit_prefix_lint.py --pre-push-lint`; a range ending in one `state: seal` commit that touches only committed state paths passes; and the lint's refusal hint for a stray path in a state commit no longer asks for a trailing state commit.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [],
+            "effort": "M",
+            "intent": "The operator ruled on 2026-11-17 (Decision D101, which supersedes D94) that state is committed once per pull request, as one seal commit written when the pull request opens, and that a Milestone of a declared multi-Milestone release may ship as a dev.N pre-release. Measured on 0.7.3: no hook, lint or continuous integration (CI) gate requires a trailing state commit; tools/commit_prefix_lint.py only mentions it in a refusal hint, and the Task trailer lint reads the on-disk state. The change is rule and profile text, re-rendered projections and the tests that pin the old wording. The 0.7.x accept and release flow still writes its acceptance and release records as later state commits; the text names that exception. No version-bumper support for dev.N is added, because those releases happen in the new repository.",
+            "priority": "P2",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Reword the commit regime to one seal commit per pull request",
+            "urn": "eawf://EAWF/task/EAWF-0771",
+            "write_claims": [
+              "src/eawf/platform/rules/data/modules/eawf.core.vcs.yaml",
+              "src/eawf/platform/rules/data/modules/eawf.core.lifecycle.yaml",
+              "src/eawf/platform/profiles/data/core.yaml",
+              "src/eawf/platform/profiles/data/agent_driven.yaml",
+              ".ea/rules.yaml",
+              "AGENTS.override.md",
+              "docs/rules",
+              "tools/commit_prefix_lint.py",
+              "tests/golden/agents_md",
+              "tests/golden/surfaces/cli/scenarios/fresh_repo",
+              "tests/unit/workflow/release/test_dev_cadence_rules.py",
+              "tests/unit/test_profile_agent_driven.py",
+              "tests/unit/test_commit_prefix_lint.py",
+              "tests/unit/surfaces/render/test_ship_skill_body_batches.py"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0407",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1041",
+                "kind": "behavioral",
+                "measurable_signal": "no address in package or plugin metadata; gate: `uv run pytest tests/unit/test_marketplace_catalog_pointers.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "security",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/test_marketplace_catalog_pointers.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The [project] table of pyproject.toml has an authors list whose entries carry the key name only and no maintainers entry with an email key; the metadata of a wheel built from the tree has no Author-email and no Maintainer-email field. The plugin and marketplace manifests rendered by src/eawf/runtime/runtimes/claude/plugin_package.py still carry the author name and no '@'.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1042",
+                "kind": "behavioral",
+                "measurable_signal": "allowlist without the package address; only added lines are judged; gate: `uv run pytest tests/unit/test_state_leak_diff.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "security",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/test_state_leak_diff.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "With no author address in pyproject.toml the leak allowlist built by scrub.py and state_leak.py holds no address derived from package metadata and building it raises nothing. The state leak diff check passes a change that leaves an existing line holding a mailbox address untouched and fails a change that adds a line holding an address at a consumer mail provider, described in the test by pattern and never as a literal address in this criterion.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [],
+            "effort": "XS",
+            "intent": "pyproject.toml carries a personal address in its authors entry, which every wheel and sdist publishes as package metadata. It is the only tracked source of the address outside the state ledgers. The plugin manifests emit the author name only. The address is also read into the leak allowlists of src/eawf/observability/logging/scrub.py and state_leak.py, so removing the key makes the scanners treat that address as a leak from now on, which is the wanted behaviour; existing committed ledger lines must not start failing checks that scan only what a change adds. Gives up the contact address in the package index listing.",
+            "priority": "P2",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Drop the author email from the package metadata",
+            "urn": "eawf://EAWF/task/EAWF-0772",
+            "write_claims": [
+              "pyproject.toml",
+              "src/eawf/observability/logging/scrub.py",
+              "src/eawf/observability/logging/state_leak.py",
+              "tests/unit/test_marketplace_catalog_pointers.py",
+              "tests/unit/test_state_leak_diff.py"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0407",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1043",
+                "kind": "behavioral",
+                "measurable_signal": "0.7.4 train, checkpoint config and evidence key; gate: `uv run pytest tests/unit/workflow/release/test_release_trains.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "functional_suitability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/release/test_release_trains.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "release train 0.7.4 resolves through RELEASE_TRAINS and CHECKPOINT_CONFIGS in src/eawf/workflow/release/train.py with exactly one stable checkpoint that requires canary membership and the same targets and claims as 0.7.3, and CANARY_EVIDENCE_DIRS in src/eawf/workflow/evidence/provider_certification.py has the key REL-0.7.4; a 0.7.4 canary export without evidence of its own is refused by the patch train admission as the 0.7.3 one is.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1044",
+                "kind": "behavioral",
+                "measurable_signal": "version and changelog section for 0.7.4; gate: `uv run pytest tests/unit/workflow/release/test_release_0_7_4.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "compatibility",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/release/test_release_0_7_4.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "src/eawf/_version.py holds __version__ = \"0.7.4\"; CHANGELOG.md has a section headed [0.7.4] whose upgrade notes name the 0.8-layout line and refusal, the `eawf batch rebind-rewritten` verb with .ea/store/rewrite_map.jsonl, the one-seal-commit regime and the removed author email; tests/unit/workflow/release/test_release_0_7_4.py replaces test_release_0_7_3.py and pins the version and that section.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1045",
+                "kind": "behavioral",
+                "measurable_signal": "version-coupled goldens and admission test; gate: `uv run pytest tests/golden/test_plugin_install_claude.py -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "compatibility",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/golden/test_plugin_install_claude.py",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The plugin_install goldens are regenerated for 0.7.4 by the recipe in the docstring of tests/golden/test_plugin_install_claude.py and contain the 0.8-layout stand-down of the wrapper; the patch train admission test covers 0.7.4 beside 0.7.3.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [
+              "eawf://EAWF/task/EAWF-0767",
+              "eawf://EAWF/task/EAWF-0768",
+              "eawf://EAWF/task/EAWF-0769",
+              "eawf://EAWF/task/EAWF-0770",
+              "eawf://EAWF/task/EAWF-0771",
+              "eawf://EAWF/task/EAWF-0772"
+            ],
+            "effort": "M",
+            "intent": "A version is releasable only when src/eawf/workflow/release/train.py declares its train and checkpoint configuration and the canary evidence map names its release key. 0.7.3 did this in its V073 block; 0.7.4 needs the same, a version bump, a changelog section with upgrade notes for the four changes of this Milestone, the version test and the version-coupled plugin goldens. This Task lands last so the goldens include the wrapper change. The version-bound canary export is acceptance evidence, not Task work.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Declare the 0.7.4 release train and cut the version",
+            "urn": "eawf://EAWF/task/EAWF-0773",
+            "write_claims": [
+              "src/eawf/workflow/release/train.py",
+              "src/eawf/workflow/evidence/provider_certification.py",
+              "src/eawf/_version.py",
+              "CHANGELOG.md",
+              "tests/_canary_releases.py",
+              "tests/unit/workflow/release/test_release_trains.py",
+              "tests/unit/workflow/release/test_release_0_7_3.py",
+              "tests/unit/workflow/release/test_release_0_7_4.py",
+              "tests/unit/workflow/release/test_stable_checkpoint_config.py",
+              "tests/integration/runtime/daemon/methods/test_patch_train_admission.py",
+              "tests/golden/plugin_install"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0408",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1046",
+                "kind": "behavioral",
+                "measurable_signal": "ledger-history accepts mapped hashes in rows the rebind leaves; gate: `uv run pytest tests/unit/platform/lint/test_ledger_history.py -k capture -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/platform/lint/test_ledger_history.py -k capture",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "In ledger_history.scan a ledger row that rebind-rewritten leaves as it is by design (a row the commit policy keeps machine-local, such as a content_artifact capture) and that names an old hash with a pair in .ea/store/rewrite_map.jsonl is not a finding when the new commit is reachable from the checked branch or from any ref under refs/heads, refs/remotes or refs/eawf; the scan and plan_rebind decide which rows those are through one shared predicate.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1047",
+                "kind": "behavioral",
+                "measurable_signal": "ledger-history still reports unmapped captures and unrebound ordinary rows; gate: `uv run pytest tests/unit/platform/lint/test_ledger_history.py -k capture -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/platform/lint/test_ledger_history.py -k capture",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "In ledger_history.scan such a row naming a hash with no pair in the rewrite map is still reported as unreachable, an ordinary ledger row naming a mapped old hash with no superseding row is still reported, and with no map file the findings on the fixtures in tests/fixtures/ledger_history are identical to before.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [],
+            "effort": "S",
+            "intent": "Measured on 2026-11-17 on a copy of a rewritten repository at the BAT-0407 head: after eawf batch rebind-rewritten and a commit of the ledgers, eawf hook ledger-history over the committed range reports four findings in ledger/artifact.jsonl. They are content_artifact rows, captures of tool output that the commit policy keeps machine-local and that plan_rebind leaves as they are for a history-rewrite map, because their record key is the digest of their content. Three of the four hashes have a pair in .ea/store/rewrite_map.jsonl. The scan in src/eawf/platform/lint/ledger_history.py translates change-history and state-document mentions through the recorded map but not these rows, so a repository that commits such a ledger file can never pass after a rewrite. Make the scan treat a mapped old hash in a row that rebind-rewritten leaves by design like a change-history mention, sharing one predicate with plan_rebind (src/eawf/workflow/integration/rebind.py) for which rows those are. Gives up nothing: a hash with no pair is still reported, and rows the rebind supersedes are still judged directly.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Read content captures through the rewrite map in ledger history",
+            "urn": "eawf://EAWF/task/EAWF-0774",
+            "write_claims": [
+              "src/eawf/platform/lint/ledger_history.py",
+              "src/eawf/workflow/integration/rebind.py",
+              "tests/unit/platform/lint/test_ledger_history.py",
+              "tests/unit/workflow/integration/test_rebind.py",
+              "CHANGELOG.md"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0409",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1048",
+                "kind": "behavioral",
+                "measurable_signal": "release key of the export REL-0.7.4 reads; gate: `uv run pytest tests/integration/workflow/verify/test_canary_evidence_by_release.py::test_the_v074_export_is_its_own_prior -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "functional_suitability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/workflow/verify/test_canary_evidence_by_release.py::test_the_v074_export_is_its_own_prior",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "The REL-0.7.4 canary export is committed at .ea/artifacts/evidence/2026-11-17-stable-native-linux/native-canary-evidence.json, produced by uv run eawf release canary-export 0.7.4 --os-class linux; load_canary_evidence and prior_canary_evidence (src/eawf/workflow/evidence/canary_export.py) both return release_key \"REL-0.7.4\", advertising exactly claude-code and codex, each on linux.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1049",
+                "kind": "behavioral",
+                "measurable_signal": "walk-module tests selected and passed for REL-0.7.4; gate: `uv run pytest tests/integration/workflow/release/test_dev3_canary_rehearsal_record.py -k REL-0.7.4 -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/workflow/release/test_dev3_canary_rehearsal_record.py -k REL-0.7.4",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "tests/fixtures/artifacts/2026-11-17-stable-native-linux/canary-acceptance-walk.json is committed, recorded with EAWF_RECORD_CANARY_WALK=REL-0.7.4, and UNRECORDED_RELEASES (tests/_canary_releases.py) no longer holds REL-0.7.4, so every release-parametrized test of the canary walk module runs for REL-0.7.4 and passes. While REL-0.7.4 stays listed, the selection is empty and the gate exits 5.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1050",
+                "kind": "behavioral",
+                "measurable_signal": "0.7.4 evidence promoted, re-included and censused; gate: `uv run pytest tests/lint/test_ea_commit_census.py tests/contract/platform/install/test_managed_ignore_block.py::test_repo_gitignore_block_is_current -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "security",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/lint/test_ea_commit_census.py tests/contract/platform/install/test_managed_ignore_block.py::test_repo_gitignore_block_is_current",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "PROMOTED_ARTIFACTS (src/eawf/kernel/store/commit_policy.py) gains the 2026-11-17-stable-native-linux directory in the canary tuple and rows for dispatch-smoke-receipts.json, dispatch-check-*.json and packet-run-receipts.jsonl, each in the commit adding its file; the managed .gitignore block re-includes them and is current; _READERS in tests/lint/test_ea_commit_census.py names each and the per-release term of _PROMOTED_CEILING grows by one release.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1051",
+                "kind": "behavioral",
+                "measurable_signal": "both runtimes smoked on linux for REL-0.7.4; gate: `uv run pytest tests/integration/workflow/release/test_v074_release_evidence.py::test_the_v074_smoke_backs_every_claimed_pair -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/workflow/release/test_v074_release_evidence.py::test_the_v074_smoke_backs_every_claimed_pair",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "dispatch-smoke-receipts.json in the 0.7.4 evidence directory names release_key \"REL-0.7.4\" and holds a scorecard \"pass\" receipt for (claude-code, linux) and (codex, linux) whose evidence_refs are dispatch-check-RUN-*.json and dispatch-check-codex-RUN-*.json files beside it; dispatch_smoke_gaps over those pairs returns (). The smoke scratch files commands.json, latency.json, frame-timeline.json and eawfd.log are not committed.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1052",
+                "kind": "behavioral",
+                "measurable_signal": "four packet runs pass on 0.7.4 at ancestors of HEAD; gate: `uv run pytest tests/integration/workflow/release/test_v074_release_evidence.py::test_the_v074_packet_runs_pass_on_both_runtimes_and_origins -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/workflow/release/test_v074_release_evidence.py::test_the_v074_packet_runs_pass_on_both_runtimes_and_origins",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "packet-run-receipts.jsonl in that directory holds four receipts, one latest per runtime (claude-code, codex) and origin (born_native, adopted), each with outcome \"pass\", eawf_version \"0.7.4\", os_class \"linux\", source_dirty false and an eawf_commit that is an ancestor of the checkout's HEAD by git merge-base --is-ancestor; a missing pair, a later fail or a commit off the line reds the test.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1053",
+                "kind": "behavioral",
+                "measurable_signal": "preflight membership and provider rows for 0.7.4; gate: `uv run pytest tests/integration/workflow/release/test_v074_release_evidence.py::test_the_v074_membership_and_provider_rows_pass -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/workflow/release/test_v074_release_evidence.py::test_the_v074_membership_and_provider_rows_pass",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "`uv run eawf release preflight 0.7.4 --skip-ci-runs` reports the membership and provider rows as pass: membership_probe and provider_probe (src/eawf/workflow/release/signal_probes.py) both return status pass for checkpoint_release_config(\"0.7.4\") read from this checkout. The command's own exit may stay non-zero while ancestry or ci_green are red before merge.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [
+              "eawf://EAWF/task/EAWF-0774"
+            ],
+            "effort": "M",
+            "intent": "Preflight needs evidence of 0.7.4's own. Evidence A, agent-safe: run uv run eawf release canary-export 0.7.4 --os-class linux (it needs a live, unexpired certification of the installed claude-code and codex; run eawf runtime certify first when one is missing), then EAWF_RECORD_CANARY_WALK=REL-0.7.4 uv run pytest tests/integration/workflow/release/test_dev3_canary_rehearsal_record.py -q to record the acceptance walk; remove REL-0.7.4 from UNRECORDED_RELEASES and add an own-prior test to tests/integration/workflow/verify/test_canary_evidence_by_release.py. Evidence B: the two live dispatch smokes run ONLY from the operator's own terminal, never from an agent session; they need live Claude and Codex logins and spend API tokens (about 4 minutes each): EAWF_SMOKE_PROVIDER=claude, then codex, with EAWF_SMOKE_EVIDENCE_DIR set to the 0.7.4 evidence directory, over uv run pytest -m e2e tests/e2e/test_smoke_milestone.py. Never unset the agent-session markers to get past the operator-identity guard. Then the four agent-run packet runs (uv run eawf release packet-run for claude-code and codex, born_native and adopted, each in an empty scratch directory outside the checkout), which also spend tokens and need a clean src/eawf at a branch commit; rerun all four after any squash. Promotions: add each evidence file to PROMOTED_ARTIFACTS, the managed .gitignore block and the census in the same commit that adds the file, since a squash dropped them once. Delete the smoke scratch files, add tests/integration/workflow/release/test_v074_release_evidence.py from the 0.7.3 one, and refresh .secrets.baseline in the code commit.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Record the 0.7.4 release evidence and promote its files",
+            "urn": "eawf://EAWF/task/EAWF-0775",
+            "write_claims": [
+              ".ea/artifacts/evidence/2026-11-17-stable-native-linux",
+              "tests/fixtures/artifacts/2026-11-17-stable-native-linux/canary-acceptance-walk.json",
+              "src/eawf/kernel/store/commit_policy.py",
+              ".gitignore",
+              ".secrets.baseline",
+              "tests/lint/test_ea_commit_census.py",
+              "tests/_canary_releases.py",
+              "tests/integration/workflow/release/test_dev3_canary_rehearsal_record.py",
+              "tests/integration/workflow/verify/test_canary_evidence_by_release.py",
+              "tests/integration/workflow/release/test_v074_release_evidence.py"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0410",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1054",
+                "kind": "behavioral",
+                "measurable_signal": "doctor repair refused on a 0.8-layout tree with no write; gate: `uv run pytest tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py -k v08_doctor_fix -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "security",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py -k v08_doctor_fix",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "On a tree whose .ea holds state and no generations, eawf doctor --fix and eawf doctor --fix --yes print the 0.8-layout line, exit with the migration-required exit code and change no file under the tree; no repair plan is built or applied.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1055",
+                "kind": "behavioral",
+                "measurable_signal": "read-only doctor unchanged and the 0.7 repair unchanged; gate: `uv run pytest tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py -k v08_doctor_fix -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py -k v08_doctor_fix",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "On the same tree eawf doctor without --fix still answers and fails its authority row with the 0.8-layout line, and on a 0.7 tree eawf doctor --fix behaves as before; the 0.7.4 changelog states that the doctor repair is refused on a 0.8-layout tree.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [],
+            "effort": "S",
+            "intent": "Review of the 0.7.4 pull request range found that the 0.8-layout exemption list in src/eawf/surfaces/cli/upgrade_refusal.py exempts the whole doctor path, so eawf doctor --fix and eawf doctor --fix --yes skip the refusal and reach build_repair_plan (src/eawf/observability/doctor/repair.py), whose config and sync actions rewrite files of a tree this release cannot read. Keep the read-only doctor answering with its failed authority row and refuse the repair with the 0.8-layout line and the migration-required exit code before any repair action is planned. Correct the changelog sentence on doctor. Gives up nothing: the repair has no valid action on such a tree.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Refuse the doctor repair on a tree in the 0.8 layout",
+            "urn": "eawf://EAWF/task/EAWF-0776",
+            "write_claims": [
+              "src/eawf/surfaces/cli/upgrade_refusal.py",
+              "src/eawf/surfaces/cli/commands/doctor.py",
+              "tests/integration/surfaces/cli/test_rel_021_epoch1_tree_gate.py",
+              "CHANGELOG.md"
+            ]
+          },
+          {
+            "batch_ref": "eawf://EAWF/batch/BAT-0410",
+            "criteria": [
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1056",
+                "kind": "behavioral",
+                "measurable_signal": "an interrupted pair write leaves the earlier record readable; gate: `uv run pytest tests/unit/workflow/integration/test_rebind.py -k \"interrupted or chain or undecodable\" -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/integration/test_rebind.py -k \"interrupted or chain or undecodable\"",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "append_rewrite_pairs replaces the record atomically: when the write of the new content fails before the replace, the record at .ea/store/rewrite_map.jsonl still holds exactly the earlier pairs and read_rewrite_pairs reads them; a successful append holds the earlier pairs followed by the new ones, and appending no pair touches no file.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1057",
+                "kind": "behavioral",
+                "measurable_signal": "chained maps rebound to the final commit in one run; gate: `uv run pytest tests/unit/workflow/integration/test_rebind.py -k \"interrupted or chain or undecodable\" -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/integration/test_rebind.py -k \"interrupted or chain or undecodable\"",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "For a rewrite map holding a chain (first old to middle, middle to last) plan_rebind rebinds a row naming the first old commit to the last commit in one run, and a second run plans no row; a map without chains plans the same rows as before.",
+                "waiver_reason": null
+              },
+              {
+                "acceptance_style": "binary",
+                "accepted_risk_decision_ref": null,
+                "contract_refs": [],
+                "evidence_kind": "deterministic",
+                "gate_ids": [
+                  "G-01"
+                ],
+                "grounding": "measured",
+                "id": "CR-1058",
+                "kind": "behavioral",
+                "measurable_signal": "undecodable map file refused with the typed error; gate: `uv run pytest tests/unit/workflow/integration/test_rebind.py -k \"interrupted or chain or undecodable\" -q` exits zero",
+                "oracle_tier": null,
+                "quality_dimension": "reliability",
+                "required": true,
+                "response": {
+                  "expected": "0",
+                  "gate_ref": "command_exit_zero",
+                  "jury_reason": null,
+                  "locus": "pytest",
+                  "object": "zero from tests/unit/workflow/integration/test_rebind.py -k \"interrupted or chain or undecodable\"",
+                  "observe": "exits",
+                  "quantifier": "single"
+                },
+                "text": "load_rewrite_map on a map file whose bytes are not UTF-8 raises RewriteMapError carrying rewrite_map_invalid and a line number, not a decoding error, so eawf batch rebind-rewritten prints the typed refusal.",
+                "waiver_reason": null
+              }
+            ],
+            "depends_on": [
+              "eawf://EAWF/task/EAWF-0776"
+            ],
+            "effort": "S",
+            "intent": "Review of the 0.7.4 pull request range found three gaps in src/eawf/workflow/integration/rebind.py and its daemon method src/eawf/runtime/daemon/methods/delivery_rebind.py. One: append_rewrite_pairs appends in place, so a crash or a full disk mid-write leaves an unterminated last line in .ea/store/rewrite_map.jsonl; parse_rewrite_pairs then refuses the whole record for every reader and for the rebind verb itself, with no repair path. Write the record so an interrupted write leaves the earlier record intact (whole-file write to a sibling temporary file, flush, then atomic replace). Two: plan_rebind maps each hash one step while resolve_rewrite_pairs follows chains, so a commit map joined from two rewrites rebinds rows to the intermediate commit; resolve the map's own chains before planning so each row lands on the final commit in one run. Three: load_rewrite_map lets a file that is not UTF-8 raise a decoding error instead of the typed rewrite_map_invalid refusal. Gives up nothing: maps without chains and whole records behave as before.",
+            "priority": "P1",
+            "role": "executor",
+            "run_purpose": "implement",
+            "title": "Keep the rewrite pair record whole and follow chained maps",
+            "urn": "eawf://EAWF/task/EAWF-0777",
+            "write_claims": [
+              "src/eawf/workflow/integration/rebind.py",
+              "src/eawf/runtime/daemon/methods/delivery_rebind.py",
+              "tests/unit/workflow/integration/test_rebind.py",
+              "tests/integration/runtime/daemon/methods/test_delivery_rebind_rewritten.py",
+              "CHANGELOG.md"
+            ]
+          }
+        ]
+      },
+      "content_digest": "sha256:9cce31a98881fec4eac2b69e89d553b5ae613b3ebaf054d86214a7bfffe6177f",
+      "created_at": "2026-11-18T04:02:52.977182Z",
+      "head_bindings": [
+        {
+          "head_sha": "cacc5041956e0eba392a54d5af395e1b3ecc504c",
+          "repository_ref": "eawf://EAWF/repository/EAWF"
+        }
+      ],
+      "key": "PRV-0357",
+      "parent_key": "PRV-0356",
+      "policy_revision": 1,
+      "provider_tuple": [
+        "claude"
+      ],
+      "revision": 4,
+      "status": "APPLIED",
+      "updated_at": "2026-11-18T04:04:25.645320Z"
     }
   },
   "project": {
