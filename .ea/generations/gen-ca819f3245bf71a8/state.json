@@ -1091,131 +1091,8 @@
       "urn": "eawf://EAWF/campaign/CAM-0004"
     }
   },
-  "canonical_sequence": 95627,
-  "milestone": {
-    "MLS-0110": {
-      "acceptance_bundle_revision": null,
-      "acceptance_journey": [
-        {
-          "action": "in a throwaway git repository holding only an empty .ea/state directory, run the installed 0.7.4 hook wrapper for the Claude and the Codex runtime with a session_start event, then with a pre_tool_use event",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "session_start prints the 0.8-layout line once and exits 0 for both runtimes; pre_tool_use prints nothing and exits 0",
-          "required": true,
-          "step_id": "AS-01"
-        },
-        {
-          "action": "in the same repository run uv run eawf status and uv run eawf doctor",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "status refuses with the 0.8-layout line and a non-zero exit; doctor shows the authority row as fail with the same line",
-          "required": true,
-          "step_id": "AS-02"
-        },
-        {
-          "action": "copy one rewritten repository with its eawf state to a throwaway folder, run eawf batch rebind-rewritten there with its kept commit map, then eawf hook ledger-history over its unpushed range, then the rebind a second time",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "the first rebind reports rebound rows and no refusal; ledger-history exits 0 with no unreachable finding where 0.7.3 reported 403; the second rebind reports rebound 0",
-          "required": true,
-          "step_id": "AS-03"
-        },
-        {
-          "action": "repeat step 3 on a throwaway copy of the repository whose map holds four many-to-one pairs",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "the rebind succeeds and each of the four new commits is recorded for both of its old commits",
-          "required": true,
-          "step_id": "AS-04"
-        },
-        {
-          "action": "on a scratch branch make two code commits with Batch and Task trailers and no state commit and run the pre-push hooks; read the commit rule in the rendered AGENTS.override.md",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "the pre-push commit lint passes; the rule says state is committed once per pull request as one seal commit",
-          "required": true,
-          "step_id": "AS-05"
-        },
-        {
-          "action": "build the wheel with uv build and read its METADATA file",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "no Author-email and no Maintainer-email field",
-          "required": true,
-          "step_id": "AS-06"
-        },
-        {
-          "action": "run uv run eawf release preflight 0.7.4 --skip-ci-runs on the reviewed head",
-          "actor": "operator",
-          "evidence_kinds": [
-            "artifact"
-          ],
-          "expected_observation": "the membership and provider rows read pass; ancestry may stay red until the merge",
-          "required": true,
-          "step_id": "AS-07"
-        }
-      ],
-      "accepted_binding": null,
-      "appetite": {
-        "amount": 20,
-        "budget_kind": "duration",
-        "unit": "hours"
-      },
-      "contributing_track_refs": [],
-      "created_at": "2026-11-17T21:26:45.522474Z",
-      "description": "Last planned Python patch release before the v0.8 rewrite moves to a fresh repository (Decision D99). A 0.7.4 client recognises a repository in the 0.8 layout on every entry path; recorded commit hashes are rebound through a history-rewrite commit map; the rules accept one seal commit per pull request (Decision D101); the package metadata drops the author email.",
-      "exclusions": [
-        "no rewrite of the event log, of machine-local files or of the plan-revision head bindings in the state document: they keep old hashes and the checks translate them through the recorded map",
-        "no rebind run in the nine rewritten repositories as part of this Milestone; it is proven on throwaway copies and run by the operator after the release",
-        "no repository rename, visibility change, repository creation, registry or account change",
-        "no change of the status line on a 0.8-layout tree",
-        "no version-bumper or release-train support for dev.N pre-release tags",
-        "no tree-SHA bindings, settlement or any other part of the v0.8 seal regime beyond the commit rule",
-        "the acceptance record and the release record stay later state commits in the 0.7.x flow",
-        "no installation on other machines and no change of a plugin marketplace source"
-      ],
-      "key": "MLS-0110",
-      "origin": {
-        "confidence": "exact",
-        "kind": "native",
-        "mapping_basis": "native",
-        "source_digest": null,
-        "source_id": null,
-        "source_kind": null,
-        "source_schema_version": null,
-        "source_urn": null
-      },
-      "outcome": "eawf 0.7.4 is released (uv run eawf --version prints 0.7.4) with: the 0.8-layout line printed once at session start by the hook wrapper of both runtimes and every verb refusing a 0.8 tree with it; eawf batch rebind-rewritten translating recorded commit hashes through a commit map, recording the map, and the history, repair, freshness and completion checks honouring it; rules and projections that commit state once per pull request; no author email in the package metadata.",
-      "primary_track_ref": "eawf://EAWF/track/TRK-EAWF-CORE",
-      "required_batch_refs": [
-        "eawf://EAWF/batch/BAT-0405",
-        "eawf://EAWF/batch/BAT-0406",
-        "eawf://EAWF/batch/BAT-0407",
-        "eawf://EAWF/batch/BAT-0408",
-        "eawf://EAWF/batch/BAT-0409",
-        "eawf://EAWF/batch/BAT-0410"
-      ],
-      "revision": 5,
-      "status": "ACTIVE",
-      "target_date": null,
-      "title": "Ship 0.7.4 to bridge to v0.8 and rebind rewritten histories",
-      "uid": "8364509f-cb4f-5fad-b037-681549c08524",
-      "updated_at": "2026-11-18T04:04:25.645320Z",
-      "urn": "eawf://EAWF/milestone/MLS-0110"
-    }
-  },
+  "canonical_sequence": 95642,
+  "milestone": {},
   "open_question": {
     "QST-0001": {
       "answer_refs": [],
@@ -13678,6 +13555,88 @@
       ],
       "updated_at": "2026-11-18T04:04:13.682747Z",
       "urn": "eawf://EAWF/pending-action/ACT-0077"
+    },
+    "ACT-0078": {
+      "assignee_ref": null,
+      "bundle_digest": "sha256:8459626a98f95dd62b6fcb129fe341992c0a0c1a3ebe689de9874356d127722f",
+      "created_at": "2026-11-18T05:11:18.097773Z",
+      "default_on_timeout": null,
+      "default_policy": null,
+      "dispositions": [
+        {
+          "acted_at": "2026-11-18T05:17:45.954926Z",
+          "option_id": "approve",
+          "outcome": "sealed",
+          "principal_id": "OP-0001",
+          "snoozed_until": null
+        }
+      ],
+      "harness_attestation": {
+        "harness": "claude-code",
+        "host_session_digest": "sha256:3f04c87ecef5908342f80df8477059a77593254081f7150fd74bb8e37763edfd",
+        "payload_digest": "sha256:f4ddcdc4b4658f36bf0188dd850e7696936fc4755ba1c9c2a1594fe3c786df6f",
+        "permission_mode": null,
+        "question_ref": "eawf://EAWF/question/QST-0125",
+        "raise_gap_ms": 374246,
+        "run_ref": null,
+        "tool_use_id": "toolu_01SpyxHRaRjVyCLoRV662mxu",
+        "transcript_check": "matched"
+      },
+      "id": "ACT-0078",
+      "idempotency_key": "accept-MLS-0110-8459626a98f95dd6",
+      "kind": "protected_approval",
+      "options": [
+        {
+          "consequence": "The Milestone is recorded as accepted on exactly this bundle. A later change needs a new acceptance.",
+          "cost": "Any change after acceptance needs a new bundle and a new acceptance.",
+          "effect": "approve",
+          "label": "Accept the Milestone",
+          "option_id": "approve",
+          "preview": "Milestone MLS-0110\n  before: in acceptance review\n  after:  accepted on bundle revision 1"
+        },
+        {
+          "consequence": "The Milestone stays in review and is not accepted. Nothing else changes.",
+          "cost": "Verified work waits unaccepted, and nothing says what would make it acceptable.",
+          "effect": "decline",
+          "label": "Do not accept it",
+          "option_id": "decline",
+          "preview": "Milestone MLS-0110\n  before: in acceptance review\n  after:  in acceptance review, not accepted"
+        },
+        {
+          "consequence": "The Milestone stays in review and a repair is requested. The next bundle revision is verified and asked about again.",
+          "cost": "Delivery waits for another verified revision and another question.",
+          "effect": "request_repair",
+          "label": "Ask for changes",
+          "option_id": "repair",
+          "preview": "Milestone MLS-0110\n  before: bundle revision 1 awaits acceptance\n  after:  repair requested; bundle revision 2 is verified next"
+        }
+      ],
+      "override_until": null,
+      "question": "Accept MLS-0110 on revision 1 of its acceptance bundle?",
+      "receipt_ref": "eawf://EAWF/evidence/EVD-0464",
+      "recommendation_rationale": "Every Batch stands on a verified head and the journey passed, so accepting records what the evidence already shows.",
+      "recommended_option_id": "approve",
+      "requested_by": {
+        "principal_id": "EAWF-PLANNER",
+        "principal_kind": "agent",
+        "run_ref": "eawf://EAWF/run/RUN-00002414"
+      },
+      "resolution_actor": {
+        "principal_id": "OP-0001",
+        "principal_kind": "human"
+      },
+      "revision": 2,
+      "selected_option_id": "approve",
+      "status": "SEALED",
+      "subject_ref": "eawf://EAWF/milestone/MLS-0110",
+      "terms": [
+        {
+          "expansion": "the Milestone, a planned delivery goal, you are asked to accept",
+          "term": "MLS-0110"
+        }
+      ],
+      "updated_at": "2026-11-18T05:17:45.954926Z",
+      "urn": "eawf://EAWF/pending-action/ACT-0078"
     }
   },
   "plan_revision": {
