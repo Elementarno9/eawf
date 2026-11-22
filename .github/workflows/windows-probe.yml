@@ -1,0 +1,287 @@
+# eawf Windows jail probe (2026-11-22). Written on Linux; this branch exists only to run it once.
+#
+# What it answers (spec 26 spike items S-1, S-2, S-4 and exit-check rows J1, J2, J4, J8, J10, J11):
+#   1. Does the GitHub-hosted `windows-2025` image offer the Microsoft Execution Containers (MXC)
+#      ProcessContainer backend at all? (step "os", rows R00 and R01)
+#   2. Do cmd, Windows PowerShell, PowerShell 7, Node.js, git.exe and Git Bash start inside it? (R02 to R07)
+#   3. Is a write outside the workspace refused, and a denied credential file unreadable? (R08 to R11)
+#   4. Is direct egress blocked while a loopback proxy still works? (R12 to R14, identity-less proxy only)
+#   5. Does `kill` reap a grandchild process? (R15)
+#   6. Does the Codex CLI's own MXC self-test pass on this image? (step "codex")
+#
+# How to run: copy this file to `.github/workflows/windows-probe.yml` on a scratch branch of any repository,
+# then start it from the Actions tab ("Run workflow"). It needs no secrets and no repository content.
+#
+# How to read the result: open the run, then the job summary. One table row per check.
+#   - R00 `isSupported=false` or R01 FAIL: the hosted image cannot run ProcessContainer. Nothing else is
+#     learned; the jail check stays on the self-hosted Windows 11 runner (ruling R6). Rows R02 to R15 then
+#     show ERROR and mean nothing.
+#   - R01 PASS: the hosted image can run ProcessContainer. Read R02 to R07 as the answer to spec 26 S-1
+#     (a FAIL names the tool that needs more `readonlyPaths` or does not work), R08 to R11 as J1, J2, J4, J8,
+#     R12 to R14 as J10 and J11 (with the weaker identity-less proxy row of the MXC networking guide),
+#     R15 as S-2 (FAIL means the hub must add a job object around the container).
+#   - INCONCLUSIVE means the precondition of the row did not hold (for example the tool is not installed).
+#   - The "codex" step prints `MXC_OK` and exit code 0 when Codex's own MXC path works on the image.
+# The job itself always ends green when the probe script ran; the verdicts are in the table, not in the job status.
+#
+# No third-party action is used, so there is nothing to pin. npm packages are pinned to an exact version and
+# the MXC package integrity is compared with the value the registry served on 2026-11-22.
+
+name: eawf-windows-jail-probe
+
+on:
+  push:
+    branches: ["probe/**"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: eawf-windows-jail-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      MXC_SDK_VERSION: "1.1.0"
+      MXC_SDK_INTEGRITY: "sha512-tSOPZ14ddCiXHc4hVNQp5Yi22HSQEfXh58Z4O/tLzERi+23rfRmMrJoxVK5jZYhlll68u4eF/UlQSaXWyUMj4w=="
+      CODEX_CLI_VERSION: "0.164.0"
+    steps:
+      - name: os
+        run: |
+          $cv = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+          $build = "$($cv.CurrentBuild).$($cv.UBR)"
+          $line = "product=$($cv.ProductName) edition=$($cv.EditionID) type=$($cv.InstallationType) display=$($cv.DisplayVersion) build=$build"
+          Write-Host $line
+          "## eawf Windows jail probe" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "OS: ``$line``" | Add-Content $env:GITHUB_STEP_SUMMARY
+          "MXC ProcessContainer floor (MXC os-version-support.md): Windows 11 24H2 26100.9278, 25H2 26200.9278. Windows Server is not listed." | Add-Content $env:GITHUB_STEP_SUMMARY
+          "" | Add-Content $env:GITHUB_STEP_SUMMARY
+          foreach ($t in 'node','git','bash','pwsh','powershell','cmd','curl') {
+            $c = Get-Command $t -ErrorAction SilentlyContinue
+            Write-Host "$t => $($c.Source)"
+          }
+          node --version
+          git --version
+
+      - name: install the MXC Node SDK (pinned, integrity checked)
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'eawf-probe'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Set-Location $dir
+          '{"name":"eawf-windows-jail-probe","private":true,"type":"module"}' | Set-Content package.json -Encoding utf8
+          npm install "@microsoft/mxc-sdk@$env:MXC_SDK_VERSION" --save-exact --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
+          $lock = Get-Content package-lock.json -Raw | ConvertFrom-Json
+          $got = $lock.packages.'node_modules/@microsoft/mxc-sdk'.integrity
+          Write-Host "integrity=$got"
+          if ($got -ne $env:MXC_SDK_INTEGRITY) { throw "integrity mismatch for @microsoft/mxc-sdk: $got" }
+
+      - name: probe
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'eawf-probe'
+          Set-Location $dir
+          @'
+          import * as mxc from '@microsoft/mxc-sdk/v1';
+          import fs from 'node:fs';
+          import net from 'node:net';
+          import path from 'node:path';
+          import { execSync } from 'node:child_process';
+
+          const root = process.cwd();
+          const ws = path.join(root, 'ws');
+          const sibling = path.join(root, 'sibling');
+          const home = path.join(root, 'home');
+          const fakeCred = path.join(home, '.ssh');
+          const runTmp = path.join(root, 'tmp');
+          for (const d of [ws, sibling, fakeCred, runTmp]) fs.mkdirSync(d, { recursive: true });
+          fs.writeFileSync(path.join(fakeCred, 'id_test'), 'not-a-real-key\n');
+
+          const rows = [];
+          const tail = (s) => String(s ?? '').trim().split(/\r?\n/).slice(-3).join(' / ').slice(0, 300);
+          const add = (id, attempt, expected, verdict, observed) => {
+            rows.push({ id, attempt, expected, verdict, observed: String(observed).slice(0, 400) });
+            console.log(`${id} | ${attempt} | ${expected} | ${verdict} | ${String(observed).slice(0, 400)}`);
+          };
+          const safe = (fn) => { try { return fn(); } catch (e) { return { error: String(e?.message ?? e) }; } };
+
+          // Tool directories: the SDK's own discovery plus the usual Git for Windows location.
+          const toolPolicy = safe(() => mxc.policy.filesystem.getAvailableToolsPolicy(process.env));
+          const gitRoot = 'C:\\Program Files\\Git';
+          const readonlyPaths = [...new Set([...(toolPolicy.readonlyPaths ?? []), ...(fs.existsSync(gitRoot) ? [gitRoot] : [])])];
+          const readwriteExtra = toolPolicy.readwritePaths ?? [];
+          const env = {
+            SYSTEMROOT: process.env.SYSTEMROOT, windir: process.env.windir, SystemDrive: process.env.SystemDrive,
+            COMSPEC: process.env.COMSPEC, PATHEXT: process.env.PATHEXT, PATH: process.env.PATH,
+            LOCALAPPDATA: process.env.LOCALAPPDATA, APPDATA: process.env.APPDATA,
+            USERPROFILE: process.env.USERPROFILE, TEMP: runTmp, TMP: runTmp,
+          };
+          const request = (command, extra = {}) => ({
+            command,
+            containment: { type: 'processcontainer' },
+            workingDirectory: ws,
+            timeoutMs: 60000,
+            filesystem: { readwritePaths: [ws, runTmp, ...readwriteExtra], readonlyPaths, deniedPaths: [fakeCred] },
+            network: { egress: { default: 'deny' }, ingress: { default: 'deny', hostLoopback: 'deny' } },
+            inheritDefaultEnvironment: false,
+            environment: env,
+            ...extra,
+          });
+          const exec = async (command, extra) => {
+            try {
+              const r = await mxc.run(request(command, extra), { telemetry: { enabled: false } });
+              return { exitCode: r.exitCode, out: tail(r.stdout), err: tail(r.stderr), timedOut: r.timedOut, warnings: r.warnings };
+            } catch (e) {
+              return { error: `${e?.code ?? ''} ${e?.message ?? e}`.trim() };
+            }
+          };
+          const show = (r) => r.error ? `ERROR ${r.error}` : `exit=${r.exitCode} out=[${r.out}] err=[${r.err}]${r.timedOut ? ' TIMEOUT' : ''}`;
+          const expectOk = async (id, attempt, command, marker, extra) => {
+            const r = await exec(command, extra);
+            const ok = !r.error && r.exitCode === 0 && (!marker || r.out.includes(marker));
+            add(id, attempt, 'succeeds', r.error ? 'ERROR' : ok ? 'PASS' : 'FAIL', show(r));
+            return ok;
+          };
+
+          // R00: what the SDK reports about this host.
+          add('R00', 'platform support reported by the SDK', 'info', 'INFO', JSON.stringify(safe(() => mxc.getPlatformSupport())));
+          add('R00b', 'ProcessContainer probe facts', 'info', 'INFO', JSON.stringify(safe(() => mxc.probe())));
+          add('R00c', 'read-only tool paths granted', 'info', 'INFO', JSON.stringify(readonlyPaths));
+
+          // R01 to R07: does each process kind start inside the container?
+          await expectOk('R01', 'cmd.exe starts', 'cmd.exe /d /c echo MXC_OK', 'MXC_OK');
+          await expectOk('R02', 'Windows PowerShell starts', 'powershell.exe -NoProfile -NonInteractive -Command "Write-Output PS5_OK"', 'PS5_OK');
+          await expectOk('R03', 'PowerShell 7 starts', 'pwsh.exe -NoProfile -NonInteractive -Command "Write-Output PS7_OK"', 'PS7_OK');
+          await expectOk('R04', 'node.exe starts', 'node.exe -e "console.log(\'NODE_OK\')"', 'NODE_OK');
+          await expectOk('R05', 'git.exe starts', 'git.exe --version', 'git version');
+          await expectOk('R06', 'Git Bash starts and forks a child', `"${gitRoot}\\bin\\bash.exe" -c "echo BASH_OK; ls / > /dev/null && echo FORK_OK"`, 'FORK_OK');
+          await expectOk('R07', 'git init and commit in the workspace', 'cmd.exe /d /c "git init -q repo && cd repo && git -c user.name=p -c user.email=p@example.invalid commit -q --allow-empty -m probe && echo GIT_COMMIT_OK"', 'GIT_COMMIT_OK');
+
+          // R08 to R11: filesystem policy.
+          await expectOk('R08', 'write a file in the workspace', 'cmd.exe /d /c "echo x> inside.txt && echo WRITE_OK"', 'WRITE_OK');
+          {
+            const target = path.join(sibling, 'escape.txt');
+            const r = await exec(`cmd.exe /d /c "echo x> ${target}"`);
+            const leaked = fs.existsSync(target);
+            add('R09', 'write a file in a sibling directory', 'refused, file absent', r.error ? 'ERROR' : leaked ? 'FAIL' : 'PASS', `${show(r)} file_present=${leaked}`);
+          }
+          {
+            const target = path.join(process.env.USERPROFILE, 'eawf-jail-probe.txt');
+            const r = await exec(`cmd.exe /d /c "echo x> ${target}"`);
+            const leaked = fs.existsSync(target);
+            if (leaked) fs.rmSync(target, { force: true });
+            add('R10', 'write a file in the user profile', 'refused, file absent', r.error ? 'ERROR' : leaked ? 'FAIL' : 'PASS', `${show(r)} file_present=${leaked}`);
+          }
+          {
+            const r = await exec(`cmd.exe /d /c "type ${path.join(fakeCred, 'id_test')}"`);
+            const leaked = !r.error && r.out.includes('not-a-real-key');
+            add('R11', 'read a file under a denied path', 'refused', r.error ? 'ERROR' : leaked ? 'FAIL' : 'PASS', show(r));
+          }
+
+          // R12 to R14: network policy. A tiny CONNECT proxy runs in this (uncontained) process.
+          const decisions = [];
+          const proxy = net.createServer((client) => {
+            client.once('data', (buf) => {
+              const m = /^CONNECT ([a-z0-9.-]+):(\d+) HTTP\/1\.[01]/i.exec(buf.toString('latin1'));
+              const host = m?.[1]?.toLowerCase();
+              if (host !== 'example.com') {
+                decisions.push(`deny ${host}`);
+                client.end('HTTP/1.1 403 Forbidden\r\nX-Eawf-Denial: egress.default_deny\r\n\r\n');
+                return;
+              }
+              decisions.push(`allow ${host}`);
+              const up = net.connect(Number(m[2]), host, () => { client.write('HTTP/1.1 200 Connection Established\r\n\r\n'); up.pipe(client); client.pipe(up); });
+              up.on('error', () => client.destroy()); client.on('error', () => up.destroy());
+            });
+          });
+          await new Promise((res) => proxy.listen(0, '127.0.0.1', res));
+          const port = proxy.address().port;
+          const proxied = {
+            containment: { type: 'processcontainer', config: { capabilities: ['internetClient'] } },
+            network: {
+              egress: { default: 'deny' },
+              ingress: { default: 'allow', hostLoopback: 'allow' },
+              runtimeConfig: { networkProxy: `http://127.0.0.1:${port}` },
+            },
+          };
+          {
+            const r = await exec('curl.exe -sS -m 10 --noproxy * -o NUL https://example.com');
+            add('R12', 'direct HTTPS with no proxy, egress default deny', 'fails', r.error ? 'ERROR' : r.exitCode !== 0 ? 'PASS' : 'FAIL', show(r));
+          }
+          {
+            const r = await exec('curl.exe -sS -m 10 --noproxy * -o NUL https://example.com', proxied);
+            add('R12b', 'direct HTTPS bypassing the proxy while the proxy policy is active', 'fails', r.error ? 'ERROR' : r.exitCode !== 0 ? 'PASS' : 'FAIL', show(r));
+          }
+          {
+            const r = await exec(`curl.exe -sS -m 15 -x http://127.0.0.1:${port} -o NUL -w "%{http_code}" https://example.com`, proxied);
+            add('R13', 'HTTPS through the loopback proxy to an allowed host', 'succeeds with 200', r.error ? 'ERROR' : (r.exitCode === 0 && r.out.includes('200')) ? 'PASS' : 'FAIL', `${show(r)} proxy_saw=[${decisions.join(', ')}]`);
+          }
+          {
+            const r = await exec(`curl.exe -sS -m 15 -x http://127.0.0.1:${port} -o NUL https://example.org`, proxied);
+            add('R14', 'HTTPS through the loopback proxy to a host off the allow-list', 'fails, proxy records a deny', r.error ? 'ERROR' : (r.exitCode !== 0 && decisions.includes('deny example.org')) ? 'PASS' : 'FAIL', `${show(r)} proxy_saw=[${decisions.join(', ')}]`);
+          }
+          proxy.close();
+
+          // R15: does kill reap a grandchild?
+          {
+            const count = () => execSync('tasklist /FI "IMAGENAME eq PING.EXE" /FO CSV /NH').toString().split(/\r?\n/).filter((l) => /PING\.EXE/i.test(l)).length;
+            let verdict = 'ERROR', observed = '';
+            try {
+              const before = count();
+              const proc = await mxc.spawn(request('cmd.exe /d /c "cmd.exe /d /c ping -n 120 127.0.0.1 > NUL"', { timeoutMs: 180000 }), { telemetry: { enabled: false } });
+              proc.standardOutput?.resume(); proc.standardError?.resume();
+              await new Promise((res) => setTimeout(res, 4000));
+              const during = count();
+              proc.kill();
+              await new Promise((res) => setTimeout(res, 4000));
+              const after = count();
+              try { proc.dispose(); } catch {}
+              observed = `ping_processes before=${before} during=${during} after_kill=${after}`;
+              verdict = during <= before ? 'INCONCLUSIVE' : after <= before ? 'PASS' : 'FAIL';
+              if (after > before) execSync('taskkill /F /IM PING.EXE /T');
+            } catch (e) { observed = `ERROR ${e?.code ?? ''} ${e?.message ?? e}`; }
+            add('R15', 'kill reaps a grandchild process', 'no process remains', verdict, observed);
+          }
+
+          // R16: the environment is the one eawf passed, not the runner's.
+          {
+            const r = await exec('cmd.exe /d /c "set GITHUB_ & set RUNNER_ & echo ENV_DONE"');
+            const leaked = !r.error && /GITHUB_|RUNNER_/.test(r.out.replace('ENV_DONE', ''));
+            add('R16', 'runner variables absent from the container environment', 'absent', r.error ? 'ERROR' : leaked ? 'FAIL' : 'PASS', show(r));
+          }
+
+          const esc = (s) => String(s).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+          const md = ['| Id | Attempt | Expected | Verdict | Observed |', '| --- | --- | --- | --- | --- |',
+            ...rows.map((r) => `| ${r.id} | ${esc(r.attempt)} | ${esc(r.expected)} | ${r.verdict} | ${esc(r.observed)} |`)].join('\n');
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md + '\n\n');
+          const n = (v) => rows.filter((r) => r.verdict === v).length;
+          console.log(`PROBE_COMPLETE rows=${rows.length} pass=${n('PASS')} fail=${n('FAIL')} error=${n('ERROR')} inconclusive=${n('INCONCLUSIVE')}`);
+          '@ | Set-Content probe.mjs -Encoding utf8
+          node probe.mjs
+          if ($LASTEXITCODE -ne 0) { throw "the probe script itself failed; see the log" }
+
+      - name: codex
+        continue-on-error: true
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'eawf-probe'
+          $prefix = Join-Path $dir 'codex-prefix'
+          $env:CODEX_HOME = Join-Path $dir 'codex-home'
+          New-Item -ItemType Directory -Force $prefix, $env:CODEX_HOME | Out-Null
+          npm install --prefix $prefix "@openai/codex@$env:CODEX_CLI_VERSION" --no-audit --no-fund
+          $codex = Join-Path $prefix 'node_modules\.bin\codex.cmd'
+          Set-Location (Join-Path $dir 'ws')
+          & $codex --version
+          "### Codex self-test (no model call, no login)" | Add-Content $env:GITHUB_STEP_SUMMARY
+          foreach ($mode in 'mxc', 'unelevated') {
+            $out = & $codex -c "windows.sandbox=$mode" sandbox --permission-profile :workspace -- cmd.exe /d /c echo MXC_OK 2>&1 | Out-String
+            $code = $LASTEXITCODE
+            Write-Host "mode=$mode exit=$code output=$out"
+            "- ``windows.sandbox=$mode``: exit $code, output ``$($out.Trim() -replace '\s+', ' ')``" | Add-Content $env:GITHUB_STEP_SUMMARY
+          }
+          exit 0
