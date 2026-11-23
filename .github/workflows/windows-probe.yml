@@ -24,7 +24,7 @@
 #   - The "codex" step prints `MXC_OK` and exit code 0 when Codex's own MXC path works on the image.
 # The job itself always ends green when the probe script ran; the verdicts are in the table, not in the job status.
 #
-# No third-party action is used, so there is nothing to pin. npm packages are pinned to an exact version and
+# One first-party action is used (actions/setup-node), pinned by commit SHA. npm packages are pinned to an exact version and
 # the MXC package integrity is compared with the value the registry served on 2026-11-22.
 
 name: eawf-windows-jail-probe
@@ -52,6 +52,10 @@ jobs:
       MXC_SDK_INTEGRITY: "sha512-tSOPZ14ddCiXHc4hVNQp5Yi22HSQEfXh58Z4O/tLzERi+23rfRmMrJoxVK5jZYhlll68u4eF/UlQSaXWyUMj4w=="
       CODEX_CLI_VERSION: "0.164.0"
     steps:
+      - name: node 24 (the MXC SDK requires it; the image ships Node 22)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
       - name: os
         run: |
           $cv = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
@@ -78,8 +82,8 @@ jobs:
           '{"name":"eawf-windows-jail-probe","private":true,"type":"module"}' | Set-Content package.json -Encoding utf8
           npm install "@microsoft/mxc-sdk@$env:MXC_SDK_VERSION" --save-exact --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
-          $lock = Get-Content package-lock.json -Raw | ConvertFrom-Json
-          $got = $lock.packages.'node_modules/@microsoft/mxc-sdk'.integrity
+          $lock = Get-Content package-lock.json -Raw | ConvertFrom-Json -AsHashtable
+          $got = $lock['packages']['node_modules/@microsoft/mxc-sdk']['integrity']
           Write-Host "integrity=$got"
           if ($got -ne $env:MXC_SDK_INTEGRITY) { throw "integrity mismatch for @microsoft/mxc-sdk: $got" }
 
