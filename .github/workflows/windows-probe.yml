@@ -42,7 +42,9 @@ concurrency:
 
 jobs:
   probe:
-    runs-on: windows-2025
+    # 2026-11-26: the hosted Windows 11 Arm image, a Windows 11 client build above the ProcessContainer floor.
+    # The probe runs twice: with the default UI policy, then with ui.disable=false, which the tools need.
+    runs-on: windows-11-arm
     timeout-minutes: 20
     defaults:
       run:
@@ -134,6 +136,7 @@ jobs:
             filesystem: { readwritePaths: [ws, runTmp, ...readwriteExtra], readonlyPaths, deniedPaths: [fakeCred] },
             network: { egress: { default: 'deny' }, ingress: { default: 'deny', hostLoopback: 'deny' } },
             inheritDefaultEnvironment: false,
+            ...(process.env.EAWF_UI_ON === '1' ? { ui: { disable: false } } : {}),
             environment: env,
             ...extra,
           });
@@ -234,11 +237,11 @@ jobs:
 
           // R15: does kill reap a grandchild?
           {
-            const count = () => execSync('tasklist /FI "IMAGENAME eq PING.EXE" /FO CSV /NH').toString().split(/\r?\n/).filter((l) => /PING\.EXE/i.test(l)).length;
+            const count = () => execSync('tasklist /FI "IMAGENAME eq POWERSHELL.EXE" /FO CSV /NH').toString().split(/\r?\n/).filter((l) => /POWERSHELL\.EXE/i.test(l)).length;
             let verdict = 'ERROR', observed = '';
             try {
               const before = count();
-              const proc = await mxc.spawn(request('cmd.exe /d /c "cmd.exe /d /c ping -n 120 127.0.0.1 > NUL"', { timeoutMs: 180000 }), { telemetry: { enabled: false } });
+              const proc = await mxc.spawn(request('cmd.exe /d /c "powershell.exe -NoProfile -NonInteractive -Command Start-Sleep 120"', { timeoutMs: 180000 }), { telemetry: { enabled: false } });
               proc.standardOutput?.resume(); proc.standardError?.resume();
               await new Promise((res) => setTimeout(res, 4000));
               const during = count();
@@ -246,9 +249,9 @@ jobs:
               await new Promise((res) => setTimeout(res, 4000));
               const after = count();
               try { proc.dispose(); } catch {}
-              observed = `ping_processes before=${before} during=${during} after_kill=${after}`;
+              observed = `powershell_processes before=${before} during=${during} after_kill=${after}`;
               verdict = during <= before ? 'INCONCLUSIVE' : after <= before ? 'PASS' : 'FAIL';
-              if (after > before) execSync('taskkill /F /IM PING.EXE /T');
+              if (after > before) execSync('taskkill /F /IM POWERSHELL.EXE /T');
             } catch (e) { observed = `ERROR ${e?.code ?? ''} ${e?.message ?? e}`; }
             add('R15', 'kill reaps a grandchild process', 'no process remains', verdict, observed);
           }
@@ -263,12 +266,16 @@ jobs:
           const esc = (s) => String(s).replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
           const md = ['| Id | Attempt | Expected | Verdict | Observed |', '| --- | --- | --- | --- | --- |',
             ...rows.map((r) => `| ${r.id} | ${esc(r.attempt)} | ${esc(r.expected)} | ${r.verdict} | ${esc(r.observed)} |`)].join('\n');
-          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md + '\n\n');
+          const pass = process.env.EAWF_UI_ON === '1' ? 'ui.disable=false' : 'default UI policy (ui.disable=true)';
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Pass with ${pass}, arch ${process.arch}\n\n${md}\n\n`);
           const n = (v) => rows.filter((r) => r.verdict === v).length;
           console.log(`PROBE_COMPLETE rows=${rows.length} pass=${n('PASS')} fail=${n('FAIL')} error=${n('ERROR')} inconclusive=${n('INCONCLUSIVE')}`);
           '@ | Set-Content probe.mjs -Encoding utf8
           node probe.mjs
           if ($LASTEXITCODE -ne 0) { throw "the probe script itself failed; see the log" }
+          $env:EAWF_UI_ON = '1'
+          node probe.mjs
+          if ($LASTEXITCODE -ne 0) { throw "the probe script itself failed on the second pass; see the log" }
 
       - name: codex
         continue-on-error: true
